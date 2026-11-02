@@ -65,29 +65,23 @@ func documentSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, mod
 		body := "fixed generation guidelines"
 		return model.DocumentContext{Commit: strings.Repeat("a", 40), Tree: strings.Repeat("b", 40), Materials: []runnercontract.Document{{Kind: "inline", Path: "SpecGuide.md", Content: &body}}}, nil
 	}
-	planning, _ := json.Marshal(struct {
-		Source    string           `json:"source_digest"`
-		Confirmed string           `json:"confirmed_digest"`
-		Analysis  *model.Analysis  `json:"analysis"`
-		Existing  []model.Existing `json:"existing"`
-	}{r.Source.Digest, r.ConfirmedDigest, r.Analysis, r.Existing})
 	rules, err := prompts.RoadmapDocumentRules()
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.files[PlanningPath] = planning
 	f.files[DocumentRulesPath] = rules
 	f.files["SpecGuide.md"] = []byte("fixed generation guidelines")
+	f.files["code.go"] = []byte("fixed code\n")
 	return s, store, f, r
 }
 func documentResult(r model.Record) (model.GeneratedDocuments, *runnercontract.RepositorySource) {
 	source := &runnercontract.RepositorySource{LocalPath: "", Commit: r.CodeCommit, Tree: r.RepositoryTree,
-		Files: []runnercontract.RepositoryFile{{Path: "code.go", Blob: strings.Repeat("d", 40), SHA256: strings.Repeat("e", 64), SizeBytes: 7}}}
+		Files: []runnercontract.RepositoryFile{{Path: "code.go", Blob: strings.Repeat("d", 40), SHA256: model.Digest([]byte("fixed code\n")), SizeBytes: len("fixed code\n")}}}
 	for _, m := range r.Materials {
 		source.Files = append(source.Files, runnercontract.RepositoryFile{Path: m.Path, Blob: strings.Repeat("d", 40), SHA256: model.Digest([]byte(*m.Content)), SizeBytes: len(*m.Content)})
 	}
 	out := model.GeneratedDocuments{SourceDigest: r.Source.Digest, ConfirmedDigest: r.ConfirmedDigest, CodeCommit: r.CodeCommit,
-		Design: "Reuse the existing owner; no second workflow.", Investigation: []model.Investigation{{Path: "code.go", SHA256: strings.Repeat("e", 64), Reason: "Existing implementation"}},
+		Design: "Reuse the existing owner; no second workflow.", Investigation: []model.InvestigationReference{{Source: "repository", Path: "code.go", Reason: "Existing implementation"}},
 		Questions: []string{}, Documents: model.PlannedDocuments(r)}
 	for i := range out.Documents {
 		out.Documents[i].Spec.Body = "# Spec\n## 目标\n完整目标\n## 范围\n当前范围\n## 验收\n通过条件"
@@ -113,7 +107,7 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	if input.Generate.Repository == nil || input.Generate.Repository.Commit != r.CodeCommit || input.Generate.Repository.LocalPath != s.Repository {
 		t.Fatal(input)
 	}
-	if len(input.Generate.Materials) != 0 || !strings.Contains(input.Generate.Instruction, PlanningPath) || strings.Contains(input.Generate.Instruction, parent.Source.Body) {
+	if len(input.Generate.Materials) != 2 || !strings.Contains(input.Generate.Instruction, PlanningPath) || strings.Contains(input.Generate.Instruction, parent.Source.Body) {
 		t.Fatal("materials expanded instead of referenced")
 	}
 
@@ -122,6 +116,17 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	}
 	out, source := documentResult(r)
 	source.LocalPath = s.Repository
+	readCommitted := s.ReadCommitted
+	readCode := false
+	s.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
+		if commit != r.CodeCommit {
+			t.Fatalf("investigation read changed commit: %s", commit)
+		}
+		if path == "code.go" {
+			readCode = true
+		}
+		return readCommitted(ctx, commit, path)
+	}
 	raw, _ := json.Marshal(out)
 	f.run.RepositorySource = source
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: source, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "docs", TurnID: "docs-turn"}}
@@ -139,6 +144,9 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	}
 	if !done.ObservationComplete() || len(done.Mapping) != 0 {
 		t.Fatal(done)
+	}
+	if !readCode || len(done.Investigation) != 1 || done.Investigation[0].SHA256 != model.Digest([]byte("fixed code\n")) {
+		t.Fatal("platform did not derive original Git digest", done.Investigation)
 	}
 	stored, _ := store.Roadmap(ctx, s.Project, r.ID)
 	if stored.Materials[0].Content == nil || *stored.Materials[0].Content != "fixed generation guidelines" {
@@ -159,7 +167,7 @@ func TestRoadmapDocumentOutputRejectsMismatchesAndSupportsQuestions(t *testing.T
 		func(o *model.GeneratedDocuments, _ *runnercontract.RepositorySource) { o.ConfirmedDigest = "stale" },
 		func(o *model.GeneratedDocuments, _ *runnercontract.RepositorySource) { o.Documents[0].Plan.Body = "" },
 		func(o *model.GeneratedDocuments, _ *runnercontract.RepositorySource) {
-			o.Investigation[0].SHA256 = "wrong"
+			o.Investigation[0].Path = "unknown.go"
 		},
 		func(_ *model.GeneratedDocuments, src *runnercontract.RepositorySource) {
 			src.Commit = strings.Repeat("f", 40)
@@ -229,6 +237,79 @@ func TestRoadmapDocumentsDoNotSubmitWithoutCapabilityOrGuidelines(t *testing.T) 
 			}
 			if f.submits != 1 || len(store.rows) != 1 {
 				t.Fatal("missing prerequisite created document run")
+			}
+		})
+	}
+}
+
+func TestRoadmapDocumentInvestigationSeparatesInputFiles(t *testing.T) {
+	s, _, _, parent := documentSetup(t)
+	r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var request runnercontract.GenerateRunInput
+	if err := json.Unmarshal(r.Request.Input, &request); err != nil {
+		t.Fatal(err)
+	}
+	out, source := documentResult(r)
+	input := request.Generate.Materials[0]
+	ref := model.InvestigationReference{Source: "input_file", Path: input.Path, Reason: "Original roadmap input"}
+	out.Investigation = append(out.Investigation, ref)
+	raw, _ := json.Marshal(out)
+	decoded, err := model.DecodeDocuments(r, raw, source)
+	if err != nil {
+		t.Fatal("verified original input citation rejected", err)
+	}
+	if decoded.Investigation[1].SHA256 != model.Digest([]byte(*input.Content)) {
+		t.Fatal("input digest not derived from original request", decoded.Investigation)
+	}
+	for _, mutate := range []func(*model.GeneratedDocuments){
+		func(o *model.GeneratedDocuments) { o.Investigation[1].Source = "repository" },
+		func(o *model.GeneratedDocuments) { o.Investigation[1].Source = "" },
+		func(o *model.GeneratedDocuments) { o.Investigation[1].Source = "unknown" },
+		func(o *model.GeneratedDocuments) { o.Investigation[1].Path = "code.go" },
+		func(o *model.GeneratedDocuments) { o.Investigation = o.Investigation[1:] },
+	} {
+		changed := out
+		changed.Investigation = append([]model.InvestigationReference{}, out.Investigation...)
+		mutate(&changed)
+		raw, _ := json.Marshal(changed)
+		if _, err := model.DecodeDocuments(r, raw, source); err == nil {
+			t.Fatal("unverified or misclassified investigation adopted")
+		}
+	}
+}
+
+func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
+	for _, mismatch := range []string{"digest", "size", "missing", "read_error", "changed_bytes"} {
+		t.Run(mismatch, func(t *testing.T) {
+			s, _, f, parent := documentSetup(t)
+			r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, source := documentResult(r)
+			source.LocalPath = s.Repository
+			switch mismatch {
+			case "digest":
+				source.Files[0].SHA256 = strings.Repeat("f", 64)
+			case "size":
+				source.Files[0].SizeBytes++
+			case "missing":
+				delete(f.files, "code.go")
+			case "read_error":
+				s.ReadCommitted = func(context.Context, string, string) ([]byte, error) { return nil, os.ErrPermission }
+			case "changed_bytes":
+				f.files["code.go"] = []byte("changed code\n")
+			}
+			raw, _ := json.Marshal(out)
+			f.run.RepositorySource = source
+			f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: source, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "docs", TurnID: "docs-turn"}}
+			f.run.Status, f.run.StopStatus = "completed", "stopped"
+			done, err := s.Observe(context.Background(), r.ID)
+			if err != nil || done.State != "invalid" || done.DocumentsVerified {
+				t.Fatal("unverified Git bytes adopted", done, err)
 			}
 		})
 	}

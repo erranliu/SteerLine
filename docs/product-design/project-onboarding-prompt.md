@@ -66,6 +66,8 @@
 
 每份必需 Markdown 都要合法 UTF-8、非空，有一级标题和实质正文；单份不超过 1 MiB，总和不超过 8 MiB。清单不超过 64 KiB。核对必需文档里的相对 Markdown 链接能在同一 Git 版本解析到实际文件/目录且不越出仓库；正文链接允许正常的 ../ 相对引用，不把代码示例里的路径当成实际文件要求。不要用空标题、伪造实现事实或复制 SteerLine 自身的 Go/worker/roadmap 规则填满文档。
 
+如本项目要使用 Roadmap 草稿转正，在正常 Git 提交前运行正式 SteerLine 命令 `steerline project prepare-roadmap -repository <本项目绝对根目录>`，准备两份平台静态规则及缺失的 SpecGuide；保留既有项目指南。命令不可用或规则冲突时如实报告，先更新工具或审阅规则，不手写动态 JSON 代替。任务图、来源映射与确认规划均由 SteerLine 在实际操作时冻结并通过 Runner 文件渠道提供，不加入项目初始化清单。
+
 权限与完成边界：
 - 本提示词只授权调查以及最小必要的文档/清单修改，不改业务代码、仓库地址、Git remote、账户或权限，不安装工具，不生成数据库、任务或运行状态。
 - 不修改 STEERLINE_HOME、C:\SteerlineRuntime 或任何已运行的 SteerLine 状态；不调用任务创建、派发、服务启动或纳管命令。此准备清单不是现有 SteerLine CLI 的已实现配置格式。

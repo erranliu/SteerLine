@@ -1,5 +1,35 @@
 # Roadmap 读取、解析与转正验收计划
 
+## 2026-11-02：草稿换行比较修复
+
+用户授权仅放宽草稿 LF/CRLF 内容比较；原始正文/摘要、固定文件 manifest、JSON 和原请求身份保持严格核验。原因为 Windows `core.autocrlf=true` 可让 Git 干净工作树出现 CRLF，而 blob 为 LF；不要求项目固定 LF。依据与命令见 [Spec](../../spec/roadmap-promotion.spec.md#41-来源) 和 [Plan](../../plans/roadmap-promotion.plan.md#2026-11-02草稿-lfcrlf-比较修复)。
+
+| ID | 验收行为及通过条件 | 状态 / 证据 |
+| --- | --- | --- |
+| RP-NL-A01 | Git/工作树两个换行方向可解析，确认容许 LF/CRLF 变化；原始 Body/Digest 与实际 Git 材料字节保留 | 已验收；`TestDocumentDrivenRoadmapMaterials`、`TestRoadmapConfirmationToleratesOnlyCheckoutLineEndings` 通过，原始日志见下文 diagnostics |
+| RP-NL-A02 | 正文、空格、空行、末尾换行、BOM、单独 CR、伪造摘要及 JSON 格式变化仍拒绝 | 已验收；同上及既有 JSON/manifest 反例通过 |
+| RP-NL-A03 | 真实 Git 的 LF blob/CRLF checkout 经公开 fixture 解析、确认、生成、发布/合并及 SQLite 入图；发布前正文变化拒绝，原请求不重复 | 已验收；`TestRoadmapPublicationAndAdmissionWithCRLFCheckout` 通过，109.120s；仅受控验证，无真实模型或外部 PR |
+| RP-NL-A04 | 固定 L1/L2、提示词原正文测试、链接/空白检查及独立审核通过 | 已验收；固定 L1/L2 和提示词测试通过，链接 0 错误、空白检查通过；独立只读审核无发现；未部署安装版 |
+
+接线差异仅为草稿比较时将 CRLF 视为 LF；返回与存储仍使用各自原始字节，不归一化用户文件、不改写原请求或输出 Schema。固定 Markdown 缺失、图/映射/确认 JSON 缺失或不符仍在 submit 前阻断，没有补材料或内联兜底。
+
+| 提示词/规则 | UTF-8 字节前 → 后 | 实际正文差异 |
+| --- | --- | --- |
+| `internal/prompts/roadmap-parse.md` | 253 → 253 | 无 |
+| `internal/prompts/roadmap-documents.md` | 398 → 398 | 无 |
+| `internal/prompts/materials/roadmap-parse.md` | 766 → 766 | 无 |
+| `internal/prompts/materials/roadmap-documents.md` | 1363 → 1363 | 无 |
+
+测试范围：新增内容比较反例、原固定材料两方向及受控 Git 整链；不更新黄金样本，不把源码测试通过写成安装版或真实模型已验。
+
+实际受测为基线 `7d85a9e908102a4f12210bbba91408f39362e6a7` 加本次未提交工作树实现；报告保留 dirty 来源，不声称固定 clean commit 已验。原始证据根为 `C:/SteerlineDebug/wt-762b-roadmap-newlines/`：
+
+- `diagnostics/20261102T065016447Z-0a5914e8/summary.json`：定向 Roadmap 共 44 项（含子项）通过，0 失败/测试 skip，271.085s；`go-test.jsonl` 保留原始断言。纯 model 包无独立测试文件，由 roadmap owner 直接覆盖，不作为测试通过数。
+- `test-results/L1/20261102T065047916Z-2556fe9f/summary.json`：passed/complete=true，准备 0.440s、执行 31.039s；`test-results/L2/20261102T065047916Z-2556fe9f/summary.json`：passed=true，受控交付冒烟通过，准备 12.813s、执行 183.452s。
+- 提示词原正文测试 `go test ./internal/prompts -count=1 -v` 通过，四份材料按 Git blob 对比均逐字相同，字节数见上表。独立审查者只读核对生产/测试/文档差异，确认原请求冻结、实际 Git 材料及 manifest 边界保持，无新增发现。
+
+首次直接在普通沙箱运行的隔离 Git 测试因临时 `.git/config` 写入权限被拒绝，不计通过；正式定向及 L1/L2 在允许创建自有隔离 Git/进程的上下文执行，无安装环境或已有任务操作。静态检查只证明文档和差异格式，不代替实际整链结果。
+
 日期：2026-10-26。归属：[Spec](../../spec/roadmap-promotion.spec.md) / [Plan](../../plans/roadmap-promotion.plan.md)。状态：用户已授权实施。本仓读取、解析、确认、发布/入图和正式 Web 已接入并进行隔离受控验证；2026-10-27 已接入合入的 Runner 固定仓库能力，真实 Codex 解析/生成与隔离 Git/SQLite 发布入图通过；正式 Edge 浏览器整链、真实 GitHub PR、入图及正常停服/清理最终已通过，最新证据见本文末尾；人工体验、Gitea 外部写入和安装部署未验。
 
 原型页面模拟及静态检查不属于产品通过证据。原始产物按[路径清单](../../paths.md)保存在仓库外唯一目录；此文档只记录最小结论、源码/构建/环境和证据定位。执行级别、命令与前置映射见 Plan V1–V7 与后续授权第 7 节。

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,8 +21,19 @@ import (
 func TestRoadmapPublicationAndAdmissionWithRealGit(t *testing.T) { roadmapPromotionChain(t, false) }
 
 func roadmapPromotionChain(t *testing.T, live bool) {
+	roadmapPromotionChainWithLineEndings(t, live, false)
+}
+
+func TestRoadmapPublicationAndAdmissionWithCRLFCheckout(t *testing.T) {
+	roadmapPromotionChainWithLineEndings(t, false, true)
+}
+
+func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
 	c, _ := nativeTaskFixture(t)
 	ctx := context.Background()
+	if crlf {
+		fixtureGit(t, c.Repository, "config", "core.autocrlf", "true")
+	}
 	fixtureGit(t, c.Repository, "config", "user.name", "Roadmap fixture")
 	fixtureGit(t, c.Repository, "config", "user.email", "roadmap@example.invalid")
 	fixtureGit(t, c.Repository, "config", "commit.gpgsign", "false")
@@ -154,37 +164,44 @@ func roadmapPromotionChain(t *testing.T, live bool) {
 	sourceFile := filepath.Join(c.Repository, filepath.FromSlash(sourcePath))
 	require(t, os.MkdirAll(filepath.Dir(sourceFile), 0700))
 	require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
-	parseRules, e := prompts.RoadmapParseRules()
+	_, e = roadmapservice.PrepareStatic(c.Repository, false)
 	require(t, e)
-	docRules, e := prompts.RoadmapDocumentRules()
-	require(t, e)
-	existingGraph, e := port.graph(ctx)
-	require(t, e)
-	graphRaw, e := json.Marshal(existingGraph)
-	require(t, e)
-	for path, body := range map[string][]byte{roadmapservice.GraphPath: graphRaw, roadmapservice.MappingPath: []byte(`{}`), roadmapservice.ParseRulesPath: parseRules, roadmapservice.DocumentRulesPath: docRules} {
-		require(t, os.WriteFile(filepath.Join(c.Repository, path), body, 0600))
-	}
 	fixtureGit(t, c.Repository, "add", ".")
 	fixtureGit(t, c.Repository, "commit", "-qm", "prepare original parse materials")
 	fixtureGit(t, c.Repository, "push", "origin", "main")
+	inputOnlyName := ""
+	if live {
+		// The native result must consume uploaded, uncommitted source bytes;
+		// the pinned repository still contains the old function name.
+		inputOnlyName = "SumInput" + roadmapservice.Token()[:8]
+		sourceBody = strings.ReplaceAll(sourceBody, "Sum", inputOnlyName)
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	}
+	if crlf {
+		require(t, os.WriteFile(sourceFile, []byte(strings.ReplaceAll(sourceBody, "\n", "\r\n")), 0600))
+	}
 	source, e := port.source(ctx, sourcePath)
 	require(t, e)
+	if crlf && (source.Modified || source.Body == sourceBody || source.Digest != roadmap.Digest([]byte(source.Body))) {
+		t.Fatal("checkout line endings changed the source state or raw snapshot", source)
+	}
 	parsed := promotionAction(t, port, "roadmap_parse", source.ID, strings.Repeat("a", 32), 1, roadmapservice.ParseInput{RequestID: strings.Repeat("a", 32), Path: sourcePath, Digest: source.Digest, Profile: "fixture"})
 	parsed = awaitPromotion(t, port, parsed, "review")
+	if live {
+		found := false
+		for _, task := range parsed.Analysis.Tasks {
+			if task.Key == "T1" && strings.Contains(task.Evidence, inputOnlyName) {
+				found = true
+			}
+		}
+		if !source.Modified || !found {
+			t.Fatal("native parse did not read the input-only roadmap", source.Modified, parsed.Analysis)
+		}
+	}
+	if crlf {
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	}
 	parent := promotionAction(t, port, "roadmap_confirm", parsed.ID, strings.Repeat("1", 32), parsed.Revision, struct{}{})
-	// Explicit normal Git preparation, outside all production commands.
-	planning, e := json.Marshal(struct {
-		Source    string             `json:"source_digest"`
-		Confirmed string             `json:"confirmed_digest"`
-		Analysis  *roadmap.Analysis  `json:"analysis"`
-		Existing  []roadmap.Existing `json:"existing"`
-	}{parent.Source.Digest, parent.ConfirmedDigest, parent.Analysis, parent.Existing})
-	require(t, e)
-	require(t, os.WriteFile(filepath.Join(c.Repository, roadmapservice.PlanningPath), planning, 0600))
-	fixtureGit(t, c.Repository, "add", ".")
-	fixtureGit(t, c.Repository, "commit", "-qm", "prepare confirmed planning material")
-	fixtureGit(t, c.Repository, "push", "origin", "main")
 	code = fixtureGit(t, c.Repository, "rev-parse", "HEAD")
 	require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
 	r := promotionAction(t, port, "roadmap_generate_documents", parent.ID, strings.Repeat("2", 32), parent.Revision, struct{}{})
@@ -200,6 +217,14 @@ func roadmapPromotionChain(t *testing.T, live bool) {
 	}
 	// Change the live worktree after freezing: documents still refer to the fixed commit.
 	require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
+	if crlf {
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody+" "), 0600))
+		rejected, err := port.publish(ctx, r, strings.Repeat("b", 32), roadmap.ReviewDigest(r), true)
+		if err == nil || rejected.Publication != nil {
+			t.Fatal("substantive source change started publication", rejected, err)
+		}
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	}
 	pub, e := port.publish(ctx, r, strings.Repeat("b", 32), roadmap.ReviewDigest(r), true)
 	if e == nil || pub.Publication.State != "pr_unknown" {
 		t.Fatal("missing PR receipt was treated as applied", pub, e)

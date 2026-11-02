@@ -35,8 +35,20 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 	r, err := f.port.store.Roadmap(ctx, f.port.config.Identity(), in.Correlation["steerline_roadmap_parse"])
 	require(f.t, err)
 	f.run.RepositorySource = appRepositoryManifest(f.t, *in.Generate.Repository)
+	for _, material := range in.Generate.Materials {
+		location := filepath.Join(f.port.config.Repository, ".runner-fixture-input", q.RequestID, filepath.FromSlash(material.Path))
+		f.run.Materials = append(f.run.Materials, runnercontract.Material{Kind: "file", Path: material.Path, Digest: roadmap.Digest([]byte(*material.Content)), SnapshotPath: location, ExecutionLocation: location})
+	}
 	if r.Purpose != "documents" {
-		body := r.Source.Body
+		body := ""
+		for _, material := range in.Generate.Materials {
+			if material.Path == roadmapservice.SourceInputPath {
+				body = *material.Content
+			}
+		}
+		if body == "" {
+			f.t.Fatal("original file material absent")
+		}
 		result = roadmap.Analysis{Tasks: []roadmap.Node{
 			{Key: "T1", KeyOrigin: "markdown", Title: "Sum function", Goal: "Sum two integers", Scope: "Pure function", Acceptance: "Sum(2,3) equals 5", Evidence: strings.Split(body, "\n")[1], Original: roadmap.Dependencies{}, Proposed: roadmap.Dependencies{}},
 			{Key: "T2", KeyOrigin: "markdown", Title: "Difference function", Goal: "Subtract via Sum", Scope: "Pure function", Acceptance: "Difference(5,2) equals 3", Evidence: strings.Split(body, "\n")[2], Original: roadmap.Dependencies{Local: []string{"T1"}}, Proposed: roadmap.Dependencies{Local: []string{"T1"}}},
@@ -57,7 +69,7 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 		}
 		f.run.RepositorySource = src
 		out := roadmap.GeneratedDocuments{SourceDigest: r.Source.Digest, ConfirmedDigest: r.ConfirmedDigest, CodeCommit: r.CodeCommit,
-			Design: "Reuse package logic; T2 follows T1.", Investigation: []roadmap.Investigation{{Path: "logic.go", SHA256: roadmap.Digest(text), Reason: "Pure logic owner"}}, Questions: []string{}, Documents: roadmap.PlannedDocuments(r)}
+			Design: "Reuse package logic; T2 follows T1.", Investigation: []roadmap.InvestigationReference{{Source: "repository", Path: "logic.go", Reason: "Pure logic owner"}}, Questions: []string{}, Documents: roadmap.PlannedDocuments(r)}
 		for i := range out.Documents {
 			out.Documents[i].Spec.Body = "# Spec\n## 目标\n" + r.Analysis.Tasks[i].Goal + "\n## 范围\n纯函数\n## 验收\n明确输入输出"
 			out.Documents[i].Plan.Body = "# Plan\n## 实施\n扩展 logic.go\n## 测试\n运行 go test ./...，报告保存在独立目录"
@@ -84,7 +96,7 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 	}
 	raw, err := json.Marshal(result)
 	require(f.t, err)
-	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: f.run.RepositorySource,
+	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: f.run.RepositorySource, FileMaterials: f.run.Materials,
 		Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: q.RequestID, TurnID: "controlled-turn"}}
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: q.RequestID, ReceiptStatus: "accepted"}, nil
 }

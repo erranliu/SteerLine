@@ -17,6 +17,7 @@ type GenerateRunInput struct {
 	Generate    GenerateInput     `json:"generate"`
 }
 type ContentResult struct {
+	FileMaterials    []Material        `json:"file_materials,omitempty"`
 	RepositorySource *RepositorySource `json:"repository_source,omitempty"`
 	Status           string            `json:"status"`
 	Text             string            `json:"text,omitempty"`

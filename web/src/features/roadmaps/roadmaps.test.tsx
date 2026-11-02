@@ -167,7 +167,12 @@ it("shows code evidence, acceptance material and the complete publication target
   record.code_commit = "d".repeat(40);
   record.design = "复用已有 Task owner";
   record.investigation = [
-    { path: "logic.go", sha256: "e".repeat(64), reason: "已有纯函数" },
+    {
+      source: "repository",
+      path: "logic.go",
+      sha256: "e".repeat(64),
+      reason: "已有纯函数",
+    },
   ];
   record.documents = [
     {
@@ -199,6 +204,25 @@ it("shows code evidence, acceptance material and the complete publication target
     screen.getByText("SteerlineFlow/Roadmap/execution-map.md"),
   ).toBeVisible();
   expect(submit).not.toHaveBeenCalled();
+});
+it("distinguishes repository and input citations with the same logical path", async () => {
+  const { record } = setup("documents-review");
+  record.investigation = [
+    {
+      source: "repository",
+      path: "roadmap-inputs/source.md",
+      sha256: "e".repeat(64),
+      reason: "仓库中的历史文件",
+    },
+    {
+      source: "input_file",
+      path: "roadmap-inputs/source.md",
+      sha256: "f".repeat(64),
+      reason: "本次冻结的原草稿",
+    },
+  ];
+  expect(await screen.findByText(/固定仓库.*仓库中的历史文件/)).toBeVisible();
+  expect(screen.getByText(/本次输入.*本次冻结的原草稿/)).toBeVisible();
 });
 it("disables mutation while offline and does not fall back to file reads or submits", () => {
   const { get, submit } = setup("review", false);
