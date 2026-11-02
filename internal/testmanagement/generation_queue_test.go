@@ -3,6 +3,7 @@ package testmanagement
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -187,7 +188,7 @@ func TestGenerationQueueResumeOnlyUnsubmittedOutbox(t *testing.T) {
 	}
 }
 
-func TestGenerationQueuePersistenceWindowsAndBuildChange(t *testing.T) {
+func TestGenerationQueuePersistenceWindowsAndNamespaceChange(t *testing.T) {
 	for _, state := range []string{"unknown", "accepted"} {
 		t.Run(state, func(t *testing.T) {
 			s, store, runner, in := generationFixture(t)
@@ -218,15 +219,16 @@ func TestGenerationQueuePersistenceWindowsAndBuildChange(t *testing.T) {
 	s, _, runner, in := generationFixture(t)
 	s.Queue = NewGenerationQueue(1)
 	s.Queue.Update(Generation{Project: "busy", ID: "original", State: "unknown"})
-	if _, err := s.Generate(context.Background(), in); err != nil {
+	original, err := s.Generate(context.Background(), in)
+	if err != nil {
 		t.Fatal(err)
 	}
-	s.Build.Version = "new-build"
+	s.Build.StateDir = filepath.Join(t.TempDir(), "different-namespace")
 	if err := s.Observe(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	g, _ := s.Store.Generation(context.Background(), s.Project, in.RequestID)
-	if g.State != "rejected" || runner.submits != 0 {
-		t.Fatal("unsent old build request rebound to a new execution", g)
+	if !g.Unsubmitted() || g.State != original.State || g.Diagnostic != "original Runner namespace differs" || g.Runner != original.Runner || g.Request.RequestID != original.Request.RequestID || string(g.Request.Input) != string(original.Request.Input) || runner.submits != 0 {
+		t.Fatal("unsent original request was not preserved behind its namespace boundary", g)
 	}
 }
