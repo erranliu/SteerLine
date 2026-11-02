@@ -2,6 +2,7 @@ param(
     [switch]$Web,
     [switch]$ForceWebInstall,
     [switch]$SerialBuild,
+    [switch]$Release,
     [string]$RunnerRepo = '',
     [string]$StageDirectory = '',
     [string]$TimingPath = ''
@@ -142,15 +143,17 @@ try {
         }
     } catch { $sourceCommit = 'unknown'; $sourceDirty = 'unknown' }
     $ldflags = "-X github.com/erranliu/SteerLine/internal/app.buildSourceCommit=$sourceCommit -X github.com/erranliu/SteerLine/internal/app.buildSourceDirty=$sourceDirty"
+    $productTags = if ($Release) { @('-tags', 'release') } else { @() }
+    $webTags = if ($Release) { 'webui,release' } else { 'webui' }
     Invoke-BuildStage 'go.steerline' {
-        Build-GoExecutable 'steerline.exe' @('-trimpath', '-ldflags', $ldflags, './cmd/steerline')
+        Build-GoExecutable 'steerline.exe' (@('-trimpath', '-ldflags', $ldflags) + $productTags + @('./cmd/steerline'))
     }
     if ($Web) {
         if ($SerialBuild) {
             try { & (Join-Path $sourceRoot 'scripts\build-web-assets.ps1') -ForceWebInstall:$ForceWebInstall -TimingPath $webTimingPath }
             finally { Import-BuildTiming $webTimingPath }
         } else { Complete-WebBuild }
-        Invoke-BuildStage 'go.web' { Build-GoExecutable 'steerline-web.exe' @('-trimpath', '-tags', 'webui', './cmd/steerline-web') }
+        Invoke-BuildStage 'go.web' { Build-GoExecutable 'steerline-web.exe' @('-trimpath', '-tags', $webTags, './cmd/steerline-web') }
     } else { Add-SkippedBuildStage 'web' 'Web build not requested' }
     if ($StageDirectory) {
         Invoke-BuildStage 'build.snapshot' {

@@ -35,6 +35,7 @@ export type Environment = {
   last_passed_activity_id?: string;
 };
 export type EnvironmentOptions = {
+  environment_readiness_required?: boolean;
   profiles: EnvironmentProfile[];
   environments: Environment[];
   default_profile_id: string;
@@ -83,11 +84,21 @@ export function useEnvironmentReadiness() {
     retry: false,
     refetchInterval: visible ? 15000 : false,
   });
+  const verified = online && query.isSuccess && !query.isError;
+  const configurationVerified =
+    online && configuration.isSuccess && !configuration.isError;
+  const required =
+    (configurationVerified
+      ? configuration.data?.environment_readiness_required
+      : undefined) ??
+    (verified ? query.data?.environment_readiness_required : undefined) ??
+    true;
   return {
     ...query,
     data: query.data ?? configuration.data,
     observed: !!query.data,
-    verified: online && query.isSuccess && !query.isError,
+    verified,
+    required,
     refetch: (...args: Parameters<typeof query.refetch>) => {
       void configuration.refetch();
       return query.refetch(...args);
@@ -134,6 +145,7 @@ export function EnvironmentSummary() {
           {environments?.length
             ? `项目运行环境已就绪 ${environments.filter((e) => e.status === "ready").length}/${environments.length}`
             : "尚无开发执行方案"}
+          {!readiness.required && " · 环境就绪阻塞已关闭"}
         </>
       )}
     </NavLink>

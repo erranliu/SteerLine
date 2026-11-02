@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/erranliu/SteerLine/internal/developerconfig"
+
 	_ "modernc.org/sqlite"
 
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -21,9 +23,16 @@ type SQLiteStore struct {
 	readOnly   bool
 	path       string
 	createdNew bool
+	developer  developerconfig.Policy
 }
 
 func OpenSQLiteStore(path string) (_ *SQLiteStore, retErr error) {
+	return OpenSQLiteStoreWithDeveloperPolicy(path, developerconfig.Policy{})
+}
+
+// OpenSQLiteStoreWithDeveloperPolicy freezes trusted application policy for
+// this writer. Candidate payloads never authorize a development override.
+func OpenSQLiteStoreWithDeveloperPolicy(path string, policy developerconfig.Policy) (_ *SQLiteStore, retErr error) {
 	defer func() { retErr = storageFailure(retErr, storageports.StorageIO) }()
 	if path == "" {
 		return nil, errors.New("sqlite path is required")
@@ -50,7 +59,7 @@ func OpenSQLiteStore(path string) (_ *SQLiteStore, retErr error) {
 	// Closing idle connections avoids keeping runtime directories undeletable on
 	// Windows when a caller forgets to close an otherwise idle Service.
 	db.SetMaxIdleConns(0)
-	store := &SQLiteStore{db: db, Reader: NewReader(db, nil), path: path, createdNew: createNew}
+	store := &SQLiteStore{db: db, Reader: NewReader(db, nil), path: path, createdNew: createNew, developer: policy}
 	if err := store.ensureSchema(context.Background(), createNew); err != nil {
 		db.Close()
 		store.abortNewDatabase()

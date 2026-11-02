@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/developerconfig"
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"path/filepath"
 	"time"
@@ -41,6 +42,7 @@ func (c Config) runnerPublication() runnerclient.Publication {
 }
 
 func runnerTaskService(config Config, connection taskrunner.Store, cli runnerclient.Client) *taskrunner.Service {
+	developer := developerconfig.Resolve(config.RunnerExecution.Developer)
 	service := &taskrunner.Service{Project: config.Identity(), Claimant: config.Claimant, StateDir: cli.StateDir, DefaultProfile: config.RunnerExecution.DefaultProfile, Profiles: config.RunnerExecution.taskProfiles(config.Repository, config.runnerPublication()), Tasks: NewTaskService(connection, config), Store: connection}
 	service.RunnerBuild = cli.BuildPin()
 	for id, profile := range service.Profiles {
@@ -63,6 +65,9 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		}
 	}
 	service.CheckExecution = func(ctx context.Context, id string, refresh bool) error {
+		if developer.SkipEnvironmentReadiness() {
+			return nil
+		}
 		if config.runtimeEnvironment == nil {
 			return &taskmodel.Error{Code: "environment_not_ready", Message: "项目环境准备门禁不可用"}
 		}
@@ -83,14 +88,20 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		if err := json.Unmarshal(candidate.Submit.Input, &input); err != nil {
 			return err
 		}
-		if config.runtimeEnvironment == nil || config.runtimeEnvironmentAdmission == nil {
+		if config.runtimeEnvironmentAdmission == nil {
 			return &taskmodel.Error{Code: "environment_not_ready", Message: "项目环境准备门禁不可用"}
 		}
-		proof, _, err := config.runtimeEnvironment.admission(ctx, candidate.ProfileID, candidate.BaseRevision, false)
-		if err != nil {
-			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
+		candidate.EnvironmentReadinessSkipped = developer.SkipEnvironmentReadiness()
+		if !candidate.EnvironmentReadinessSkipped {
+			if config.runtimeEnvironment == nil {
+				return &taskmodel.Error{Code: "environment_not_ready", Message: "项目环境准备门禁不可用"}
+			}
+			proof, _, err := config.runtimeEnvironment.admission(ctx, candidate.ProfileID, candidate.BaseRevision, false)
+			if err != nil {
+				return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
+			}
+			candidate.Environment = &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
 		}
-		candidate.Environment = &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
 		target := executionconfig.Target(input.Execution)
 		a := config.runtimeEnvironmentAdmission
 		a.mu.Lock()

@@ -51,6 +51,7 @@ switch ($Tool) {
     'go' {
         if ($args[0] -ne 'build') { throw "Unexpected go arguments: $args" }
         $name = if ($args -contains './cmd/steerline-web') { 'go.web' } else { 'go.steerline' }
+        [IO.File]::WriteAllText((Join-Path $env:SL_BUILD_EVENTS ($name+'.args.json')), (ConvertTo-Json -InputObject @($args)))
         Event ($name+'.start')
         if ($name -eq 'go.web' -and -not (Test-Path web/server/dist/index.html)) { throw 'Web Go build preceded assets.' }
         Start-Sleep -Milliseconds 800
@@ -127,6 +128,17 @@ try {
     Expect-Install $cold 'succeeded'
     $warm = Run-Build 'warm'
     Expect-Install $warm 'skipped'
+    $developmentArgs = Get-Content -LiteralPath (Join-Path $OutDir 'warm\go.steerline.args.json') -Raw | ConvertFrom-Json
+    Assert (-not ($developmentArgs -contains 'release')) 'Development build unexpectedly disabled developer options.'
+    $release = Run-Build 'release' $true @('-Release')
+    Expect-Install $release 'skipped'
+    foreach ($product in @('go.steerline', 'go.web')) {
+        $releaseArgs = Get-Content -LiteralPath (Join-Path $OutDir ('release\'+$product+'.args.json')) -Raw | ConvertFrom-Json
+        $tagIndex = [Array]::IndexOf($releaseArgs, '-tags')
+        Assert ($tagIndex -ge 0) "$product release build omitted tags."
+        $expectedTags = if ($product -eq 'go.web') { 'webui,release' } else { 'release' }
+        Assert ($releaseArgs[$tagIndex + 1] -eq $expectedTags) "$product release build did not disable developer options."
+    }
     $runnerStage = $warm.stages | Where-Object name -eq 'go.runner'
     $backendStage = $warm.stages | Where-Object name -eq 'go.steerline'
     $frontend = $warm.stages | Where-Object name -eq 'web.dependencies.check'

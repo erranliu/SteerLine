@@ -23,7 +23,7 @@ func TestHTTPConsumerBoundary(t *testing.T) {
 			count++
 			// processwindow only sets native launch flags; it carries no backend ownership.
 			name := pkg.ImportPath
-			webConfigValue := (owner == "../../web/server" || owner == "../../cmd/steerline-web") && (name == "github.com/erranliu/SteerLine/internal/executionconfig" || name == "github.com/erranliu/SteerLine/internal/runnercontract")
+			webConfigValue := (owner == "../../web/server" || owner == "../../cmd/steerline-web") && (name == "github.com/erranliu/SteerLine/internal/executionconfig" || name == "github.com/erranliu/SteerLine/internal/runnercontract" || name == "github.com/erranliu/SteerLine/internal/developerconfig")
 			if webConfigValue {
 				continue
 			}
