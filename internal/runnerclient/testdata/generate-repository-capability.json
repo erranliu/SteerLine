@@ -1,6 +1,14 @@
 {
-  "source_commit": "a03e30efdee964b1702332e1ec241bde9481db08",
+  "source_commit": "66cc0acf50b675c75458d9d6281139e16158a3a3-dirty",
   "generate": {
+    "file_materials": {
+      "contract": "frozen_private_files/v1",
+      "input_property": "generate.materials",
+      "kind": "file",
+      "manifest": "run.materials/content_result.file_materials",
+      "max_bytes": 4194304,
+      "max_files": 64
+    },
     "max_result_utf8_bytes": 1048576,
     "output_schema": "caller_defined_json_schema_2020_12",
     "replay": "original_request_id_only_no_unknown_retry",
@@ -58,8 +66,6 @@
                       "properties": {
                         "access_mode": {
                           "enum": [
-                            "",
-                            "sandbox",
                             "full_access"
                           ]
                         }
@@ -206,8 +212,6 @@
                       "properties": {
                         "access_mode": {
                           "enum": [
-                            "",
-                            "sandbox",
                             "full_access"
                           ]
                         }
@@ -323,6 +327,90 @@
             }
           }
         }
+      },
+      {
+        "if": {
+          "properties": {
+            "workflow": {
+              "properties": {
+                "id": {
+                  "const": "execute"
+                },
+                "version": {
+                  "const": 1
+                }
+              }
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "workflow": {
+              "required": [
+                "prompt_overrides"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "workflow": {
+              "properties": {
+                "id": {
+                  "const": "execute"
+                },
+                "version": {
+                  "const": 1
+                }
+              }
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "execution": {
+              "properties": {
+                "adapter": {
+                  "enum": [
+                    "codex-app-server",
+                    "orca-terminal"
+                  ]
+                },
+                "settings": {
+                  "allOf": [
+                    {},
+                    {
+                      "properties": {
+                        "access_mode": {
+                          "enum": [
+                            "full_access"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "workflow": {
+              "properties": {
+                "prompt_overrides": {
+                  "minProperties": 1,
+                  "propertyNames": {
+                    "enum": [
+                      "execute"
+                    ]
+                  },
+                  "required": [
+                    "execute"
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     ],
     "properties": {
@@ -345,11 +433,8 @@
                 "additionalProperties": false,
                 "properties": {
                   "access_mode": {
-                    "default": "sandbox",
-                    "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                    "description": "Explicit permission mode. Development requires full_access; local content requires read_only.",
                     "enum": [
-                      "",
-                      "sandbox",
                       "full_access",
                       "read_only"
                     ]
@@ -380,6 +465,9 @@
                     ]
                   }
                 },
+                "required": [
+                  "access_mode"
+                ],
                 "type": "object"
               },
               "target": {
@@ -584,11 +672,8 @@
                 ],
                 "properties": {
                   "access_mode": {
-                    "default": "sandbox",
-                    "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                    "description": "Explicit permission mode. Development requires full_access; local content requires read_only.",
                     "enum": [
-                      "",
-                      "sandbox",
                       "full_access"
                     ]
                   },
@@ -664,6 +749,9 @@
                     "type": "object"
                   }
                 },
+                "required": [
+                  "access_mode"
+                ],
                 "type": "object"
               },
               "target": {
@@ -768,7 +856,10 @@
                   "type": "string"
                 },
                 "kind": {
-                  "const": "inline"
+                  "enum": [
+                    "inline",
+                    "file"
+                  ]
                 },
                 "path": {
                   "minLength": 1,

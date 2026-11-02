@@ -82,7 +82,7 @@ func (p *roadmapPort) source(ctx context.Context, relative string) (roadmap.Sour
 		return source, e
 	}
 	committed, readErr := m.read(ctx, source.Head, relative)
-	source.Modified = readErr != nil || roadmap.Digest(committed) != source.Digest
+	source.Modified = readErr != nil || !roadmap.SameMarkdown(committed, []byte(source.Body))
 	return source, nil
 }
 func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
@@ -190,7 +190,7 @@ func (p *roadmapPort) read(ctx context.Context, route string, values url.Values)
 		Profiles           []map[string]string `json:"profiles"`
 		DocumentsAvailable bool                `json:"documents_available"`
 		DocumentsReason    string              `json:"documents_reason"`
-	}{sources, records, profiles, p.config.runtimeCatalog.RepositoryGenerationUnavailable() == "", p.config.runtimeCatalog.RepositoryGenerationUnavailable()}, nil
+	}{sources, records, profiles, p.config.runtimeCatalog.FileMaterialGenerationUnavailable() == "", p.config.runtimeCatalog.FileMaterialGenerationUnavailable()}, nil
 }
 func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
 	out := maintenanceResponse(in)

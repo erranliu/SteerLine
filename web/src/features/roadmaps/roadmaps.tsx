@@ -42,7 +42,12 @@ export type RoadmapRecord = {
   parent_id?: string;
   code_commit?: string;
   design?: string;
-  investigation?: { path: string; sha256: string; reason: string }[];
+  investigation?: {
+    source: "repository" | "input_file";
+    path: string;
+    sha256: string;
+    reason: string;
+  }[];
   document_questions?: string[];
   publication_preview?: {
     repository: string;
@@ -503,9 +508,10 @@ export function Roadmaps() {
         </button>
         {record?.code_commit && <p>固定代码提交：{record.code_commit}</p>}
         {record?.design && <p>{record.design}</p>}
-        {record?.investigation?.map((ref) => (
-          <p key={ref.path}>
-            调查依据：{ref.path} · {ref.sha256.slice(0, 12)} · {ref.reason}
+        {record?.investigation?.map((ref, index) => (
+          <p key={`${ref.source}:${ref.path}:${index}`}>
+            调查依据 · {ref.source === "repository" ? "固定仓库" : "本次输入"}：
+            {ref.path} · {ref.sha256.slice(0, 12)} · {ref.reason}
           </p>
         ))}
         {record?.document_questions?.map((q, i) => (

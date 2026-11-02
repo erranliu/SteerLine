@@ -27,11 +27,14 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "project" {
+		return runProjectCommand(os.Args[2:])
+	}
 	if len(os.Args) > 1 && os.Args[1] == "verify-runner-upgrade" {
 		return runRunnerUpgrade(os.Args[2:])
 	}
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <start|restart|serve|stop|prepare-deployment|verify-stop|verify-restart|recover-deployment|verify-runner-upgrade|status|check|control|task|tests|answer|home|install|launchers> [-config config.json]")
+		return fmt.Errorf("usage: steerline <start|restart|serve|stop|prepare-deployment|verify-stop|verify-restart|recover-deployment|verify-runner-upgrade|status|check|control|task|tests|project|answer|home|install|launchers> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
