@@ -50,6 +50,8 @@ test("runtime environments keep card actions, failed observations and task retur
 }, info) => {
   const projects = ["a".repeat(64), "b".repeat(64)];
   let failOptions = false;
+  let holdQualification = false;
+  let releaseQualification = () => {};
   const writes: unknown[] = [];
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -131,14 +133,34 @@ test("runtime environments keep card actions, failed observations and task retur
       return;
     }
     if (path.endsWith("/environment/options")) {
-      if (failOptions) {
+      const configuration =
+        new URL(route.request().url()).searchParams.get("configuration") ===
+        "true";
+      if (!configuration && holdQualification)
+        await new Promise<void>((resolve) => {
+          releaseQualification = resolve;
+        });
+      if (!configuration && failOptions) {
         await route.fulfill({
           status: 503,
           json: { message: "fixture unavailable" },
         });
         return;
       }
-      const visible = project === projects[0] ? environments : [];
+      const visible =
+        project === projects[0]
+          ? environments.map((e) =>
+              configuration
+                ? {
+                    ...e,
+                    status: "not_ready",
+                    stage: "unverified",
+                    reason: "项目运行环境状态待核实",
+                    current_revision: 0,
+                  }
+                : e,
+            )
+          : [];
       data = {
         environments: visible,
         profiles: visible.flatMap((e) =>
@@ -223,6 +245,7 @@ test("runtime environments keep card actions, failed observations and task retur
   environments[0].stage = "stale";
   await page.getByRole("button", { name: "刷新查询" }).click();
   // Explicit navigation also covers a refresh with serialized task/profile.
+  holdQualification = true;
   await page.goto(
     `${origin}/projects/${projects[0]}/environment?profile=alternate&task=38`,
   );
@@ -230,8 +253,24 @@ test("runtime environments keep card actions, failed observations and task retur
     page.getByRole("heading", { name: "项目运行环境", exact: true }),
   ).toBeVisible();
   const first = page.locator(".environment-card").first();
+  await expect(
+    page.getByRole("region", { name: "选择运行机与链路" }).getByRole("button"),
+  ).toHaveCount(6);
+  await expect(first.getByRole("heading")).toHaveText(
+    "Codex 直连 · 状态待核实",
+  );
+  await expect(first.getByRole("button", { name: "提交检测" })).toBeDisabled();
+  await page.screenshot({
+    path: info.outputPath("configuration-visible-qualification-pending.png"),
+    fullPage: true,
+  });
+  holdQualification = false;
+  releaseQualification();
+  await expect(first.getByRole("heading")).toHaveText("Codex 直连 · 已失效");
   await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
-  await expect(first.getByLabel("检测所用方案").locator("option:checked")).toHaveText("alternate · model-high · high");
+  await expect(
+    first.getByLabel("检测所用方案").locator("option:checked"),
+  ).toHaveText("alternate · model-high · high");
   await expect(first).toBeFocused();
   await expect(page.getByText("阅读项目准备清单", { exact: true })).toHaveCount(
     1,

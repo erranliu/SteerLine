@@ -167,6 +167,8 @@ function fixture(
   send = vi.fn().mockResolvedValue(true),
   emptyHistory = false,
   path = "",
+  pendingReadiness = false,
+  configurationFailure = false,
 ) {
   const api = new Api(identity, "csrf", "home");
   const round = {
@@ -203,9 +205,16 @@ function fixture(
     diagnostic: "",
     rounds: [round],
   };
-  vi.spyOn(api, "get").mockImplementation(
-    async (path) =>
-      (path === "/environment/options"
+  vi.spyOn(api, "get").mockImplementation(async (path) => {
+    if (
+      path === "/environment/options?configuration=true" &&
+      configurationFailure
+    )
+      throw new Error("configuration temporarily unavailable");
+    if (path === "/environment/options" && pendingReadiness)
+      return new Promise(() => {});
+    return (
+      path.startsWith("/environment/options")
         ? {
             default_profile_id: "remote",
             profiles: [
@@ -247,8 +256,9 @@ function fixture(
             }
           : path.split("?")[0] === "/environment"
             ? { records: emptyHistory ? [] : [{ ...record, rounds: [] }] }
-            : record) as never,
-  );
+            : record
+    ) as never;
+  });
   const client = testClient();
   mountFeature(
     <>
@@ -260,7 +270,15 @@ function fixture(
     online,
     { send },
   );
-  return { send, record, api, client };
+  return {
+    send,
+    record,
+    api,
+    client,
+    recoverConfiguration: () => {
+      configurationFailure = false;
+    },
+  };
 }
 it("keeps progress separate from binary admission and stops the exact original activity", async () => {
   const { send, record } = fixture();
@@ -472,4 +490,56 @@ it("provides project interface guidance without generation or protocol synchroni
   expect(
     screen.queryByRole("button", { name: /生成文档|导出.*上下文|同步协议/ }),
   ).not.toBeInTheDocument();
+});
+
+it("shows configured machines and links while project qualification is pending without enabling detection", async () => {
+  const { send } = fixture(true, vi.fn(), false, "", true);
+  const chooser = screen.getByRole("region", { name: "选择运行机与链路" });
+  expect(
+    await within(chooser).findByRole("button", { name: /环境 eeeeeeee/ }),
+  ).toBeVisible();
+  await screen.findByText(/共用方案：远端一/);
+  expect(screen.getByRole("button", { name: "提交检测" })).toBeDisabled();
+  expect(screen.getByText("项目运行环境状态待核实")).toBeVisible();
+  expect(send).not.toHaveBeenCalled();
+});
+
+it("retries configuration on explicit refresh while project qualification remains pending", async () => {
+  const { api, client, send, recoverConfiguration } = fixture(
+    true,
+    vi.fn(),
+    false,
+    "",
+    true,
+    true,
+  );
+  await waitFor(() =>
+    expect(
+      client.getQueryState([...optionsKey.slice(0, -1), "configuration"])
+        ?.status,
+    ).toBe("error"),
+  );
+  expect(
+    screen.queryByRole("button", { name: /环境 eeeeeeee/ }),
+  ).not.toBeInTheDocument();
+  const callsBeforeRefresh = vi
+    .mocked(api.get)
+    .mock.calls.filter(
+      ([path]) => path === "/environment/options?configuration=true",
+    ).length;
+  recoverConfiguration();
+  fireEvent.click(screen.getByRole("button", { name: "刷新环境" }));
+  expect(
+    await screen.findByRole("button", { name: /环境 eeeeeeee/ }),
+  ).toBeVisible();
+  await screen.findByText(/共用方案：远端一/);
+  expect(screen.getByRole("button", { name: "提交检测" })).toBeDisabled();
+  expect(
+    vi
+      .mocked(api.get)
+      .mock.calls.filter(
+        ([path]) => path === "/environment/options?configuration=true",
+      ),
+  ).toHaveLength(callsBeforeRefresh + 1);
+  expect(send).not.toHaveBeenCalled();
 });

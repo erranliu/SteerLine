@@ -29,7 +29,8 @@ import {
 } from "../test/workspace";
 
 function workspaceRead(api: Api, path: string): unknown {
-  if (path === "/environment/options") return { profiles: [], environments: [], generators: [] };
+  if (path.startsWith("/environment/options"))
+    return { profiles: [], environments: [], generators: [] };
   if (path === "/snapshot") return makeSnapshot(api);
   if (path === "/presentation")
     return { presentation: { profiles: [], default_profile_id: "" } };
@@ -123,7 +124,9 @@ it("preloads only after connection verification, shares presentation in StrictMo
         path === "/snapshot" ||
         path === "/presentation" ||
         path === "/tasks?limit=100&cursor=" ||
-        path === "/maintenance" || path === "/environment/options",
+        path === "/maintenance" ||
+        path === "/environment/options" ||
+        path === "/environment/options?configuration=true",
     ),
   ).toBe(true);
   client.clear();

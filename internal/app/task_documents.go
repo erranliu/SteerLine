@@ -14,6 +14,14 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
+type materialReadKey struct{}
+
+// Each assessment uses one request-scoped cache of immutable Git blobs. It is
+// never shared between requests or used for mutable workspace files.
+func materialReads(ctx context.Context) context.Context {
+	return context.WithValue(ctx, materialReadKey{}, map[string][]byte{})
+}
+
 // Git access stays in the app adapter; task sees bytes of an exact regular blob.
 type taskDocuments struct {
 	processHost executionbackend.ManagedProcessHost
@@ -27,7 +35,16 @@ func (a taskDocuments) ReadCommittedRegularFile(ctx context.Context, ref taskmod
 	if err := taskmodel.ValidateFileReference(ref); err != nil {
 		return nil, err
 	}
-	return a.readCommittedFile(ctx, ref.Commit, ref.Path)
+	cache, _ := ctx.Value(materialReadKey{}).(map[string][]byte)
+	key := a.repository + ":" + ref.Commit + ":" + ref.Path
+	if body, ok := cache[key]; ok {
+		return body, nil
+	}
+	body, err := a.readCommittedFile(ctx, ref.Commit, ref.Path)
+	if err == nil && cache != nil {
+		cache[key] = body
+	}
+	return body, err
 }
 
 // readCommittedFile is also used for optional, commit-pinned testing JSON. The

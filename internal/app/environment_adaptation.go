@@ -96,21 +96,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 			return out, e
 		}
 	}
-	document, e := p.read(ctx, commit, envmodel.DocumentPath(key))
-	if e != nil {
-		if errors.Is(e, os.ErrNotExist) {
-			return out, fmt.Errorf("项目尚未接入检测，缺少环境文档：%w", e)
-		}
-		return out, e
-	}
-	manifest, e := envmodel.ParseManifest(document)
-	if e != nil {
-		return out, &invalidEnvironmentBasis{e}
-	}
-	if manifest.EnvironmentKey != key {
-		return out, &invalidEnvironmentBasis{errors.New("环境接口与所选目标不符")}
-	}
-	script, e := p.read(ctx, commit, manifest.Script)
+	document, manifest, script, e := p.invocationAt(ctx, key, commit)
 	if e != nil {
 		return out, e
 	}
@@ -152,6 +138,29 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	}
 	out = envmodel.Prepared{Commit: commit, Inputs: envmodel.Digest(basis), ScriptDigest: envmodel.Digest(script), Manifest: manifest, Input: input}
 	return out, nil
+}
+
+// invocationAt reads only the project invocation, not its dependency basis.
+func (p *environmentPort) invocationAt(ctx context.Context, key, commit string) ([]byte, envmodel.Manifest, []byte, error) {
+	document, e := p.read(ctx, commit, envmodel.DocumentPath(key))
+	if e != nil {
+		if errors.Is(e, os.ErrNotExist) {
+			return nil, envmodel.Manifest{}, nil, fmt.Errorf("项目尚未接入检测，缺少环境文档：%w", e)
+		}
+		return nil, envmodel.Manifest{}, nil, e
+	}
+	manifest, e := envmodel.ParseManifest(document)
+	if e != nil {
+		return document, envmodel.Manifest{}, nil, &invalidEnvironmentBasis{e}
+	}
+	if manifest.EnvironmentKey != key {
+		return document, envmodel.Manifest{}, nil, &invalidEnvironmentBasis{errors.New("环境接口与所选目标不符")}
+	}
+	script, e := p.read(ctx, commit, manifest.Script)
+	if e != nil {
+		return document, envmodel.Manifest{}, nil, e
+	}
+	return document, manifest, script, nil
 }
 
 // observedSource is query-only: fetch belongs to explicit prepare/start or the
