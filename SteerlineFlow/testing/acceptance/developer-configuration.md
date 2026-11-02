@@ -131,3 +131,22 @@
 - release 五包策略与依赖边界定向通过：`diagnostics/20261102T093701232Z-ce64dad42bf84c0088bf2307fd14f47e/summary.json`。
 
 整合后文档检查通过（653 文件、4068 本地链接、0 错误），差异检查通过。本轮未新增真实模型、浏览器或安装环境操作。
+
+## 后续独立 PR：源码防回流约束
+
+按用户审计后的要求，从已合入功能的 main `ffcdcc0b88eb25a3136ec42e5b28318ef1a5a85a` 创建 `codex/developer-policy-boundary`。新增非提示词的源码规则：原始开发者配置只允许在定义包、全局配置类型、应用校验、能力映射及 Web 编辑器这些明确位置使用。其他生产 Go 文件导入 `developerconfig`（含子包）、访问 `Developer` 命名空间或 `SkipEnvironmentReadiness` 字段均报错。全平台/标签扫描会发现辅助包中的访问，测试夹具不受该生产规则限制，注释和字符串不误报。
+
+规则接入已有 `ScanSource`，既有 L1 `TestRunnerExecutionBoundary` 读取真实仓库结果并拒绝本规则的违规；测试根与 Windows/Linux 两子例清单保持不变。正反例归边界包普通测试，不增加 E2E 场景或固定 L1 owner 用例集。同步 L1/L4 说明和机器清单，产品运行时、配置格式、策略解析、提示词正文/规则/组装、提示词检查函数及 CI 工作流均未改动。
+
+证据根为独立的 `C:\SteerlineDebug\wt-2c36-developer-policy-boundary\`，报告源码为上述 main 上的本轮工作树：
+
+| 验证 | 结果与原报告 |
+| --- | --- |
+| 新增配置所有权及辅助包正反例 | 通过；`diagnostics/20261102T094742645Z-91359dd4b87446dda097660a26a1641d/summary.json`。 |
+| 边界包及子包完整回归 | 通过；`diagnostics/20261102T095200415Z-9b652308ac194c8f99f4abf55296ee1a/summary.json`；这是两个包的完整回归，不是 go.full 报告。 |
+| 最终固定 L1 | 通过；`test-results/L1/20261102T095157096Z-cbb830078071407688a737f4fbd42aab/summary.json`；真实仓库约束及原两平台检查均执行。 |
+| 固定 L2 | 通过且清理完成；`test-results/L2/20261102T095001873Z-7204446c81af469185a687e1b924fcc2/summary.json`。该轮执行期间仅更新下述边界测试夹具，不改变规则实现、L2 构建或运行时代码。 |
+
+首轮边界包完整回归失败保留在 `diagnostics/20261102T095003452Z-c71dac74124046649bdaf7a6e9b39d21/summary.json`：旧 `pure_developer_policy` 正例允许任意 Web 配置文件导入开发者配置，与本次精确所有权规则冲突。将其同步为编辑器 `store.go` 允许、其他文件拒绝两例后，规则实现未放宽，完整复验通过。未把旧失败改写为通过。
+
+本轮不重跑未修改的产品 owner 全集或浏览器，不扩展前阶段的通过范围。文档链接与差异检查通过；未运行真实模型或操作安装环境。

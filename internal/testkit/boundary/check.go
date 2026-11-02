@@ -504,6 +504,7 @@ func ScanSource(root string) (Report, error) {
 		}
 		if !strings.HasSuffix(entry.Name(), "_test.go") {
 			checkPromptSource(&report, filepath.ToSlash(rel)+"/"+entry.Name(), parsed)
+			checkDeveloperConfigSource(&report, filepath.ToSlash(rel)+"/"+entry.Name(), parsed)
 			for _, decl := range parsed.Decls {
 				names := []string{}
 				switch d := decl.(type) {
