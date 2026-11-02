@@ -32,6 +32,7 @@ func failure(status int, code, message string) error { return &Error{status, cod
 
 type Snapshot struct {
 	Config       Config                          `json:"config"`
+	Environments []cfg.Environment               `json:"environments"`
 	SavedDigest  string                          `json:"saved_digest"`
 	Writable     bool                            `json:"writable"`
 	Reason       string                          `json:"reason,omitempty"`
@@ -119,7 +120,7 @@ func (s *Store) Snapshot(ctx context.Context) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	out := Snapshot{Config: c, SavedDigest: cfg.Digest(raw), Writable: s.writeReason() == "", Reason: s.writeReason(), Efforts: []string{}, Workflows: []runnercontract.WorkflowChoice{}}
+	out := Snapshot{Config: c, Environments: cfg.Environments(c.Profiles), SavedDigest: cfg.Digest(raw), Writable: s.writeReason() == "", Reason: s.writeReason(), Efforts: []string{}, Workflows: []runnercontract.WorkflowChoice{}}
 	cat, err := s.contract(ctx, c.Runner)
 	if err != nil {
 		out.Writable = false
@@ -396,5 +397,5 @@ func (s *Store) Save(ctx context.Context, expected string, raw []byte) (Snapshot
 		}
 		digest = cfg.Digest(published)
 	}
-	return Snapshot{Config: c, SavedDigest: digest, Writable: true, Workflows: s.catalog.Workflows, Efforts: s.catalog.Efforts, Combinations: s.catalog.Combinations, LocalHelper: helperStatus(c)}, nil
+	return Snapshot{Config: c, Environments: cfg.Environments(c.Profiles), SavedDigest: digest, Writable: true, Workflows: s.catalog.Workflows, Efforts: s.catalog.Efforts, Combinations: s.catalog.Combinations, LocalHelper: helperStatus(c)}, nil
 }

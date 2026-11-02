@@ -8,8 +8,8 @@ import (
 	"errors"
 	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
 	repository "github.com/erranliu/SteerLine/web/server/executionconfig"
+	"github.com/erranliu/SteerLine/web/server/nativequery"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -130,11 +130,11 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 		if q.Host == "local" && q.Environment != "" {
 			return Result{}, errors.New("local discovery cannot select an environment")
 		}
+		if q.Host == "orca_environment" && q.Environment == "" {
+			return Result{}, errors.New("remote discovery requires an explicit environment")
+		}
 		if !agentID.MatchString(q.Agent) {
 			return Result{}, errors.New("invalid discovery agent")
-		}
-		if q.Adapter == "codex-app-server" && (q.Host != "local" || q.Agent != "codex") {
-			return Result{State: "unsupported", Origin: "unknown", Diagnostic: "Codex 直连仅提供本机 Codex 目录", ContextUnverified: true}, nil
 		}
 	}
 	config, err := m.Store.Current()
@@ -145,33 +145,44 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 	if runtime.GOOS == "windows" {
 		program = "codex.exe"
 	}
-	orcaProgram := "orca"
-	for _, p := range config.Profiles {
-		if p.ID == q.ProfileID {
-			var s struct {
+	if q.ProfileID != "" {
+		matched := false
+		for _, p := range config.Profiles {
+			if p.ID != q.ProfileID {
+				continue
+			}
+			var settings struct {
 				Executable string `json:"executable"`
-				Transport  struct {
-					Executable string `json:"executable"`
-				} `json:"transport"`
+				Agent      string `json:"agent"`
 			}
-			json.Unmarshal(p.Execution.Settings, &s)
-			if p.Execution.Adapter == "codex-app-server" && s.Executable != "" {
-				program = s.Executable
+			if err := json.Unmarshal(p.Execution.Settings, &settings); err != nil {
+				return Result{}, err
 			}
-			if p.Execution.Adapter == "orca-terminal" && s.Transport.Executable != "" {
-				orcaProgram = s.Transport.Executable
+			if settings.Agent == "" || p.Execution.Adapter == "codex-app-server" {
+				settings.Agent = "codex"
 			}
+			if q.Kind == "environments" || p.Execution.Adapter != q.Adapter || p.Execution.Target.Kind != q.Host || p.Execution.Target.Environment != q.Environment || settings.Agent != q.Agent {
+				return Result{}, errors.New("discovery profile and target/agent differ")
+			}
+			matched = true
+			if q.Adapter == "codex-app-server" && settings.Executable != "" {
+				program = settings.Executable
+			}
+			break
+		}
+		if !matched {
+			return Result{}, errors.New("discovery profile does not exist")
 		}
 	}
-	if q.Kind == "environments" || q.Host == "orca_environment" {
-		program = orcaProgram
+	if q.Kind != "environments" && q.Adapter == "codex-app-server" && (q.Host != "local" || q.Agent != "codex") {
+		return Result{State: "unsupported", Origin: "unknown", Diagnostic: "Codex 直连仅提供本机 Codex 目录", ContextUnverified: true}, nil
 	}
-	resolved := program
-	var executableIdentity any = program
+	resolved := ""
+	var executableIdentity any
 	if q.Host == "local" && q.Adapter == "codex-app-server" && q.Kind != "environments" {
-		resolved, err = exec.LookPath(program)
+		resolved, err = nativequery.Executable(program)
 		if err != nil {
-			return Result{State: "unavailable", Diagnostic: "找不到已配置的原生程序", ContextUnverified: true}, nil
+			return Result{State: "unavailable", Diagnostic: err.Error(), ContextUnverified: true}, nil
 		}
 		info, e := os.Stat(resolved)
 		if e != nil {
@@ -228,10 +239,10 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 		defer m.wg.Done()
 		defer func() { <-m.slots }()
 		defer cancel()
-		result := Result{Origin: "unknown", ContextKey: key, ContextUnverified: true, Freshness: "fresh", Scope: "原生默认账号与配置目录；未验证具体项目执行上下文"}
+		result := Result{Origin: "unknown", ContextKey: key, ContextUnverified: true, Freshness: "fresh", Scope: "原生账号与目录查询；未验证方案的 provider、权限或启动参数"}
 		var e error
 		if q.Kind == "environments" {
-			result.Environments, e = m.environments(queryCtx, resolved)
+			result.Environments, e = m.environments(queryCtx)
 			result.State = "ready"
 			result.Origin = "registered"
 		} else if q.Host == "local" && q.Adapter == "orca-terminal" {
@@ -242,7 +253,7 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 				result.State = "ready"
 				result.Origin = "product"
 			} else {
-				result.Models, result.Version, e = codexModels(queryCtx, resolved)
+				result.Models, result.Version, e = codexModels(queryCtx, m.Store.Home, resolved)
 				result.State = "ready"
 				result.Origin = "probe"
 			}

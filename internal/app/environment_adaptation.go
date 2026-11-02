@@ -11,6 +11,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"os"
 	"strings"
 	"time"
 )
@@ -97,6 +98,9 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	}
 	document, e := p.read(ctx, commit, envmodel.DocumentPath(key))
 	if e != nil {
+		if errors.Is(e, os.ErrNotExist) {
+			return out, fmt.Errorf("项目尚未接入检测，缺少环境文档：%w", e)
+		}
 		return out, e
 	}
 	manifest, e := envmodel.ParseManifest(document)
