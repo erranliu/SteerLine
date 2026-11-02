@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+L1–L4 测试内容调整（2026-11-02，已实施并独立审核）：[Spec](test-content-alignment.spec.md) · [Plan](../plans/test-content-alignment.plan.md) · [验收](../testing/acceptance/test-content-alignment.md)。保持现有分级，补齐 Web/owner 正式测试集、材料生成 L3、独立 Runner 专项及一致结果；L1/L2、专项及组合通过，Full 失败与基线复现/未定位边界独立保留；共享 Web 重型场景不改级。
+
 项目 × 运行机 × 链路环境准备（2026-10-31，已实施，自动验收完成）：[Spec](project-environment-workflow.spec.md) · [Plan](../plans/project-environment-workflow.plan.md) · [审计与验收安排](../testing/acceptance/project-environment-workflow.md)。环境选择优先，目标材料与生成/验收模型分别绑定，首次生成、固定上下文及原资格/生命周期边界；已实现并完成受控/Web及真实G09/V05自动验收；人工体验待走查，未部署，不进入 roadmap。
 
 执行方案与项目运行环境界面梳理（2026-10-31，审计收窄后实施）：[Spec](runtime-environment-ui.spec.md) · [Plan](../plans/runtime-environment-ui.plan.md) · [专属验收计划](../testing/acceptance/runtime-environment-ui.md)。明确全局方案/项目环境职责、五类事实与六阶段、卡片内验收/失效及任务定向准备与返回；保留原环境资格和生命周期，不进入 roadmap。

@@ -119,8 +119,10 @@ func (p *Project) validateControlledEnvironment(profile, commit string) {
 		Data struct{ Run runnercontract.Run }
 	}
 	s.Must(json.Unmarshal(raw, &observed))
+	// Preserve the original public result even when its binding assertion fails.
+	s.Must(controlled.Write(filepath.Join(s.Output, p.Name+"-"+profile+"-environment-proof.json"), view))
 	if round.Result.CollectionStatus != "closed" || round.Result.Version != 1 || observed.Data.Run.StopStatus != "stopped" || round.Report.Commit != commit || !round.Report.Passed() {
-		s.t.Fatal("unverified controlled adaptation provenance")
+		s.t.Fatalf("unverified controlled adaptation provenance: result=%s/%d stop=%s commit=%s expected=%s ready=%v", round.Result.CollectionStatus, round.Result.Version, observed.Data.Run.StopStatus, round.Report.Commit, commit, round.Report.Passed())
 	}
 	s.Must(controlled.Write(filepath.Join(s.Output, p.Name+"-environment-proof.json"), view))
 }

@@ -1,3 +1,5 @@
+//go:build runneracceptance
+
 package runnerclient
 
 import (
@@ -21,7 +23,7 @@ import (
 func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 	exe, native := os.Getenv("STEERRUNNER_EXE"), os.Getenv("STEERRUNNER_NATIVE_FIXTURE")
 	if exe == "" || native == "" {
-		t.Skip("explicit pinned Runner and its native protocol fixture required")
+		t.Fatal("explicit pinned Runner and its native protocol fixture required")
 	}
 	root, err := os.MkdirTemp("", "sl-result-")
 	if err != nil {

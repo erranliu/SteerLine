@@ -2,7 +2,7 @@
 
 固定输出根、每级文件布局、临时 scratch 和仓库外并行目录见[流程路径清单](../paths.md)。本文件维护报告内容与 Git 历史规则，具体运行的绝对路径和源码版本记录在专属验收中。
 
-分级入口保留 summary.json、JSONL 和退出码，并输出每个完整登记测试项的 managed-<id>.json。L1 为整体 ID，E2E 为实际所选场景，L4 Go 为 go.full；定向子集和 build-only 不输出整体通过。缺失、跳过、零匹配、超时、必要证据或清理不完整不能算通过。失败和补测分别保留。E2E 证据位于 `scenarios/<id>/scenario.json`，含实际断言、资源与清理事实。
+分级入口保留 summary.json、JSONL 和退出码，并输出每个完整登记测试项的 managed-<id>.json。L1 为整体 ID，E2E 为实际所选场景，L4 本地回归按所选正式 ID 输出（go.full、固定 Go owner、Runner 契约或 web.unit）；未登记定向子集和 build-only 不输出整体通过。缺失、跳过、零匹配、超时、必要证据或清理不完整不能算通过。失败和补测分别保留。E2E 证据位于 `scenarios/<id>/scenario.json`，含实际断言、资源与清理事实。
 
 ## 写入 Git 历史
 
@@ -32,3 +32,7 @@ SteerLine 历史页面只读取已核实主分支 commit 中的 records 目录�
 候选消费冻结提示中的安排和真实 worktree 文档。运行时进度使用 Runner 绑定的 `STEERLINE_PROGRESS_FILE`，字段为 `test.<test_id>`；开始或重跑清零，完整通过才写 true。入口使用正式写入逻辑，加锁合并并原子替换；失败、跳过、零匹配或清理未核实均未完成。普通 L1–L4 入口的原始日志和报告仍保留。
 
 候选查询通过公开 progress-file 接口核验原 Run、版本、长度和 SHA256，保留最后有效快照；断连或无效 JSON 单独显示诊断。候选不再收集 managed/summary，不调用 R2 或 workspace-git，也不从进度生成详细历史。独立测试历史沿前述 Git JSON 导出和主分支只读机制，详见[运行时进度](../../docs/integration/runtime-progress.md)。
+
+## 正式本地回归
+
+L4 go.http/go.storage/go.environment/go.runner-contract/go.runner-result 及 web.unit 使用固定执行定义和独立 managed 报告，不能替代 go.full。Go 原始日志为 go-owner/test.jsonl，Web 为 web-unit/vitest.json、stdout.txt、stderr.txt。L1 的 quick-web 复用相同原生格式。Vitest 文件/断言集合须非零且完整，无 skip/todo；不合成 Go 事件。Go Full 在 packages_without_tests 中明确枚举没有普通测试的编译项，原生 package skip 只在该集合内允许；真实测试 skip 或未知包 skip 均使原 summary、退出码、managed 及进度不通过。

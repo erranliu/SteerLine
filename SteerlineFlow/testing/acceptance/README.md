@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+L1–L4 测试内容调整（2026-11-02）：[专属验收](test-content-alignment.md)，记录正式 Web/owner、材料生成 L3、Runner 专项、结果口径及独立审核。
+
 测试安排生成精确 ID 约束（2026-11-01）：[真实初始化与生成验证](test-generation-id-schema.md)，记录 SteerlineTest 五个真实生成中的附注 ID 问题、冻结清单 enum、原失败与独立审核。
 
 Runner v8 接入与用户授权安装清理（2026-11-01）：[专属记录](runner-v8-install-reset.md)，当前格式、隔离验证、保留任务定义/配置及清理旧执行进度的实际证据。

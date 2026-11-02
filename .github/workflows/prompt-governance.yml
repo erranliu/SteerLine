@@ -23,6 +23,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Prepare fixed L1 Web dependencies
+        shell: pwsh
+        run: npm --prefix web ci
       - name: Fixed L1 including prompt snapshots and source boundary
         shell: pwsh
         run: |

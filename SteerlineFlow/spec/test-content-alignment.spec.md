@@ -1,0 +1,31 @@
+# Spec：L1–L4 测试内容与执行口径对齐
+
+日期：2026-11-02。用户授权普通开发，先形成本文与 [Plan](../plans/test-content-alignment.plan.md)，再实施、独立审核并提 PR，不进入 roadmap。遵循[统一测试架构](../../SteerlineProjectGuideDoc/testing-architecture.md)；运行及审核归[专属验收](../testing/acceptance/test-content-alignment.md)。
+
+## 目标与边界
+
+沿用四级：L1 最小代码检查、L2 单一受控核心冒烟、L3 独立功能流程、L4 可复用回归及专项。解决主要断言过宽、前置不完整、Web 测试未登记，以及 Go 全集含条件跳过而退出码与受管报告不同的问题。
+
+只调整测试、入口、清单及说明；不改变产品执行、固定提示词正文/组装/黄金样本、历史证据或安装现场。涉及提示词回归选择/报告的变化须给出实际正文差异、字节数前后及独立审核结论；无变化也明确登记。
+
+## 成果要求
+
+1. **L1**：保留现有 Go 六组，复用既有前端请求封装和候选状态计算两份文件，不复制用例或运行完整 Web 构建。缺 Node/依赖、零匹配、跳过、缺报告或失败均不通过。现有必跑 L1 的 CI 显式准备 Node 与 npm ci，不放宽或跳过原提示词门禁。整体一分钟仍为目标，冷编译与执行耗时如实登记。
+2. **L2**：保留 `smoke.delivery` 准备、依赖、候选、合并、唯一交付、后继未启动、静默及停止清理；失败矩阵不塞入冒烟。明确 Windows/Go/Git 前置，无真实模型或远端写入。
+3. **L3**：新增 `testing.material-generation`，用公开维护/查询入口及 Runner 公开夹具，在独立 home/repo/DB/provider 中验证已提交 Spec/Plan 与自动生成测试安排组成的材料闭环 ready，核对引用摘要、原版本/生成绑定；一键生成无缺失时不重复生成（空批次 total=0，不要求生成 ID/完成时间），无业务候选及完整停止清理。准备允许独立 generate Run。不直接写业务库或注入 ready。与配置场景组合运行，保留实际重叠和隔离证据，总并发不超过二。
+4. **L4 复用**：登记 `web.unit`（全部 Vitest）、`go.http`、`go.storage`、`go.environment`（固定 owner 包集），正式 test-feedback 选择及受管报告；子集不冒充 `go.full`。Web 脚本保留构建/可选浏览器用途，前端及 HTTP 回归委托正式入口。
+5. **Runner 专项**：需独立 Runner 的普通测试移至 `runneracceptance` build tag，混合文件只提取对应函数。登记 `go.runner-contract`（空闲生命周期、完整绑定、退役命令）与 `go.runner-result`（结果闭环，另需原生 fixture）；保留原断言，正式入口缺前置明确阻断，普通 Full 不要求外部 Runner 或模型。
+6. **结果一致**：受管 L1/L4 的缺失、零匹配、skip 和断言失败在原 summary、退出码、managed、进度完成值上保持一致。保留原生 Vitest JSON/stdout/stderr 与 Go JSONL，不把合成信息冒充原始日志。Go Full 明确三条分区流水线加一条其他包流水线。
+7. **清单可信**：ID/级别/环境/命令与实现一致；readiness 仅承诺其 E2E 实际断言，模型分组/重启矩阵归 go.environment。修正本机 profile 变量及 Windows/Node/npm/Edge/预构建资产前置。同步本地测试集登记校验；JSON 仅用已支持字段。
+
+共享 Web 构建仍须串行。维护/记录重型场景不在构建隔离未经证明时改级；本轮补配置组合证据，后续迁入 L3 须证明冻结构建与全部资源隔离。真实模型、远端及 GitHub 测试 PR 不属于本次执行范围。
+
+## 验收要求
+
+| ID | 通过条件 |
+| --- | --- |
+| TCA-A1 | 合法精确选择与非法/跨级/错环境拒绝；零匹配、skip、缺报告、失败不能通过；本地回归集与清单一一映射。 |
+| TCA-A2 | 最终 L1/L2 完整通过，L2 原断言与清理保留，源码身份/耗时可追溯。 |
+| TCA-A3 | Web、三个 owner 集实际执行；Go Full 无外部条件 skip，其他失败保留定位，不宣称通过。Runner 缺输入能前置阻断；固定独立 Runner 可用时运行空闲契约。 |
+| TCA-A4 | 材料生成与配置 L3 组合实际通过，有时间重叠且各自清理完整，不泛化全部组合。 |
+| TCA-A5 | 文档/清单/报告/路径一致，链接及 diff 检查通过；独立审核覆盖文档、实现、测试选择及提示词实际字节，修复确认问题后提 PR。 |

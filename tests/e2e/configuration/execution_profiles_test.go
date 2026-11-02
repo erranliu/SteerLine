@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/localservice"
+	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
@@ -42,6 +43,7 @@ func TestExecutionProfiles(t *testing.T) {
 		c.Profiles = append(c.Profiles, template)
 	}
 	s.Must(controlled.Write(path, c))
+	p.PrepareControlledEnvironment("controlled")
 	p.CreateTasks()
 	p.Claim("a")
 	before := p.WaitPhase("waiting_pr_merge")
@@ -153,6 +155,24 @@ func TestExecutionProfiles(t *testing.T) {
 	}
 	if len(expected) != 3 {
 		t.Fatalf("missing browser Agent combinations: %d", len(expected))
+	}
+	// The saved agents have distinct environment keys. Commit their fixture
+	// entrypoints, refresh the public baseline/materials, then prepare each key.
+	// The PR fixture leaves its owned repository on the candidate branch.
+	// Prepare on main, and finish all environment work before another candidate
+	// is allowed to switch this fixture repository again.
+	_, err = controlled.Git(s.Context, p.Repo, "checkout", "main")
+	s.Must(err)
+	p.WriteControlledEnvironment()
+	project, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
+	s.Must(err)
+	_, err = driver.WaitFixtureMaterials(s.Context, p.Home, project.Identity(), "SteerlineFlow/plans/task.plan.md", filepath.Join(s.Output, "saved-profile-materials"))
+	project.Close()
+	s.Must(err)
+	for _, profile := range c.Profiles {
+		if _, ok := expected[profile.ID]; ok {
+			p.ValidateDeclaredControlledEnvironment(profile.ID)
+		}
 	}
 	requestIndex := 0
 	for _, profile := range c.Profiles {
