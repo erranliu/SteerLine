@@ -30,6 +30,8 @@
 
 ### 3.1 全局配置和探测
 
+开发链路的能力组合试样，以及 Web 新建方案或在无匹配模板时构造的开发链路参数，必须显式提供公共 schema 要求的 `access_mode: full_access`，不能因试样缺少必填字段误报不支持，也不能生成无法保存的开发方案。真实保存配置仍必须显式声明权限，后端不补默认值、不放宽校验。
+
 - `execution.json` 仍是唯一人工保存的执行配置。沿现有 Snapshot 增加由 profiles 派生的 `environments` 只读分组，每项仅含 `adapter`、`target`、`profile_ids`；不包含项目身份、材料、活动或 ready。所有合法 workflow 的 profile 均参与全局分组，项目检测继续仅消费其支持的方案。
 - 复用 `/api/web/execution-config` 和其 `/discover`、`/validate`、`/status`，不新建环境 API。配置读取、校验与全局分组不连接项目端口、不解析项目 Git 身份、不读取项目库或环境材料。Runner schema/能力仍由现有离线元数据入口提供，不为探测启动共享 Runner 服务或业务 Run。所有元数据子进程显式使用当前应用 home 作为 cwd，不继承启动 Web 的项目目录；不使用进程级 `os.Chdir`。
 - `discovery.Manager` 继续由 Web 持有，原生查询只接受全局目标与查询参数。提供 `profile_id` 时必须找到该方案，并校验查询的 adapter/target 和所选 Agent 与之相符；不存在或错配明确报错，不能静默用默认程序探测另一条链路。profile 只用于绑定目标、Agent 和原查询实际支持的参数，不承诺还原其全部执行配置。Codex 沿现有元数据程序查询，Orca 沿当前本机 runtime/已配对远端的目录 RPC 查询，不执行 profile 的 transport/agent_launch。原不带 profile 的目录查询保留其原生默认上下文；profile 内的 provider、权限、启动参数等未被目录查询验证的上下文仍明确 `context_unverified`，不为验证这些字段增加执行或连接路径。
