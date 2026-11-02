@@ -61,3 +61,9 @@ SteerLine 同步 `origin/main=fd84478926bea32fbfa687ece56e931470924faf`，仅验
 最终 Runner 干净提交 `b11219e8fc9bfa5dc357202e58aded5aa4591df7` 的完整正式 L1 **通过**：`test-results/runner-L1-final-20261102T164640208Z/summary.json` 为 status=passed、validation_scope=complete、exit_code=0；738 个顶层测试、36 个包通过、零失败事件，29 项终端扩展、framework、native driver compile/零匹配守卫全部通过。16 项既有显式原生 opt-in/helper skip 沿用原白名单、不计原生通过，零意外跳过。总耗时 1028.197s；application 实际 771.223s，原中断处审计用例为9.26s，20分钟仅是整包聚合预算。此结果更新前文因 Runner L1 暂缓转正式的结论；各次原始失败不改写。
 
 按用户授权补齐两仓验收记录后，将 [Runner #89](https://github.com/erranliu/SteerRunner/pull/89) 和 [SteerLine #430](https://github.com/erranliu/SteerLine/pull/430) 转入正式审阅，最终状态以公开PR回执核对。本轮 SteerLine 只有验收文档更新；既有固定 L1/L2/web.unit 和新组合真实链的精确受测版本保持上述记录，不为纯结果登记重复运行模型。安装版未部署。
+
+## PR #430 冲突解决与复验
+
+用户要求解决 PR #430 冲突。合入 `origin/main=82935861a23db22147e43082bd1357c1579a9234`，合并提交 `43725704142c05d1dd0b10b32c3f3cdac0be18ff`。唯一文本冲突在验收索引，保留 Roadmap 材料准备与主分支开发权限精简两条记录。自动合并沿用主分支 `missingCommittedFileError` 分类，Roadmap 预览/发布仍拒绝真实读取错误，不把工具故障当文件缺失；保留本 PR 的 LF/CRLF 比较与原文件材料冻结。本次冲突解决没有额外修改提示正文、黄金样本或 CI。
+
+证据根 `C:\SteerlineDebug\wt-762b-pr430-conflict`：固定 L1 `L1-20261102T170916621Z/summary.json`、固定 L2 `L2-20261102T170915115Z/summary.json`、前端全集 `web-20261102T170948112Z/summary.json` 全部通过；`roadmap-20261102T170911680Z/summary.json` 的真实 Git 发布/入图、CRLF checkout、文档生命周期与调查引用反例共9项含子例通过，零 fail/skip，190.020s。文档651文件/4065本地链接零错误，diff检查通过。此轮未重跑真实模型或 Runner 完整 L1，其精确历史受测版本保持前文记录。
