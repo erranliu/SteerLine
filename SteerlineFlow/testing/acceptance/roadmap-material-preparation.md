@@ -45,3 +45,19 @@ SteerLine 受测基线 `7d85a9e908102a4f12210bbba91408f39362e6a7` 加本轮工�
 实现提交 `3d10e4c9`，配套 Runner 提交 `97680b81`；已创建 [SteerLine #430](https://github.com/erranliu/SteerLine/pull/430) 和 [Runner #89](https://github.com/erranliu/SteerRunner/pull/89)，两者保持草稿，等待配套能力及 Runner 既有完整 L1 问题处理。未合并或部署。
 
 SteerLine 同步 `origin/main=fd84478926bea32fbfa687ece56e931470924faf`，仅验收索引冲突，保留双方条目；合并提交 `3b3170361d6560724a4c73a4b67d367c49ddc3c1` 后固定 L1、L2、web.unit 全部通过，报告分别为 `test-results/L1/pr-main-20261102T160211942Z/summary.json`、`test-results/L2/pr-main-20261102T160207900Z/summary.json`、`test-results/web/pr-main-20261102T160234750Z/summary.json`。文档链接为 649 文件/4061 链接零错误。真实 Runner/Codex 链是同步前上述固定工作树的结果，未将其标为同步后重跑。
+
+## 2026-11-02 后续：Runner L1 修复与配套复验
+
+用户追加授权修复 Runner L1，验证通过后把两 PR 转正式。Runner 修复提交 `14eba14`：依赖守卫扫描全部实际 execution 目录，报告恢复夹具使用正式 FreezeInput 补齐原预算并核对恢复时 Prompt/Budget 不变，样本流测试等待墙钟严格晚于两次原接收时间并核对 Drain 未重打时间戳；未修改生产预算准入和接收代码，原夹具正文 UTF-8 17→17 字节。定向 22 项含子例及样本流重复 100 次通过、零 fail/skip，独立只读审核无发现。
+
+同步 Runner main=`761f916af352d22f51eab4b5967f9a390eeebd17` 后干净提交 `06a9214ad54dcaa9283368103de80be1c73e602f` 的完整 L1 在三项原失败通过、734 项顶层通过后仍因 application 包旧 12 分钟总上限 panic，保留 `test-results/runner-L1-repaired-20261102T161644437Z/summary.json` 为失败。聚合预算随后调整为 20 分钟，不改变测试集合、skip、断言或用例/产品期限；完整入口复验完成后在本节追加，不以定向通过冒充完整通过。
+
+本次 SteerLine 精确提交 `7355fc5e33dc26cee11c6f7f7402cd828fa1db03` 配合上述新 Runner 构建重跑真实链，EXE SHA-256=`41de9144c4c999298628e24511f24767f5f3cb5d2959b23edfd80fc55b35be08`，source digest=`30dc64bec16156fdb0e62af9b5911d4c21392aa5bccf1789e44d7a8f2cba1463`，resource digest 不变。`diagnostics/live-runner-l1-repaired-20261102T161722633Z` 被模型抄错 confirmed_digest 的 schema 校验拒绝、零采用，原 Run stopped/resources_settled=true；不改写失败。独立新现场 `diagnostics/live-runner-l1-repaired-confirmation-20261102T162140859Z/summary.json` 通过（243.930s）：工作树草稿实际读取、六份完整文档、隔离 Git/provider 实际发布合并、SQLite T1→0/T2→1 和 0→1 依赖、重放幂等与正常停止均通过。
+
+新现场解析 Run=`9a77997f5308f652d31e58ecc24ef4bf`，文档 Run=`4553f250a32aca1c5193c531974302b5`，均 completed/stopped；固定源码 commit=`891d670882f6c0e78584c227fc1c35f1990ac309`，merge commit=`1653291aa1e80b33bc6315b499b4e29a4189f176`；同目录 `evidence/runner-settlement.json` 公开 resources_settled=true。没有重发原请求或放宽 schema 校验。此后 Runner 只改测试/验收，不将该真实链误标为新生产行为。SteerLine 原精确 head 的远端 Prompt governance CI 已通过；最终 PR 资格以本轮完整报告及公开回执为准，安装版仍未部署。
+
+20 分钟聚合预算的第二轮完整 L1 又暴露原 `TestOrcaPreSendReconnect/provider-query-exhausted` 的 20ms 调度竞争（首次连接前耗尽，opens=0）。`test-results/runner-L1-complete-20261102T163508518Z` 保留为失败；核实唯一报告路径、父 Go 进程和精确 EXE/PID 后终止该已知失败轮剩余 application 测试，`operator-abort.json` 保存身份与原因，不计通过。Runner 提交 `b11219e` 只修测试：保留正常 3s readiness 预算，在原连接/查询回调等待同一个真实 deadline，新增 DeadlineExceeded/原查询一次断言；取消在首次实际连接中触发，核验 Canceled。原零发送、一次打开及禁止重放断言保留。重连全表和取消重复 10 轮、150 个父/子 pass 事件、零 fail/skip，见 `diagnostics/reconnect-deadline-repair-20261102T164422437Z/go-test.jsonl`；独立审核通过。
+
+最终 Runner 干净提交 `b11219e8fc9bfa5dc357202e58aded5aa4591df7` 的完整正式 L1 **通过**：`test-results/runner-L1-final-20261102T164640208Z/summary.json` 为 status=passed、validation_scope=complete、exit_code=0；738 个顶层测试、36 个包通过、零失败事件，29 项终端扩展、framework、native driver compile/零匹配守卫全部通过。16 项既有显式原生 opt-in/helper skip 沿用原白名单、不计原生通过，零意外跳过。总耗时 1028.197s；application 实际 771.223s，原中断处审计用例为9.26s，20分钟仅是整包聚合预算。此结果更新前文因 Runner L1 暂缓转正式的结论；各次原始失败不改写。
+
+按用户授权补齐两仓验收记录后，将 [Runner #89](https://github.com/erranliu/SteerRunner/pull/89) 和 [SteerLine #430](https://github.com/erranliu/SteerLine/pull/430) 转入正式审阅，最终状态以公开PR回执核对。本轮 SteerLine 只有验收文档更新；既有固定 L1/L2/web.unit 和新组合真实链的精确受测版本保持上述记录，不为纯结果登记重复运行模型。安装版未部署。
