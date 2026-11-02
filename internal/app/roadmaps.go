@@ -30,11 +30,14 @@ func (p *runtimeProjectPort) RoadmapReceipt(ctx context.Context, id string) (*ht
 }
 
 type roadmapPort struct {
-	config        Config
-	store         *sqlite.SQLiteStore
-	service       *roadmapservice.Service
-	publicationMu sync.Mutex
-	mutateTask    func(context.Context, func(context.Context) error) error
+	config           Config
+	store            *sqlite.SQLiteStore
+	service          *roadmapservice.Service
+	publicationMu    sync.Mutex
+	initializationMu sync.Mutex
+	preparationMu    sync.Mutex
+	preparationCache *roadmapPreparation
+	mutateTask       func(context.Context, func(context.Context) error) error
 }
 
 func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *roadmapPort {
@@ -190,7 +193,8 @@ func (p *roadmapPort) read(ctx context.Context, route string, values url.Values)
 		Profiles           []map[string]string `json:"profiles"`
 		DocumentsAvailable bool                `json:"documents_available"`
 		DocumentsReason    string              `json:"documents_reason"`
-	}{sources, records, profiles, p.config.runtimeCatalog.FileMaterialGenerationUnavailable() == "", p.config.runtimeCatalog.FileMaterialGenerationUnavailable()}, nil
+		Preparation        roadmapPreparation  `json:"preparation"`
+	}{sources, records, profiles, p.config.runtimeCatalog.FileMaterialGenerationUnavailable() == "", p.config.runtimeCatalog.FileMaterialGenerationUnavailable(), p.preparation(ctx)}, nil
 }
 func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
 	out := maintenanceResponse(in)
@@ -201,9 +205,13 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 	if port == nil || p.actor == nil || !p.Server.Identity(ctx).Ready {
 		return out, projectStoppingError()
 	}
-	allowed := map[string]bool{"roadmap_parse": true, "roadmap_confirm": true, "roadmap_observe": true, "roadmap_stop": true, "roadmap_generate_documents": true, "roadmap_publish": true, "roadmap_edit_documents": true, "roadmap_admit": true, "roadmap_resume": true}
+	allowed := map[string]bool{"roadmap_prepare_static": true, "roadmap_parse": true, "roadmap_confirm": true, "roadmap_observe": true, "roadmap_stop": true, "roadmap_generate_documents": true, "roadmap_publish": true, "roadmap_edit_documents": true, "roadmap_admit": true, "roadmap_resume": true}
 	if !allowed[in.Action] {
 		return out, errors.New("unknown roadmap action")
+	}
+	if in.Action == "roadmap_prepare_static" {
+		port.initializationMu.Lock()
+		defer port.initializationMu.Unlock()
 	}
 	raw, e := json.Marshal(in)
 	if e != nil {
@@ -217,7 +225,7 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 		if old.Kind != "roadmap_command" || !bytes.Equal(raw, old.Payload) {
 			return out, errors.New("request_conflict: original roadmap envelope differs")
 		}
-		if receipt, e := p.roadmapReceipt(ctx, in.RequestID); e != nil {
+		if receipt, e := p.roadmapReceiptLocked(ctx, in.RequestID); e != nil {
 			return out, e
 		} else if receipt != nil {
 			return *receipt, nil
@@ -254,7 +262,13 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 	return out, nil
 }
 func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelope) (any, error) {
+	if in.Action == "roadmap_prepare_static" {
+		return p.prepareStatic(ctx, in)
+	}
 	if in.Action == "roadmap_parse" {
+		if !p.preparation(ctx).Ready {
+			return nil, errors.New("Roadmap 静态材料未就绪：请先初始化材料，再提交并发布到项目目标分支后重试")
+		}
 		var input roadmapservice.ParseInput
 		if e := decodeStrictJSON(in.Payload, &input); e != nil {
 			return nil, e
@@ -370,6 +384,22 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 	return nil, errors.New("unsupported roadmap action")
 }
 func (p *runtimeProjectPort) roadmapReceipt(ctx context.Context, id string) (*httpcontract.CommandResponse, error) {
+	old, found, err := p.store.LookupCommand(ctx, p.config.Identity(), id)
+	if err != nil || !found || old.Kind != "roadmap_command" {
+		return nil, err
+	}
+	var envelope httpcontract.CommandEnvelope
+	if err = json.Unmarshal(old.Payload, &envelope); err != nil {
+		return nil, err
+	}
+	if envelope.Action == "roadmap_prepare_static" {
+		p.config.runtimeRoadmaps.initializationMu.Lock()
+		defer p.config.runtimeRoadmaps.initializationMu.Unlock()
+	}
+	return p.roadmapReceiptLocked(ctx, id)
+}
+
+func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string) (*httpcontract.CommandResponse, error) {
 	old, found, e := p.store.LookupCommand(ctx, p.config.Identity(), id)
 	if e != nil || !found || old.Kind != "roadmap_command" {
 		return nil, e
@@ -383,6 +413,9 @@ func (p *runtimeProjectPort) roadmapReceipt(ctx context.Context, id string) (*ht
 		if e = json.Unmarshal(old.Result, &out); e != nil {
 			return nil, e
 		}
+	}
+	if envelope.Action == "roadmap_prepare_static" && (old.Status == "pending" || out.Status == "outcome_unknown") {
+		return p.reconcilePreparation(ctx, old, envelope)
 	}
 	if out.Status == "outcome_unknown" || old.Status == "pending" {
 		r, e := p.config.runtimeRoadmaps.store.RoadmapRequest(ctx, p.config.Identity(), id)

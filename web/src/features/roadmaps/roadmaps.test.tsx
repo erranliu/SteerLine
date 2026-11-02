@@ -2,13 +2,14 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
+import type {StoredRequest} from "../../shared/api/types";
 import { Roadmaps, type RoadmapRecord, type RoadmapView } from "./roadmaps";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-function setup(state = "review", online = true) {
+function setup(state = "review", online = true, requests:StoredRequest[] = []) {
   const source = {
     id: "b".repeat(32),
     path: "SteerlineFlow/Roadmap/drafts/control.md",
@@ -49,6 +50,7 @@ function setup(state = "review", online = true) {
     },
   };
   const view: RoadmapView = {
+    preparation: {commit: source.head, ready: true, local_ready: true, branch: "main", files: []},
     sources: [{ ...source, body: "" }],
     records: [record],
     profiles: [{ id: "local", name: "本机 Codex" }],
@@ -80,7 +82,7 @@ function setup(state = "review", online = true) {
         },
       }) as never,
   );
-  mountFeature(<Roadmaps />, api, testClient(), online);
+  mountFeature(<Roadmaps />, api, testClient(), online,{requests});
   return { api, get, submit, source, record, view };
 }
 it("reads Markdown and shows original versus proposed dependencies without allocating or calling a model on mount", async () => {
@@ -244,4 +246,30 @@ it("shows official IDs only from the admitted mapping and keeps local origin", a
   expect(
     screen.getByRole("button", { name: "正式入 DAG · 分配编号" }),
   ).toBeDisabled();
+});
+
+it("shows fixed preparation failures and submits explicit initialization without parsing", async () => {
+ const {view,submit}=setup();
+ view.preparation={commit:"d".repeat(40),ready:false,local_ready:false,branch:"main",files:[{path:"SteerlineFlow/Roadmap/parse-rules.md",ready:false}]};
+ expect(await screen.findByRole("heading",{name:"先准备项目静态材料"})).toBeVisible();
+ expect(screen.getByRole("button",{name:"Runner generate · 解析任务与依赖"})).toBeDisabled();
+ fireEvent.click(screen.getByRole("button",{name:"初始化静态材料"}));
+ await waitFor(()=>expect(submit).toHaveBeenCalledWith(expect.objectContaining({action:"roadmap_prepare_static",target_id:identity.project_id,expected_version:1,payload:{commit:"d".repeat(40)}})));
+ expect(submit.mock.calls.some(([e])=>e.action==="roadmap_parse")).toBe(false);
+});
+it("keeps local-only preparation blocked until published and prevents needless regeneration",async()=>{
+ const {view,submit}=setup();
+ view.preparation={commit:"d".repeat(40),ready:false,local_ready:true,branch:"main",files:[]};
+ expect(await screen.findByText(/材料已在工作树中，请提交并合入 main/)).toBeVisible();
+ expect(screen.getByRole("button",{name:"初始化静态材料"})).toBeDisabled();
+ expect(screen.getByRole("button",{name:"Runner generate · 解析任务与依赖"})).toBeDisabled();
+ expect(submit).not.toHaveBeenCalled();
+});
+
+it.each([["other",false],[identity.project_id,true]])("scopes pending initialization requests to project %s",async(owner,blocked)=>{
+ const request:StoredRequest={envelope:new Api({...identity,project_id:owner},"csrf").envelope("roadmap_prepare_static",owner,1,{}),created_at:new Date().toISOString()};
+ const {view}=setup("review",true,[request]);
+ view.preparation={commit:"d".repeat(40),ready:false,local_ready:false,branch:"main",files:[]};
+ const button=await screen.findByRole("button",{name:"初始化静态材料"});
+ if(blocked)expect(button).toBeDisabled();else expect(button).toBeEnabled();
 });

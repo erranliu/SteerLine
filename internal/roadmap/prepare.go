@@ -16,6 +16,10 @@ type PreparedFile struct {
 	Created bool   `json:"created"`
 }
 
+// A deterministic content conflict is distinct from an interrupted or failed
+// filesystem read when reconciling an original initialization request.
+var ErrStaticRuleConflict = errors.New("静态规则内容冲突")
+
 // PrepareStatic is explicit project preparation, never a runtime fallback.
 // Existing project guides are owned by the project; platform rules are versioned.
 func PrepareStatic(repository string, check bool) ([]PreparedFile, error) {
@@ -45,7 +49,7 @@ func PrepareStatic(repository string, check bool) ([]PreparedFile, error) {
 		actual, err := ReadRegular(root, item.path)
 		if err == nil {
 			if item.rule && !prompts.SameRules(actual, expected) {
-				return result, fmt.Errorf("静态规则与当前版本不一致，需审阅更新：%s", item.path)
+				return result, fmt.Errorf("静态规则与当前版本不一致，需审阅更新：%s：%w", item.path, ErrStaticRuleConflict)
 			}
 			result = append(result, PreparedFile{Path: item.path})
 			continue
