@@ -2,6 +2,8 @@
 
 日期：2026-11-02。普通开发，依据 [Spec](../../spec/test-content-alignment.spec.md) 与 [Plan](../../plans/test-content-alignment.plan.md)。用户授权先文档再实施，独立审核后提 PR。
 
+PR #423 创建后，用户追加要求修复 Go Full 的全部失败且不放宽断言；续修结果见[专属记录](go-full-repair.md)。本文保留初轮运行与当时结论。
+
 | ID | 范围 | 状态 |
 | --- | --- | --- |
 | TCA-A1 | 正式本地回归、失败及完整性 | 执行器完整回归及新反例通过 |

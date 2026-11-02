@@ -3,13 +3,14 @@ package prompts
 import (
 	"crypto/sha256"
 	"fmt"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"os"
 	"strings"
 	"testing"
+
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
-var testProject = pm.ProjectEntry{Version: 1, Requirements: []string{"quality/policy.md"}, TestingCatalogue: "quality/catalogue.json"}
+var testProject = testmodel.ProjectEntry{Version: 1, Requirements: []string{"quality/policy.md"}, TestingCatalogue: "quality/catalogue.json"}
 
 const testSnapshot = `{"project":{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/catalogue.json"},"status":"ready","plan_path":"task.plan.md","commit":"fixed","digest":"digest","generation_id":"generation","inputs":"inputs","definitions":[{"id":"z.last"},{"id":"a.first"}]}`
 

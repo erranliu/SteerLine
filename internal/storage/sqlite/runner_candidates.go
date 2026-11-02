@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"path/filepath"
 	"strings"
@@ -155,7 +155,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		}
 	}
 	var testing struct {
-		Project      pm.ProjectEntry        `json:"project"`
+		Project      testmodel.ProjectEntry `json:"project"`
 		GenerationID string                 `json:"generation_id"`
 		Inputs       string                 `json:"inputs"`
 		Definitions  []testmodel.Definition `json:"definitions"`

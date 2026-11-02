@@ -23,3 +23,12 @@
 | A5 | 文档、标签编译、审核 | `python scripts/check_doc_links.py`、`go test -tags=e2e ./tests/e2e/... -run '^$'`、`git diff --check`；清单一致，编译不算场景通过；独立审核覆盖提示词 0 字节变化。 |
 
 原始输出使用独占系统临时目录或显式外部 scope；每次补测新目录，失败不覆盖。首次完整检查后只复验新修改/未决问题；不自动重试。无新增人工验收，不执行真实模型/远端/测试 PR 或重型场景改级。
+
+## PR #423 续修安排
+
+依据 Spec 续修授权，先修复三类失败再重跑全套，不修改边界矩阵或减少原断言：
+
+1. 将 ProjectEntry 及原测试移到测试模型 owner，更新所有引用；应用向 GenerationSources 显式提供权威协议正文，缺失仍阻断。runnerstate 独立声明原四字段准入证据，应用/SQLite 转换核对；环境 model 的外部测试改同包，保留断言。
+2. Windows 私有快照先取得共享删除/替换句柄，再对同一句柄核验类型和完整私有 ACL；SID 级私有内核互斥体仅协调打开/发布，覆盖不同进程及路径别名，不在读取期间持锁。Unix 防符号链接、FIFO 非阻塞拒绝及已解绑 inode/多个硬链接边界分别回归，路径级校验不变。增加已打开文件与路径替换的确定性回归，原并发1000次发布断言保持。
+3. 正向配置夹具补 access_mode；保留可用 executable，并将已不被公开 run schema 接受的 github_auth 改为显式负例。可选字段保留用现行合法字段验证，保留原标记断言并增加完整 settings 字节相等断言；不放宽 schema。定向复验执行配置、httpfs、完整 boundary、projectmaintenance/testmanagement/prompts/SQLite 等 owner。
+4. 执行最终 L1/L2、受影响材料生成/环境准备 L3 及普通 go.full。Full 完整通过后，只因新修改/失败才重跑；原生 Runner/真实模型/安装及远端仍不执行。独立审核全部差异与提示词黄金正文、字节数，更新 [修复验收](../testing/acceptance/go-full-repair.md)，提交/推送同分支并更新 PR 描述。

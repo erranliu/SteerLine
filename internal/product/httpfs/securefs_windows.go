@@ -41,7 +41,12 @@ type privateRenameInfo struct {
 	fileName      [1]uint16
 }
 
-func renamePrivateSnapshot(source, target string) error {
+func renamePrivateSnapshot(source, target string) (err error) {
+	unlock, err := lockSnapshotNamespace()
+	if err != nil {
+		return &os.LinkError{Op: "rename", Old: source, New: target, Err: err}
+	}
+	defer func() { err = errors.Join(err, unlock()) }()
 	rename := func() error {
 		if source == "" || target == "" {
 			return os.ErrInvalid
@@ -95,14 +100,27 @@ func renamePrivateSnapshot(source, target string) error {
 
 // Discovery is atomically replaced while clients observe startup/ready state.
 // Hold a snapshot handle without excluding the writer's rename or deletion.
-func openDiscoveryReader(path string) (*os.File, error) {
+func openDiscoveryReader(path string) (file *os.File, err error) {
+	unlock, err := lockSnapshotNamespace()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if releaseErr := unlock(); releaseErr != nil {
+			if file != nil {
+				file.Close()
+				file = nil
+			}
+			err = errors.Join(err, releaseErr)
+		}
+	}()
 	name, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return nil, err
 	}
 	handle, err := windows.CreateFile(name, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 	if err != nil {
-		return nil, err
+		return nil, &os.PathError{Op: "open discovery snapshot", Path: path, Err: err}
 	}
 	var info windows.ByHandleFileInformation
 	if err = windows.GetFileInformationByHandle(handle, &info); err != nil || info.FileAttributes&(windows.FILE_ATTRIBUTE_REPARSE_POINT|windows.FILE_ATTRIBUTE_DIRECTORY) != 0 {
@@ -110,7 +128,7 @@ func openDiscoveryReader(path string) (*os.File, error) {
 		if err == nil {
 			err = errors.New("linked/nonregular discovery file")
 		}
-		return nil, err
+		return nil, &os.PathError{Op: "inspect discovery snapshot", Path: path, Err: err}
 	}
 	return os.NewFile(uintptr(handle), path), nil
 }
@@ -256,6 +274,29 @@ func verifyPrivateACL(path string, user *windows.SID) error {
 	if err != nil {
 		return fmt.Errorf("read local API Windows ACL: %w", err)
 	}
+	return verifyPrivateDescriptor(sd, user)
+}
+
+// Validate the exact opened snapshot, not a pathname that can be atomically
+// replaced between an attributes/ACL query and CreateFile.
+func verifyPrivateSnapshot(file *os.File) error {
+	user, err := CurrentUserSID()
+	if err != nil {
+		return err
+	}
+	sd, err := windows.GetSecurityInfo(windows.Handle(file.Fd()), windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	runtime.KeepAlive(file)
+	if err != nil {
+		return fmt.Errorf("read local API snapshot ACL: %w", err)
+	}
+	return verifyPrivateDescriptor(sd, user)
+}
+
+func verifyPrivateDescriptor(sd *windows.SECURITY_DESCRIPTOR, user *windows.SID) error {
+	return verifyPrivateDescriptorAccess(sd, user, fileAllAccess)
+}
+
+func verifyPrivateDescriptorAccess(sd *windows.SECURITY_DESCRIPTOR, user *windows.SID, access windows.ACCESS_MASK) error {
 	owner, _, err := sd.Owner()
 	if err != nil || owner == nil || !owner.Equals(user) {
 		return fmt.Errorf("local API path is not owned by the current Windows user")
@@ -269,7 +310,7 @@ func verifyPrivateACL(path string, user *windows.SID) error {
 		return fmt.Errorf("local API Windows ACL does not have one current-user entry")
 	}
 	var ace *windows.ACCESS_ALLOWED_ACE
-	if err = windows.GetAce(dacl, 0, &ace); err != nil || ace == nil || ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || windows.ACCESS_MASK(ace.Mask) != fileAllAccess {
+	if err = windows.GetAce(dacl, 0, &ace); err != nil || ace == nil || ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || windows.ACCESS_MASK(ace.Mask) != access {
 		return fmt.Errorf("local API Windows ACL does not grant the expected current-user access")
 	}
 	if ace.Header.AceFlags != 0 {

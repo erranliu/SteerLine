@@ -4,7 +4,6 @@ package runnerstate
 
 import (
 	"encoding/json"
-	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/taskcontract"
 	"time"
@@ -22,8 +21,17 @@ type Action struct {
 	ActionStatus        string                 `json:"action_status,omitempty"`
 }
 
+// EnvironmentAdmission is the caller's immutable reservation evidence. The
+// environment owner qualifies it; storage checks all fields in its transaction.
+type EnvironmentAdmission struct {
+	Key        string `json:"environment_key"`
+	Revision   uint64 `json:"current_revision"`
+	ActivityID string `json:"activity_id"`
+	Basis      string `json:"basis"`
+}
+
 type Candidate struct {
-	Environment       *envmodel.Admission       `json:"environment,omitempty"`
+	Environment       *EnvironmentAdmission     `json:"environment,omitempty"`
 	Contract          taskcontract.TaskContract `json:"contract"`
 	MaterialDigest    string                    `json:"material_digest"`
 	TestPlan          json.RawMessage           `json:"test_plan,omitempty"`

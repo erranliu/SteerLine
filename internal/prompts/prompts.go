@@ -10,10 +10,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
-	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"strings"
 	"text/template"
+
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 //go:embed *.md materials/*.md
@@ -48,12 +48,12 @@ func SameRules(actual, expected []byte) bool {
 	return len(actual) > 0 && bytes.Equal(bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll(expected, []byte("\r\n"), []byte("\n")))
 }
 
-func TestingGenerate(plan, commit string, project pm.ProjectEntry) (string, error) {
+func TestingGenerate(plan, commit string, project testmodel.ProjectEntry) (string, error) {
 	if plan == "" || commit == "" || project.Version != 1 {
 		return "", errors.New("fixed Plan and commit are required")
 	}
 	projectRaw, _ := json.Marshal(project)
-	if _, err := pm.ParseProjectEntry(projectRaw); err != nil {
+	if _, err := testmodel.ParseProjectEntry(projectRaw); err != nil {
 		return "", err
 	}
 	return render("testing-generate", struct{ Plan, Commit, ProjectFiles string }{plan, commit, strings.Join(project.Paths(), "、")})
@@ -71,7 +71,7 @@ func TestingContext(snapshot []byte, preparedWriter bool) (string, error) {
 		return "", errors.New("ready frozen test arrangement is required")
 	}
 	projectRaw, _ := json.Marshal(plan.Project)
-	if _, err := pm.ParseProjectEntry(projectRaw); err != nil {
+	if _, err := testmodel.ParseProjectEntry(projectRaw); err != nil {
 		return "", err
 	}
 	arrangement, err := testmodel.ArrangementPath(plan.PlanPath)

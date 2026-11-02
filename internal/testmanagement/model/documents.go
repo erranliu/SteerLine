@@ -2,7 +2,7 @@ package model
 
 import (
 	"errors"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"strings"
 )
@@ -29,7 +29,7 @@ func ValidateArrangement(plan Snapshot, raw []byte, catalogue Catalogue) error {
 	}
 	return nil
 }
-func TestReference(doc runnercontract.Document, plan, commit string, ready bool, project pm.ProjectEntry) bool {
+func TestReference(doc runnercontract.Document, plan, commit string, ready bool, project ProjectEntry) bool {
 	arrangement, err := ArrangementPath(plan)
 	if err != nil || !ready || project.Version != 1 || !strings.HasSuffix(plan, ".plan.md") || doc.Kind != "" || doc.Content != nil || doc.Commit != "" {
 		return false

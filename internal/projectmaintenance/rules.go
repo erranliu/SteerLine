@@ -2,9 +2,9 @@
 package projectmaintenance
 
 import (
+	"bytes"
 	"fmt"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"unicode/utf8"
 )
@@ -24,12 +24,15 @@ func Read(r Reader, path string) ([]byte, error) {
 
 // GenerationSources never reads an arrangement or approves content. Already
 // merged Plan/rules/catalogue are the only generation inputs.
-func GenerationSources(plan string, r Reader) ([]tm.Source, error) {
+func GenerationSources(plan string, r Reader, protocol []byte) ([]tm.Source, error) {
+	if len(protocol) == 0 {
+		return nil, fmt.Errorf("fixed testing protocol is required")
+	}
 	if _, e := tm.ArrangementPath(plan); e != nil {
 		return nil, e
 	}
 	sources := []tm.Source{}
-	entry, e := pm.ReadProjectEntry(r)
+	entry, e := tm.ReadProjectEntry(r)
 	if e != nil {
 		return nil, e
 	}
@@ -44,11 +47,7 @@ func GenerationSources(plan string, r Reader) ([]tm.Source, error) {
 			return nil, e
 		}
 		if path == tm.ProtocolPath {
-			expected, err := prompts.TestingRules()
-			if err != nil {
-				return nil, err
-			}
-			if !prompts.SameRules(b, expected) {
+			if !bytes.Equal(bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll(protocol, []byte("\r\n"), []byte("\n"))) {
 				return nil, fmt.Errorf("fixed testing protocol differs: %s", path)
 			}
 		}

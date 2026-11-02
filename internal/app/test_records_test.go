@@ -8,6 +8,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,7 +87,7 @@ func TestTRQueryOnlyCommittedGitHistoryAndDeletion(t *testing.T) {
 func TestTRCatalogueUsesDeclaredCustomSource(t *testing.T) {
 	repo := t.TempDir()
 	pmGit(t, repo, "init", "--initial-branch=main")
-	for path, body := range map[string]string{pm.ProjectEntryPath: `{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`, "quality/cases.json": `{"tests":[{"id":"custom.l2","name":"Custom","level":"L2","environment":"controlled","command":"original-test","check":"passed"}]}`} {
+	for path, body := range map[string]string{testmodel.ProjectEntryPath: `{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`, "quality/cases.json": `{"tests":[{"id":"custom.l2","name":"Custom","level":"L2","environment":"controlled","command":"original-test","check":"passed"}]}`} {
 		full := filepath.Join(repo, path)
 		require(t, os.MkdirAll(filepath.Dir(full), 0700))
 		require(t, os.WriteFile(full, []byte(body), 0600))

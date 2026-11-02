@@ -5,7 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	projectmodel "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
+
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	progresstools "github.com/erranliu/SteerLine/tools"
@@ -336,7 +337,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 		}
 		result, _ := json.Marshal(map[string]any{"tests": selection})
 		id := strings.Repeat("6", 32)
-		if e = r.store.SaveGeneration(ctx, testmanagement.Generation{ProjectEntry: projectmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Request: runnercontract.Request{RequestID: "fixture-" + id, Protocol: runnercontract.Protocol, Input: json.RawMessage(`{}`)}, ID: id, Project: c.Identity(), Revision: 1, Runner: m.tests.service.Build, PlanText: string(planText), Projection: &runnercontract.Run{StopStatus: "stopped"}, Inputs: mat.Inputs, Command: testmanagement.GenerateCommand{Plan: mat.Contract.PlanRef.Path, Commit: base}, State: "generated", Catalogue: cat, Result: result}, 0); e != nil {
+		if e = r.store.SaveGeneration(ctx, testmanagement.Generation{ProjectEntry: testmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Request: runnercontract.Request{RequestID: "fixture-" + id, Protocol: runnercontract.Protocol, Input: json.RawMessage(`{}`)}, ID: id, Project: c.Identity(), Revision: 1, Runner: m.tests.service.Build, PlanText: string(planText), Projection: &runnercontract.Run{StopStatus: "stopped"}, Inputs: mat.Inputs, Command: testmanagement.GenerateCommand{Plan: mat.Contract.PlanRef.Path, Commit: base}, State: "generated", Catalogue: cat, Result: result}, 0); e != nil {
 			return e
 		}
 		return m.refresh(ctx)

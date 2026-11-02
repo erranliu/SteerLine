@@ -21,10 +21,7 @@ func randomHex(n int) (string, error) {
 
 func ReadDiscoveryFile(path string) (Discovery, error) {
 	var discovery Discovery
-	if err := VerifyPrivateFile(path); err != nil {
-		return discovery, err
-	}
-	file, err := openDiscoveryReader(path)
+	file, err := OpenPrivateSnapshot(path)
 	if err != nil {
 		return discovery, err
 	}
@@ -62,21 +59,32 @@ func decodeStrict(data []byte, target any) error {
 // OpenPrivateSnapshot opens an immutable view that does not block atomic
 // replacement on Windows. The caller retains its own size/schema boundary.
 func OpenPrivateSnapshot(path string) (*os.File, error) {
-	if err := VerifyPrivateFile(path); err != nil {
+	file, err := openDiscoveryReader(path)
+	if err != nil {
 		return nil, err
 	}
-	return openDiscoveryReader(path)
+	if err := verifyPrivateSnapshot(file); err != nil {
+		file.Close()
+		return nil, err
+	}
+	return file, nil
 }
 
 // OpenRegularSnapshot provides the same non-blocking atomic-replacement reader
 // for non-secret configuration files. It never changes their existing ACL.
 func OpenRegularSnapshot(path string) (*os.File, error) {
-	info, err := os.Lstat(path)
+	file, err := openDiscoveryReader(path)
 	if err != nil {
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		file.Close()
 		return nil, errors.New("configuration is not a regular file")
 	}
-	return openDiscoveryReader(path)
+	return file, nil
 }

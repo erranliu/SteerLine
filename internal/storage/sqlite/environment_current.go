@@ -12,6 +12,7 @@ import (
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -120,7 +121,7 @@ func (s *SQLiteStore) InvalidateEnvironment(ctx context.Context, project, key, r
 	return err
 }
 
-func verifyCandidateEnvironment(ctx context.Context, tx *sql.Tx, project string, proof *env.Admission, execution runnercontract.ExecutionInput) error {
+func verifyCandidateEnvironment(ctx context.Context, tx *sql.Tx, project string, proof *runnerstate.EnvironmentAdmission, execution runnercontract.ExecutionInput) error {
 	if proof == nil {
 		return nativeErr("environment_not_ready", "项目环境尚未准备")
 	}
@@ -140,7 +141,7 @@ func verifyCandidateEnvironment(ctx context.Context, tx *sql.Tx, project string,
 	if err != nil {
 		return nativeErr("environment_not_ready", err.Error())
 	}
-	if actual != *proof {
+	if actual.Key != proof.Key || actual.Revision != proof.Revision || actual.ActivityID != proof.ActivityID || actual.Basis != proof.Basis {
 		return nativeErr("environment_not_ready", "环境准备引用在预留前已变化")
 	}
 	return nil

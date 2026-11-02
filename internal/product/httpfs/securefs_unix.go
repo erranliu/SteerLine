@@ -10,7 +10,27 @@ import (
 	"syscall"
 )
 
-func openDiscoveryReader(path string) (*os.File, error) { return os.Open(path) }
+func openDiscoveryReader(path string) (*os.File, error) {
+	// Inspect the opened object without waiting for a FIFO writer. Regular
+	// files ignore O_NONBLOCK; the caller rejects every other file type.
+	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+}
+
+func verifyPrivateSnapshot(file *os.File) error {
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+		return fmt.Errorf("local API credential permissions are not private")
+	}
+	// An immutable opened inode can have no remaining name after replacement.
+	// Multiple names still violate the private snapshot boundary.
+	if st, ok := info.Sys().(*syscall.Stat_t); ok && st.Nlink > 1 {
+		return fmt.Errorf("local API credential has multiple hard links")
+	}
+	return nil
+}
 
 func ReplacePrivateFile(source, target string) error { return os.Rename(source, target) }
 

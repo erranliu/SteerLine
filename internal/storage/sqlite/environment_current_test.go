@@ -14,6 +14,7 @@ import (
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -90,7 +91,11 @@ func TestProjectEnvironmentReadinessTransactionProofAndIdentity(t *testing.T) {
 			return err
 		}
 		defer tx.Rollback()
-		return verifyCandidateEnvironment(ctx, tx, project, p, execution)
+		var evidence *runnerstate.EnvironmentAdmission
+		if p != nil {
+			evidence = &runnerstate.EnvironmentAdmission{Key: p.Key, Revision: p.Revision, ActivityID: p.ActivityID, Basis: p.Basis}
+		}
+		return verifyCandidateEnvironment(ctx, tx, project, evidence, execution)
 	}
 	require(t, check("project", &proof, record.Execution))
 	if check("project", nil, record.Execution) == nil || check("other", &proof, record.Execution) == nil {
@@ -150,7 +155,7 @@ func reserveFixtureCandidate(t *testing.T, s *SQLiteStore, ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	c.Environment = &proof
+	c.Environment = &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
 	c.Submit.Input, _ = json.Marshal(input)
 	return s.ReserveRunnerCandidate(ctx, work, c, extra)
 }
@@ -183,7 +188,7 @@ func TestProjectEnvironmentReadinessReservationCommitOrder(t *testing.T) {
 				require(t, err)
 				input := runnerclient.RunInput{Execution: record.Execution, Title: work.Record.Title, Repository: runnerclient.Repository{URL: contract.Repository, Remote: contract.Remote, BaseBranch: contract.Branch, BaseRevision: strings.Repeat("a", 40)}, Documents: runnerclient.Documents{Spec: runnerclient.Document{Path: contract.SpecRef.Path}, Plan: runnerclient.Document{Path: contract.PlanRef.Path}}, Publication: runnerclient.Publication{BaseBranch: contract.Branch}}
 				raw, _ := json.Marshal(input)
-				candidate := runnerbridge.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "candidate", Revision: 1, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", ContractDigest: contract.Digest, BaseRevision: strings.Repeat("a", 40), Participation: "active", Explicit: true, Environment: &proof, SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "original-request", Input: raw}}
+				candidate := runnerbridge.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "candidate", Revision: 1, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", ContractDigest: contract.Digest, BaseRevision: strings.Repeat("a", 40), Participation: "active", Explicit: true, Environment: &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}, SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "original-request", Input: raw}}
 				release := make(chan struct{})
 				done := make(chan error, 1)
 				go func() { <-release; done <- s.ReserveRunnerCandidate(ctx, work, candidate, false) }()

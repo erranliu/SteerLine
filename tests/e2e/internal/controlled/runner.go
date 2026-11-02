@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"io"
 	"os"
 	"os/exec"
@@ -18,7 +19,7 @@ import (
 	"time"
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
@@ -226,11 +227,11 @@ func RunnerCLI(args []string) (bool, error) {
 					return true, e
 				}
 			}
-			var entry pm.ProjectEntry
+			var entry testmodel.ProjectEntry
 			for _, material := range materials {
-				if material.Path == pm.ProjectEntryPath && material.Content != nil {
+				if material.Path == testmodel.ProjectEntryPath && material.Content != nil {
 					var e error
-					entry, e = pm.ParseProjectEntry([]byte(*material.Content))
+					entry, e = testmodel.ParseProjectEntry([]byte(*material.Content))
 					if e != nil {
 						return true, e
 					}
