@@ -28,4 +28,14 @@
 
 初次公开停止回归失败于新增反例的查询/范围期望：实际实现已在身份不符时提前拒收，测试还要求发生 inventory 查询；修正夹具期望后重跑通过。初次 SteerLine L1 检出 runnerclient 新增对 runnerbinding 的越层依赖；实现改用标准库核对绝对路径，保留原分层守卫并完整重跑 L1/L2 通过。
 
-完整 L1 在基线提交加本次未提交修复上执行，源码与最终修复一致；报告保留原 source_commit/source_dirty，不改写受测身份。三份原安装库均为 schema39，与当前 SteerLine 一致。实际部署结果在完成后补记；当前条目不将尚未完成的部署标为成功。不宣称完整真实模型交付或远端全场景资格。
+完整 L1 在基线提交加本次未提交修复上执行，源码与最终修复一致；报告保留原 source_commit/source_dirty，不改写受测身份。三份原安装库均为 schema39，与当前 SteerLine 一致。不宣称完整真实模型交付或远端全场景资格。
+
+## 实际部署与启动
+
+2026-11-03 15:20（Asia/Shanghai）通过正式 `scripts/build-deploy.ps1 -UpdateRunner -RunnerRepo <上述 Runner worktree> -InstallHome C:\SteerlineInstall -NoPause` 完成安装并启动；报告出口为证据根 `deploy-timings.json`，原日志 `deploy.log`。总耗时 61.080 秒，升级预检 5.740 秒、全部项目 ready 等待 23.320 秒，succeeded=true。
+
+安装包为 `C:\SteerlineInstall\deployments\20261103-072005-11aafc64`。SteerLine 来源 `e213a6fcb673e77977f2b19a6c698f372123f418`（实现加本验收记录的部署前版本），source_dirty=false；Runner 来源 `40f83cb984193c72ca15944f10fccc11f5327d24`，version `0.2.0-dev.4`，SHA256 `3daffb75460cb0ed829d5396c366f11148c69fd39626aa5a0f6c3daf8c03db8a`。三个安装 EXE 均与部署记录摘要一致，原 v8 namespace `C:\slr\rehnosf7lwgci2qaqusuz6z56u` 保留，未清理或修改历史 Run。
+
+15:21 的部署后核验确认：后端 PID 39868、Web PID 51148、Runner PID 43804，均 ready；SteerLine、SteerlineTest、merge-h-308-code 三项目 ready/online，degraded=false。`http://127.0.0.1:18742/` 返回 HTTP 200。全部项目配置及 Web 配置原始字节摘要不变；执行方案摘要不变，8 个 profiles、默认 project-default 和 developer 配置均保留，仅按正式部署流程更新 Runner pin。
+
+证据根中的 `installed-before-hashes.json`、`installed-profile-digest.json` 记录部署前摘要；`installed-status.json`、`installed-runner-status.json`、`installed-after-verification.json` 保存启动、Runner 身份与配置保留的最终核验。部署包另有 `shutdown-verification.json`、`runner-upgrade-preflight.json`、`deployment.json` 和本次 startup 日志/回执。源码原 checkout 未应用修复，两个修复分支和 worktree 保留。
