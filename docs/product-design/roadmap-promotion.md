@@ -59,3 +59,7 @@ Web 的项目导航提供 Roadmap 页面。当前实现读取 `SteerlineFlow/Roa
 在已有 Git 项目根执行 `steerline project prepare-roadmap -repository <绝对目录>`，交付当前平台 parse-rules.md、document-rules.md 和缺失的 `SteerlineFlow/spec/SpecGuide.md`；`-check` 只检查。既有自定义 SpecGuide 保留，平台规则不同源会明确报错，需审阅更新，不静默覆盖。将新增静态文档按项目正常流程提交/合入，再使用 Roadmap 页面。命令不纳管、建库或创建任务，完整项目添加仍按其后续范围。
 
 原始动态文件的逻辑名称为 `roadmap-inputs/source.md`、`existing-task-graph.json`、`existing-roadmap-source-map.json` 和 `confirmed-planning.json`。它们由 Runner 给出实际 `file` 读取位置，与源码中的同名文件无关；Run/结果的文件清单须与原上传字节一致。
+
+## 静态初始化入口
+
+Roadmap 页面在解析前展示 HEAD 与已观察目标分支的三份静态材料状态，提供显式“初始化静态材料”；服务按原项目/版本信封生成缺少文件，不调用模型或提交 Git。文件仅在工作树中时显示待提交/合入提示，解析保持禁用；初始化未决请求可按原号只读对账，部分结果保留并明确终止，不自动重跑。CLI `project prepare-roadmap` 仍供仓库准备使用；独立调试包的新项目在首次提交前自动调用同一准备 owner。完整项目添加/纳管仍属于后置范围。细则和验收见 [初始化闭环 Spec](../../SteerlineFlow/spec/roadmap-static-initialization.spec.md)。

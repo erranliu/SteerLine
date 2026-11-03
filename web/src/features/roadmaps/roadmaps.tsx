@@ -73,7 +73,13 @@ export type RoadmapRecord = {
   };
   admission_request?: string;
 };
+type Preparation = {
+  commit: string; ready: boolean; local_ready: boolean; branch: string;
+  files: {path: string; ready: boolean; diagnostic?: string}[];
+  diagnostic?: string;
+};
 export type RoadmapView = {
+  preparation: Preparation;
   sources: RoadmapSource[];
   records: RoadmapRecord[];
   profiles: { id: string; name: string }[];
@@ -111,7 +117,7 @@ const dependencies = (d: Dependencies) =>
   ].join("、") || "无";
 
 export function Roadmaps() {
-  const { api, identity, online, submit, busy, refresh } = useWorkspace();
+  const { api, identity, online, submit, busy, refresh, requests } = useWorkspace();
   const [params, setParams] = useSearchParams();
   const [profile, setProfile] = useState(""),
     [error, setError] = useState(""),
@@ -196,12 +202,13 @@ export function Roadmaps() {
       const returned = result.roadmap as RoadmapRecord | undefined;
       if (returned?.id) setRecordID(returned.id);
       await list.refetch();
-      await detail.refetch();
+      if (selectedID) await detail.refetch();
       refresh();
     } catch (e) {
       setError(String(e));
     }
   }
+  const preparationPending = requests?.some(r => r.envelope.project_id === identity.project_id && r.envelope.action === "roadmap_prepare_static" && !["applied", "rejected"].includes(r.response?.status || ""));
   const parse = () =>
     source.data &&
     action("roadmap_parse", source.data.id, 1, {
@@ -243,6 +250,15 @@ export function Roadmaps() {
           连接待核实 · 以下为最后观察，暂不能提交操作。
         </p>
       )}
+      {value && !value.preparation.ready && <section aria-label="Roadmap 静态材料初始化" className="notice">
+        <h2>先准备项目静态材料</h2>
+        <p>静态规则只需初始化一次；任务图、来源映射和确认规划由 SteerLine 自动提供，无需手写 JSON。</p>
+        <ul>{value.preparation.files.map(file => <li key={file.path}>{file.path} · {file.ready ? "固定提交可读取" : "未就绪"}</li>)}</ul>
+        <p>{value.preparation.local_ready ? "材料已在工作树中，请提交并合入 " + value.preparation.branch + "，更新本地后刷新。" : "初始化仅生成缺少的静态文件，保留已有项目指南；请审阅后按项目正常流程提交并发布。"}</p>
+        {value.preparation.diagnostic && <p role="alert">{value.preparation.diagnostic}</p>}
+        <button disabled={locked || preparationPending || !value.preparation.commit || value.preparation.local_ready}
+          onClick={() => void action("roadmap_prepare_static", identity.project_id, 1, {commit: value.preparation.commit})}>初始化静态材料</button>
+      </section>}
       <div className="roadmaps-grid">
         <aside className="roadmaps-library">
           <h2>仓库 Markdown</h2>
@@ -345,7 +361,8 @@ export function Roadmaps() {
               !source.data ||
               !!source.data.diagnostic ||
               hasPending ||
-              !value?.profiles.length
+              !value?.profiles.length ||
+              !value?.preparation.ready
             }
             onClick={() => void parse()}
           >
@@ -493,7 +510,8 @@ export function Roadmaps() {
             !generationParent ||
             hasPending ||
             generationParent.state !== "confirmed" ||
-            !value?.documents_available
+            !value?.documents_available ||
+            !value?.preparation.ready
           }
           onClick={() =>
             generationParent &&
