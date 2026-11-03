@@ -50,11 +50,10 @@ func ExecutionDigest(e runnercontract.ExecutionInput) string {
 }
 
 type Manifest struct {
-	Version        int      `json:"version"`
-	EnvironmentKey string   `json:"environment_key"`
-	Script         string   `json:"script"`
-	Interpreter    string   `json:"interpreter"`
-	Dependencies   []string `json:"dependencies"`
+	Version      int      `json:"version"`
+	Script       string   `json:"script"`
+	Interpreter  string   `json:"interpreter"`
+	Dependencies []string `json:"dependencies"`
 }
 
 func ParseManifest(document []byte) (Manifest, error) {
@@ -76,12 +75,12 @@ func ParseManifest(document []byte) (Manifest, error) {
 	if e := Decode(b[:end], &m); e != nil {
 		return m, e
 	}
-	if m.Version != 4 || !ValidKey(m.EnvironmentKey) || m.Dependencies == nil || (m.Script != ScriptPath(m.EnvironmentKey, "ps1") && m.Script != ScriptPath(m.EnvironmentKey, "sh")) || (strings.HasSuffix(m.Script, ".ps1") && m.Interpreter != "powershell.exe") || (strings.HasSuffix(m.Script, ".sh") && m.Interpreter != "bash") {
+	if m.Version != 5 || m.Dependencies == nil || (m.Script != ScriptPath("ps1") && m.Script != ScriptPath("sh")) || (strings.HasSuffix(m.Script, ".ps1") && m.Interpreter != "powershell.exe") || (strings.HasSuffix(m.Script, ".sh") && m.Interpreter != "bash") {
 		return m, errors.New("invalid environment invocation interface")
 	}
 	seen := map[string]bool{}
 	for _, p := range m.Dependencies {
-		if !fs.ValidPath(p) || p == "." || strings.ContainsAny(p, "\\:\x00*?[]") || seen[p] || p == m.Script || p == DocumentPath(m.EnvironmentKey) || p == "SteerlineProjectGuideDoc/environment-adaptation.md" || p == "SteerlineFlow/environment-generation.md" || p == "SteerlineFlow/environment-execution.md" || strings.HasPrefix(p, "SteerlineFlow/environments/") && !strings.HasPrefix(p, MaterialDirectory(m.EnvironmentKey)+"/") {
+		if !fs.ValidPath(p) || p == "." || strings.ContainsAny(p, "\\:\x00*?[]") || seen[p] || p == m.Script || p == DocumentPath() || p == "SteerlineProjectGuideDoc/environment-adaptation.md" || p == "SteerlineFlow/environment-generation.md" || p == "SteerlineFlow/environment-execution.md" || strings.HasPrefix(p, "SteerlineFlow/environments/") {
 			return m, errors.New("dependencies require unique finite project files")
 		}
 		seen[p] = true

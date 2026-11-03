@@ -120,7 +120,6 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 	t.Helper()
 	rules, err := prompts.TestingRules()
 	require(t, err)
-	key, _ := envmodel.Key(c.RunnerExecution.Profiles[0].Execution)
 	for name, body := range map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`,
 		"SteerlineFlow/spec/task.spec.md":           "# Spec\n\n## Acceptance\n\nFrozen task.\n",
 		"SteerlineFlow/plans/task.plan.md":          "# Plan\n\nFrozen implementation plan. No automated tests are required for this stopped Run fixture.\n",
@@ -129,8 +128,8 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 		"SteerlineFlow/plans/task.tests.json":       `{"tests":["one"]}`,
 		"SteerlineFlow/testing/runtime-progress.md": string(rules),
 		"tools/testing/RuntimeProgress.ps1":         progresstools.PowerShellWriter,
-		envmodel.DocumentPath(key):                  environmentFixtureDocument(key, "ps1", "environment-validation", []string{}),
-		envmodel.ScriptPath(key, "ps1"):             "param($Phase)\n# Lifecycle fixture only.\n",
+		envmodel.DocumentPath():                     environmentFixtureDocument("ps1", []string{}),
+		envmodel.ScriptPath("ps1"):                  "param($Phase)\n# Lifecycle fixture only.\n",
 	} {
 		path := filepath.Join(c.Repository, filepath.FromSlash(name))
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))

@@ -16,6 +16,9 @@ func TestProjectEntryOwnsOneCatalogueAndFinitePolicySources(t *testing.T) {
 		`{"version":1,"requirements":[],"testing_catalogue":"quality/*.json"}`,
 		`{"version":1,"requirements":[],"testing_catalogue":"SteerlineFlow/environment-project.json"}`,
 		`{"version":1,"requirements":["SteerlineFlow/environments/key/environment.md"],"testing_catalogue":"quality/cases.json"}`,
+		`{"version":1,"requirements":["SteerlineFlow/environment.md"],"testing_catalogue":"quality/cases.json"}`,
+		`{"version":1,"requirements":["SteerlineFlow/scripts/verify-environment.ps1"],"testing_catalogue":"quality/cases.json"}`,
+		`{"version":1,"requirements":[],"testing_catalogue":"SteerlineFlow/scripts/verify-environment.sh"}`,
 		`{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json","required_checks":[]}`,
 		`{"version":1,"requirements":["SteerlineProjectGuideDoc/environment-adaptation.md"],"testing_catalogue":"quality/cases.json"}`,
 	} {

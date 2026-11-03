@@ -195,7 +195,7 @@
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario testing.project-environment-orca",
       "check": "固定源码与 execution，只调用项目自有检测入口一次，原 Run 完成/停止及最终结果封存；验证身份/依据绑定、ready 与失败原因/可选明细、准备前拒绝及通过后单一真实准入探针、原停止和资源清理。不复核项目内部检查，负向结果保留但不算正向 L4 通过。",
-      "note": "独立 home/clone/DB，live 精确单项串行，新 -out；显式 STEERRUNNER_EXE 必须支持 execute/1，STEERLINE_L4_PROJECT_CONFIG、STEERLINE_L4_PROJECT_COMMIT 完整 SHA、STEERLINE_L4_ROUND_TIMEOUT_SECONDS 正秒数。profile 使用 STEERLINE_L4_LOCAL_PROFILE（本机）或 STEERLINE_L4_REMOTE_PROFILE（远端）；模型目标分别取证。源提交只需 manifest4 文档/入口/依赖，不需平台协议副本、项目测试目录、L2 或 PR。额外 Task 准入探针材料由驱动在自有 clone 中提交；不改变项目检测要求。不覆盖安装环境，不合入业务主分支；缺能力/输入、skip 或清理未知不得通过。"
+      "note": "独立 home/clone/DB，live 精确单项串行，新 -out；显式 STEERRUNNER_EXE 必须支持 execute/1，STEERLINE_L4_PROJECT_CONFIG、STEERLINE_L4_PROJECT_COMMIT 完整 SHA、STEERLINE_L4_ROUND_TIMEOUT_SECONDS 正秒数。profile 使用 STEERLINE_L4_LOCAL_PROFILE（本机）或 STEERLINE_L4_REMOTE_PROFILE（远端）；模型目标分别取证。源提交只需 manifest5 文档/入口/依赖，不需平台协议副本、项目测试目录、L2 或 PR。额外 Task 准入探针材料由驱动在自有 clone 中提交；不改变项目检测要求。不覆盖安装环境，不合入业务主分支；缺能力/输入、skip 或清理未知不得通过。"
     },
     {
       "id": "testing.project-environment-readiness",
@@ -213,7 +213,7 @@
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario testing.project-environment-local",
       "check": "固定源码与 execution，只调用项目自有检测入口一次，原 Run 完成/停止及最终结果封存；验证身份/依据绑定、ready 与失败原因/可选明细、准备前拒绝及通过后单一真实准入探针、原停止和资源清理。不复核项目内部检查，负向结果保留但不算正向 L4 通过。",
-      "note": "独立 home/clone/DB，live 精确单项串行，新 -out；显式 STEERRUNNER_EXE 必须支持 execute/1，STEERLINE_L4_PROJECT_CONFIG、STEERLINE_L4_PROJECT_COMMIT 完整 SHA、STEERLINE_L4_ROUND_TIMEOUT_SECONDS 正秒数。profile 使用 STEERLINE_L4_LOCAL_PROFILE（本机）或 STEERLINE_L4_REMOTE_PROFILE（远端）；模型目标分别取证。源提交只需 manifest4 文档/入口/依赖，不需平台协议副本、项目测试目录、L2 或 PR。额外 Task 准入探针材料由驱动在自有 clone 中提交；不改变项目检测要求。不覆盖安装环境，不合入业务主分支；缺能力/输入、skip 或清理未知不得通过。"
+      "note": "独立 home/clone/DB，live 精确单项串行，新 -out；显式 STEERRUNNER_EXE 必须支持 execute/1，STEERLINE_L4_PROJECT_CONFIG、STEERLINE_L4_PROJECT_COMMIT 完整 SHA、STEERLINE_L4_ROUND_TIMEOUT_SECONDS 正秒数。profile 使用 STEERLINE_L4_LOCAL_PROFILE（本机）或 STEERLINE_L4_REMOTE_PROFILE（远端）；模型目标分别取证。源提交只需 manifest5 文档/入口/依赖，不需平台协议副本、项目测试目录、L2 或 PR。额外 Task 准入探针材料由驱动在自有 clone 中提交；不改变项目检测要求。不覆盖安装环境，不合入业务主分支；缺能力/输入、skip 或清理未知不得通过。"
     },
     {
       "id": "web.unit",

@@ -99,7 +99,7 @@ func RunProjectProgress(t *testing.T) {
 	}
 	p.git(p.Repo, "add", "--", "AGENTS.md", "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json")
 	if remote != nil {
-		p.git(p.Repo, "add", "--", env.DocumentPath(p.environmentKey(p.Driver.Profile)))
+		p.git(p.Repo, "add", "--", env.DocumentPath())
 	}
 	p.git(p.Repo, "commit", "--quiet", "-m", "Bind isolated live progress acceptance")
 	head := p.git(p.Repo, "rev-parse", "HEAD")

@@ -519,10 +519,8 @@ function fixture(
         : path.startsWith("/environment/materials")
           ? {
               document_path:
-                "SteerlineFlow/environments/" +
-                "e".repeat(64) +
-                "/environment.md",
-              document: "Only selected target requirements",
+                "SteerlineFlow/environment.md",
+              document: "Shared project requirements",
             }
           : path.split("?")[0] === "/environment"
             ? { records: emptyHistory ? [] : [{ ...record, rounds: [] }] }

@@ -23,14 +23,14 @@ func (p *environmentPort) materials(ctx context.Context, key string) (any, error
 	if e != nil {
 		return nil, e
 	}
-	out := map[string]any{"environment_key": key, "document_path": model.DocumentPath(key)}
+	out := map[string]any{"environment_key": key, "document_path": model.DocumentPath()}
 	commit, e := p.observedSource(ctx)
 	if e != nil {
 		out["diagnostic"] = e.Error()
 		return out, nil
 	}
 	out["source_commit"] = commit
-	document, manifest, _, e := p.invocationAt(ctx, key, commit)
+	document, manifest, _, e := p.invocationAt(ctx, commit)
 	if len(document) > 0 {
 		out["document"] = string(document)
 	}

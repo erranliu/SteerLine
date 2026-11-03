@@ -56,8 +56,8 @@ func TestEnvironmentUnqualifiedQueryDoesNotReadDependencyBasis(t *testing.T) {
 	require(t, err)
 	key, err := env.Key(profile.Execution)
 	require(t, err)
-	path := filepath.Join(c.Repository, filepath.FromSlash(env.DocumentPath(key)))
-	document := environmentFixtureDocument(key, "ps1", "", []string{"missing-dependency.md"})
+	path := filepath.Join(c.Repository, filepath.FromSlash(env.DocumentPath()))
+	document := environmentFixtureDocument("ps1", []string{"missing-dependency.md"})
 	require(t, os.WriteFile(path, []byte(document), 0600))
 	commitEnvironmentMaterials(t, c)
 	value, err := p.readinessOptions(context.Background())
@@ -78,7 +78,7 @@ func TestProjectEnvironmentConfigurationSurvivesProjectFailures(t *testing.T) {
 			p, c, store := environmentFixture(t)
 			switch failure {
 			case "materials":
-				fixtureGit(t, c.Repository, "rm", "-r", "SteerlineFlow/environments")
+				fixtureGit(t, c.Repository, "rm", "SteerlineFlow/environment.md")
 				commitEnvironmentMaterials(t, c)
 			case "source":
 				p.config.Branch = "missing-source"
