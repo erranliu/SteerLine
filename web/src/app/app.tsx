@@ -169,7 +169,7 @@ export function Workspace({
                 ? "操作未完成，请查看操作结果或刷新重试。"
                 : "操作结果未放行"}
             </strong>
-            {!environmentPage && <p>{error}</p>}
+            <p>{error}</p>
             <Button size="sm" onClick={clearError}>
               收起提示
             </Button>

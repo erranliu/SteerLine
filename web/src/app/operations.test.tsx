@@ -109,3 +109,41 @@ it("keeps older unresolved operations visible alongside the latest result", () =
   expect(screen.getByText("停止检测：操作未成功，请刷新后重试")).toBeVisible();
   expect(screen.getAllByRole("button", { name: "重新查询" })).toHaveLength(1);
 });
+
+it.each(["rejected", "outcome_unknown"] as const)(
+  "shows the specific environment diagnostic for %s without changing the request",
+  (status) => {
+    const row = request("environment_start", status);
+    row.response!.diagnostic =
+      "environment.md requires one steerline-environment JSON block";
+    const before = structuredClone(row);
+    render(
+      <Operations
+        requests={[row]}
+        compact
+        online
+        reconcile={vi.fn()}
+        reconciling={false}
+      />,
+    );
+    expect(screen.getByText(row.response!.diagnostic)).toBeVisible();
+    expect(screen.queryByText(row.error!)).not.toBeInTheDocument();
+    expect(row).toEqual(before);
+  },
+);
+
+it("keeps a transport error visible when there is no server diagnostic", () => {
+  const row = request("environment_start");
+  row.error = "Failed to fetch the original operation";
+  render(
+    <Operations
+      requests={[row]}
+      compact
+      online
+      reconcile={vi.fn()}
+      reconciling={false}
+    />,
+  );
+  expect(screen.getByText(row.error)).toBeVisible();
+  expect(screen.getByRole("button", { name: "重新查询" })).toBeEnabled();
+});

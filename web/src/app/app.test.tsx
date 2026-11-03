@@ -6,6 +6,7 @@ import {
   waitFor,
   act,
   fireEvent,
+  within,
 } from "@testing-library/react";
 import { StrictMode, type ComponentProps } from "react";
 import {
@@ -44,11 +45,12 @@ function mountWorkspace(
   api: Api,
   client: QueryClient,
   props: Partial<ComponentProps<typeof Workspace>> = {},
+  route = "settings",
 ) {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter
-        initialEntries={[`/projects/${api.identity.project_id}/settings`]}
+        initialEntries={[`/projects/${api.identity.project_id}/${route}`]}
       >
         <Workspace
           home={api.home}
@@ -65,6 +67,68 @@ afterEach(() => {
   onlineManager.setOnline(true);
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+it("shows the backend rejection in the environment page alert and allows dismissing it", async () => {
+  const client = testClient();
+  const api = new Api(
+    { ...fixtureIdentity, project_id: "environment-error" },
+    "csrf",
+    "environment-error-home",
+  );
+  const diagnostic =
+    "environment.md requires one steerline-environment JSON block";
+  const profile = {
+    id: "project-default",
+    name: "本机",
+    environment_key: "e".repeat(64),
+    status: "not_ready",
+    stage: "awaiting_user",
+    reason: "",
+    current_revision: 0,
+  };
+  const options = {
+    profiles: [profile],
+    default_profile_id: profile.id,
+    environments: [
+      {
+        ...profile,
+        target: { kind: "local" },
+        adapter: "codex-app-server",
+        agent: "codex",
+        activity_settled: true,
+        document_path: "SteerlineFlow/environment.md",
+        profiles: [profile],
+      },
+    ],
+  };
+  vi.spyOn(Api.prototype, "get").mockImplementation(
+    async (path) =>
+      (path.startsWith("/environment/options")
+        ? options
+        : workspaceRead(api, path)) as never,
+  );
+  const submit = vi
+    .spyOn(Api.prototype, "submit")
+    .mockImplementation(async (envelope) => ({
+      ...envelope,
+      original: envelope,
+      status: "rejected",
+      diagnostic,
+      sampled_at: "now",
+    }));
+  mountWorkspace(api, client, {}, "environment");
+  const start = await screen.findByRole("button", { name: "开始检测" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  const alert = await screen.findByRole("alert");
+  expect(within(alert).getByText(diagnostic)).toBeVisible();
+  expect(submit).toHaveBeenCalledTimes(1);
+  expect(submit.mock.calls[0][0].action).toBe("environment_start");
+  fireEvent.click(within(alert).getByRole("button", { name: "收起提示" }));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(submit).toHaveBeenCalledTimes(1);
+  client.clear();
 });
 
 it("preloads only after connection verification, shares presentation in StrictMode, and does not repeat on snapshot samples", async () => {

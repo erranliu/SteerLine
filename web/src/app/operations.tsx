@@ -37,24 +37,30 @@ export function Operations({
         aria-live="polite"
       >
         {displayed.map((row) => (
-          <p key={row.envelope.request_id}>
-            {actions[row.envelope.action] || "环境操作"}：
-            {row.response?.status === "applied"
-              ? "操作成功"
-              : row.response?.status === "rejected"
-                ? "操作未成功，请刷新后重试"
-                : "结果待核实"}
-            {pending.includes(row) && (
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={!online || reconciling}
-                onClick={() => reconcile(row)}
-              >
-                重新查询
-              </Button>
-            )}
-          </p>
+          <div key={row.envelope.request_id}>
+            <p>
+              {actions[row.envelope.action] || "环境操作"}：
+              {row.response?.status === "applied"
+                ? "操作成功"
+                : row.response?.status === "rejected"
+                  ? "操作未成功，请刷新后重试"
+                  : "结果待核实"}
+              {pending.includes(row) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!online || reconciling}
+                  onClick={() => reconcile(row)}
+                >
+                  重新查询
+                </Button>
+              )}
+            </p>
+            {row.response?.status !== "applied" &&
+              (row.response?.diagnostic || row.error) && (
+                <p className="muted">{row.response?.diagnostic || row.error}</p>
+              )}
+          </div>
         ))}
       </section>
     ) : null;
