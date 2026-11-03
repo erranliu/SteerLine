@@ -44,3 +44,9 @@ SteerlineTest 准备分支材料提交 `16adfb2`，最终 PR head=`b378559a07666
 ## Rebase 后最终回归
 
 本分支已 rebase 到 main `02285e1cb9b62564d37ee8a03a0f2f839af4c482`（环境页面精简），仅验收索引冲突，保留双方条目。精确受测提交 `fe57c6d22fc41dbb655cdb799244ab7b90fc5d24`，干净工作树；`test-results/L1-rebase-20261102-final/summary.json`、`L2-rebase-20261102-final/summary.json`、`web-rebase-20261102-final/summary.json`、`http-rebase-20261102-final/summary.json` 均通过，零意外 skip，生产前端构建通过。文档657文件/4079本地链接零错误，diff检查通过。本段为验证后文档登记，不变更受测业务；main 无 Roadmap 行为变化，未重复调用模型。
+
+## PR #435 冲突解决与回归（2026-11-03）
+
+Rebase 到 main `e5cd4f2a58a713eb1c769604ffabe733b336aa1f`；唯一冲突为验收索引同处新增，保留公共环境材料与 Roadmap 两条记录。range-diff 及逐文件比对确认原业务代码、提示正文、资产和专项测试正文无变化。受测提交 `2342eacb94c9bc879677787a59fb6aa9e59bcf05`，干净工作树。
+
+本任务证据根下 `test-results/L1-pr435-rebase-20261103/summary.json`、`L2-pr435-rebase-20261103/summary.json`、`web-pr435-rebase-20261103/summary.json` 均通过；`diagnostics/owner-pr435-rebase-20261103/summary.json` 11项含子例通过，零失败/跳过，112.252s，覆盖首次提交、固定来源、原请求恢复和指南校验。文档659文件/4094本地链接零错误，diff检查通过；未重复调用真实模型或操作安装现场。本段仅登记本轮结果。
