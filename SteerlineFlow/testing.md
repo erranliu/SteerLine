@@ -13,7 +13,7 @@ go run ./cmd/test-feedback -level=L2
 
 | 级别 | 本项目内容 | 环境与选择 |
 | --- | --- | --- |
-| [L1](testing/l1.md) | 一个最小 Go 与前端单元/集成集合 | 隔离 Go/Vitest 测试，无模型；需 Go/Git、Node 24+ 及 npm ci；包含固定提示词正文/参数和有限源码约束，不累积各功能完整 owner 回归。 |
+| [L1](testing/l1.md) | 一个最小 Go 与前端单元/集成集合 | 隔离 Go/Vitest 测试，无模型；需 Go/Git、Node 24+ 及 npm ci；保留固定提示词正文/参数/源码守卫，复用一次真实仓库完整依赖矩阵检查，不累积各功能完整 owner 回归。 |
 | [L2](testing/l2.md) | 一个受控核心交付冒烟 | 真实 SteerLine/Git/SQLite，公开 Runner/PR fixture；不需要真实 Runner、模型或 GitHub。 |
 | [L3](testing/l3.md) | 可并行功能流程 | controlled，资源隔离，总并发最多二；按受影响 ID 选择。 |
 | [L4](testing/l4.md) | 边界、不可并行功能、真实链和 Go 测试集 | controlled/live/isolated；live 必须单独精确选择，按需运行。 |
@@ -30,6 +30,10 @@ go run ./cmd/test-feedback -- ./internal/runnerclient ./internal/runnerbridge -c
 ```
 
 Full 仅指全部普通 Go 测试，已登记为 L4 `go.full`，不包含 e2e/runneracceptance 标签或 Web；没有测试文件的包单独枚举为编译项。真实测试 skip 在原 summary/退出码/managed 中均不通过。正式复用集可用 `-level=L4 -suite=go -scenario go.http/go.storage/go.environment`（每次选一个 ID），前端全集用 `-level=L4 -suite=web -scenario web.unit`。前端与 HTTP 检查用 `scripts/test-web.ps1`，其他浏览器及独立脚本入口见 [L4 列表](testing/l4.md)；未接入受管报告的入口不能凭 Agent 自述登记通过。
+
+go.http 全量执行七个 HTTP/快照/配置/探测/元数据进程 owner，每包必须实际非零；go.environment 串行执行环境/model/remotetest/中性executionconfig四包全量，以及明确的Windows29根/其他平台28根的 App 环境集成组。源清单/正式定义及 package/root 终态须一致，缺失、额外或重复、跳过、一组失败均使整体不通过；其他 App 回归仍在 go.full。新范围须以本次定义报告验证，不继承旧专项通过。详细选择与本轮证据见[早期反馈验收](testing/acceptance/test-early-feedback.md)。
+
+go.http 的 Windows 跨进程快照压力保持原30秒窗口、1000次发布和8读者；本机安排与E2E、Full、其他压力串行，独立通过不代表并行组合已验证。此约束也保留在机器清单，不改变L3自身并行实现。
 
 ## 环境与证据
 
