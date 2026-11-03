@@ -52,19 +52,20 @@ type environment struct {
 }
 
 type runReport struct {
-	SchemaVersion int                  `json:"schema_version"`
-	Scope         string               `json:"scope"`
-	Phase         string               `json:"phase"`
-	Mode          string               `json:"mode"`
-	Command       []string             `json:"command"`
-	StartedAt     string               `json:"started_at"`
-	FinishedAt    string               `json:"finished_at"`
-	WallSeconds   float64              `json:"wall_seconds"`
-	Environment   environment          `json:"environment"`
-	ProcessError  string               `json:"process_error,omitempty"`
-	Summary       testfeedback.Summary `json:"summary"`
-	StdoutLog     string               `json:"stdout_json_log"`
-	StderrLog     string               `json:"stderr_log"`
+	ExecutionParameters executionParameters  `json:"execution_parameters"`
+	SchemaVersion       int                  `json:"schema_version"`
+	Scope               string               `json:"scope"`
+	Phase               string               `json:"phase"`
+	Mode                string               `json:"mode"`
+	Command             []string             `json:"command"`
+	StartedAt           string               `json:"started_at"`
+	FinishedAt          string               `json:"finished_at"`
+	WallSeconds         float64              `json:"wall_seconds"`
+	Environment         environment          `json:"environment"`
+	ProcessError        string               `json:"process_error,omitempty"`
+	Summary             testfeedback.Summary `json:"summary"`
+	StdoutLog           string               `json:"stdout_json_log"`
+	StderrLog           string               `json:"stderr_log"`
 }
 
 type summaryOnlyReport struct {
@@ -177,6 +178,7 @@ func run(args []string) (code int) {
 	}
 
 	env := collectEnvironment(parsed.cacheCondition, parsed.nativeNote, parsed.out, goArgs)
+	executionParams := executionParametersFor(command, nil)
 	startedAt := time.Now().UTC()
 	stopwatch := time.Now()
 	cmd := exec.Command("go", commandArgs...)
@@ -186,6 +188,7 @@ func run(args []string) (code int) {
 	cmd.Stdout = stdoutFile
 	cmd.Stderr = io.MultiWriter(stderrFile, os.Stderr)
 	err = cmd.Run()
+	finishExecutionParameters(&executionParams, cmd.ProcessState != nil)
 	wallSeconds := time.Since(stopwatch).Seconds()
 	finishedAt := time.Now().UTC()
 	stdoutCloseErr := stdoutFile.Close()
@@ -221,20 +224,22 @@ func run(args []string) (code int) {
 		summary.IncompleteReasons = append(summary.IncompleteReasons, "could not start or finish go test: "+processError)
 	}
 	report := runReport{
-		SchemaVersion: 1,
-		Scope:         scope,
-		Phase:         parsed.phase,
-		Mode:          mode,
-		Command:       command,
-		StartedAt:     startedAt.Format(time.RFC3339Nano),
-		FinishedAt:    finishedAt.Format(time.RFC3339Nano),
-		WallSeconds:   wallSeconds,
-		Environment:   env,
-		ProcessError:  processError,
-		Summary:       summary,
-		StdoutLog:     filepath.ToSlash(stdoutPath),
-		StderrLog:     filepath.ToSlash(stderrPath),
+		ExecutionParameters: executionParams,
+		SchemaVersion:       1,
+		Scope:               scope,
+		Phase:               parsed.phase,
+		Mode:                mode,
+		Command:             command,
+		StartedAt:           startedAt.Format(time.RFC3339Nano),
+		FinishedAt:          finishedAt.Format(time.RFC3339Nano),
+		WallSeconds:         wallSeconds,
+		Environment:         env,
+		ProcessError:        processError,
+		Summary:             summary,
+		StdoutLog:           filepath.ToSlash(stdoutPath),
+		StderrLog:           filepath.ToSlash(stderrPath),
 	}
+	summarizeExecutionParameters(&report.Environment, []scopedGroup{{ExecutionParameters: executionParams}})
 	if err = writeJSON(filepath.Join(parsed.out, "summary.json"), report); err != nil {
 		fmt.Fprintf(os.Stderr, "write report: %v\n", err)
 		return 2
@@ -438,10 +443,10 @@ func collectEnvironment(cacheCondition, nativeNote, out string, goArgs []string)
 		}
 	}
 	concurrency := map[string]string{
-		"GOMAXPROCS_environment":    os.Getenv("GOMAXPROCS"),
-		"runtime_GOMAXPROCS":        fmt.Sprint(runtime.GOMAXPROCS(0)),
-		"go_test_parallel":          flagValue(goArgs, "-parallel", fmt.Sprintf("default %d", runtime.GOMAXPROCS(0))),
-		"go_build_package_parallel": flagValue(goArgs, "-p", "Go default"),
+		"GOMAXPROCS_environment":        os.Getenv("GOMAXPROCS"),
+		"controller_runtime_GOMAXPROCS": fmt.Sprint(runtime.GOMAXPROCS(0)),
+		"go_test_parallel":              "unknown",
+		"go_build_package_parallel":     "unknown",
 	}
 	if concurrency["GOMAXPROCS_environment"] == "" {
 		concurrency["GOMAXPROCS_environment"] = "unset"

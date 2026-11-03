@@ -2,6 +2,8 @@
 
 [Roadmap 静态初始化闭环](roadmap-static-initialization.spec.md)：显式初始化、固定发布门槛、原请求恢复与现有项目材料采用。
 
+App领域专项与实际参数报告（2026-11-03，已实施，自动验收与独立审核通过）：[Spec](app-domain-test-suites.spec.md) · [Plan](../plans/app-domain-test-suites.plan.md) · [验收规划与重型断言梳理](../testing/acceptance/app-domain-test-suites.md)。新增部署/Roadmap两个L4专项并修正各组实际参数报告；重型用例只做断言与层级梳理，不改断言、期限或原分级，不启动roadmap。
+
 Roadmap 材料自动准备（2026-11-02，实施/验收中）：[Spec](roadmap-material-preparation.spec.md) · [Plan](../plans/roadmap-material-preparation.plan.md) · [验收](../testing/acceptance/roadmap-material-preparation.md)。静态规则显式初始化，动态原文/图/确认结果自动冻结，经 Runner file 材料交付，不要求用户手写 JSON；与 Git 源码分别核验。
 
 运行环境与项目运行环境最小解耦（2026-11-02，已实施，所选自动验证及独立审核通过）：[Spec](runtime-project-environment-decoupling.spec.md) · [Plan](../plans/runtime-project-environment-decoupling.plan.md) · [验收规划](../testing/acceptance/runtime-project-environment-decoupling.md)。抽离中性目标与分组，复用全局配置/能力探测，项目保留检测与资格；页面最小适配，不新增全局 ready、数据库、工作流或 Runner 协议。中性目标、全局探测/项目资格、元数据 cwd/程序解析及最小页面适配已验证；原失败/补验分别保留，不启动 roadmap。
