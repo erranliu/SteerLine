@@ -51,10 +51,7 @@ func VerifyRunnerUpgrade(ctx context.Context, home, executable, sha string) (Run
 	}
 	if err == nil && pin.SHA256 != sha {
 		original := runnerclient.Client{Executable: pin.Executable, SHA256: pin.SHA256, StateDir: pin.StateDir}
-		if err := original.VerifyDrained(ctx); err != nil {
-			return result, err
-		}
-		if err := cli.VerifyDrained(ctx); err != nil {
+		if err := original.VerifyUpgradeDrained(ctx, cli); err != nil {
 			return result, err
 		}
 	}

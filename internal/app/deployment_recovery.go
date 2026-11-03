@@ -189,10 +189,7 @@ func admitDeploymentRecovery(ctx context.Context, candidate string) (*Deployment
 	// An interrupted same-build service can reconnect its original resources.
 	// A different build must wait for explicit draining by the original version.
 	if sha != pin.SHA256 {
-		if err := original.VerifyDrained(ctx); err != nil {
-			return fail(err)
-		}
-		if err := selected.VerifyDrained(ctx); err != nil {
+		if err := original.VerifyUpgradeDrained(ctx, selected); err != nil {
 			return fail(err)
 		}
 	}
