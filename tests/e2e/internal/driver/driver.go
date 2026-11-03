@@ -98,10 +98,12 @@ func (c *Client) runWithTimeout(ctx context.Context, timeout time.Duration, bina
 	var out, stderr strings.Builder
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
+	started := time.Now().UTC()
 	err := testprocess.Run(ctx, cmd)
+	finished := time.Now().UTC()
 	c.sequence++
 	if c.LogDir != "" {
-		record := map[string]any{"command": append([]string{binary}, args...), "stdout": out.String(), "stderr": stderr.String(), "error": fmt.Sprint(err)}
+		record := map[string]any{"command": append([]string{binary}, args...), "stdout": out.String(), "stderr": stderr.String(), "error": fmt.Sprint(err), "started_at": started.UTC().Format(time.RFC3339Nano), "finished_at": finished.UTC().Format(time.RFC3339Nano), "wall_seconds": finished.Sub(started).Seconds()}
 		raw, encodeErr := json.MarshalIndent(record, "", "  ")
 		if encodeErr != nil {
 			return nil, encodeErr

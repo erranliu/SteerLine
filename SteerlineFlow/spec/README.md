@@ -147,6 +147,8 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 [Spec](worker-disconnect-recovery.spec.md) · [Plan / 测试计划](../plans/worker-disconnect-recovery.plan.md) · [专属验收](../testing/acceptance/worker-disconnect-recovery.md) · [L3 场景设计](../../tests/e2e/suites/recovery/README.md)。场景已补实现/注册，实时执行状态见专属验收。
 
+测试早期反馈与专项范围收敛（2026-11-02，自动验收及独立审核通过）：[Spec](test-early-feedback.spec.md) · [Plan](../plans/test-early-feedback.plan.md) · [验收记录](../testing/acceptance/test-early-feedback.md)。L1前移真实仓库架构检查，go.http补齐基础owner直接覆盖，go.environment拆为owner全量与App精确环境集合；L2/L3和Full原覆盖不减，按独立审核及实际报告交付。
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)：当前持续 worker、单写者、身份、反馈与真实交付边界。

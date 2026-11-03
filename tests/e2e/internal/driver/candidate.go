@@ -136,9 +136,6 @@ func MainCandidate(args []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 145*time.Second)
 	defer cancel()
-	if err = c.ResolveIdentity(ctx); err != nil {
-		return err
-	}
 	hostConfig, err := steerlineapp.BuildHostConfig(ctx, c)
 	if err != nil {
 		return err

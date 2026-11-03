@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,20 +13,31 @@ import (
 // Fixed reusable sets are executable definitions, not user-supplied Go flags.
 type localSuite struct {
 	ID, Suite string
-	Packages  []string
-	Tests     []string
+	Groups    []localGroup
 	Tag       string
 	Required  []string
+}
+
+type localGroup struct {
+	ID       string
+	Packages []string
+	Tests    []string
 }
 
 var localSuites = []localSuite{
 	{ID: "go.full", Suite: "go"},
 	{ID: "web.unit", Suite: "web"},
-	{ID: "go.http", Suite: "go", Packages: []string{"./web/server", "./internal/product/httpapi", "./internal/product/httpclient"}},
-	{ID: "go.storage", Suite: "go", Packages: []string{"./internal/storage/sqlite", "./internal/pathguard"}},
-	{ID: "go.environment", Suite: "go", Packages: []string{"./internal/environmentadaptation", "./internal/environmentadaptation/model", "./internal/testkit/remotetest", "./internal/app"}},
-	{ID: "go.runner-contract", Suite: "go", Packages: []string{"./internal/app", "./internal/runnerclient"}, Tests: []string{"TestPublishedRunnerApplicationLifecycle", "TestLegacyCheckRetirementPublishedContract", "TestRunnerFullBindingPublicCLI"}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256"}},
-	{ID: "go.runner-result", Suite: "go", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestProjectEnvironmentExecutionPublishedResultRoundTrip"}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256", "STEERRUNNER_NATIVE_FIXTURE"}},
+	{ID: "go.http", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./web/server", "./internal/product/httpapi", "./internal/product/httpclient", "./internal/product/httpfs", "./web/server/executionconfig", "./web/server/discovery", "./web/server/nativequery"}}}},
+	{ID: "go.storage", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./internal/storage/sqlite", "./internal/pathguard"}}}},
+	{ID: "go.environment", Suite: "go", Groups: []localGroup{
+		{ID: "go-environment-owner", Packages: []string{"./internal/environmentadaptation", "./internal/environmentadaptation/model", "./internal/testkit/remotetest", "./internal/executionconfig"}},
+		{ID: "go-environment-app", Packages: []string{"./internal/app"}, Tests: environmentAppRoots()},
+	}},
+	{ID: "go.runner-contract", Suite: "go", Groups: []localGroup{
+		{ID: "go-runner-app", Packages: []string{"./internal/app"}, Tests: []string{"TestPublishedRunnerApplicationLifecycle"}},
+		{ID: "go-runner-client", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestLegacyCheckRetirementPublishedContract", "TestRunnerFullBindingPublicCLI"}},
+	}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256"}},
+	{ID: "go.runner-result", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestProjectEnvironmentExecutionPublishedResultRoundTrip"}}}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256", "STEERRUNNER_NATIVE_FIXTURE"}},
 }
 
 func selectLocalSuite(opts options) (localSuite, bool) {
@@ -53,77 +65,142 @@ func runLocalSuite(opts options, def localSuite) int {
 	if def.ID == "web.unit" {
 		report.Groups = append(report.Groups, runWebGroup(ctx, opts.out, "web-unit", nil))
 	} else {
-		args := []string{"go", "test", "-json", "-count=1", "-timeout=25m", "-p=1", "-parallel=1"}
-		if def.Tag != "" {
-			args = append(args, "-tags="+def.Tag)
+		if err := validateLocalGroups(def.Groups); err != nil {
+			return scopedSetupError(opts.out, &report, err)
 		}
-		if len(def.Tests) > 0 {
-			args = append(args, "-run="+exactPattern(def.Tests))
-		}
-		args = append(args, def.Packages...)
-		g := runGroup(ctx, opts.out, "go-owner", "", args, def.Tests, def.Packages, true)
-		report.Groups = append(report.Groups, g)
-		// Every selected package must actually execute tests. Patterns are expanded
-		// by Go itself; package/test events remain the original evidence.
-		if g.Error == "" {
-			raw, err := os.ReadFile(g.StdoutLog)
+		if def.ID == "go.environment" {
+			root, err := e2eRoot()
+			if err == nil {
+				err = checkEnvironmentAppSources(root)
+			}
 			if err != nil {
-				report.Errors = append(report.Errors, err.Error())
-			} else {
-				runs, terminals, packages, err := scanEvents(raw)
-				if err != nil {
-					report.Errors = append(report.Errors, err.Error())
-				}
-				seen := map[string]bool{}
-				expectedPackages := map[string]bool{}
-				module := strings.TrimSuffix(corePackage, "/internal/app/host")
-				for _, pkg := range def.Packages {
-					expectedPackages[module+"/"+strings.TrimPrefix(pkg, "./")] = true
-				}
-				for key, count := range runs {
-					pkg, name, _ := strings.Cut(key, "\x00")
-					if count != 1 || terminals[key] != 1 {
-						report.Errors = append(report.Errors, "incomplete test "+key)
-					}
-					if !strings.Contains(name, "/") {
-						seen[name] = true
-					}
-					if packages[pkg] != 1 {
-						report.Errors = append(report.Errors, "missing package terminal "+pkg)
-					}
-				}
-				for pkg, count := range packages {
-					if !expectedPackages[pkg] {
-						report.Errors = append(report.Errors, "unexpected package "+pkg)
-					}
-					n := 0
-					for key := range runs {
-						if strings.HasPrefix(key, pkg+"\x00") {
-							n++
-						}
-					}
-					if count != 1 || n == 0 {
-						report.Errors = append(report.Errors, "empty or duplicate package "+pkg)
-					}
-				}
-				for pkg := range expectedPackages {
-					if packages[pkg] != 1 {
-						report.Errors = append(report.Errors, "missing assigned package "+pkg)
-					}
-				}
-				for _, name := range def.Tests {
-					if !seen[name] {
-						report.Errors = append(report.Errors, "missing assigned test "+name)
-					}
-				}
-				if len(runs) == 0 {
-					report.Errors = append(report.Errors, "no tests matched")
-				}
+				return scopedSetupError(opts.out, &report, err)
+			}
+		}
+		for _, selected := range def.Groups {
+			g := runGroup(ctx, opts.out, selected.ID, "", localGroupCommand(def.Tag, selected), selected.Tests, selected.Packages, true)
+			report.Groups = append(report.Groups, g)
+			if err := checkLocalGroup(g, selected); err != nil {
+				report.Errors = append(report.Errors, selected.ID+": "+err.Error())
 			}
 		}
 	}
 	report.ExecutionSecs = time.Since(started).Seconds()
 	return finishLocalReport(opts.out, &report)
+}
+
+func localGroupCommand(tag string, group localGroup) []string {
+	args := []string{"go", "test", "-json", "-count=1", "-timeout=25m", "-p=1", "-parallel=1"}
+	if tag != "" {
+		args = append(args, "-tags="+tag)
+	}
+	if len(group.Tests) > 0 {
+		args = append(args, "-run="+exactPattern(group.Tests))
+	}
+	return append(args, group.Packages...)
+}
+
+func validateLocalGroups(groups []localGroup) error {
+	ids, packages := map[string]bool{}, map[string]bool{}
+	if len(groups) == 0 {
+		return fmt.Errorf("local suite has no groups")
+	}
+	for _, group := range groups {
+		if group.ID == "" || ids[group.ID] || len(group.Packages) == 0 || len(group.Tests) > 0 && len(group.Packages) != 1 {
+			return fmt.Errorf("invalid or duplicate local group %s", group.ID)
+		}
+		ids[group.ID] = true
+		for _, pkg := range group.Packages {
+			if !strings.HasPrefix(pkg, "./") || packages[pkg] {
+				return fmt.Errorf("invalid or repeated local package %s", pkg)
+			}
+			packages[pkg] = true
+		}
+		roots := map[string]bool{}
+		for _, name := range group.Tests {
+			if name == "" || strings.Contains(name, "/") || roots[name] {
+				return fmt.Errorf("invalid or repeated assigned root %s", name)
+			}
+			roots[name] = true
+		}
+	}
+	return nil
+}
+
+func checkLocalGroup(group scopedGroup, selected localGroup) error {
+	if group.Error != "" {
+		return fmt.Errorf("%s", group.Error)
+	}
+	raw, err := os.ReadFile(group.StdoutLog)
+	if err != nil {
+		return err
+	}
+	runs, terminals, packages, err := scanEvents(raw)
+	if err != nil {
+		return err
+	}
+	starts := map[string]int{}
+	for _, line := range strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n") {
+		var event struct{ Action, Package, Test string }
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			return err
+		}
+		if event.Test == "" && event.Action == "start" {
+			starts[event.Package]++
+		}
+	}
+	expected, counts := map[string]bool{}, map[string]int{}
+	module := strings.TrimSuffix(corePackage, "/internal/app/host")
+	for _, pkg := range selected.Packages {
+		expected[module+"/"+strings.TrimPrefix(pkg, "./")] = true
+	}
+	roots := map[string]bool{}
+	for _, name := range selected.Tests {
+		roots[name] = true
+	}
+	for key, count := range runs {
+		pkg, name, _ := strings.Cut(key, "\x00")
+		root, _, child := strings.Cut(name, "/")
+		if !expected[pkg] || count != 1 || terminals[key] != 1 || packages[pkg] != 1 {
+			return fmt.Errorf("unexpected or incomplete test %s", key)
+		}
+		if child && runs[pkg+"\x00"+root] != 1 {
+			return fmt.Errorf("subtest without assigned root %s", key)
+		}
+		if len(roots) > 0 && !roots[root] {
+			return fmt.Errorf("unassigned root %s", key)
+		}
+		counts[pkg]++
+	}
+	for key, count := range terminals {
+		if count != 1 || runs[key] != 1 {
+			return fmt.Errorf("orphan or duplicate terminal %s", key)
+		}
+	}
+	for pkg, count := range packages {
+		if !expected[pkg] || count != 1 || starts[pkg] != 1 || counts[pkg] == 0 {
+			return fmt.Errorf("unexpected, empty or duplicate package %s", pkg)
+		}
+	}
+	for pkg, count := range starts {
+		if !expected[pkg] || count != 1 || packages[pkg] != 1 {
+			return fmt.Errorf("orphan or duplicate package start %s", pkg)
+		}
+	}
+	for pkg := range expected {
+		if packages[pkg] != 1 || counts[pkg] == 0 {
+			return fmt.Errorf("missing assigned package %s", pkg)
+		}
+		for root := range roots {
+			if runs[pkg+"\x00"+root] != 1 {
+				return fmt.Errorf("missing assigned root %s/%s", pkg, root)
+			}
+		}
+	}
+	if len(runs) == 0 {
+		return fmt.Errorf("no tests matched")
+	}
+	return nil
 }
 
 func finishLocalReport(out string, report *scopedReport) int {

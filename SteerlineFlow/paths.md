@@ -86,7 +86,7 @@ test-feedback 每次输出根统一以 `summary.json` 为结果入口；受管�
 | L3 | `summary.json`；每个实际选择的 ID 对应一份 `managed-<test-id>.json` 和 `scenarios/<scenario-id>/scenario.json`。 |
 | L4 E2E | 与 L3 相同；受控/真实环境及所选范围由原 summary 及冻结定义表达，不仅凭目录名判断。 |
 | L4 Go 全集 | `summary.json`、`managed-go.full.json`；分组原日志为 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`。 |
-| L4 本地 owner/Web | `summary.json`、`managed-<test-id>.json`；Go 为 `go-owner/test.jsonl`、`go-owner/stderr.txt`，Web 为 `web-unit/vitest.json`、`stdout.txt`、`stderr.txt`（同在 web-unit 下）。 |
+| L4 本地 owner/Web | `summary.json`、`managed-<test-id>.json`；Go 为 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`：单组使用 `go-owner`，环境专项为 `go-environment-owner` / `go-environment-app`，Runner contract 为 `go-runner-app` / `go-runner-client`。Web 为 `web-unit/vitest.json`、`stdout.txt`、`stderr.txt`（同在 web-unit 下）；实际日志路径以 summary 为准。 |
 | 定向 Go / build-only | `summary.json`、`go-test.jsonl`、`go-test.stderr.txt`；不生成完整登记测试集的通过报告，归 diagnostics。 |
 | `-summarize-log <原日志>` | 只读取已有 Go JSONL 并写 `summary.json`，其中 `source_json_log` 定位原日志；不执行测试、不复制原日志或生成受管报告，也不适用实际执行的非空目录检查。应显式选择独立的 diagnostics 叶目录以免覆盖旧摘要。 |
 

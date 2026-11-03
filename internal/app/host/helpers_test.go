@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 			if child.Start() != nil {
 				os.Exit(1)
 			}
-			if os.WriteFile(args[1], []byte(fmt.Sprint(child.Process.Pid)), 0600) != nil {
+			if AtomicWrite(args[1], []byte(fmt.Sprint(child.Process.Pid))) != nil {
 				child.Process.Kill()
 				os.Exit(1)
 			}
