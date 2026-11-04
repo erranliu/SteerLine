@@ -27,6 +27,10 @@ func Project(snapshot storageports.RunnerSnapshot, checkpoint hostcontract.Servi
 			v.Title = task.Title
 			v.TaskStatus = task.Status
 		}
+		if d, ok := g.Deliveries[c.TaskID]; ok && d.SelectedWorkflowRunID == c.ID {
+			v.PR.URL, v.PR.State, v.PR.MergedAt, v.PR.MergeCommit = text(d.PRURL), "merged", &d.MergedAt, text(d.MergeCommit)
+			v.PR.QueriedAt, v.PR.QueryError = nil, nil
+		}
 		view.Runs = append(view.Runs, v)
 		if c.Participation == "active" && c.SubmitState != "rejected" && c.SubmitState != "cancelled" && (c.Projection == nil || c.Projection.Status != "pr_ready" && c.Projection.Status != "stopped") {
 			view.SlotOccupied = true

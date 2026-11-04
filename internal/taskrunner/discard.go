@@ -16,7 +16,7 @@ type DiscardStore interface {
 	CommitRunnerDiscard(context.Context, ports.RunnerDiscard) (taskmodel.TaskDiscardReceipt, error)
 }
 
-// Discard verifies all known PRs through the public CLI. An unknown original
+// Discard verifies all known PRs with the platform. An unknown original
 // submission/publication cannot be interpreted as proof that no PR exists.
 func (s *Service) Discard(ctx context.Context, store DiscardStore, requestID string, intent taskmodel.DiscardIntent) (taskmodel.TaskDiscardReceipt, error) {
 	s.mu.Lock()
@@ -49,13 +49,14 @@ func (s *Service) Discard(ctx context.Context, store DiscardStore, requestID str
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
-	commit := ports.RunnerDiscard{Project: s.Project, RequestID: requestID, Intent: intent, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, CandidateRevisions: map[string]uint64{}, VerificationStarted: time.Now().UTC()}
+	commit := ports.RunnerDiscard{Project: s.Project, RequestID: requestID, Intent: intent, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, CandidateRevisions: map[string]uint64{}, VerificationStarted: time.Now().UTC(), PRs: map[string]ports.RunnerPRObservation{}}
 	for _, candidate := range rows {
 		if candidate.RunID != "" {
-			candidate, _, err = s.Bridge.ObservePR(ctx, s.Project, candidate.ID)
+			observation, err := s.observeTaskPR(ctx, candidate, graph.Authority.Branch)
 			if err != nil {
 				return taskmodel.TaskDiscardReceipt{}, err
 			}
+			commit.PRs[candidate.ID] = observation
 		}
 		commit.CandidateRevisions[candidate.ID] = candidate.Revision
 	}

@@ -43,6 +43,7 @@ type Service struct {
 	Tasks                                       taskapp.Service
 	Store                                       Store
 	Bridge                                      *runnerbridge.Bridge
+	QueryPR                                     storageports.RunnerPRQuery
 	ResolveBase                                 func(context.Context, taskmodel.FixedWork, bool) (string, error)
 	Admit                                       func(context.Context) error
 	RunnerBuild                                 runnercontract.BuildPin
@@ -306,9 +307,13 @@ func (s *Service) Deliver(ctx context.Context, taskID, candidateID string, versi
 	if c.TaskID != taskID {
 		return taskmodel.TaskDeliveryReceipt{}, failure("immutable_task", "candidate belongs to another task")
 	}
-	c, started, err := s.Bridge.RefreshPR(ctx, s.Project, candidateID)
+	if c.Participation != "active" || c.StopRequested || c.RunID == "" || c.SubmitState != "accepted" || c.Claimant != record.Claimant {
+		return taskmodel.TaskDeliveryReceipt{}, failure("candidate_inactive", "candidate cannot verify a new delivery")
+	}
+	started := time.Now().UTC()
+	observation, err := s.observeTaskPR(ctx, c, graph.Authority.Branch)
 	if err != nil {
 		return taskmodel.TaskDeliveryReceipt{}, err
 	}
-	return s.Store.CommitRunnerTaskResult(ctx, storageports.RunnerResult{Project: s.Project, TaskID: taskID, CandidateID: c.ID, TaskVersion: version, CandidateRevision: c.Revision, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, VerificationStarted: started})
+	return s.Store.CommitRunnerTaskResult(ctx, storageports.RunnerResult{Project: s.Project, TaskID: taskID, CandidateID: c.ID, TaskVersion: version, CandidateRevision: c.Revision, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, VerificationStarted: started, PR: observation})
 }

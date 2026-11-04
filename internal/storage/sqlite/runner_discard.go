@@ -53,7 +53,7 @@ func (s *SQLiteStore) CommitRunnerDiscard(ctx context.Context, in ports.RunnerDi
 		}
 		stops := []string{}
 		for _, c := range candidates {
-			if in.CandidateRevisions[c.ID] != c.Revision {
+			if revision, ok := in.CandidateRevisions[c.ID]; !ok || revision != c.Revision {
 				return nativeErr("stale_version", "candidate changed during discard verification")
 			}
 			if c.RunID == "" {
@@ -62,18 +62,14 @@ func (s *SQLiteStore) CommitRunnerDiscard(ctx context.Context, in ports.RunnerDi
 				}
 				continue
 			}
-			_, pr, err := runnerPRBinding(c, graph.Authority.Branch)
+			observation := in.PRs[c.ID]
+			_, err := ports.VerifyRunnerPR(c, graph.Authority.Branch, in.VerificationStarted, observation)
 			if err != nil {
 				return err
 			}
-			if in.VerificationStarted.IsZero() || pr.CheckedAt.Before(in.VerificationStarted) || pr.QueryError != "" {
-				return nativeErr("merge_state_unknown", "discard requires a fresh query of every known PR")
-			}
-			if pr.Merged || pr.State == "merged" {
+			pr := observation.Fact
+			if pr.Merged {
 				return nativeErr("already_merged", "candidate PR already merged")
-			}
-			if pr.State != "open" && pr.State != "closed_unmerged" {
-				return nativeErr("merge_state_unknown", "candidate PR merge state is unknown")
 			}
 			if c.Projection.StopStatus != "stopped" {
 				stops = append(stops, "runner_stop:"+c.RunID)

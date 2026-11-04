@@ -8,9 +8,13 @@ import (
 	"testing"
 	"time"
 
+	model "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
@@ -54,12 +58,22 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	at := time.Now().UTC()
 	merge := strings.Repeat("b", 40)
 	selected.RunID, selected.InputDigest, selected.Branch, selected.PRURL, selected.SubmitState = "original-run", "frozen-input", "original-head", "https://example.invalid/Org/Repo/pulls/84", "accepted"
-	selected.Projection = &runnerclient.Run{RunID: selected.RunID, Revision: 8, InputDigest: selected.InputDigest, Status: "running", Step: "publish.report", Execution: runnerclient.Execution{SessionID: "original-session", Branch: selected.Branch, Workspace: `C:\owned\workspace`}, PR: &runnerclient.PRFact{Provider: "gitea", Repository: "Org/Repo", HeadRepository: "Org/Repo", URL: selected.PRURL, Number: 84, BaseBranch: "main", HeadBranch: selected.Branch, State: "merged", Merged: true, MergedAt: &at, MergeCommit: &merge, CheckedAt: at}}
+	selected.Projection = &runnerclient.Run{RunID: selected.RunID, Revision: 8, InputDigest: selected.InputDigest, Status: "running", Step: "publish.report", Execution: runnerclient.Execution{SessionID: "original-session", Branch: selected.Branch, Workspace: `C:\owned\workspace`}, PR: &runnerclient.PRFact{Provider: "gitea", Repository: "Org/Repo", HeadRepository: "Org/Repo", URL: selected.PRURL, Number: 84, BaseBranch: "main", HeadBranch: selected.Branch, State: "open", CheckedAt: at}}
 	selected.Revision++
 	require(t, s.SaveCandidate(ctx, selected, 1, nil))
 	graph, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
-	input := RunnerResult{Project: project, TaskID: selected.TaskID, CandidateID: selected.ID, TaskVersion: graph.ByID[selected.TaskID].Version, CandidateRevision: selected.Revision, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, VerificationStarted: at.Add(-time.Second)}
+	input := RunnerResult{Project: project, TaskID: selected.TaskID, CandidateID: selected.ID, TaskVersion: graph.ByID[selected.TaskID].Version, CandidateRevision: selected.Revision, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, VerificationStarted: at.Add(-time.Second), PR: fixturePRObservation(selected, at, "merged", &merge)}
+	stale := input
+	stale.PR.StartedAt = at.Add(-2 * time.Second)
+	if _, err := s.CommitRunnerTaskResult(ctx, stale); err == nil {
+		t.Fatal("delivery accepted an observation from before the operation")
+	}
+	foreign := input
+	foreign.PR.Fact.HeadBranch = "another-head"
+	if _, err := s.CommitRunnerTaskResult(ctx, foreign); err == nil {
+		t.Fatal("delivery accepted a foreign platform head branch")
+	}
 	if _, err := s.db.Exec(`CREATE TRIGGER fail_runner_delivery BEFORE INSERT ON task_results BEGIN SELECT RAISE(ABORT,'injected final commit failure'); END;`); err != nil {
 		t.Fatal(err)
 	}
@@ -112,6 +126,23 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	if closed.ByID[selected.TaskID].Status != "closed" || closed.Authority.GraphRevision != graph.Authority.GraphRevision+1 || len(closed.Deliveries) != 1 {
 		t.Fatal("delivery was not unique or graph was not released")
 	}
+	snapshot, err := s.ReadRunnerSnapshot(ctx, project)
+	require(t, err)
+	view := taskrunner.Project(snapshot, hostcontract.ServiceCheckpoint{})
+	var observed bool
+	for _, candidate := range view.Runs {
+		if candidate.RunID != selected.ID {
+			continue
+		}
+		observed = true
+		if candidate.PR.State != "merged" || candidate.PR.MergeCommit == nil ||
+			*candidate.PR.MergeCommit != merge || candidate.RunnerDelivery.PRState != "open" {
+			t.Fatal("task delivery did not take precedence over the original Run PR observation")
+		}
+	}
+	if !observed {
+		t.Fatal("selected candidate missing from the task projection")
+	}
 	for _, id := range []string{selected.ID, sibling.ID, withdrawn.ID} {
 		c, err := s.Candidate(ctx, project, id)
 		require(t, err)
@@ -124,5 +155,14 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	}
 	if ready, _ := taskmodel.DependencyStateForTask(closed.ByID[tasks[1].TaskID], closed.TaskGraph()); !ready {
 		t.Fatal("successor remained blocked after committed delivery")
+	}
+}
+
+func fixturePRObservation(c runnerbridge.Candidate, at time.Time, state string, merge *string) ports.RunnerPRObservation {
+	p := c.Projection.PR
+	return ports.RunnerPRObservation{
+		CandidateID: c.ID, CandidateRevision: c.Revision, RunID: c.RunID, StartedAt: at, CheckedAt: at,
+		Fact: model.PRInfo{URL: p.URL, Repository: p.Repository, BaseBranch: p.BaseBranch, HeadRepository: p.HeadRepository, HeadBranch: p.HeadBranch,
+			State: state, Merged: state == "merged", MergedAt: &at, MergeCommit: merge},
 	}
 }

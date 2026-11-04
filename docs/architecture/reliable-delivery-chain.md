@@ -14,7 +14,7 @@ SteerLine 的可靠性依靠三种独立结果：命令是否送达并被处理�
 | --- | --- | --- |
 | Task、DAG、候选参与、原请求、唯一交付、停止义务 | SteerLine，每项目 SQLite | actor 串行协调，事务重核版本；Web 只经 HTTP 操作 |
 | Run、workflow、逐轮输入、原生会话与资源 | SteerRunner 的单写服务及所属状态 | SteerLine 只消费公开 CLI，不读 Runner 数据库或私有原生日志 |
-| PR 身份与是否合并 | 实际 PR 平台，经 Runner provider 查询 | SteerLine 交付前刷新，并在事务中核对原候选和固定发布目标 |
+| PR 身份与是否合并 | 实际 PR 平台 | Runner 核验 Workflow 发布并绑定原 PR。SteerLine 在交付或废弃前直接查询平台，在事务中重核原候选和固定发布目标 |
 | 应用进程、项目本地关闭和锁 | 宿主身份记录、checkpoint、实际进程与锁 | 不能用 PID、旧回执或窗口消失单独判断 |
 | 已安装程序的来源和字节 | staged 包、安装 EXE、`deployment.json` | 摘要证明选中了哪些程序，不证明数据格式兼容或原资源已经退出 |
 
@@ -37,9 +37,8 @@ sequenceDiagram
     S->>R: 对账原 request 或 Run 并收集事件
     S->>D: CAS 保存绑定 投影与事件游标
     R->>P: 发布或查询固定候选 PR
-    S->>R: 交付前刷新原 PR
-    R->>P: 查询当前合并事实
-    R-->>S: 原身份绑定的 PR 事实
+    S->>P: 按冻结的 provider 查询原 PR
+    P-->>S: 本次平台合入事实
     S->>D: 同事务提交唯一 Delivery Task closed 与停止义务
     Note over S,D: 后继资格由已提交交付和 DAG 决定
     S->>R: 按原持久义务撤销后续输入并停止相关 Run
@@ -50,7 +49,7 @@ sequenceDiagram
 2. **跨进程受理。** 调用方保存产品请求与 Runner 请求之间的映射。Runner 的 accepted 表示受理，不表示原生轮次开始、模型已经落实要求或业务成功。连接失败、超时或响应不完整都可能留下未知结果，后续沿原请求对账。
 3. **执行和观察。** Runner 拥有 workflow、原生准备、输入意图与结果来源校验。SteerLine 核对原 Run/input digest/分支/PR 绑定、单调 revision 和事件游标，将观察副本与事件同事务保存。它不解释模型正文来补推进执行状态机。
 4. **显式反馈。** 当前用户输入固定项目实例、候选及 Runner revision、原问题与完整答案，先保存再转交。产品回执 applied 通常证明本地命令或 outbox 已保存；Runner 接受、原生开始与实际结果另行观察。不能把 applied 显示为“修改已完成”。
-5. **核验交付。** 交付前通过 Runner 刷新 PR，核对 provider、仓库、原 Run、工作区/会话、base/head 分支、PR URL/number、merged、MergeCommit/MergedAt 和本次查询时间。SQLite 事务再次核对 Task/图/候选版本、契约和参与资格，然后提交唯一交付、Task closed、图修订及候选停止义务。事务外查询与事务内重核防范的是不同窗口。
+5. **核验交付。** 交付前直接向平台查询已绑定的 PR，核对 provider、仓库、原 Run、工作区/会话、base/head 分支、PR URL/number、merged、MergeCommit/MergedAt 和本次查询时间。SQLite 事务再次核对 Task/图/候选版本、契约和参与资格，然后提交唯一交付、Task closed、图修订及候选停止义务。事务外查询与事务内重核防范的是不同窗口。
 6. **交付后收尾。** 任一合格候选即可交付，不等待兄弟候选都变成确定状态，也不要求先达到 `pr_ready`。交付后的停止或清理失败保留诊断，不撤销已经成立的 Delivery。Task closed 后不再轮询该任务候选的 PR；其他原停止义务仍要完成对账。
 
 核心接线为 [taskrunner/service.go](../../internal/taskrunner/service.go)、[runnerbridge/bridge.go](../../internal/runnerbridge/bridge.go) 和 [SQLite 交付事务](../../internal/storage/sqlite/runner_result.go)。完整契约与异常规则分别见[数据模型](../product-design/data-model.md)、[Runner 协作](../../SteerlineFlow/spec/runner-collaboration.spec.md)及 [W17–W18](../product-design/worker-lifecycle.md#报告发布与收尾阶段)。

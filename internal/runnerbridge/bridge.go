@@ -498,39 +498,3 @@ func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, 
 	c.Actions = append(c.Actions, Action{CallerRequestID: callerID, CallerRequestDigest: callerDigest, Command: command, Request: request, State: "pending"})
 	return b.save(ctx, &c)
 }
-
-func (b *Bridge) RefreshPR(ctx context.Context, project, id string) (Candidate, time.Time, error) {
-	return b.refreshPR(ctx, project, id, true)
-}
-
-// ObservePR is an explicit read-only provider refresh, including a withdrawn
-// candidate. It grants no delivery participation or native input authority.
-func (b *Bridge) ObservePR(ctx context.Context, project, id string) (Candidate, time.Time, error) {
-	return b.refreshPR(ctx, project, id, false)
-}
-func (b *Bridge) refreshPR(ctx context.Context, project, id string, delivery bool) (Candidate, time.Time, error) {
-	entry, _ := b.locks.LoadOrStore(project+"\x00"+id, &sync.Mutex{})
-	gate := entry.(*sync.Mutex)
-	gate.Lock()
-	defer gate.Unlock()
-	c, err := b.Store.Candidate(ctx, project, id)
-	if err != nil {
-		return c, time.Time{}, err
-	}
-	if c.RunID == "" || delivery && (c.StopRequested || c.Participation != "active") {
-		return c, time.Time{}, errors.New("candidate cannot verify a new delivery")
-	}
-	started := time.Now().UTC()
-	result, err := b.Client(c.StateDir).Inspect(ctx, "run-id", c.RunID, true)
-	if err != nil {
-		return c, started, err
-	}
-	if result.Run == nil {
-		return c, started, errors.New("original Run is missing")
-	}
-	if err := bind(&c, *result.Run); err != nil {
-		return c, started, err
-	}
-	err = b.save(ctx, &c)
-	return c, started, err
-}

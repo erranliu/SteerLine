@@ -367,20 +367,7 @@ func RunnerCLI(args []string) (bool, error) {
 				run.Revision++
 			}
 			if hasArgument(args, "--refresh-pr") {
-				if err := recordProviderQuery(providerPath); err != nil {
-					return true, err
-				}
-				pr, err := ProviderPR(provider, run.PR.URL)
-				if err != nil {
-					return true, err
-				}
-				b, _ := json.Marshal(pr)
-				var fact runnercontract.PRFact
-				json.Unmarshal(b, &fact)
-				fact.Provider = "command"
-				fact.Number, _ = strconv.Atoi(pr.URL[strings.LastIndex(pr.URL, "/")+1:])
-				fact.CheckedAt = time.Now().UTC()
-				run.PR = &fact
+				return respond(nil, "unexpected_runner_pr_refresh")
 			}
 		}
 		s.Runs[runID] = run
