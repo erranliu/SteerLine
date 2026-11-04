@@ -36,32 +36,42 @@ export function Operations({
         aria-label="操作结果"
         aria-live="polite"
       >
-        {displayed.map((row) => (
-          <div key={row.envelope.request_id}>
-            <p>
-              {actions[row.envelope.action] || "环境操作"}：
-              {row.response?.status === "applied"
-                ? "操作成功"
-                : row.response?.status === "rejected"
-                  ? "操作未成功，请刷新后重试"
-                  : "结果待核实"}
-              {pending.includes(row) && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={!online || reconciling}
-                  onClick={() => reconcile(row)}
-                >
-                  重新查询
-                </Button>
-              )}
-            </p>
-            {row.response?.status !== "applied" &&
-              (row.response?.diagnostic || row.error) && (
-                <p className="muted">{row.response?.diagnostic || row.error}</p>
-              )}
-          </div>
-        ))}
+        {displayed.map((row) => {
+          const unresolved = pending.includes(row);
+          const confirmingStart =
+            unresolved && row.envelope.action === "environment_start";
+          return (
+            <div key={row.envelope.request_id}>
+              <p>
+                {actions[row.envelope.action] || "环境操作"}：
+                {row.response?.status === "applied"
+                  ? "操作成功"
+                  : row.response?.status === "rejected"
+                    ? "操作未成功，请刷新后重试"
+                    : confirmingStart
+                      ? "正在确认启动"
+                      : "结果待核实"}
+                {unresolved && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!online || reconciling}
+                    onClick={() => reconcile(row)}
+                  >
+                    重新查询
+                  </Button>
+                )}
+              </p>
+              {!confirmingStart &&
+                row.response?.status !== "applied" &&
+                (row.response?.diagnostic || row.error) && (
+                  <p className="muted">
+                    {row.response?.diagnostic || row.error}
+                  </p>
+                )}
+            </div>
+          );
+        })}
       </section>
     ) : null;
   }

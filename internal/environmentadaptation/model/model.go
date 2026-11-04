@@ -154,6 +154,11 @@ func (r Record) Settled() bool {
 	}
 	return r.State == "ready" || r.State == "failed" || r.State == "cancelled"
 }
+
+func (r Record) TimedOut() bool {
+	return len(r.Rounds) > 0 && r.Rounds[len(r.Rounds)-1].TimedOut
+}
+
 func (r Record) Status() string {
 	if r.Kind == "adaptation" && r.State == "ready" && r.Settled() {
 		return "ready"

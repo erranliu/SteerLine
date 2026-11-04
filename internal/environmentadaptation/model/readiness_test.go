@@ -106,9 +106,14 @@ func TestProjectEnvironmentReadinessStagesDoNotGrantUnsettledOrHistoricalSuccess
 	running := ready
 	running.Rounds = []Round{{Number: 1}}
 	running.State = "running"
+	running.Diagnostic = "receipt query: context deadline exceeded"
+	timingOut := running
+	timingOut.Rounds = []Round{{Number: 1, TimedOut: true}}
 	failed := ready
 	failed.State = "failed"
 	failed.Diagnostic = "required tool missing"
+	timedOut := failed
+	timedOut.Rounds = []Round{{Number: 1, TimedOut: true, Settled: true}}
 	revoked := current
 	revoked.Invalidated = true
 	revoked.Reason = "machine reset"
@@ -123,6 +128,8 @@ func TestProjectEnvironmentReadinessStagesDoNotGrantUnsettledOrHistoricalSuccess
 		{"missing-material", Current{}, Record{}, "", errors.New("missing document"), "unprepared"},
 		{"awaiting-user", Current{}, Record{}, "", nil, "awaiting_user"},
 		{"running", current, running, "basis", nil, "verifying"},
+		{"timeout-cleanup", current, timingOut, "basis", nil, "timed_out"},
+		{"settled-timeout", current, timedOut, "basis", nil, "timed_out"},
 		{"failed", current, failed, "basis", nil, "blocked"},
 		{"basis-changed", current, ready, "new", nil, "stale"},
 		{"revoked-with-unsettled-writer", revoked, running, "basis", nil, "stale"},

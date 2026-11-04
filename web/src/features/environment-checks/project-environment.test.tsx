@@ -172,7 +172,7 @@ it("preserves the selected timeout and profile and prevents duplicate detection 
         finish = resolve;
       }),
   );
-  fixture(true, send);
+  const { api, client, record } = fixture(true, send);
   await loaded();
   fireEvent.click(screen.getByText("更多设置", { selector: "summary" }));
   fireEvent.change(screen.getByLabelText("本次检测总超时（秒）"), {
@@ -180,6 +180,8 @@ it("preserves the selected timeout and profile and prevents duplicate detection 
   });
   const start = screen.getByRole("button", { name: "重新检测" });
   fireEvent.click(start);
+  expect(screen.getByRole("heading", { name: "正在确认启动" })).toBeVisible();
+  expect(start).toBeDisabled();
   fireEvent.click(start);
   expect(send).toHaveBeenCalledTimes(1);
   expect(send).toHaveBeenCalledWith(
@@ -193,7 +195,38 @@ it("preserves the selected timeout and profile and prevents duplicate detection 
       expected_current_revision: 2,
     },
   );
+  record.settled = false;
+  record.state = "running";
+  await updateOptions(client, ({ environments }) => {
+    environments[0].stage = "verifying";
+    environments[0].activity_settled = false;
+  });
+  expect(
+    screen.queryByRole("heading", { name: "检测中" }),
+  ).not.toBeInTheDocument();
+  const get = vi.mocked(api.get).getMockImplementation()!;
+  const running = client.getQueryData<EnvironmentOptions>(optionsKey);
+  vi.mocked(api.get).mockImplementation(async (path, signal) =>
+    path === "/environment/options" ? (running as never) : get(path, signal),
+  );
+  vi.mocked(fetch).mockImplementationOnce(() => new Promise(() => {}));
   finish(true);
+  expect(await screen.findByRole("heading", { name: "检测中" })).toBeVisible();
+  expect(screen.queryByText("检测超时")).not.toBeInTheDocument();
+});
+
+it("shows a recorded detection timeout on the card and in history", async () => {
+  const { client, record } = fixture();
+  record.timed_out = true;
+  await loaded();
+  await updateOptions(client, ({ environments }) => {
+    environments[0].stage = "timed_out";
+  });
+  expect(screen.getByRole("heading", { name: "检测超时" })).toBeVisible();
+  await openHistory();
+  expect(
+    await screen.findByText("检测超时", { selector: "strong" }),
+  ).toBeVisible();
 });
 
 it("requires a scheme selection only for shared environments without a default", async () => {
@@ -469,6 +502,7 @@ function fixture(
     state: "failed",
     status: "not_ready",
     settled: true,
+    timed_out: false,
     diagnostic: "",
     rounds: [round],
   };
@@ -518,8 +552,7 @@ function fixture(
           }
         : path.startsWith("/environment/materials")
           ? {
-              document_path:
-                "SteerlineFlow/environment.md",
+              document_path: "SteerlineFlow/environment.md",
               document: "Shared project requirements",
             }
           : path.split("?")[0] === "/environment"

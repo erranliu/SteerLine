@@ -40,6 +40,7 @@ export function EnvironmentCard({
   project,
   defaultProfile,
   preferred,
+  confirmingStart,
   disabled,
   stopDisabled,
   activity,
@@ -49,6 +50,7 @@ export function EnvironmentCard({
   project: string;
   defaultProfile: string;
   preferred: string;
+  confirmingStart: boolean;
   disabled: boolean;
   stopDisabled: boolean;
   activity?: {
@@ -79,14 +81,20 @@ export function EnvironmentCard({
       id={`environment-${e.environment_key || e.profiles[0]?.id}`}
       tabIndex={-1}
     >
-      <h2>{environmentStage[e.stage] ?? "状态待核实"}</h2>
-      {e.stage !== "ready" && e.reason && <p>{e.reason}</p>}
-      {activity?.created_at && (
+      <h2 aria-live="polite">
+        {confirmingStart
+          ? "正在确认启动"
+          : (environmentStage[e.stage] ?? "状态待核实")}
+      </h2>
+      {!confirmingStart && e.stage !== "ready" && e.reason && <p>{e.reason}</p>}
+      {!confirmingStart && activity?.created_at && (
         <p className="muted">
           最近检测：{new Date(activity.created_at).toLocaleString("zh-CN")}
         </p>
       )}
-      {activityID && <DetectionID key={activityID} id={activityID} />}
+      {!confirmingStart && activityID && (
+        <DetectionID key={activityID} id={activityID} />
+      )}
       {e.profiles.length > 1 && (
         <label>
           检测所用方案
@@ -107,7 +115,7 @@ export function EnvironmentCard({
         </label>
       )}
       <div className="actions">
-        {unsettled ? (
+        {unsettled && !confirmingStart ? (
           <Button
             disabled={stopDisabled || !activity || activity.settled}
             onClick={() =>
@@ -126,6 +134,7 @@ export function EnvironmentCard({
           <Button
             disabled={
               disabled ||
+              confirmingStart ||
               !e.environment_key ||
               !chosen ||
               !Number.isInteger(timeout) ||
@@ -144,8 +153,10 @@ export function EnvironmentCard({
           </Button>
         )}
       </div>
-      {unsettled && <p className="muted">本次检测结束前不能再次检测。</p>}
-      {e.stage === "ready" && (
+      {!confirmingStart && unsettled && (
+        <p className="muted">本次检测结束前不能再次检测。</p>
+      )}
+      {!confirmingStart && e.stage === "ready" && (
         <p className="muted">重新检测会使当前就绪状态失效。</p>
       )}
       <details>
@@ -171,7 +182,9 @@ export function EnvironmentCard({
         </label>
         <Button
           variant="ghost"
-          disabled={disabled || !e.environment_key || !reason.trim()}
+          disabled={
+            disabled || confirmingStart || !e.environment_key || !reason.trim()
+          }
           onClick={() =>
             void command("environment_invalidate", project, 1, {
               environment_key: e.environment_key,
