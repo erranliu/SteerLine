@@ -40,7 +40,7 @@ var localSuites = []localSuite{
 		{ID: "go-runner-app", Packages: []string{"./internal/app"}, Tests: []string{"TestPublishedRunnerApplicationLifecycle"}},
 		{ID: "go-runner-client", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestLegacyCheckRetirementPublishedContract", "TestRunnerFullBindingPublicCLI"}},
 	}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256"}},
-	{ID: "go.runner-result", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestProjectEnvironmentExecutionPublishedResultRoundTrip"}}}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256", "STEERRUNNER_NATIVE_FIXTURE"}},
+	{ID: "go.runner-result", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestProjectEnvironmentExecutionPublishedResultRoundTrip", "TestNative101PublishedArrangement"}}}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256", "STEERRUNNER_NATIVE_FIXTURE"}},
 }
 
 func selectLocalSuite(opts options) (localSuite, bool) {

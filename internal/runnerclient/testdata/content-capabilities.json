@@ -3053,6 +3053,7 @@
           ],
           "description": "Audited workflow requires managed Codex with two explicit, different models. Orca uses execution.settings.agent_launch.model and the trusted execution-host runtime. Omitted audit effort inherits the normalized execution effort.",
           "properties": {
+            "project_policy_slots": {"type": "array", "uniqueItems": true, "items": {"enum": ["git", "command", "testing"]}},
             "audit_model": {
               "additionalProperties": false,
               "properties": {
@@ -4212,6 +4213,7 @@
                   ],
                   "description": "Audited workflow requires managed Codex with two explicit, different models. Orca uses execution.settings.agent_launch.model and the trusted execution-host runtime. Omitted audit effort inherits the normalized execution effort.",
                   "properties": {
+                    "project_policy_slots": {"type": "array", "uniqueItems": true, "items": {"enum": ["git", "command", "testing"]}},
                     "audit_model": {
                       "additionalProperties": false,
                       "properties": {
@@ -5950,6 +5952,7 @@
       ],
       "description": "Audited workflow requires managed Codex with two explicit, different models. Orca uses execution.settings.agent_launch.model and the trusted execution-host runtime. Omitted audit effort inherits the normalized execution effort.",
       "properties": {
+        "project_policy_slots": {"type": "array", "uniqueItems": true, "items": {"enum": ["git", "command", "testing"]}},
         "audit_model": {
           "additionalProperties": false,
           "properties": {

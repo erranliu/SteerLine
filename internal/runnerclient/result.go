@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -87,6 +89,19 @@ func (c Client) ResultFile(ctx context.Context, run string) (runnercontract.Resu
 	}
 	_, err = ValidateResultFile(out, run)
 	return out, err
+}
+
+// ValidateResultTarget checks support for the existing file channel.
+func (c *Catalog) ValidateResultTarget(e runnercontract.ExecutionInput, w runnercontract.Workflow) error {
+	if err := c.ValidateResult(); err != nil {
+		return err
+	}
+	support := c.Capabilities.ResultFile.Supported
+	if !slices.Contains(support.Workflows, fmt.Sprintf("%s/%d", w.ID, w.Version)) ||
+		!slices.Contains(support.Adapters, e.Adapter) || !slices.Contains(support.TargetKinds, e.Target.Kind) {
+		return errors.New("Runner未公布所选执行目标的结果文件能力")
+	}
+	return nil
 }
 
 // ValidateEnvironmentExecution consumes the Runner's generic one-shot contract.

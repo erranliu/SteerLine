@@ -46,9 +46,27 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 	service.RunnerBuild = cli.BuildPin()
 	for id, profile := range service.Profiles {
 		profile.UnavailableReason = config.runtimeCatalog.ExecutionWaitUnavailable(profile.Input.Execution)
+		if profile.UnavailableReason == "" && config.runtimeMaintenance != nil &&
+			(profile.Input.Workflow.ID == "development" || profile.Input.Workflow.ID == "development-audited") {
+			if err := config.validateTestArrangementProfile(profile.Input.Execution, profile.Input.Workflow); err != nil {
+				profile.UnavailableReason = err.Error()
+			}
+		}
 		service.Profiles[id] = profile
 	}
-	service.PrepareTestPlan = config.prepareTestPlan
+	service.PrepareTestPlan = func(ctx context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (json.RawMessage, error) {
+		if run.Workflow.ID == "development" || run.Workflow.ID == "development-audited" {
+			slots, err := config.projectPolicySlots(ctx, run.Repository.BaseRevision)
+			if err != nil {
+				return nil, &taskmodel.Error{Code: "project_policy_unreadable", Message: err.Error()}
+			}
+			run.Workflow.ProjectPolicySlots = slots
+			if err := config.runtimeCatalog.ValidateConfiguration(run.Execution, run.Workflow); err != nil {
+				return nil, &taskmodel.Error{Code: "unsupported_capability", Message: err.Error()}
+			}
+		}
+		return config.prepareTestPlan(ctx, work, run)
+	}
 	service.Bridge = &runnerbridge.Bridge{Store: connection, Client: func(string) runnerbridge.CLI { return cli }}
 	git := commandRunner{Dir: config.Repository, Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), ProcessHost: config.ProcessHost}
 	base := taskrunner.BaseResolver{Project: config.Identity(), Store: connection, Git: func(ctx context.Context, args ...string) ([]byte, error) { return git.Output(ctx, config.Git, args...) }}

@@ -30,6 +30,9 @@ func (w Workflow) MarshalJSON() ([]byte, error) {
 	if w.PromptOverrides != nil || w.promptOverridesPresent {
 		value["prompt_overrides"] = w.PromptOverrides
 	}
+	if w.ProjectPolicySlots != nil {
+		value["project_policy_slots"] = w.ProjectPolicySlots
+	}
 	if w.AuditModel != nil || w.auditModelPresent {
 		value["audit_model"] = w.AuditModel
 	}
