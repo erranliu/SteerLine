@@ -87,7 +87,7 @@ func TestRemoteL4OnlyConsumesBoundSealedProjectResult(t *testing.T) {
 			sum := sha256.Sum256(body)
 			now := time.Now().UTC()
 			result := runnercontract.ResultFile{Contract: runnercontract.ResultContract, RunID: "run", Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(body), SHA256: hex.EncodeToString(sum[:]), CollectionStatus: "closed"}
-			input := runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: execution, ResultFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}}
+			input := runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: execution, ResultFile: &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}}
 			raw, _ := json.Marshal(input)
 			run := runnercontract.Run{RunID: "run", Status: "completed", InputDigest: env.Digest(raw), StopStatus: "stopped", Correlation: map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": "1"}, Final: &runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", SessionID: "session", TurnID: "turn"}}
 			round := env.Round{Number: 1, Request: runnercontract.Request{Input: raw}, RunID: "run", InputDigest: run.InputDigest, Run: &run, Result: &result, Report: &p, Settled: true}

@@ -79,8 +79,13 @@ type Publication struct {
 	BaseBranch string          `json:"base_branch"`
 	Settings   json.RawMessage `json:"settings"`
 }
+type ResultFileInput struct {
+	InitialContentBase64 string `json:"initial_content_base64"`
+	RequiredInput        bool   `json:"required_input,omitempty"`
+}
+
 type RunInput struct {
-	ResultFile   *ProgressFileInput `json:"result_file,omitempty"`
+	ResultFile   *ResultFileInput   `json:"result_file,omitempty"`
 	ProgressFile *ProgressFileInput `json:"progress_file,omitempty"`
 	Title        string             `json:"title"`
 	NamePrefix   string             `json:"name_prefix,omitempty"`

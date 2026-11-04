@@ -3,12 +3,14 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
@@ -19,8 +21,8 @@ import (
 	"unicode/utf8"
 )
 
-// Every model-visible reference must already be a verified regular Git file.
-// The immutable database snapshot remains the original arrangement authority.
+// Static references come from pinned Git. The generated selection is frozen
+// into the same Runner request as its progress seed.
 func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (snapshot json.RawMessage, preparationErr error) {
 	// These checks only read pinned materials, before candidate reservation or
 	// Runner submission. Reject a definite preparation failure with a receipt.
@@ -72,24 +74,20 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 	if err != nil {
 		return nil, err
 	}
-	index := map[string]testmanagement.Definition{}
-	for _, d := range catalogue.Tests {
-		index[d.ID] = d
-	}
-	for _, d := range plan.Definitions {
-		if actual, ok := index[d.ID]; !ok || actual != d {
-			return nil, fmt.Errorf("固定测试定义与原安排不一致：%s", d.ID)
-		}
-	}
-	arrangementPath, err := testmanagement.ArrangementPath(plan.PlanPath)
+	arrangement, err := testmodel.FrozenArrangement(plan)
 	if err != nil {
 		return nil, err
 	}
-	arrangement, err := read(arrangementPath)
-	if err != nil {
-		return nil, fmt.Errorf("材料准备不足：固定测试安排 %s 不可读：%w", arrangementPath, err)
-	}
 	if err = testmodel.ValidateArrangement(plan, arrangement, catalogue); err != nil {
+		return nil, err
+	}
+	if len(arrangement) > runnercontract.MaxProgressBytes {
+		return nil, errors.New("固定测试安排超过 Runner 文件上限")
+	}
+	if run.ResultFile != nil {
+		return nil, errors.New("Runner 文件通道已被当前候选占用")
+	}
+	if err := c.runtimeCatalog.ValidateRequiredInputFile(run.Execution, run.Workflow); err != nil {
 		return nil, err
 	}
 	rules, err := read(testmodel.ProtocolPath)
@@ -124,14 +122,12 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 		return nil, e
 	}
 	run.Workflow = workflow
+	run.ResultFile = &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(arrangement), RequiredInput: true}
 	seen := map[string]bool{run.Documents.Spec.Path: true, run.Documents.Plan.Path: true}
 	for _, ref := range run.Documents.References {
 		seen[ref.Path] = true
 	}
-	paths := append(entry.Paths(), arrangementPath, testmodel.ProtocolPath)
-	if referencedWriter {
-		paths = append(paths, testmodel.WriterPath)
-	}
+	paths := append(entry.Paths(), testmodel.ProtocolPath, testmodel.WriterPath)
 	for _, path := range paths {
 		if !seen[path] {
 			run.Documents.References = append(run.Documents.References, runnerclient.Document{Path: path})

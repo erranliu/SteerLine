@@ -76,12 +76,13 @@ func TestingContext(snapshot []byte, preparedWriter bool) (string, error) {
 	if _, err := testmodel.ParseProjectEntry(projectRaw); err != nil {
 		return "", err
 	}
-	arrangement, err := testmodel.ArrangementPath(plan.PlanPath)
+	arrangement, err := testmodel.FrozenArrangement(plan)
 	if err != nil {
 		return "", err
 	}
 	sum := sha256.Sum256(snapshot)
-	return render("testing-execute", struct{ Plan, Arrangement, Commit, Digest, Snapshot, ProjectFiles string }{plan.PlanPath, arrangement, plan.Commit, plan.Digest, hex.EncodeToString(sum[:]), strings.Join(plan.Project.Paths(), "、")})
+	fileSum := sha256.Sum256(arrangement)
+	return render("testing-execute", struct{ Plan, Commit, FileSHA256, Snapshot, ProjectFiles string }{plan.PlanPath, plan.Commit, hex.EncodeToString(fileSum[:]), hex.EncodeToString(sum[:]), strings.Join(plan.Project.Paths(), "、")})
 }
 func TestingStep(body string, snapshot []byte, preparedWriter, writesTests bool) (string, error) {
 	if body == "" {

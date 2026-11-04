@@ -21,6 +21,15 @@ import (
 // One caller/public-EXE boundary test. The native protocol fixture is supplied
 // by Runner; this does not duplicate its collector matrix or prove a real PR.
 func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
+	testPublishedResultFile(t, false)
+}
+
+func TestNative101PublishedRequiredInput(t *testing.T) {
+	testPublishedResultFile(t, true)
+}
+
+func testPublishedResultFile(t *testing.T, requiredInput bool) {
+	t.Helper()
 	exe, native := os.Getenv("STEERRUNNER_EXE"), os.Getenv("STEERRUNNER_NATIVE_FIXTURE")
 	if exe == "" || native == "" {
 		t.Fatal("explicit pinned Runner and its native protocol fixture required")
@@ -130,9 +139,15 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 		t.Fatal("published result schema and frozen caller fixture differ")
 	}
 	c = c.WithCatalog(cat)
-	settings, _ := json.Marshal(map[string]string{"executable": native})
+	settings, _ := json.Marshal(map[string]string{"executable": native, "access_mode": "full_access"})
 	publication, _ := json.Marshal(map[string]any{"base_url": "https://controlled.invalid", "query": map[string]any{"executable": native, "args": []string{"--query", provider}}})
-	input := runnercontract.RunInput{Title: "Caller result contract", Repository: runnercontract.Repository{URL: "https://controlled.invalid/owner/repo.git", LocalPath: source, Remote: "origin", BaseBranch: "main", BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: "spec.md"}, Plan: runnercontract.Document{Path: "plan.md"}}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Publication: runnercontract.Publication{Provider: "command", Repository: "owner/repo", BaseBranch: "main", Settings: publication}, ProgressFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"test.one":false}`))}, ResultFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte("seed"))}}
+	input := runnercontract.RunInput{Title: "Caller result contract", Repository: runnercontract.Repository{URL: "https://controlled.invalid/owner/repo.git", LocalPath: source, Remote: "origin", BaseBranch: "main", BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: "spec.md"}, Plan: runnercontract.Document{Path: "plan.md"}}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Publication: runnercontract.Publication{Provider: "command", Repository: "owner/repo", BaseBranch: "main", Settings: publication}, ProgressFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"test.one":false}`))}, ResultFile: &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte("seed"))}}
+	const arrangement101 = `{"tests":["N101-CONTENT","N101-SCOPE","demo.progress.roundtrip","demo.progress.retry","demo.progress.cleanup"]}`
+	if requiredInput {
+		check(cat.ValidateRequiredInputFile(input.Execution, input.Workflow))
+		input.Title = "Native 101"
+		input.ResultFile = &runnercontract.ResultFileInput{RequiredInput: true, InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(arrangement101))}
+	}
 	body, _ := json.Marshal(input)
 	receipt, err := c.Submit(ctx, Request{Protocol: Protocol, RequestID: "caller-result-submit", Input: body})
 	check(err)
@@ -150,10 +165,19 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 	check(ctx.Err())
 	pending, err := c.ResultFile(ctx, runID)
 	check(err)
+	path := filepath.Join(run.Execution.Workspace, ".steerrunner", "result", runID, "result.bin")
+	if requiredInput {
+		raw, err := os.ReadFile(path)
+		check(err)
+		if string(raw) != arrangement101 || pending.CollectionStatus != "disabled" || pending.ContentBase64 != nil {
+			t.Fatal("original arrangement not materialized or exposed as an output", string(raw), pending)
+		}
+		check(stopRun())
+		return
+	}
 	if pending.CollectionStatus != "pending" || pending.Version != 0 || pending.ContentBase64 != nil {
 		t.Fatal("running result was exposed", pending)
 	}
-	path := filepath.Join(run.Execution.Workspace, ".steerrunner", "result", runID, "result.bin")
 	final := []byte{0, 255, 'r', '\n'} // Result is opaque, including non-JSON bytes.
 	check(os.WriteFile(path+".tmp", final, 0600))
 	check(os.Rename(path+".tmp", path))

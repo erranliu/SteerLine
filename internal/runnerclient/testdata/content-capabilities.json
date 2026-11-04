@@ -6474,6 +6474,7 @@
     ]
   },
   "result_file": {
+    "required_input": "verify_exact_before_dispatch/v1",
     "collection": "end_only",
     "command": "result-file --run-id R --json",
     "contract": "steerrunner-result-file/v1",

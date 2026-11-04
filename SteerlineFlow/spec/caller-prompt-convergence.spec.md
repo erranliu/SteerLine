@@ -31,13 +31,15 @@
 
 | 流程 | 固定项目材料及核验 |
 | --- | --- |
-| 测试执行 | Plan 同名 `.tests.json` 沿用既有 `{tests:[ID]}` 格式；与完整清单展开后须逐项等于原冻结定义和顺序。另需 `SteerlineFlow/testing/runtime-progress.md`（正式规则副本）及同源 writer；不存在 commit 自引用或第二份可编辑安排。 |
+| 测试执行 | SteerLine 从已就绪的候选快照按原顺序生成 `{tests:[ID]}`，逐项核对固定清单定义，并随原请求冻结为 Runner 必读输入文件。Runner 在实施、审计派发前核对原始字节。固定提交继续提供 `SteerlineFlow/testing/runtime-progress.md`（正式规则副本）及同源 writer。 |
 | 测试安排生成 | 固定 commit 的 Plan、测试规范和清单，通过 `generate.repository.paths` 明确选择这三个完整文件读取；未提供 commit、能力或固定文件即阻断。 |
 | Roadmap | 2026-11-02 用户授权自动准备：静态 parse-rules.md、document-rules.md 和 SpecGuide 由显式项目准备交付；草稿、任务图、来源映射和确认规划由业务 owner 自动冻结，经 Runner 正式 file 材料提供，不要求用户创建 JSON。源码 Git manifest 与文件材料 manifest 独立严格核验；原文及原始摘要保留，内容比较只容许 LF/CRLF 差异。 |
 | 环境调用 | 按[当前环境边界](project-environment-workflow.spec.md)，只调用项目自有检测入口一次，结果通过原 Runner 封存；不复制平台规则，不要求 publication、生成上下文或项目内部检查格式。 |
 | 环境执行 | 固定 `SteerlineFlow/environment-execution.md`、原 environment.md、脚本与结果初始 JSON。复用正式 `result_file.initial_content_base64` 文件渠道，在下一轮初始JSON的 previous 字段提供完整前轮报告及诊断；原三轮上限、封存/PR安全核验保持。总初始JSON超过既有64KiB上限时，在新Run创建前明确准备不足，不截断或摘要。 |
 
 2026-11-02 的 Roadmap 材料自动准备修订替代原先要求用户正常 Git 准备动态 JSON 的边界，见[专属 Spec](roadmap-material-preparation.spec.md)。动态文件由原业务快照生成并随原请求持久化，Runner 正式冻结为私有只读文件，不自动写业务仓库。静态规则仍需先准备并发布；缺能力、缺静态文件或文件 manifest 不符仍阻断，禁止回退到正文内联或重新构造旧请求。
+
+2026-11-04 的测试安排修订由项目库生成结果直接供给候选。SteerLine 在预留候选前检查 Runner 公布的 `result_file.required_input` 模式，并在预留事务内核对请求字节和原生成记录。Runner 使用原 Run 的专用文件路径供给，派发前核实原宿主、工作区与字节。短指令只给出文件定位和 SHA-256，并明确该文件是固定执行协议所用的安排来源。详见[任务 101 验收](../testing/acceptance/native-101-frozen-test-input.md)。
 
 ### CPC-D01：任务指令与执行材料分离
 

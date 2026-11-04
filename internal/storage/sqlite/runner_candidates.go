@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -154,17 +155,15 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			want[ref.Path] = ref
 		}
 	}
-	var testing struct {
-		Project      testmodel.ProjectEntry `json:"project"`
-		GenerationID string                 `json:"generation_id"`
-		Inputs       string                 `json:"inputs"`
-		Definitions  []testmodel.Definition `json:"definitions"`
-		PlanPath     string                 `json:"plan_path"`
-		Commit       string                 `json:"commit"`
-		Status       string                 `json:"status"`
-	}
+	var testing testmodel.Snapshot
 	testingBound := len(c.TestPlan) > 0 && json.Unmarshal(c.TestPlan, &testing) == nil && testing.PlanPath == work.Contract.PlanRef.Path && testing.Commit == work.Contract.PlanRef.Commit
-	if testingBound && testing.Status == "ready" {
+	testingReady := testingBound && testing.Status == "ready"
+	if testingReady {
+		arrangement, err := testmodel.FrozenArrangement(testing)
+		if err != nil || len(arrangement) > runnercontract.MaxProgressBytes || input.ResultFile == nil || !input.ResultFile.RequiredInput ||
+			input.ResultFile.InitialContentBase64 != base64.StdEncoding.EncodeToString(arrangement) {
+			return nativeErr("contract_mismatch", "Runner test input file differs from the frozen generated arrangement")
+		}
 		referencedWriter := false
 		for _, doc := range input.Documents.References {
 			if doc.Path == testmodel.WriterPath {
@@ -184,6 +183,8 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if !bound {
 			return nativeErr("contract_mismatch", "system test snapshot is absent from frozen prompt context")
 		}
+	} else if input.ResultFile != nil {
+		return nativeErr("contract_mismatch", "Runner test input file has no frozen generated arrangement")
 	}
 	seenRefs := map[string]bool{}
 	for _, doc := range input.Documents.References {
@@ -192,7 +193,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		}
 		seenRefs[doc.Path] = true
 		ref, ok := want[doc.Path]
-		if !ok && testingBound && testmodel.TestReference(doc, testing.PlanPath, testing.Commit, testing.Status == "ready", testing.Project) {
+		if !ok && testingReady && testmodel.TestReference(doc, testing.PlanPath, testing.Project) {
 			continue
 		}
 		if !ok || !matches(doc, ref) {
@@ -203,12 +204,8 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 	if len(want) != 0 {
 		return nativeErr("contract_mismatch", "Runner input omits fixed task references")
 	}
-	if testingBound && testing.Status == "ready" {
-		arrangement, err := testmodel.ArrangementPath(testing.PlanPath)
-		if err != nil {
-			return nativeErr("contract_mismatch", err.Error())
-		}
-		for _, path := range append(testing.Project.Paths(), testmodel.WriterPath, testmodel.ProtocolPath, arrangement) {
+	if testingReady {
+		for _, path := range append(testing.Project.Paths(), testmodel.WriterPath, testmodel.ProtocolPath) {
 			if !seenRefs[path] {
 				return nativeErr("contract_mismatch", "Runner input omits required prepared test file: "+path)
 			}
@@ -339,7 +336,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			if json.Unmarshal(raw, &current) != nil || current.Digest != c.MaterialDigest || current.Status != "ready" {
 				return nativeErr("materials_changed", "latest materials changed before reservation")
 			}
-			if digestValue(current.Contract) != digestValue(work.Contract) || !testingBound || testing.Status != "ready" || testing.GenerationID != current.GenerationID || testing.Inputs != current.Inputs {
+			if digestValue(current.Contract) != digestValue(work.Contract) || !testingReady || testing.GenerationID != current.GenerationID || testing.Inputs != current.Inputs {
 				return nativeErr("materials_changed", "candidate does not bind latest complete materials")
 			}
 			var generationRaw []byte

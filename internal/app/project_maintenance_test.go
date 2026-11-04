@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -15,6 +16,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	progresstools "github.com/erranliu/SteerLine/tools"
 	"net/http"
 	"net/http/httptest"
@@ -224,7 +226,6 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	require(t, err)
 	files["SteerlineFlow/testing/runtime-progress.md"] = string(rules)
 	files["tools/testing/RuntimeProgress.ps1"] = progresstools.PowerShellWriter
-	files["task.tests.json"] = `{"tests":["one"]}`
 	for name, body := range files {
 		p := filepath.Join(repo, name)
 		if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {
@@ -290,7 +291,7 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(snapshot) == 0 || len(run.Documents.References) != 6 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
+	if len(snapshot) == 0 || len(run.Documents.References) != 5 || run.ResultFile == nil || !run.ResultFile.RequiredInput || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
 		t.Fatal("compact system context not frozen")
 	}
 	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: b, TestPlan: snapshot}
@@ -342,14 +343,70 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if _, e = m.candidateDocuments(ctx, candidate.ID); e != nil {
 		t.Fatal(e)
 	}
-	if raw, e := os.ReadFile(filepath.Join(m.config.Repository, "task.tests.json")); e != nil || string(raw) != `{"tests":["one"]}` {
-		t.Fatal("generation changed prepared repository material", e)
+	if _, e := os.Stat(filepath.Join(m.config.Repository, "task.tests.json")); !os.IsNotExist(e) {
+		t.Fatal("generation wrote a repository sidecar", e)
 	}
 	m.mu.Lock()
 	m.observation.Diagnostic = "offline"
 	m.mu.Unlock()
 	if m.freshness(ctx, candidate) != "unknown" {
 		t.Fatal("offline claimed current eligibility")
+	}
+}
+
+func TestNative101GeneratedArrangementStartsWithoutSidecar(t *testing.T) {
+	ctx := context.Background()
+	m, store, cli := pmsFixture(t)
+	repo := m.config.Repository
+	const planPath = "SteerlineFlow/plans/native-101.plan.md"
+	require(t, os.MkdirAll(filepath.Join(repo, filepath.Dir(planPath)), 0700))
+	pmGit(t, repo, "mv", "task.plan.md", planPath)
+	store.contract.PlanRef.Path = planPath
+	store.contract.Digest, _ = taskmodel.ContractDigest(store.contract)
+	const expected = `{"tests":["N101-CONTENT","N101-SCOPE","demo.progress.roundtrip","demo.progress.retry","demo.progress.cleanup"]}`
+	var selection testmodel.Arrangement
+	require(t, json.Unmarshal([]byte(expected), &selection))
+	catalogue := testmanagement.Catalogue{}
+	// Catalogue order differs from the generated execution order.
+	for i := len(selection.Tests) - 1; i >= 0; i-- {
+		id := selection.Tests[i]
+		catalogue.Tests = append(catalogue.Tests, testmanagement.Definition{ID: id, Name: id, Level: "L4", Environment: "isolated", Command: "sample test", Check: "passes"})
+	}
+	raw, err := json.Marshal(catalogue)
+	require(t, err)
+	require(t, os.WriteFile(filepath.Join(repo, testmodel.CataloguePath), raw, 0600))
+	pmGit(t, repo, "add", ".")
+	pmGit(t, repo, "-c", "commit.gpgsign=false", "commit", "-qm", "native 101 materials")
+	pmGit(t, repo, "push", "origin", "main")
+	_, err = m.check(ctx)
+	require(t, err)
+	require(t, m.refresh(ctx))
+	cli.finish()
+	cli.run.ContentResult.JSON = json.RawMessage(expected)
+	require(t, m.tests.service.Observe(ctx))
+	require(t, m.refresh(ctx))
+	if got := store.materials["101"].Status; got != "ready" {
+		t.Fatal("generation not ready", got)
+	}
+	work := taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contract}
+	fixed, commit, err := m.prepare(ctx, work, false, func(context.Context, taskmodel.FixedWork, bool) (string, error) {
+		return m.current().Commit, nil
+	})
+	require(t, err)
+	run := callerTestRun()
+	snapshot, err := m.config.prepareTestPlan(ctx, fixed, &run)
+	require(t, err)
+	if string(snapshot) != string(fixed.FrozenTestPlan) || run.ResultFile == nil || !run.ResultFile.RequiredInput {
+		t.Fatal("start did not freeze the ready arrangement")
+	}
+	arrangement, err := base64.StdEncoding.DecodeString(run.ResultFile.InitialContentBase64)
+	require(t, err)
+	if string(arrangement) != expected {
+		t.Fatal("generated order changed", string(arrangement))
+	}
+	sidecar := "SteerlineFlow/plans/native-101.tests.json"
+	if pmGit(t, repo, "ls-tree", commit, "--", sidecar) != "" || strings.Contains(run.Workflow.PromptOverrides["implement.execute"], expected) {
+		t.Fatal("arrangement leaked into Git or the prompt")
 	}
 }
 func TestPMSFastForwardAndOriginalUpdateReplay(t *testing.T) {

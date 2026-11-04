@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/prompts"
@@ -27,13 +28,13 @@ func TestTMReservationAdmitsOnlyBoundOptionalTestReferences(t *testing.T) {
 			require(t, e)
 			work := taskmodel.FixedWork{Record: tasks[0], Contract: contract, Authority: graph.TaskGraph().Authority}
 			snapshot, _ := json.Marshal(map[string]any{"project": json.RawMessage(`{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`), "plan_path": contract.PlanRef.Path, "commit": contract.PlanRef.Commit, "status": "ready"})
-			input := runnercontract.RunInput{Title: work.Record.Title, Repository: runnercontract.Repository{URL: contract.Repository, Remote: contract.Remote, BaseBranch: contract.Branch, BaseRevision: strings.Repeat("a", 40)}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: contract.SpecRef.Path}, Plan: runnercontract.Document{Path: contract.PlanRef.Path}, References: []runnercontract.Document{{Path: "SteerlineFlow/environment-project.json"}, {Path: testmodel.CataloguePath}, {Path: testmodel.RulesPath}, {Path: testmodel.ProtocolPath}, {Path: mustArrangement(t, contract.PlanRef.Path)}}}, Workflow: runnercontract.Workflow{PromptOverrides: map[string]string{"implement.execute": "Published instruction\n" + testPromptContext(t, snapshot, true)}}, Publication: runnercontract.Publication{BaseBranch: contract.Branch}}
+			input := runnercontract.RunInput{Title: work.Record.Title, Repository: runnercontract.Repository{URL: contract.Repository, Remote: contract.Remote, BaseBranch: contract.Branch, BaseRevision: strings.Repeat("a", 40)}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: contract.SpecRef.Path}, Plan: runnercontract.Document{Path: contract.PlanRef.Path}, References: []runnercontract.Document{{Path: "SteerlineFlow/environment-project.json"}, {Path: testmodel.CataloguePath}, {Path: testmodel.RulesPath}, {Path: testmodel.ProtocolPath}}}, Workflow: runnercontract.Workflow{PromptOverrides: map[string]string{"implement.execute": "Published instruction\n" + testPromptContext(t, snapshot, true)}}, Publication: runnercontract.Publication{BaseBranch: contract.Branch}, ResultFile: &runnercontract.ResultFileInput{RequiredInput: true, InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"tests":[]}`))}}
 			if referenced {
 				input.Documents.References = append(input.Documents.References, runnercontract.Document{Path: testmodel.WriterPath})
 				input.Workflow.PromptOverrides["implement.execute"] = "Published instruction\n" + testPromptContext(t, snapshot, true)
 			}
 			c := runnerstate.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "test-candidate", Revision: 1, Explicit: true, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", ContractDigest: contract.Digest, BaseRevision: strings.Repeat("a", 40), Participation: "active", SubmitState: "pending", Submit: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original"}, TestPlan: snapshot}
-			for _, mode := range []string{"other-path", "other-commit", "legacy-inline", "duplicate", "unbound-snapshot", "legacy-arrangement", "changed-snapshot", "missing-context", "wrong-writer", "legacy-spec"} {
+			for _, mode := range []string{"other-path", "other-commit", "legacy-inline", "duplicate", "unbound-snapshot", "legacy-arrangement", "changed-snapshot", "missing-context", "wrong-writer", "legacy-spec", "missing-input", "optional-input", "changed-input"} {
 				raw, _ := json.Marshal(input)
 				var bad runnercontract.RunInput
 				require(t, json.Unmarshal(raw, &bad))
@@ -62,6 +63,12 @@ func TestTMReservationAdmitsOnlyBoundOptionalTestReferences(t *testing.T) {
 				case "legacy-spec":
 					bad.Documents.Spec.Kind = "git"
 					bad.Documents.Spec.Commit = contract.SpecRef.Commit
+				case "missing-input":
+					bad.ResultFile = nil
+				case "optional-input":
+					bad.ResultFile.RequiredInput = false
+				case "changed-input":
+					bad.ResultFile.InitialContentBase64 = base64.StdEncoding.EncodeToString([]byte(`{"tests":["other"]}`))
 				}
 				next.Submit.Input, _ = json.Marshal(bad)
 				if reserveFixtureCandidate(t, s, ctx, work, next, false) == nil {
@@ -87,11 +94,4 @@ func testPromptContext(t *testing.T, snapshot []byte, referenced bool) string {
 		t.Fatal(err)
 	}
 	return body
-}
-
-func mustArrangement(t *testing.T, plan string) string {
-	t.Helper()
-	p, e := testmodel.ArrangementPath(plan)
-	require(t, e)
-	return p
 }

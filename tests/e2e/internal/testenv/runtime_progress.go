@@ -26,12 +26,11 @@ func RuntimeProgress(s *Scenario) {
 	s.Must(controlled.Write(filepath.Join(p.Repo, "SteerlineFlow", "testing", "test-list.json"), testmanagement.Catalogue{Tests: []testmanagement.Definition{definition}}))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "testing.md"), []byte("Run exactly fixture.progress; passing assertions complete its progress field.\n"), 0600))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.plan.md"), []byte("# Progress plan\nRequires fixture.progress automatic assertions.\n"), 0600))
-	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow/plans/task.tests.json"), []byte(`{"tests":["fixture.progress"]}`), 0600))
+	sidecar := "SteerlineFlow/plans/task.tests.json"
+	s.Must(os.Remove(filepath.Join(p.Repo, sidecar)))
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Progress fixture arrangement")
-	pushProvider, pushErr := controlled.Read(p.Provider)
-	s.Must(pushErr)
-	p.git(p.Repo, "push", "--quiet", pushProvider.GitURL, "main")
+	p.PrepareControlledEnvironment("controlled")
 	p.CreateTasks()
 	provider, err := controlled.Read(p.Provider)
 	s.Must(err)
@@ -56,12 +55,25 @@ func RuntimeProgress(s *Scenario) {
 		if input.ProgressFile == nil {
 			return false, fmt.Errorf("missing runtime progress input")
 		}
+		if input.ResultFile == nil || !input.ResultFile.RequiredInput {
+			return false, fmt.Errorf("missing required test arrangement")
+		}
+		arrangement, err := base64.StdEncoding.DecodeString(input.ResultFile.InitialContentBase64)
+		if err != nil {
+			return false, err
+		}
+		if string(arrangement) != `{"tests":["fixture.progress"]}` {
+			return false, fmt.Errorf("candidate did not freeze the generated arrangement")
+		}
 		var frozen testmanagement.Snapshot
 		if err = json.Unmarshal(c.TestPlan, &frozen); err != nil {
 			return false, err
 		}
 		referenced := false
 		for _, ref := range input.Documents.References {
+			if ref.Path == sidecar {
+				return false, fmt.Errorf("candidate referenced a Git sidecar")
+			}
 			referenced = referenced || ref.Path == testmodel.WriterPath
 		}
 		body := input.Workflow.PromptOverrides["implement.execute"]

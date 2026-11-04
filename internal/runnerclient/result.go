@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -17,6 +19,7 @@ type ResultCapability struct {
 	ProgressCapability
 	Collection     string `json:"collection"`
 	QueryReadsFile *bool  `json:"query_reads_file"`
+	RequiredInput  string `json:"required_input"`
 }
 
 func (c *Catalog) ValidateResult() error {
@@ -87,6 +90,19 @@ func (c Client) ResultFile(ctx context.Context, run string) (runnercontract.Resu
 	}
 	_, err = ValidateResultFile(out, run)
 	return out, err
+}
+
+func (c *Catalog) ValidateRequiredInputFile(e ExecutionInput, w Workflow) error {
+	if err := c.ValidateResult(); err != nil {
+		return err
+	}
+	p := c.Capabilities.ResultFile
+	if p.RequiredInput != "verify_exact_before_dispatch/v1" ||
+		!slices.Contains(p.Supported.Workflows, fmt.Sprintf("%s/%d", w.ID, w.Version)) ||
+		!slices.Contains(p.Supported.Adapters, e.Adapter) || !slices.Contains(p.Supported.TargetKinds, e.Target.Kind) {
+		return errors.New("Runner 未公布该执行方案的必读输入文件能力")
+	}
+	return nil
 }
 
 // ValidateEnvironmentExecution consumes the Runner's generic one-shot contract.
