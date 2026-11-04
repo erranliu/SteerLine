@@ -140,6 +140,9 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 		return errors.New("detection is a single invocation")
 	}
 	input := r.Prepared.Input
+	if err := useNativeOrcaExecutor(&input); err != nil {
+		return err
+	}
 	input.NamePrefix = "sl-env"
 	input.Title = "项目环境检测: " + r.Profile
 	input.Correlation = map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": "1"}
@@ -161,6 +164,48 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 	r.Rounds = []envmodel.Round{{Number: 1, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}, Submission: "pending", Deadline: s.now().Add(time.Duration(r.TimeoutSeconds) * time.Second)}}
 	r.State = "running"
 	return nil
+}
+
+// Select Orca's native Codex executor only for the submitted detection Run.
+// The prepared execution still identifies the development environment being checked.
+func useNativeOrcaExecutor(input *runnercontract.RunInput) error {
+	if input.Execution.Adapter != "orca-terminal" || input.Workflow.ID != "execute" || input.Workflow.Version != 1 {
+		return nil
+	}
+	var settings map[string]json.RawMessage
+	if err := json.Unmarshal(input.Execution.Settings, &settings); err != nil {
+		return err
+	}
+	var agent string
+	if raw, ok := settings["agent"]; ok {
+		if err := json.Unmarshal(raw, &agent); err != nil {
+			return err
+		}
+	}
+	launchSettings, ok := settings["agent_launch"]
+	if agent != "" && agent != "codex" || !ok {
+		return nil
+	}
+	var launch map[string]json.RawMessage
+	if err := json.Unmarshal(launchSettings, &launch); err != nil {
+		return err
+	}
+	delete(launch, "executable")
+	delete(launch, "runtime_executable")
+	delete(launch, "runtime_sha256")
+	delete(launch, "args")
+	if len(launch) == 0 {
+		delete(settings, "agent_launch")
+	} else {
+		encoded, err := json.Marshal(launch)
+		if err != nil {
+			return err
+		}
+		settings["agent_launch"] = encoded
+	}
+	var err error
+	input.Execution.Settings, err = json.Marshal(settings)
+	return err
 }
 func (s *Service) Stop(ctx context.Context, id, request string, revision uint64, original json.RawMessage) (envmodel.Record, error) {
 	s.mu.Lock()
