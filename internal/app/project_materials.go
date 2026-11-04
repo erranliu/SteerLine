@@ -24,6 +24,12 @@ type materialStore interface {
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
 
+func isRetryableMaterialRead(err error) bool {
+	var missing *missingCommittedFileError
+	var nonregular *nonRegularCommittedFileError
+	return !errors.As(err, &missing) && !errors.As(err, &nonregular) && !errors.Is(err, errMismatchedTestWriter)
+}
+
 func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.TaskRecord, commit string) (pmm.Material, error) {
 	result := pmm.Material{TaskID: task.TaskID, Commit: commit, Status: "invalid"}
 	contract, e := m.store.TaskContract(ctx, m.config.Identity(), task)
@@ -53,9 +59,15 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 		return result, e
 	}
 	if e = verifyTestWriter(func(path string) ([]byte, error) { return m.read(ctx, commit, path) }); e != nil {
+		if isRetryableMaterialRead(e) {
+			result.Status = "pending"
+		}
 		return result, e
 	}
 	if _, e = m.config.projectPolicySlots(ctx, commit); e != nil {
+		if isRetryableMaterialRead(e) {
+			result.Status = "pending"
+		}
 		return result, e
 	}
 	for _, source := range sources {
@@ -91,7 +103,7 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 		previous, previousErr := store.Material(ctx, m.config.Identity(), task.TaskID)
 		material := previous
 		var inputErr error
-		if previousErr != nil || previous.Commit != observed.Commit {
+		if previousErr != nil || previous.Commit != observed.Commit || previous.Status == "pending" && previous.Digest == "" {
 			material, inputErr = m.materialInput(ctx, task, observed.Commit)
 		}
 		if previousErr == nil && previous.Commit == observed.Commit && previous.Status == "invalid" && previous.Digest == "" {

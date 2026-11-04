@@ -139,11 +139,16 @@ func (c Config) testArrangement(ctx context.Context, contract taskmodel.TaskCont
 	return plan, arrangement, nil
 }
 
+var errMismatchedTestWriter = errors.New("材料准备不足：固定提交缺少同源 writer，不支持内联兜底")
+
 func verifyTestWriter(read func(string) ([]byte, error)) error {
 	writer, writerErr := read(testmodel.WriterPath)
-	referencedWriter := writerErr == nil && bytes.Equal(bytes.ReplaceAll(writer, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll([]byte(progresstools.PowerShellWriter), []byte("\r\n"), []byte("\n")))
+	if writerErr != nil {
+		return fmt.Errorf("材料准备不足：无法读取固定提交的 writer：%w", writerErr)
+	}
+	referencedWriter := bytes.Equal(bytes.ReplaceAll(writer, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll([]byte(progresstools.PowerShellWriter), []byte("\r\n"), []byte("\n")))
 	if !referencedWriter {
-		return errors.New("材料准备不足：固定提交缺少同源 writer，不支持内联兜底")
+		return errMismatchedTestWriter
 	}
 	return nil
 }

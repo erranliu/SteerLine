@@ -22,6 +22,12 @@
 - SteerLine 正式 L1、L2 通过，见 `test-results/release-L1`、`test-results/release-L2`。早期受控 L2 在生成观察期间达到场景期限，原报告保留于 `test-results/L2`、`test-results/final-L2` 和 `test-results/cache-L2`。未修改主干的 L2 对照也通过，见 `test-results/main-L2`。最终实现把固定文件读取移到基线预检，生成完成后只做已固定输入的快照、大小和能力判断。
 - L3 `testing.runtime-progress` 通过。正式启动在无旁置安排的受控项目中保留 outbox 的安排文件种子，原进度通道继续覆盖完成、重跑清零、异常快照、重启和停止。见 `test-results/release-L3`。
 
+## 合入审计修订
+
+writer 和项目策略的暂时读取失败保持材料待准备。下一次刷新重新读取同一固定 commit。两项回归均验证恢复后只发起一次生成并进入就绪。已确认的必需文件缺失、非普通文件和 writer 正文不符沿原无效状态处理。任务 101 原提交复验仍得到原有序五项、111 字节和相同 SHA-256。报告根为 `C:\SteerlineDebug\fresh-worktree-audit-20261104`，见 `owner` 与 `public-101`。正式 L1 和 L2 同样通过。
+
+修复后的配对 Runner 构建 `0.2.0-dev.fresh-audit` 复验通过。真实本机 Codex Run `da64a3da77c9de7d440a924b8271a4b1` 从新 worktree 读出与就绪和启动安排一致的 SHA-256，原 Run 和隔离服务已结算，见 `native-101`。
+
 ## 提示词审核
 
 SteerLine 的实施和审计提示将同名 Git 安排替换为读取 `STEERLINE_RESULT_FILE`，包括 Orca 的文件绑定定位、原字节 SHA-256、读取失败时报告阻塞及安排来源优先级。继续读取固定 Plan、清单和执行协议，复用原 writer。模板 377 → 540 字节，渲染样本 484 → 702 字节，组合样本 512 → 730 字节。[实际模板](../../../internal/prompts/testing-execute.md)

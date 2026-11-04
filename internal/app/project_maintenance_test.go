@@ -356,6 +356,31 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	}
 }
 
+func TestPMSRetriesTransientStaticMaterialReadsAtSameCommit(t *testing.T) {
+	for _, name := range []string{testmodel.WriterPath, "SteerlineFlow/runner-policies/git.md"} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			m, store, cli := pmsFixture(t)
+			observation, err := m.check(ctx)
+			require(t, err)
+			host := m.config.ProcessHost
+			m.config.ProcessHost = failingDocumentHost{ManagedProcessHost: host, stage: name, cause: context.DeadlineExceeded}
+			require(t, m.refresh(ctx))
+			if got := store.materials["101"]; got.Status != "pending" || got.Commit != observation.Commit || cli.submits != 0 {
+				t.Fatalf("failed pinned read should leave preparation pending: %+v", got)
+			}
+			m.config.ProcessHost = host
+			require(t, m.refresh(ctx))
+			cli.finish()
+			require(t, m.tests.service.Observe(ctx))
+			require(t, m.refresh(ctx))
+			if got := store.materials["101"]; got.Status != "ready" || got.Commit != observation.Commit || len(got.TestPlan) == 0 || cli.submits != 1 {
+				t.Fatalf("same pinned commit did not recover once: %+v", got)
+			}
+		})
+	}
+}
+
 func TestNative101GeneratedArrangementStartsWithoutSidecar(t *testing.T) {
 	ctx := context.Background()
 	m, store, cli := pmsFixture(t)
