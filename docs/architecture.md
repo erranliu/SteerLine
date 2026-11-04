@@ -56,6 +56,12 @@ SteerLine 与 SteerRunner 各自具有默认执行链路，初始默认均为本
 
 自然语言成功、轮次结束、进程退出、worker_done 或 PR 创建都不证明交付。人合并任一已绑定候选 PR 后，中心核验该候选 PR 身份与合并事实，再在同一事务记录唯一 TaskDelivery、关闭 Task 和释放后继；其他候选已合并或查询未知不阻塞该交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。数据与状态细节见[数据模型](product-design/data-model.md)。
 
+### 新建 worktree 的职责边界
+
+SteerLine 在提交 Git 型新 Run 前选定不可变 Git commit，核验项目材料和适用的环境资格。开发候选用同一份冻结材料判断「已就绪」与构建启动请求。Runner 按请求的 commit 新建专属 worktree。创建成功后即可进入所选 Workflow，启动阶段省去重复的 HEAD、diff 和文件交付核验。Runner 处理创建及原资源身份，材料由 Agent 在使用时读取，SteerLine 负责项目验收和交付。
+
+Runner 自主推进所选 Workflow 的实施、审核、修复及发布步骤。旧 Run 恢复沿[原生命周期](product-design/worker-lifecycle.md)独立处理。详见[启动边界 Spec](../SteerlineFlow/spec/fresh-worktree-startup.spec.md)和[实施 Plan](../SteerlineFlow/plans/fresh-worktree-startup.plan.md)。
+
 ## 生命周期、反馈与恢复
 
 工作区准备、代理启动/初始化、输入接受/开执行、结果结算及收尾的节点异常和重试规则统一归[Worker 流程异常处理与重试](product-design/worker-lifecycle.md)。具体适配器提供原生事实与能力，Runner 的单写服务决定并提交执行动作；SteerLine 单独提交调用方事实和 TaskDelivery。文档中的待补设计不代表当前实现已经支持。

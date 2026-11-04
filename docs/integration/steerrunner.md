@@ -1,5 +1,8 @@
 # SteerRunner 依赖与运行
 
+## Git 型新 Run 的启动边界
+
+SteerLine 校验固定 commit 的项目材料及接入条件，冻结候选与请求。Runner 按该 commit 创建新 worktree，沿创建回执绑定原资源，随后自主推进 Workflow。成功创建即满足该路径的工作区启动条件。自动生成的测试安排随冻结请求进入既有文件渠道，由 Agent 在工作区使用时读取。请求形成时发现的缺项由 SteerLine 阻断，运行期读不到安排由 Agent 报告。旧 Run 恢复继续走独立流程。见[启动边界 Spec](../../SteerlineFlow/spec/fresh-worktree-startup.spec.md)。
 
 2026-10-28 调用方提示词改为短指令与固定文档：新请求仅保留动作、引用及少量参数，完整安排、规则、原文和报告通过既有固定仓库/工作区读取；缺文件或版本不符在投递前阻断，无 inline 兜底。generate 使用固定 `generate.repository` 且 materials 为空；schema 仅保留结构，结果仍核对原文和 manifest。完整冻结安排与原报告保存在原 owner；环境下一轮缺少完整报告到新工作区的正式渠道时停止创建新 Run。用户完整回答最多 2000 UTF-8 字节，超限拒绝；旧请求仅观察原冻结输入。[设计与供给边界](../../SteerlineFlow/spec/caller-prompt-convergence.spec.md)、[实际验收](../../SteerlineFlow/testing/acceptance/caller-prompt-convergence.md)。
 

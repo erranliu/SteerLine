@@ -53,6 +53,10 @@ func (a taskDocuments) readCommittedFile(ctx context.Context, commit, name strin
 // Read a finite set with one commit check, one exact tree lookup and one batch
 // blob read. Process startup cost must not grow by three commands per file.
 func (a taskDocuments) readCommittedFiles(ctx context.Context, commit string, names []string) (map[string][]byte, error) {
+	return a.readPinnedFiles(ctx, commit, names, false)
+}
+
+func (a taskDocuments) readPinnedFiles(ctx context.Context, commit string, names []string, allowMissing bool) (map[string][]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -75,14 +79,14 @@ func (a taskDocuments) readCommittedFiles(ctx context.Context, commit string, na
 		return files, nil
 	}
 	r := commandRunner{Dir: a.repository, Timeout: a.timeout, ProcessHost: a.processHost}
-	resolved, err := r.Output(ctx, a.git, "rev-parse", "--verify", commit+"^{commit}")
+	resolved, err := r.Output(ctx, a.git, "--no-replace-objects", "rev-parse", "--verify", commit+"^{commit}")
 	if err != nil {
 		return nil, fmt.Errorf("cannot verify pinned Git commit %s: %w", commit, err)
 	}
 	if strings.TrimSpace(string(resolved)) != commit {
 		return nil, taskDocumentError("pinned Git commit is not a full canonical commit: " + commit)
 	}
-	args := append([]string{"--literal-pathspecs", "ls-tree", "-z", commit, "--"}, pending...)
+	args := append([]string{"--no-replace-objects", "--literal-pathspecs", "ls-tree", "-z", commit, "--"}, pending...)
 	tree, err := r.Output(ctx, a.git, args...)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read pinned Git tree %s: %w", commit, err)
@@ -104,18 +108,26 @@ func (a taskDocuments) readCommittedFiles(ctx context.Context, commit string, na
 		objects[name] = meta[2]
 	}
 	var input strings.Builder
+	available := make([]string, 0, len(pending))
 	for _, name := range pending {
 		if objects[name] == "" {
+			if allowMissing {
+				continue
+			}
 			return nil, &missingCommittedFileError{fmt.Errorf("pinned path missing %s: %w", name, os.ErrNotExist)}
 		}
 		input.WriteString(objects[name] + "\n")
+		available = append(available, name)
+	}
+	if len(available) == 0 {
+		return files, nil
 	}
 	r.Input = []byte(input.String())
-	body, err := r.Output(ctx, a.git, "cat-file", "--batch")
+	body, err := r.Output(ctx, a.git, "--no-replace-objects", "cat-file", "--batch")
 	if err != nil {
 		return nil, fmt.Errorf("cannot read pinned Git blobs %s: %w", commit, err)
 	}
-	for _, name := range pending {
+	for _, name := range available {
 		header, rest, ok := bytes.Cut(body, []byte{'\n'})
 		fields := strings.Fields(string(header))
 		if !ok || len(fields) != 3 || fields[0] != objects[name] || fields[1] != "blob" {
@@ -130,7 +142,7 @@ func (a taskDocuments) readCommittedFiles(ctx context.Context, commit string, na
 	if len(body) != 0 {
 		return nil, taskDocumentError("unexpected trailing Git batch output")
 	}
-	for _, name := range pending {
+	for _, name := range available {
 		if cache != nil {
 			cache[a.repository+":"+commit+":"+name] = files[name]
 		}

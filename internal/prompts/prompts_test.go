@@ -62,7 +62,7 @@ func TestInlineProgressWriterForProjectWithoutHelper(t *testing.T) {
 		t.Fatal("missing writer fell back to inline source")
 	}
 	body, err := TestingContext([]byte(testSnapshot), true)
-	if err != nil || !strings.Contains(body, "task.tests.json") || strings.Contains(body, "Set-RuntimeProgress") {
+	if err != nil || !strings.Contains(body, "STEERLINE_RESULT_FILE") || strings.Contains(body, "Set-RuntimeProgress") {
 		t.Fatal("missing real references or source expanded", err)
 	}
 	external := "用户原文 {{.Ignore}}\r\n"
