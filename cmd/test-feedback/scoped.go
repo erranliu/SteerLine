@@ -63,18 +63,19 @@ var quickPackages = func() []string {
 var weightFile embed.FS
 
 type scopedGroup struct {
-	ID          string               `json:"id"`
-	Command     []string             `json:"command"`
-	Assigned    []string             `json:"assigned_tests,omitempty"`
-	Packages    []string             `json:"assigned_packages,omitempty"`
-	StdoutLog   string               `json:"stdout_json_log"`
-	StderrLog   string               `json:"stderr_log"`
-	WallSeconds float64              `json:"wall_seconds"`
-	StartedAt   string               `json:"started_at,omitempty"`
-	FinishedAt  string               `json:"finished_at,omitempty"`
-	ExitCode    int                  `json:"exit_code"`
-	Error       string               `json:"error,omitempty"`
-	Summary     testfeedback.Summary `json:"summary"`
+	ExecutionParameters executionParameters  `json:"execution_parameters"`
+	ID                  string               `json:"id"`
+	Command             []string             `json:"command"`
+	Assigned            []string             `json:"assigned_tests,omitempty"`
+	Packages            []string             `json:"assigned_packages,omitempty"`
+	StdoutLog           string               `json:"stdout_json_log"`
+	StderrLog           string               `json:"stderr_log"`
+	WallSeconds         float64              `json:"wall_seconds"`
+	StartedAt           string               `json:"started_at,omitempty"`
+	FinishedAt          string               `json:"finished_at,omitempty"`
+	ExitCode            int                  `json:"exit_code"`
+	Error               string               `json:"error,omitempty"`
+	Summary             testfeedback.Summary `json:"summary"`
 }
 
 type scopedReport struct {
@@ -186,9 +187,11 @@ func runScoped(opts options) int {
 			id := fmt.Sprintf("core-%d", i+1)
 			args := []string{"go", "tool", "test2json", "-t", "-p", fullCorePackage, binary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(assignments[i])}
 			core := runGroup(ctx, opts.out, id, coreDir, args, assignments[i], []string{fullCorePackage}, true)
+			attachBuildParameters(&core, filepath.Join(opts.out, "core-build-command.json"))
 			id = fmt.Sprintf("integration-%d", i+1)
 			args = []string{"go", "tool", "test2json", "-t", "-p", boundaryPackage, integrationBinary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(integrationAssignments[i])}
 			integrationGroups[i] = runGroup(ctx, opts.out, id, integrationDir, args, integrationAssignments[i], []string{boundaryPackage}, true)
+			attachBuildParameters(&integrationGroups[i], filepath.Join(opts.out, "integration-build-command.json"))
 			return core
 		}, func() scopedGroup {
 			args := append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, others...)
@@ -196,12 +199,15 @@ func runScoped(opts options) int {
 		})
 		report.Groups = append(report.Groups, groups...)
 		report.Groups = append(report.Groups, integrationGroups...)
+		report.Workers = len(assignments) + 1 // three serial lanes plus other-packages
 	}
 	report.ExecutionSecs = time.Since(execution).Seconds()
 	report.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	report.Errors = append(report.Errors, checkScopedCoverage(report)...)
 	report.Complete = len(report.Errors) == 0
 	report.Passed = report.Complete
+	summarizeExecutionParameters(&report.Environment, report.Groups)
+	report.Environment.Concurrency["group_worker_limit"] = fmt.Sprint(report.Workers)
 	if err := writeJSON(filepath.Join(opts.out, "summary.json"), report); err != nil {
 		fmt.Fprintf(os.Stderr, "write scoped report: %v\n", err)
 		return 2
@@ -378,7 +384,11 @@ func prepareTestPackage(ctx context.Context, out, pkg, name string) (string, str
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	output, err := exec.CommandContext(ctx, "go", "test", "-c", "-o", binary, pkg).CombinedOutput()
+	buildCommand := []string{"go", "test", "-c", "-o", binary, pkg}
+	if err := writeJSON(filepath.Join(out, name+"-build-command.json"), buildCommand); err != nil {
+		return "", "", err
+	}
+	output, err := exec.CommandContext(ctx, buildCommand[0], buildCommand[1:]...).CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("compile core: %w: %s", err, output)
 	}
@@ -468,6 +478,7 @@ func exactPattern(names []string) string {
 
 func runGroup(ctx context.Context, out, id, dir string, command, assigned, packages []string, isolated bool) scopedGroup {
 	group := scopedGroup{ID: id, Command: command, Assigned: append([]string(nil), assigned...), Packages: append([]string(nil), packages...), ExitCode: 127}
+	group.ExecutionParameters = executionParametersFor(command, nil)
 	groupDir := filepath.Join(out, id)
 	group.StdoutLog = filepath.Join(groupDir, "test.jsonl")
 	group.StderrLog = filepath.Join(groupDir, "stderr.txt")
@@ -519,6 +530,7 @@ func runGroup(ctx context.Context, out, id, dir string, command, assigned, packa
 	begin := time.Now()
 	group.StartedAt = begin.UTC().Format(time.RFC3339Nano)
 	err = runOwned(ctx, cmd)
+	finishExecutionParameters(&group.ExecutionParameters, cmd.ProcessState != nil)
 	finished := time.Now()
 	group.FinishedAt = finished.UTC().Format(time.RFC3339Nano)
 	group.WallSeconds = finished.Sub(begin).Seconds()

@@ -35,23 +35,24 @@ type e2eScenario struct {
 	Chain   string `json:"chain,omitempty"`
 }
 type e2eReport struct {
-	Scope          string            `json:"scope"`
-	Level          string            `json:"level"`
-	Env            string            `json:"env"`
-	Environment    environment       `json:"environment"`
-	Selected       []e2eScenario     `json:"selected_scenarios"`
-	Groups         []scopedGroup     `json:"groups"`
-	Builds         map[string]string `json:"build_sha256"`
-	Preparation    float64           `json:"preparation_seconds"`
-	Execution      float64           `json:"execution_seconds"`
-	Passed         bool              `json:"passed"`
-	Cleanup        bool              `json:"cleanup_complete"`
-	Errors         []string          `json:"errors"`
-	Started        string            `json:"started_at"`
-	Finished       string            `json:"finished_at"`
-	Blocked        []e2eScenario     `json:"blocked_scenarios,omitempty"`
-	Coverage       string            `json:"coverage"`
-	PackageWorkers int               `json:"package_workers"`
+	Scope             string              `json:"scope"`
+	Level             string              `json:"level"`
+	Env               string              `json:"env"`
+	Environment       environment         `json:"environment"`
+	Selected          []e2eScenario       `json:"selected_scenarios"`
+	Groups            []scopedGroup       `json:"groups"`
+	Builds            map[string]string   `json:"build_sha256"`
+	TestBuildCommands map[string][]string `json:"test_build_commands,omitempty"`
+	Preparation       float64             `json:"preparation_seconds"`
+	Execution         float64             `json:"execution_seconds"`
+	Passed            bool                `json:"passed"`
+	Cleanup           bool                `json:"cleanup_complete"`
+	Errors            []string            `json:"errors"`
+	Started           string              `json:"started_at"`
+	Finished          string              `json:"finished_at"`
+	Blocked           []e2eScenario       `json:"blocked_scenarios,omitempty"`
+	Coverage          string              `json:"coverage"`
+	PackageWorkers    int                 `json:"package_workers"`
 }
 
 func e2eRoot() (string, error) {
@@ -245,6 +246,10 @@ func runE2E(opts options) (code int) {
 		}
 		report.Finished = time.Now().UTC().Format(time.RFC3339Nano)
 		report.Passed = len(report.Errors) == 0
+		summarizeExecutionParameters(&report.Environment, report.Groups)
+		if report.PackageWorkers > 0 {
+			report.Environment.Concurrency["package_worker_limit"] = fmt.Sprint(report.PackageWorkers)
+		}
 		if err := writeJSON(filepath.Join(out, "summary.json"), report); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			report.Passed = false
@@ -421,6 +426,7 @@ func runE2E(opts options) (code int) {
 	// Freeze every selected test binary before resource creation. Later packages
 	// must not silently compile a newer checkout halfway through a long run.
 	testBinaries := map[string]string{}
+	report.TestBuildCommands = map[string][]string{}
 	for index, pkg := range names {
 		testBinary := filepath.Join(buildDir, fmt.Sprintf("scenario-%d.test.exe", index+1))
 		build := exec.CommandContext(ctx, "go", "test", "-tags=e2e", "-c", "-o", testBinary, pkg)
@@ -429,6 +435,7 @@ func runE2E(opts options) (code int) {
 		if output, err := build.CombinedOutput(); err != nil {
 			return fail(fmt.Errorf("compile %s: %w: %s", pkg, err, output))
 		}
+		report.TestBuildCommands[pkg] = append([]string(nil), build.Args...)
 		compiled, err := os.ReadFile(testBinary)
 		if err != nil {
 			return fail(err)
@@ -470,7 +477,7 @@ func runE2E(opts options) (code int) {
 			return fail(fmt.Errorf("manifest differs from tests in %s: actual=%v expected=%v", pkg, actual, expected))
 		}
 	}
-	if err := writeJSON(filepath.Join(buildDir, "frozen-binaries.json"), map[string]any{"source_commit": strings.TrimSpace(sourceCommit), "source_dirty": sourceDirty, "sha256": report.Builds}); err != nil {
+	if err := writeJSON(filepath.Join(buildDir, "frozen-binaries.json"), map[string]any{"source_commit": strings.TrimSpace(sourceCommit), "source_dirty": sourceDirty, "sha256": report.Builds, "test_build_commands": report.TestBuildCommands}); err != nil {
 		return fail(err)
 	}
 	report.Preparation = time.Since(started).Seconds()
@@ -499,6 +506,7 @@ func runE2E(opts options) (code int) {
 		}
 		args := []string{"-test.v=test2json", "-test.count=1", fmt.Sprintf("-test.parallel=%d", parallelism), "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
 		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{testBinaries[pkg]}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
+		g.ExecutionParameters = executionParametersFor(g.Command, report.TestBuildCommands[pkg])
 		// Own the test binary directly. Detached external services must not keep
 		// a live test2json pipe open after the test process has exited.
 		rawLog := filepath.Join(out, g.ID+".raw.log")
@@ -518,6 +526,7 @@ func runE2E(opts options) (code int) {
 		groupStarted := time.Now()
 		g.StartedAt = groupStarted.UTC().Format(time.RFC3339Nano)
 		err = runOwned(ctx, cmd)
+		finishExecutionParameters(&g.ExecutionParameters, cmd.ProcessState != nil)
 		groupFinished := time.Now()
 		g.FinishedAt = groupFinished.UTC().Format(time.RFC3339Nano)
 		g.WallSeconds = groupFinished.Sub(groupStarted).Seconds()

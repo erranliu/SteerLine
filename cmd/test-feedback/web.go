@@ -135,6 +135,7 @@ func parseWebReport(raw []byte, root string, expected []string, exit int) feedba
 
 func runWebGroup(ctx context.Context, out, id string, files []string) scopedGroup {
 	g := scopedGroup{ID: id, ExitCode: 127}
+	g.ExecutionParameters = executionParametersFor([]string{"node"}, nil)
 	root, err := e2eRoot()
 	if err != nil {
 		g.Error = err.Error()
@@ -178,11 +179,13 @@ func runWebGroup(ctx context.Context, out, id string, files []string) scopedGrou
 	}
 	args := append([]string{cli, "run", "--reporter=json", "--outputFile=" + g.StdoutLog}, files...)
 	g.Command = append([]string{"node"}, args...)
+	g.ExecutionParameters = executionParametersFor(g.Command, nil)
 	cmd := exec.Command("node", args...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = web, stdout, stderr
 	started := time.Now()
 	g.StartedAt = started.UTC().Format(time.RFC3339Nano)
 	err = runOwned(ctx, cmd)
+	finishExecutionParameters(&g.ExecutionParameters, cmd.ProcessState != nil)
 	g.WallSeconds, g.FinishedAt = time.Since(started).Seconds(), time.Now().UTC().Format(time.RFC3339Nano)
 	g.ExitCode = 0
 	if err != nil {

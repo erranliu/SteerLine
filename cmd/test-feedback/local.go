@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -29,6 +30,8 @@ var localSuites = []localSuite{
 	{ID: "web.unit", Suite: "web"},
 	{ID: "go.http", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./web/server", "./internal/product/httpapi", "./internal/product/httpclient", "./internal/product/httpfs", "./web/server/executionconfig", "./web/server/discovery", "./web/server/nativequery"}}}},
 	{ID: "go.storage", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./internal/storage/sqlite", "./internal/pathguard"}}}},
+	{ID: "go.deployment", Suite: "go", Groups: domainGroupsForGOOS("go.deployment", runtime.GOOS)},
+	{ID: "go.roadmap", Suite: "go", Groups: domainGroupsForGOOS("go.roadmap", runtime.GOOS)},
 	{ID: "go.environment", Suite: "go", Groups: []localGroup{
 		{ID: "go-environment-owner", Packages: []string{"./internal/environmentadaptation", "./internal/environmentadaptation/model", "./internal/testkit/remotetest", "./internal/executionconfig"}},
 		{ID: "go-environment-app", Packages: []string{"./internal/app"}, Tests: environmentAppRoots()},
@@ -72,6 +75,15 @@ func runLocalSuite(opts options, def localSuite) int {
 			root, err := e2eRoot()
 			if err == nil {
 				err = checkEnvironmentAppSources(root)
+			}
+			if err != nil {
+				return scopedSetupError(opts.out, &report, err)
+			}
+		}
+		if def.ID == "go.deployment" || def.ID == "go.roadmap" {
+			root, err := e2eRoot()
+			if err == nil {
+				err = checkAppDomainSources(root)
 			}
 			if err != nil {
 				return scopedSetupError(opts.out, &report, err)
@@ -204,6 +216,8 @@ func checkLocalGroup(group scopedGroup, selected localGroup) error {
 }
 
 func finishLocalReport(out string, report *scopedReport) int {
+	summarizeExecutionParameters(&report.Environment, report.Groups)
+	report.Environment.Concurrency["group_worker_limit"] = "1"
 	for _, g := range report.Groups {
 		if g.Error != "" {
 			report.Errors = append(report.Errors, g.ID+": "+g.Error)

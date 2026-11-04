@@ -35,4 +35,15 @@ SteerLine 历史页面只读取已核实主分支 commit 中的 records 目录�
 
 ## 正式本地回归
 
-L4 go.http/go.storage/go.environment/go.runner-contract/go.runner-result 及 web.unit 使用固定执行定义和独立 managed 报告，不能替代 go.full。Go 原始日志为 go-owner/test.jsonl，Web 为 web-unit/vitest.json、stdout.txt、stderr.txt。L1 的 quick-web 复用相同原生格式。Vitest 文件/断言集合须非零且完整，无 skip/todo；不合成 Go 事件。Go Full 在 packages_without_tests 中明确枚举没有普通测试的编译项，原生 package skip 只在该集合内允许；真实测试 skip 或未知包 skip 均使原 summary、退出码、managed 及进度不通过。
+L4 go.http/go.storage/go.environment/go.deployment/go.roadmap/go.runner-contract/go.runner-result 及 web.unit 使用固定执行定义和独立 managed 报告，不能替代 go.full。Go 原始日志为 go-owner/test.jsonl，Web 为 web-unit/vitest.json、stdout.txt、stderr.txt。L1 的 quick-web 复用相同原生格式。Vitest 文件/断言集合须非零且完整，无 skip/todo；不合成 Go 事件。Go Full 在 packages_without_tests 中明确枚举没有普通测试的编译项，原生 package skip 只在该集合内允许；真实测试 skip 或未知包 skip 均使原 summary、退出码、managed 及进度不通过。
+
+
+## 实际执行参数
+
+每组原始command旁的execution_parameters记录command_kind和status，以及count、timeout、test_parallelism、go_package_parallelism、build_tags、test_filter、test_skip的state/value/source。显式argv为explicit；未显式参数为default且不推断子进程默认数值；不识别、未知自定义flag或不完整参数为unknown；冻结二进制的Go构建并发、Web的Go参数为not_applicable。GOFLAGS环境保留原值，未展开时不拿命令默认替代。-args/--转发尾段不当作可信测试参数；未知flag的值长度不能猜；test2json的-p仅是包名，test.p/test.tags也不冒充Go构建参数。
+
+status=not_executed表示日志/前置等失败导致尚未尝试执行，attempted表示启动已尝试但没有进程终态，executed只在实际ProcessState存在时写入；executed并不表示测试通过，零匹配、skip、超时或原断言失败仍按原规则失败。每组从最终argv取值，诊断也使用追加-json及默认参数后的真实命令。测试二进制的build_tags和build_command来自实际构建记录：Full的core-build-command.json/integration-build-command.json，E2E的test_build_commands（同时保存在build/frozen-binaries.json），没有构建证据不能猜标签；Full缺证据进入原错误链。
+
+顶层environment.concurrency的go_test_parallel/go_build_package_parallel仅聚合同一适用维度：共同显式值直接显示，不同为mixed，未执行/未知为unknown，全部不适用为not_applicable，原始分组仍是权威。controller_runtime_GOMAXPROCS只指报告控制器，GOMAXPROCS_environment是进程环境原值；两者不证明子进程实测GOMAXPROCS。scoped的workers/group_worker_limit是原调度上限，Full为三条core→integration串行流水线加other-packages共4条，不代表Go-p或某一时刻实测重叠；L1保持原上限，local串行为1。E2E的package_workers/package_worker_limit来自实际包调度策略，组内test.parallel另记，不扩大任何并发。
+
+新字段属于原summary内容，并由原managed证据SHA覆盖。不新增历史报告迁移或兼容双读；报告参数修正不构成新性能、Linux或原生模型链通过证明。两个领域的断言与层级梳理、真实结果及未验边界见[专属验收](acceptance/app-domain-test-suites.md)。

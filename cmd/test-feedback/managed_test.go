@@ -233,6 +233,9 @@ func TestRegisteredCommandsSelectExactlyTheirDefinitions(t *testing.T) {
 	if err := checkEnvironmentAppSources(root); err != nil {
 		t.Fatal(err)
 	}
+	if err := checkAppDomainSources(root); err != nil {
+		t.Fatal(err)
+	}
 	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(testmanagement.CataloguePath)))
 	if err != nil {
 		t.Fatal(err)
