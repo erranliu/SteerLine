@@ -19,6 +19,8 @@ SteerLine 校验固定 commit 的项目材料及接入条件，冻结候选与�
 
 本机采集沿 Runner 默认策略。远端采集需要在 `execution.json` 顶层显式配置 Runner 的 `usage_policy`，启动时原样传入原 `service start`；例如关闭远端新增目录登记的策略为 `{"enabled":true,"remote_log_access":{"mode":"disabled","grants":[]}}`。允许远端登记时使用 Runner 公开 schema 的 `temporary` 模式，并显式指定 environment、已核实的稳定 host_id 和受限 session_roots。不要使用账号 home 或凭据根作为授权范围；具体根资格由 Runner 验证。策略省略不扩权，页面读取不授权；更改须经正式停服/启动，冲突不热更新。Web 编辑执行 profile 时保留这两项部署字段。
 
+SteerLine 按候选冻结的 provider 查询已绑定 PR，交付和废弃共用平台查询，并在本地事务重核原候选和版本。Runner 自主核验 Workflow 发布，独立调用方仍可使用 `inspect --refresh-pr`。详见[任务 PR 核验 Spec](../../SteerlineFlow/spec/task-pr-merge-ownership.spec.md)。
+
 SteerLine 只通过 `steerrunner-cli/v1` 调用独立 EXE。Runner 同一个 EXE 提供短命 CLI 与常驻服务；CLI 连接同一 state-dir 的现有实例，读请求不自动启动服务。任务、DAG、候选参与及 TaskDelivery 留在 SteerLine。
 
 当前对接 Runner state/v8：同构建重启只重连原资源；换构建前由原版本排空业务、原生资源及未完成控制。不再调用已删除的 verify-takeover，也不维护旧兼容矩阵。启动前取消通过公开 inspect（冷态使用 --offline）核对原 Run/input/request，再提交原 pending_stops 信封；原资源丢失或未知结果耗尽后显示人工处理，显式 resume 只对账。v7 及更早格式保留原安装收尾，使用新的应用 home 与 v8 派生目录，不迁移旧状态。未来兼容且已排空时可复用同一目录，历史构建摘要不决定逐 Run 业务权限。部署步骤见[安装更新](install-deploy.md#同构建更新与重启)。此前服务换代/接管 Spec 和下文 A/B 结果仅是历史记录。

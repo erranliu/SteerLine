@@ -290,7 +290,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	p.git(p.Repo, "push", "--quiet", "origin", "main")
 	p.git(p.Repo, "remote", "set-url", "origin", p.RemoteURL)
 	s.Must(controlled.Write(p.Provider, controlled.State{LocalRepository: p.Repo, GitURL: "http://" + address + "/e2e/project.git"}))
-	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider}}
+	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider, "--pr-url", "{pr_url}"}}
 	s.Must(controlled.Write(p.Config, map[string]any{
 		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2", "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
 		"publication_policy": map[string]any{"publisher": "worker"},

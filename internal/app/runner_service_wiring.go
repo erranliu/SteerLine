@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
@@ -68,7 +69,11 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		return config.prepareTestPlan(ctx, work, run)
 	}
 	service.Bridge = &runnerbridge.Bridge{Store: connection, Client: func(string) runnerbridge.CLI { return cli }}
-	git := commandRunner{Dir: config.Repository, Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), ProcessHost: config.ProcessHost}
+	timeout := positiveDuration(config.CommandTimeout, 30*time.Second)
+	prTimeout := min(timeout, 30*time.Second)
+	pr := publication.QueryClient{Command: commandRunner{Timeout: prTimeout, ProcessHost: config.ProcessHost}, Timeout: prTimeout}
+	service.QueryPR = pr.Query
+	git := commandRunner{Dir: config.Repository, Timeout: timeout, ProcessHost: config.ProcessHost}
 	base := taskrunner.BaseResolver{Project: config.Identity(), Store: connection, Git: func(ctx context.Context, args ...string) ([]byte, error) { return git.Output(ctx, config.Git, args...) }}
 	service.ResolveBase = base.Resolve
 	if m := config.runtimeMaintenance; m != nil {
