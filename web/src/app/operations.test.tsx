@@ -105,12 +105,12 @@ it("keeps older unresolved operations visible alongside the latest result", () =
       reconciling={false}
     />,
   );
-  expect(screen.getByText("开始检测：结果待核实")).toBeVisible();
+  expect(screen.getByText("开始检测：正在确认启动")).toBeVisible();
   expect(screen.getByText("停止检测：操作未成功，请刷新后重试")).toBeVisible();
   expect(screen.getAllByRole("button", { name: "重新查询" })).toHaveLength(1);
 });
 
-it.each(["rejected", "outcome_unknown"] as const)(
+it.each(["rejected"] as const)(
   "shows the specific environment diagnostic for %s without changing the request",
   (status) => {
     const row = request("environment_start", status);
@@ -132,9 +132,9 @@ it.each(["rejected", "outcome_unknown"] as const)(
   },
 );
 
-it("keeps a transport error visible when there is no server diagnostic", () => {
+it("keeps confirming a start whose receipt query timed out", () => {
   const row = request("environment_start");
-  row.error = "Failed to fetch the original operation";
+  row.error = "TimeoutError: 本次请求核实超时，保留原请求";
   render(
     <Operations
       requests={[row]}
@@ -144,6 +144,7 @@ it("keeps a transport error visible when there is no server diagnostic", () => {
       reconciling={false}
     />,
   );
-  expect(screen.getByText(row.error)).toBeVisible();
+  expect(screen.getByText("开始检测：正在确认启动")).toBeVisible();
+  expect(screen.queryByText(/超时/)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "重新查询" })).toBeEnabled();
 });

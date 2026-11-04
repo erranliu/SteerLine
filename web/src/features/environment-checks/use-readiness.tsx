@@ -44,6 +44,7 @@ export const environmentStage: Record<string, string> = {
   unprepared: "未准备",
   awaiting_user: "待准备与检测",
   verifying: "检测中",
+  timed_out: "检测超时",
   ready: "已就绪",
   blocked: "检测阻断",
   stale: "已失效",

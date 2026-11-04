@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Api } from "../shared/api/client";
 import { invalidateCommand, receiptChanged } from "../shared/api/queries";
-import { listRequests } from "../shared/api/journal";
+import { listRequests, requestByID } from "../shared/api/journal";
 import type { StoredRequest, Envelope } from "../shared/api/types";
 
 export function useOriginalRequests(api: Api, online: boolean) {
@@ -12,7 +12,18 @@ export function useOriginalRequests(api: Api, online: boolean) {
   const [errorRequest, setErrorRequest] = useState("");
   const mutation = useMutation({
     mutationFn: (envelope: ReturnType<Api["envelope"]>) => api.submit(envelope),
-    onError: (e, envelope) => {
+    onMutate: (envelope) => {
+      if (envelope.action === "environment_start") {
+        setError("");
+        setErrorRequest("");
+      }
+    },
+    onError: async (e, envelope) => {
+      if (
+        envelope.action === "environment_start" &&
+        (await requestByID(envelope.request_id).catch(() => undefined))
+      )
+        return;
       setError(String(e));
       setErrorRequest(envelope.request_id);
     },
@@ -103,7 +114,11 @@ export function useOriginalRequests(api: Api, online: boolean) {
     if (!online) throw new Error("当前连接不能变更业务状态");
     try {
       const result = await mutation.mutateAsync(envelope);
-      if (result.status === "rejected" || result.status === "outcome_unknown") {
+      if (
+        result.status === "rejected" ||
+        (result.status === "outcome_unknown" &&
+          envelope.action !== "environment_start")
+      ) {
         setError(result.diagnostic || "操作结果待核实，请查询原请求");
         setErrorRequest(result.request_id);
       }
@@ -136,7 +151,8 @@ export function useOriginalRequests(api: Api, online: boolean) {
     },
     onSettled: () =>
       queries.invalidateQueries({ queryKey: [api.home, "local-requests"] }),
-    onError: (error) => {
+    onError: (error, row) => {
+      if (row.envelope.action === "environment_start") return;
       setError(String(error));
       setErrorRequest("");
     },

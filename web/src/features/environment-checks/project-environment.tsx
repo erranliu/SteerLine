@@ -21,6 +21,7 @@ type Record = {
   state: string;
   status: string;
   settled: boolean;
+  timed_out?: boolean;
   diagnostic: string;
 };
 const recordState: { [key: string]: string } = {
@@ -46,7 +47,7 @@ export function ProjectEnvironment() {
   );
 }
 function EnvironmentWorkspace() {
-  const { api, identity, online, busy, send } = useWorkspace();
+  const { api, identity, online, busy, send, requests } = useWorkspace();
   const visible = usePageVisible();
   const scope = [
     api.home,
@@ -122,8 +123,23 @@ function EnvironmentWorkspace() {
   });
   const pending = useRef(false);
   const [submitting, setSubmitting] = useState(false);
-  const refresh = async () => {
-    const queries: Promise<unknown>[] = [options.refetch()];
+  const [startingEnvironment, setStartingEnvironment] = useState("");
+  const confirmingStart =
+    !!environmentKey &&
+    (startingEnvironment === environmentKey ||
+      requests?.some(
+        ({ envelope, response }) =>
+          envelope.action === "environment_start" &&
+          envelope.project_id === identity.project_id &&
+          envelope.instance_id === identity.instance_id &&
+          envelope.payload.environment_key === environmentKey &&
+          response?.status !== "applied" &&
+          response?.status !== "rejected",
+      ));
+  const refresh = async (onOptionsRefreshed?: () => void) => {
+    const queries: Promise<unknown>[] = [
+      options.refetch().finally(onOptionsRefreshed),
+    ];
     if (hasRemote) queries.push(machines.refetch());
     if (historyOpen && (allActivities || environmentKey))
       queries.push(history.refetch());
@@ -140,12 +156,18 @@ function EnvironmentWorkspace() {
     if (pending.current) return;
     pending.current = true;
     setSubmitting(true);
+    if (action === "environment_start") setStartingEnvironment(environmentKey);
     try {
       await send(action, target, version, payload);
-      await refresh();
+      await refresh(
+        action === "environment_start"
+          ? () => setStartingEnvironment("")
+          : undefined,
+      );
     } finally {
       pending.current = false;
       setSubmitting(false);
+      setStartingEnvironment("");
     }
   };
   const focusProfile = options.data?.profiles.find((p) => p.id === profile);
@@ -180,7 +202,7 @@ function EnvironmentWorkspace() {
     <div className="settings-page environment-page">
       <div className="environment-header">
         <h1>项目运行环境</h1>
-        <Button variant="ghost" onClick={refresh}>
+        <Button variant="ghost" onClick={() => void refresh()}>
           刷新环境
         </Button>
       </div>
@@ -233,6 +255,7 @@ function EnvironmentWorkspace() {
             project={identity.project_id}
             defaultProfile={options.data!.default_profile_id}
             preferred={profile}
+            confirmingStart={!!confirmingStart}
             disabled={!options.verified || busy || submitting}
             stopDisabled={!online || busy || submitting}
             activity={activity.data}
@@ -291,7 +314,11 @@ function EnvironmentWorkspace() {
           return (
             <article className="environment-history-item" key={r.id}>
               <p>
-                <strong>{recordState[r.state] || "结果待核实"}</strong>
+                <strong>
+                  {r.timed_out
+                    ? "检测超时"
+                    : recordState[r.state] || "结果待核实"}
+                </strong>
                 {r.created_at && (
                   <> · {new Date(r.created_at).toLocaleString("zh-CN")}</>
                 )}
