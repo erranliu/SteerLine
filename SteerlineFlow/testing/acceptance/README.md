@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+环境检测切换到 Orca 原生执行器（2026-11-04）：[修复与真实检测](environment-native-orca-executor.md)。保留原开发配置，SteerlineTest 已部署并完成远端检测。
+
 App领域专项与实际参数报告（2026-11-03，已实施，自动验收与独立审核通过）：[专属验收及断言矩阵](app-domain-test-suites.md)。部署/Roadmap两个L4专项、真实参数报告、四个重型根的层级梳理；重型源码不改，按Plan验证，不放宽断言。
 
 项目运行环境页面精简（2026-11-02）：[实现与验证](project-environment-ui-simplification.md)。合并状态和操作，准备要求/设置/历史默认折叠，只专门展示检测 ID；本页回执显示简短结果并保留原请求核实，后台记录继续保留。
