@@ -26,6 +26,7 @@ SteerLine 目前尚未发布，正逐步完善从规划到交付的流程。上�
 
 ## 继续阅读
 
+- [项目初始化指南](project-initialization.md)：从实际仓库调查开始，准备测试入口、材料和环境检测接口，自检并采用后完成首次接入。
 - [受管理项目规范](project-standards.md)：了解项目文档结构和维护职责。
 - [Spec 与 Plan 编写规范](spec-plan-guidelines.md)：了解怎样描述需求及实施安排。
 - [测试架构规范](testing-architecture.md)：了解测试分级、内容清单和验证原则。

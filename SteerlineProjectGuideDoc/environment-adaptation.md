@@ -1,6 +1,8 @@
 # 项目环境接口适配指导
 
-2026-11-02 公共材料接口。以[环境 Spec](../SteerlineFlow/spec/project-environment-workflow.spec.md)及[共用材料 Spec](../SteerlineFlow/spec/shared-environment-materials.spec.md)为准。项目只维护一套要求与检测入口，各运行机/链路分别检测并保存资格。日常检测不生成或修复材料。
+当前接口采用公共材料 manifest 5 和结果信封 version 3。项目共用一套要求与检测入口，各运行机和链路分别检测并保存资格。字段和执行规则见[环境 Spec](../SteerlineFlow/spec/project-environment-workflow.spec.md)及[共用材料 Spec](../SteerlineFlow/spec/shared-environment-materials.spec.md)，已验证的构建和范围见[共用材料验收](../SteerlineFlow/testing/acceptance/shared-environment-materials.md)。
+
+开始前核实部署的 SteerLine 和独立 Runner 构建。项目维护者按[项目初始化指南](project-initialization.md#4-适配各目标的环境检测)准备并自检仓库材料。
 
 ## 两级职责
 

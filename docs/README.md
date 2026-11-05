@@ -5,6 +5,7 @@ SteerLine 的整体职责、具体产品设计、后续规划、执行契约与�
 | 阅读目的 | 入口 |
 | --- | --- |
 | SteerLine 与受管理项目的关系、工作方式 | [认识 SteerLine](../SteerlineProjectGuideDoc/README.md) |
+| 首次准备项目测试材料、环境接口并接入 | [项目初始化指南](../SteerlineProjectGuideDoc/project-initialization.md) |
 | 本项目的规划、任务与验证流程 | [SteerlineFlow](../SteerlineFlow/README.md) |
 | 系统整体职责与业务权威 | [架构总览](architecture.md) |
 | 独立 Runner、固定 EXE 与 CLI 接入 | [Runner 接入](integration/steerrunner.md) |

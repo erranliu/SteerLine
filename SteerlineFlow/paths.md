@@ -33,7 +33,7 @@
 | `SteerlineFlow/Roadmap/RoadmapGuide.md` | 本项目定制的 roadmap 维护规则。 |
 | `SteerlineFlow/Roadmap/parse-rules.md`、`document-rules.md`、`SteerlineFlow/spec/SpecGuide.md` | `project prepare-roadmap` 显式初始化/检查的静态材料；规则和默认指南的唯一打包来源为 internal/prompts/materials，不在运行时补写。 |
 | `SteerlineFlow/Roadmap/drafts/`、`SteerlineFlow/Roadmap/task-ids/` | 候选讨论与永久任务身份；身份分配不等于执行授权。 |
-| `SteerlineFlow/environment-project.json` | version1 任务测试入口，仅定位任务测试公共要求与正式清单；测试安排、候选测试及记录共用同提交来源。环境检测不依赖此文件，项目可自行把它声明为环境依赖。 |
+| `SteerlineFlow/environment-project.json` | version1 任务测试入口，仅定位任务测试公共要求与正式清单；测试安排、候选测试及记录共用同提交来源。 |
 | `SteerlineFlow/testing.md`、`SteerlineFlow/testing/test-list.json` | 本仓库入口声明的测试规范和机器定义，其他受管项目可声明自己的实际路径。与 Plan 及固定测试协议一起作为系统测试安排输入。 |
 | `SteerlineFlow/testing/l1.md` 至 `l4.md` | 可读测试列表；ID、级别、环境及入口须与清单一致。 |
 | `SteerlineFlow/testing/reports.md` | 报告格式、Git 历史导出和读取规则；不是某次原始报告。 |
