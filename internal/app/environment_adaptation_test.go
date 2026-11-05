@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,12 +32,8 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	t.Setenv("GIT_CONFIG_VALUE_0", "https://github.com/owner/repo.git")
 	c.RunnerExecution.Profiles = append(c.RunnerExecution.Profiles, RunnerProfile{ID: "remote", Name: "Remote", Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote-a"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex","model":"selected"},"access_mode":"full_access"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}})
 	files := map[string]string{"go.mod": "module example.invalid/fixture\n"}
-	for _, profile := range c.RunnerExecution.Profiles {
-		k, _ := envmodel.Key(profile.Execution)
-		files[envmodel.DocumentPath(k)] = environmentFixtureDocument(k, "ps1", "environment-validation", []string{"go.mod"})
-		files[envmodel.ScriptPath(k, "ps1")] = "param($Phase)\n# fixture only\n"
-
-	}
+	files[envmodel.DocumentPath()] = environmentFixtureDocument("ps1", []string{"go.mod"})
+	files[envmodel.ScriptPath("ps1")] = "# fixture only\n"
 	for name, body := range files {
 		path := filepath.Join(c.Repository, name)
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))
@@ -125,7 +122,7 @@ func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) 
 		go func() {
 			defer wg.Done()
 			id := envmodel.ID()
-			err := c.runtimeEnvironmentAdmission.adapt(ctx, envmodel.Target(prepared.Input.Execution), id, func() error {
+			err := c.runtimeEnvironmentAdmission.adapt(ctx, executionconfig.Target(prepared.Input.Execution), id, func() error {
 				return store.SaveEnvironment(ctx, envmodel.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, State: "running", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Submission: "pending"}}}, 0)
 			})
 			if err == nil {
@@ -142,7 +139,7 @@ func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) 
 	rebuilt := &environmentAdmission{}
 	rebuilt.register(c)
 	rebuilt.mu.Lock()
-	e = rebuilt.check(ctx, envmodel.Target(prepared.Input.Execution), "", false)
+	e = rebuilt.check(ctx, executionconfig.Target(prepared.Input.Execution), "", false)
 	rebuilt.mu.Unlock()
 	if e == nil {
 		t.Fatal("restart lost durable occupancy")
@@ -168,21 +165,21 @@ func TestProjectEnvironmentAdmissionAcrossProjectsUsesPublicTarget(t *testing.T)
 	require(t, store.SaveEnvironment(ctx, envmodel.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: profile.Execution, State: "running", Requests: []envmodel.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Submission: "unknown"}}}, 0))
 	accepted := false
 	a := p.config.runtimeEnvironmentAdmission
-	if e = a.adapt(ctx, envmodel.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }); e == nil || accepted {
+	if e = a.adapt(ctx, executionconfig.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }); e == nil || accepted {
 		t.Fatal("other project's original unknown activity did not block shared target")
 	}
 	profile.Execution.Target.Environment = "different-public-target"
-	require(t, a.adapt(ctx, envmodel.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }))
+	require(t, a.adapt(ctx, executionconfig.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }))
 	if !accepted {
 		t.Fatal("unrelated public target was blocked")
 	}
 }
 
-func environmentFixtureDocument(key, extension, _ string, deps []string) string {
+func environmentFixtureDocument(extension string, deps []string) string {
 	interpreter := "powershell.exe"
 	if extension == "sh" {
 		interpreter = "bash"
 	}
-	body, _ := json.Marshal(envmodel.Manifest{Version: 4, EnvironmentKey: key, Script: envmodel.ScriptPath(key, extension), Interpreter: interpreter, Dependencies: deps})
+	body, _ := json.Marshal(envmodel.Manifest{Version: 5, Script: envmodel.ScriptPath(extension), Interpreter: interpreter, Dependencies: deps})
 	return "# Environment\n```steerline-environment\n" + string(body) + "\n```\n"
 }

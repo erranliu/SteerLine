@@ -27,7 +27,7 @@ type Store interface {
 }
 type Runner interface {
 	Submit(context.Context, runnercontract.Request) (runnerclient.Receipt, error)
-	Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error)
+	Inspect(context.Context, string, string) (runnerclient.Inspection, error)
 	Call(context.Context, string, []string, *runnercontract.Request) (runnerclient.Response, error)
 }
 type Queue interface {
@@ -133,22 +133,10 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
 	if e != nil {
 		return model.Record{}, e
 	}
-	if reason := catalog.RepositoryGenerationUnavailable(); reason != "" {
+	if reason := catalog.FileMaterialGenerationUnavailable(); reason != "" {
 		return model.Record{}, errors.New(reason)
 	}
-	materials := []runnercontract.Document{}
-	for _, item := range []struct {
-		path     string
-		expected []byte
-	}{
-		{source.Path, []byte(source.Body)}, {GraphPath, body}, {MappingPath, mappingBody},
-	} {
-		file, err := s.fixedFile(ctx, source.Head, item.path, item.expected, false)
-		if err != nil {
-			return model.Record{}, err
-		}
-		materials = append(materials, file)
-	}
+	inputs := []runnercontract.Document{fileMaterial(SourceInputPath, []byte(source.Body)), fileMaterial(GraphPath, body), fileMaterial(MappingPath, mappingBody)}
 	rules, e := prompts.RoadmapParseRules()
 	if e != nil {
 		return model.Record{}, e
@@ -157,7 +145,7 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
 	if e != nil {
 		return model.Record{}, e
 	}
-	materials = append(materials, file)
+	materials := []runnercontract.Document{file}
 	instruction, e := prompts.RoadmapParse(source.Path, source.Head)
 	if e != nil {
 		return model.Record{}, e
@@ -167,7 +155,7 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
 		paths = append(paths, material.Path)
 	}
 	input := runnercontract.GenerateRunInput{Title: "Roadmap 任务及依赖解析: " + source.Path, Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": in.RequestID}, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Generate: runnercontract.GenerateInput{
-		Instruction: instruction, Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: source.Head, Paths: paths}, Materials: []runnercontract.Document{}, OutputSchema: ParseSchema(),
+		Instruction: instruction, Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: source.Head, Paths: paths}, Materials: inputs, OutputSchema: ParseSchema(),
 	}}
 	if e = catalog.ValidateRepositoryGenerate(input); e != nil {
 		return model.Record{}, e
@@ -272,7 +260,7 @@ func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, er
 	if id == "" || r.InputDigest == "" {
 		selector, id = "request-id", r.Request.RequestID
 	}
-	observation, e := s.Runner.Inspect(ctx, selector, id, false)
+	observation, e := s.Runner.Inspect(ctx, selector, id)
 	if e != nil {
 		return r, e
 	}
@@ -322,10 +310,22 @@ func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, er
 				r.State = "failed"
 				r.Diagnostic = "未取得经核实的完整解析结果"
 			} else {
+				if run.Status != "completed" || run.StopStatus != "stopped" {
+					return s.save(ctx, r)
+				}
+				var frozen runnercontract.GenerateRunInput
+				if err := json.Unmarshal(r.Request.Input, &frozen); err != nil {
+					return r, err
+				}
+				if err := runnerclient.VerifyFileMaterials(frozen.Generate.Materials, run.Materials); err != nil {
+					r.State, r.Diagnostic = "invalid", err.Error()
+					return s.save(ctx, r)
+				}
+				if err := runnerclient.VerifyFileMaterials(frozen.Generate.Materials, result.FileMaterials); err != nil || model.ValueDigest(run.Materials) != model.ValueDigest(result.FileMaterials) {
+					r.State, r.Diagnostic = "invalid", "Run 与结果的固定文件材料不一致"
+					return s.save(ctx, r)
+				}
 				if r.Purpose == "documents" {
-					if run.Status != "completed" || run.StopStatus != "stopped" {
-						return s.save(ctx, r)
-					}
 					if result.RepositorySource == nil || run.RepositorySource == nil ||
 						!sameRepositoryPath(result.RepositorySource.LocalPath, s.Repository) ||
 						model.ValueDigest(result.RepositorySource) != model.ValueDigest(run.RepositorySource) {
@@ -334,6 +334,10 @@ func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, er
 						return s.save(ctx, r)
 					}
 					r.Result = append(json.RawMessage(nil), result.JSON...)
+					if err := s.verifyInvestigation(ctx, r, r.Result, result.RepositorySource); err != nil {
+						r.State, r.Diagnostic = "invalid", err.Error()
+						return s.save(ctx, r)
+					}
 					applied, err := model.DecodeDocuments(r, r.Result, result.RepositorySource)
 					if err != nil {
 						r.State = "invalid"
@@ -342,10 +346,6 @@ func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, er
 						r = applied
 					}
 					return s.save(ctx, r)
-				}
-				var frozen runnercontract.GenerateRunInput
-				if err := json.Unmarshal(r.Request.Input, &frozen); err != nil {
-					return r, err
 				}
 				if frozen.Generate.Repository != nil {
 					expected := map[string]string{}
@@ -497,11 +497,17 @@ func ParseSchema() json.RawMessage {
 	return raw
 }
 
-const GraphPath = "SteerlineFlow/Roadmap/existing-task-graph.json"
-const MappingPath = "SteerlineFlow/Roadmap/existing-roadmap-source-map.json"
-const PlanningPath = "SteerlineFlow/Roadmap/confirmed-planning.json"
+const SourceInputPath = "roadmap-inputs/source.md"
+const GraphPath = "roadmap-inputs/existing-task-graph.json"
+const MappingPath = "roadmap-inputs/existing-roadmap-source-map.json"
+const PlanningPath = "roadmap-inputs/confirmed-planning.json"
 const ParseRulesPath = "SteerlineFlow/Roadmap/parse-rules.md"
 const DocumentRulesPath = "SteerlineFlow/Roadmap/document-rules.md"
+
+func fileMaterial(path string, body []byte) runnercontract.Document {
+	text := string(body)
+	return runnercontract.Document{Kind: "file", Path: path, Content: &text}
+}
 
 // fixedFile reads only the caller's already versioned Git material; it never
 // exports a dynamic record, invents a model path, or changes the repository.
@@ -516,6 +522,8 @@ func (s *Service) fixedFile(ctx context.Context, commit, path string, expected [
 	matches := bytes.Equal(actual, expected)
 	if rules {
 		matches = prompts.SameRules(actual, expected)
+	} else if model.SourcePath(path) {
+		matches = model.SameMarkdown(actual, expected)
 	}
 	if !matches {
 		return runnercontract.Document{}, fmt.Errorf("材料准备不足：%s 与原始固定来源不同", path)

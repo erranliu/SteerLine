@@ -3,13 +3,14 @@ package prompts
 import (
 	"crypto/sha256"
 	"fmt"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"os"
 	"strings"
 	"testing"
+
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
-var testProject = pm.ProjectEntry{Version: 1, Requirements: []string{"quality/policy.md"}, TestingCatalogue: "quality/catalogue.json"}
+var testProject = testmodel.ProjectEntry{Version: 1, Requirements: []string{"quality/policy.md"}, TestingCatalogue: "quality/catalogue.json"}
 
 const testSnapshot = `{"project":{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/catalogue.json"},"status":"ready","plan_path":"task.plan.md","commit":"fixed","digest":"digest","generation_id":"generation","inputs":"inputs","definitions":[{"id":"z.last"},{"id":"a.first"}]}`
 
@@ -25,7 +26,7 @@ func TestPromptGovernanceGolden(t *testing.T) {
 			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true, true)
 		}},
 		{"environment-invoke", func() (string, error) {
-			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment.ps1")
+			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/scripts/verify-environment.ps1")
 		}},
 		{"roadmap-parse", func() (string, error) { return RoadmapParse("roadmap.md", "fixed") }},
 		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md") }},
@@ -61,7 +62,7 @@ func TestInlineProgressWriterForProjectWithoutHelper(t *testing.T) {
 		t.Fatal("missing writer fell back to inline source")
 	}
 	body, err := TestingContext([]byte(testSnapshot), true)
-	if err != nil || !strings.Contains(body, "task.tests.json") || strings.Contains(body, "Set-RuntimeProgress") {
+	if err != nil || !strings.Contains(body, "STEERLINE_RESULT_FILE") || strings.Contains(body, "Set-RuntimeProgress") {
 		t.Fatal("missing real references or source expanded", err)
 	}
 	external := "用户原文 {{.Ignore}}\r\n"
@@ -108,7 +109,8 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 	}{
 		{"testing", "75671b11e26c540791678c1593c3b14ed4161ba53b721d8758ae8c9c1eba937a", TestingRules},
 		{"roadmap-parse", "c1452c0d591caf5cf6f3db0f4d156c2e1a4451c797e96837c0afb1d6699463e6", RoadmapParseRules},
-		{"roadmap-documents", "0c84c0ce636e4c7ca8c9f0b80cf8bdf41bbd2ecb588ea225fb10fa4bb88f2f71", RoadmapDocumentRules},
+		{"roadmap-documents", "4f04f38c14ba54d90d6ebb0000f6a21652a5dd224afd074efd9a10a909ff827e", RoadmapDocumentRules},
+		{"roadmap-spec-guide", "140acc1062a7838474a11947b55087c8c5194a18ec0be9cd5c8c313db92f230b", RoadmapSpecGuide},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

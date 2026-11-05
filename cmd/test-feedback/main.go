@@ -52,19 +52,20 @@ type environment struct {
 }
 
 type runReport struct {
-	SchemaVersion int                  `json:"schema_version"`
-	Scope         string               `json:"scope"`
-	Phase         string               `json:"phase"`
-	Mode          string               `json:"mode"`
-	Command       []string             `json:"command"`
-	StartedAt     string               `json:"started_at"`
-	FinishedAt    string               `json:"finished_at"`
-	WallSeconds   float64              `json:"wall_seconds"`
-	Environment   environment          `json:"environment"`
-	ProcessError  string               `json:"process_error,omitempty"`
-	Summary       testfeedback.Summary `json:"summary"`
-	StdoutLog     string               `json:"stdout_json_log"`
-	StderrLog     string               `json:"stderr_log"`
+	ExecutionParameters executionParameters  `json:"execution_parameters"`
+	SchemaVersion       int                  `json:"schema_version"`
+	Scope               string               `json:"scope"`
+	Phase               string               `json:"phase"`
+	Mode                string               `json:"mode"`
+	Command             []string             `json:"command"`
+	StartedAt           string               `json:"started_at"`
+	FinishedAt          string               `json:"finished_at"`
+	WallSeconds         float64              `json:"wall_seconds"`
+	Environment         environment          `json:"environment"`
+	ProcessError        string               `json:"process_error,omitempty"`
+	Summary             testfeedback.Summary `json:"summary"`
+	StdoutLog           string               `json:"stdout_json_log"`
+	StderrLog           string               `json:"stderr_log"`
 }
 
 type summaryOnlyReport struct {
@@ -80,13 +81,19 @@ func main() {
 	os.Exit(code)
 }
 
-func run(args []string) int {
+func run(args []string) (code int) {
 	if len(args) > 0 && args[0] == "record" {
 		return recordReports(args[1:])
 	}
 	parsed, err := parseOptions(args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	// An inherited -run/-skip/-tags can silently narrow a fixed registered set
+	// without emitting skipped events. Diagnostics may still use ordinary flags.
+	if parsed.level != "" && strings.TrimSpace(os.Getenv("GOFLAGS")) != "" {
+		fmt.Fprintln(os.Stderr, "registered tests require GOFLAGS to be empty; use explicit diagnostic arguments after --")
 		return 2
 	}
 	if parsed.summarizeLog == "" {
@@ -111,14 +118,28 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		defer writeManagedReports(parsed, before, sequence)
+		defer func() {
+			if err := writeManagedReports(parsed, before, sequence); err != nil {
+				fmt.Fprintln(os.Stderr, "registered result:", err)
+				if code == 0 {
+					code = 1
+				}
+			}
+		}()
 	}
 	if parsed.summarizeLog != "" {
 		return summarizeExisting(parsed)
 	}
 	if parsed.level == "L4" && parsed.suite == "go" {
-		parsed.workers = 3
-		return runScoped(parsed)
+		def, _ := selectLocalSuite(parsed)
+		if def.ID == "go.full" {
+			parsed.workers = 3
+			return runScoped(parsed)
+		}
+		return runLocalSuite(parsed, def)
+	}
+	if def, ok := selectLocalSuite(parsed); ok {
+		return runLocalSuite(parsed, def)
 	}
 	if parsed.quick || parsed.workers == 3 {
 		return runScoped(parsed)
@@ -157,6 +178,7 @@ func run(args []string) int {
 	}
 
 	env := collectEnvironment(parsed.cacheCondition, parsed.nativeNote, parsed.out, goArgs)
+	executionParams := executionParametersFor(command, nil)
 	startedAt := time.Now().UTC()
 	stopwatch := time.Now()
 	cmd := exec.Command("go", commandArgs...)
@@ -166,6 +188,7 @@ func run(args []string) int {
 	cmd.Stdout = stdoutFile
 	cmd.Stderr = io.MultiWriter(stderrFile, os.Stderr)
 	err = cmd.Run()
+	finishExecutionParameters(&executionParams, cmd.ProcessState != nil)
 	wallSeconds := time.Since(stopwatch).Seconds()
 	finishedAt := time.Now().UTC()
 	stdoutCloseErr := stdoutFile.Close()
@@ -201,20 +224,22 @@ func run(args []string) int {
 		summary.IncompleteReasons = append(summary.IncompleteReasons, "could not start or finish go test: "+processError)
 	}
 	report := runReport{
-		SchemaVersion: 1,
-		Scope:         scope,
-		Phase:         parsed.phase,
-		Mode:          mode,
-		Command:       command,
-		StartedAt:     startedAt.Format(time.RFC3339Nano),
-		FinishedAt:    finishedAt.Format(time.RFC3339Nano),
-		WallSeconds:   wallSeconds,
-		Environment:   env,
-		ProcessError:  processError,
-		Summary:       summary,
-		StdoutLog:     filepath.ToSlash(stdoutPath),
-		StderrLog:     filepath.ToSlash(stderrPath),
+		ExecutionParameters: executionParams,
+		SchemaVersion:       1,
+		Scope:               scope,
+		Phase:               parsed.phase,
+		Mode:                mode,
+		Command:             command,
+		StartedAt:           startedAt.Format(time.RFC3339Nano),
+		FinishedAt:          finishedAt.Format(time.RFC3339Nano),
+		WallSeconds:         wallSeconds,
+		Environment:         env,
+		ProcessError:        processError,
+		Summary:             summary,
+		StdoutLog:           filepath.ToSlash(stdoutPath),
+		StderrLog:           filepath.ToSlash(stderrPath),
 	}
+	summarizeExecutionParameters(&report.Environment, []scopedGroup{{ExecutionParameters: executionParams}})
 	if err = writeJSON(filepath.Join(parsed.out, "summary.json"), report); err != nil {
 		fmt.Fprintf(os.Stderr, "write report: %v\n", err)
 		return 2
@@ -313,8 +338,8 @@ func parseOptions(args []string) (options, error) {
 		if opts.e2eEnv == "" && opts.level == "L2" {
 			opts.e2eEnv = "controlled"
 		}
-		localGo := opts.level == "L4" && opts.suite == "go" && (opts.scenario == "" || opts.scenario == "go.full")
-		if localGo && opts.e2eEnv == "" {
+		_, local := selectLocalSuite(opts)
+		if local && opts.e2eEnv == "" {
 			opts.e2eEnv = "isolated"
 		}
 		live := opts.level == "L4" && opts.e2eEnv == "live" && (opts.suite == "smoke" && opts.scenario == "smoke.local-codex" ||
@@ -322,11 +347,11 @@ func parseOptions(args []string) (options, error) {
 			opts.suite == "testing" && opts.scenario == "testing.management-local-codex" ||
 			opts.suite == "configuration" && opts.scenario == remotetest.Discovery ||
 			opts.suite == "testing" && (opts.scenario == remotetest.Progress || opts.scenario == remotetest.Environment || opts.scenario == remotetest.LocalEnvironment))
-		if localGo {
+		if local {
 			if opts.e2eEnv != "isolated" {
-				return opts, fmt.Errorf("L4 go.full requires isolated environment")
+				return opts, fmt.Errorf("L4 local regression requires isolated environment")
 			}
-		} else if opts.suite == "go" || opts.e2eEnv != "controlled" && !live {
+		} else if opts.suite == "go" || opts.suite == "web" || opts.e2eEnv != "controlled" && !live {
 			return opts, fmt.Errorf("unsupported test selection/environment %q", opts.e2eEnv)
 		}
 
@@ -418,10 +443,10 @@ func collectEnvironment(cacheCondition, nativeNote, out string, goArgs []string)
 		}
 	}
 	concurrency := map[string]string{
-		"GOMAXPROCS_environment":    os.Getenv("GOMAXPROCS"),
-		"runtime_GOMAXPROCS":        fmt.Sprint(runtime.GOMAXPROCS(0)),
-		"go_test_parallel":          flagValue(goArgs, "-parallel", fmt.Sprintf("default %d", runtime.GOMAXPROCS(0))),
-		"go_build_package_parallel": flagValue(goArgs, "-p", "Go default"),
+		"GOMAXPROCS_environment":        os.Getenv("GOMAXPROCS"),
+		"controller_runtime_GOMAXPROCS": fmt.Sprint(runtime.GOMAXPROCS(0)),
+		"go_test_parallel":              "unknown",
+		"go_build_package_parallel":     "unknown",
 	}
 	if concurrency["GOMAXPROCS_environment"] == "" {
 		concurrency["GOMAXPROCS_environment"] = "unset"

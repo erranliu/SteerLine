@@ -1,5 +1,22 @@
 # Roadmap Markdown 解析与转正实现 Plan
 
+## 2026-11-02：草稿 LF/CRLF 比较修复
+
+依据 [Spec 来源约束](../spec/roadmap-promotion.spec.md#41-来源)。仅调整 Markdown 内容等价比较，复用 model 层同一比较函数；app 的修改标记/发布检查与解析、确认、文档生成统一采用。保留原始 Body/Digest、幂等请求和固定材料 manifest，不改提示词正文、不修改缺材料供给方式。实际调查入口为 `internal/app/roadmaps.go`、`roadmap_publication.go`、`internal/roadmap/generation.go`、`documents.go` 及 `model/model.go`。
+
+以下均在源码修改后运行；Go/Git/Node，隔离临时 Git/SQLite 和公开 Runner/provider fixture，无真实模型、安装版或远端 PR 操作。报告按 [路径清单](../paths.md)写入独立外部 scope，结果登记到 [专属验收](../testing/acceptance/roadmap-promotion.md#2026-11-02草稿换行比较修复)。
+
+定向 owner 命令为 `go run ./cmd/test-feedback -- ./internal/roadmap/... ./internal/app -run 'Test(Roadmap|DocumentDrivenRoadmapMaterials)' -count=1`，加 `-out` 指定本次独立诊断目录。
+
+| 验收项 | 执行方式 | 通过条件 |
+| --- | --- | --- |
+| RP-NL-A01 / A02 | 上述定向 owner 命令 | 两个换行方向可解析；逐阶段换行变化可确认/生成/发布；原文/摘要和实际材料不变；空格/空行/末尾换行/BOM/单独 CR/伪造摘要及 JSON 格式变化仍拒绝 |
+| RP-NL-A03 | 同一入口中的 `TestRoadmapPublicationAndAdmissionWithCRLFCheckout` | 真实 Git LF blob 与 CRLF 工作树不误标记，公开 fixture 经解析、确认、生成、发布/合并、SQLite 入图；真实正文变化在发布前拒绝；manifest 仍严格核验，原请求不重复 |
+| 必要回归 | `go run ./cmd/test-feedback -level=L1`、`-level=L2` | 固定测试集非零、无失败/意外跳过且清理完整；L1 前按锁文件准备 web 依赖 |
+| RP-NL-A04 / 静态与独立审核 | `go test ./internal/prompts -count=1 -v`、`python scripts/check_doc_links.py`、`git diff --check`，独立只读审核 | 短提示/规则实际正文及字节数前后相同；代码仅放宽指定比较，JSON、原请求和 manifest 没有放宽 |
+
+本修复无新增人工验收项。安装部署和真实模型整链结果另验，不沿用受控通过结论。
+
 日期：2026-10-26；接入更新：2026-10-27。状态：用户已授权实施及对接已合入 Runner。完整业务路径已接通，真实本机 Codex 解析/调查/六份文档、隔离 PR 合并与入图通过；正式 Edge 浏览器整链、真实 GitHub 文档 PR、编号/依赖、正常停服及清理最终已通过，实际结果见[专属验收](../testing/acceptance/roadmap-promotion.md)。普通开发，不改本仓 execution-map、不分配本仓开发任务号、不部署安装环境。
 
 ## 1. 调查结论与实现边界

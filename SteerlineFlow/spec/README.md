@@ -1,5 +1,15 @@
 # 当前 Spec 与 Plan
 
+[Roadmap 静态初始化闭环](roadmap-static-initialization.spec.md)：显式初始化、固定发布门槛、原请求恢复与现有项目材料采用。
+
+App领域专项与实际参数报告（2026-11-03，已实施，自动验收与独立审核通过）：[Spec](app-domain-test-suites.spec.md) · [Plan](../plans/app-domain-test-suites.plan.md) · [验收规划与重型断言梳理](../testing/acceptance/app-domain-test-suites.md)。新增部署/Roadmap两个L4专项并修正各组实际参数报告；重型用例只做断言与层级梳理，不改断言、期限或原分级，不启动roadmap。
+
+Roadmap 材料自动准备（2026-11-02，实施/验收中）：[Spec](roadmap-material-preparation.spec.md) · [Plan](../plans/roadmap-material-preparation.plan.md) · [验收](../testing/acceptance/roadmap-material-preparation.md)。静态规则显式初始化，动态原文/图/确认结果自动冻结，经 Runner file 材料交付，不要求用户手写 JSON；与 Git 源码分别核验。
+
+运行环境与项目运行环境最小解耦（2026-11-02，已实施，所选自动验证及独立审核通过）：[Spec](runtime-project-environment-decoupling.spec.md) · [Plan](../plans/runtime-project-environment-decoupling.plan.md) · [验收规划](../testing/acceptance/runtime-project-environment-decoupling.md)。抽离中性目标与分组，复用全局配置/能力探测，项目保留检测与资格；页面最小适配，不新增全局 ready、数据库、工作流或 Runner 协议。中性目标、全局探测/项目资格、元数据 cwd/程序解析及最小页面适配已验证；原失败/补验分别保留，不启动 roadmap。
+
+L1–L4 测试内容调整（2026-11-02，已实施并独立审核）：[Spec](test-content-alignment.spec.md) · [Plan](../plans/test-content-alignment.plan.md) · [初轮验收](../testing/acceptance/test-content-alignment.md) · [Full 续修验收](../testing/acceptance/go-full-repair.md)。保持现有分级，补齐 Web/owner 正式测试集、材料生成 L3、独立 Runner 专项及一致结果；原 Full 三类失败修复后71包1431测试终态全部通过、0实际测试skip，原断言/矩阵/schema保留；L1/L2及受影响L3通过。初轮失败独立保留，共享 Web 重型场景不改级。
+
 项目 × 运行机 × 链路环境准备（2026-10-31，已实施，自动验收完成）：[Spec](project-environment-workflow.spec.md) · [Plan](../plans/project-environment-workflow.plan.md) · [审计与验收安排](../testing/acceptance/project-environment-workflow.md)。环境选择优先，目标材料与生成/验收模型分别绑定，首次生成、固定上下文及原资格/生命周期边界；已实现并完成受控/Web及真实G09/V05自动验收；人工体验待走查，未部署，不进入 roadmap。
 
 执行方案与项目运行环境界面梳理（2026-10-31，审计收窄后实施）：[Spec](runtime-environment-ui.spec.md) · [Plan](../plans/runtime-environment-ui.plan.md) · [专属验收计划](../testing/acceptance/runtime-environment-ui.md)。明确全局方案/项目环境职责、五类事实与六阶段、卡片内验收/失效及任务定向准备与返回；保留原环境资格和生命周期，不进入 roadmap。
@@ -138,6 +148,8 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 2026-10-12 经用户要求审计后收敛为可一次实施的首轮设计：原观察重接、明确失败的继续入口、Codex 原进程退出后同 thread 恢复，人工成果复用 implement 重核；Orca 先支持原终端重接与资源丢失诊断。专用成果接纳、远端真实故障链与全窗口增强延后。用户已授权按收敛范围实施，工作树实现及本轮自动验收已完成，未部署，不部署 Runtime；普通开发，无 Task ID，不进入 execution-map。
 
 [Spec](worker-disconnect-recovery.spec.md) · [Plan / 测试计划](../plans/worker-disconnect-recovery.plan.md) · [专属验收](../testing/acceptance/worker-disconnect-recovery.md) · [L3 场景设计](../../tests/e2e/suites/recovery/README.md)。场景已补实现/注册，实时执行状态见专属验收。
+
+测试早期反馈与专项范围收敛（2026-11-02，自动验收及独立审核通过）：[Spec](test-early-feedback.spec.md) · [Plan](../plans/test-early-feedback.plan.md) · [验收记录](../testing/acceptance/test-early-feedback.md)。L1前移真实仓库架构检查，go.http补齐基础owner直接覆盖，go.environment拆为owner全量与App精确环境集合；L2/L3和Full原覆盖不减，按独立审核及实际报告交付。
 
 ## 共同约束
 

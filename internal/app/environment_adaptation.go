@@ -79,6 +79,7 @@ func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prep
 	return p.materialAt(ctx, id, "")
 }
 func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (envmodel.Prepared, error) {
+	ctx = materialReads(ctx)
 	var out envmodel.Prepared
 	c := p.config
 	profile, e := c.RunnerExecution.Profile(id, "")
@@ -95,28 +96,19 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 			return out, e
 		}
 	}
-	document, e := p.read(ctx, commit, envmodel.DocumentPath(key))
+	document, manifest, script, e := p.invocationAt(ctx, commit)
 	if e != nil {
 		return out, e
 	}
-	manifest, e := envmodel.ParseManifest(document)
-	if e != nil {
-		return out, &invalidEnvironmentBasis{e}
-	}
-	if manifest.EnvironmentKey != key {
-		return out, &invalidEnvironmentBasis{errors.New("环境接口与所选目标不符")}
-	}
-	script, e := p.read(ctx, commit, manifest.Script)
-	if e != nil {
-		return out, e
-	}
-	files := map[string]string{envmodel.DocumentPath(key): envmodel.Digest(document), manifest.Script: envmodel.Digest(script)}
+	files := map[string]string{envmodel.DocumentPath(): envmodel.Digest(document), manifest.Script: envmodel.Digest(script)}
 	total := len(document) + len(script)
+	reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
+	dependencies, e := reader.readCommittedFiles(ctx, commit, manifest.Dependencies)
+	if e != nil {
+		return out, fmt.Errorf("环境检测依据读取失败: %w", e)
+	}
 	for _, path := range manifest.Dependencies {
-		b, e := p.read(ctx, commit, path)
-		if e != nil {
-			return out, fmt.Errorf("环境依据 %s: %w", path, e)
-		}
+		b := dependencies[path]
 		total += len(b)
 		files[path] = envmodel.Digest(b)
 	}
@@ -141,13 +133,34 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if e != nil {
 		return out, e
 	}
-	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Repository: runnercontract.Repository{LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath(key)}, Plan: runnercontract.Document{Path: manifest.Script}}}
+	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Repository: runnercontract.Repository{LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath()}, Plan: runnercontract.Document{Path: manifest.Script}}}
 	input.Repository.URL, e = c.TaskRepositoryTarget(ctx)
 	if e != nil {
 		return out, e
 	}
 	out = envmodel.Prepared{Commit: commit, Inputs: envmodel.Digest(basis), ScriptDigest: envmodel.Digest(script), Manifest: manifest, Input: input}
 	return out, nil
+}
+
+// invocationAt reads only the project invocation, not its dependency basis.
+func (p *environmentPort) invocationAt(ctx context.Context, commit string) ([]byte, envmodel.Manifest, []byte, error) {
+	document, e := p.read(ctx, commit, envmodel.DocumentPath())
+	if e != nil {
+		var missing *missingCommittedFileError
+		if errors.As(e, &missing) {
+			return nil, envmodel.Manifest{}, nil, fmt.Errorf("项目尚未接入检测，缺少环境文档：%w", e)
+		}
+		return nil, envmodel.Manifest{}, nil, e
+	}
+	manifest, e := envmodel.ParseManifest(document)
+	if e != nil {
+		return document, envmodel.Manifest{}, nil, &invalidEnvironmentBasis{e}
+	}
+	script, e := p.read(ctx, commit, manifest.Script)
+	if e != nil {
+		return document, envmodel.Manifest{}, nil, e
+	}
+	return document, manifest, script, nil
 }
 
 // observedSource is query-only: fetch belongs to explicit prepare/start or the

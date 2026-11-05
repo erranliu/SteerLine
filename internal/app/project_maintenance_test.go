@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -15,6 +16,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	progresstools "github.com/erranliu/SteerLine/tools"
 	"net/http"
 	"net/http/httptest"
@@ -198,7 +200,7 @@ func (f *pmsCLI) Submit(_ context.Context, r runnerclient.Request) (runnerclient
 	}
 	return runnerclient.Receipt{RunID: f.run.RunID, ReceiptStatus: "accepted"}, nil
 }
-func (f *pmsCLI) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (f *pmsCLI) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	run := f.run
 	return runnerclient.Inspection{Run: &run, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &run.RunID}}, nil
 }
@@ -224,7 +226,6 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	require(t, err)
 	files["SteerlineFlow/testing/runtime-progress.md"] = string(rules)
 	files["tools/testing/RuntimeProgress.ps1"] = progresstools.PowerShellWriter
-	files["task.tests.json"] = `{"tests":["one"]}`
 	for name, body := range files {
 		p := filepath.Join(repo, name)
 		if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {
@@ -250,6 +251,8 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 		return profile.Execution, cat, nil
 	}}
 	m.config.runtimeCatalog = cat
+	m.config.RunnerExecution.Profiles[0].Workflow = runnerclient.Workflow{ID: "development", Version: 2}
+	m.config.RunnerExecution.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access"}`)
 	m.tests = &testManagementPort{service: service}
 	return m, store, cli
 }
@@ -290,7 +293,7 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(snapshot) == 0 || len(run.Documents.References) != 6 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
+	if len(snapshot) == 0 || len(run.Documents.References) != 5 || run.ResultFile == nil || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
 		t.Fatal("compact system context not frozen")
 	}
 	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: b, TestPlan: snapshot}
@@ -342,8 +345,8 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if _, e = m.candidateDocuments(ctx, candidate.ID); e != nil {
 		t.Fatal(e)
 	}
-	if raw, e := os.ReadFile(filepath.Join(m.config.Repository, "task.tests.json")); e != nil || string(raw) != `{"tests":["one"]}` {
-		t.Fatal("generation changed prepared repository material", e)
+	if _, e := os.Stat(filepath.Join(m.config.Repository, "task.tests.json")); !os.IsNotExist(e) {
+		t.Fatal("generation wrote a repository sidecar", e)
 	}
 	m.mu.Lock()
 	m.observation.Diagnostic = "offline"
@@ -351,6 +354,96 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if m.freshness(ctx, candidate) != "unknown" {
 		t.Fatal("offline claimed current eligibility")
 	}
+}
+
+func TestPMSRetriesTransientStaticMaterialReadsAtSameCommit(t *testing.T) {
+	for _, name := range []string{testmodel.WriterPath, "SteerlineFlow/runner-policies/git.md"} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			m, store, cli := pmsFixture(t)
+			observation, err := m.check(ctx)
+			require(t, err)
+			host := m.config.ProcessHost
+			m.config.ProcessHost = failingDocumentHost{ManagedProcessHost: host, stage: name, cause: context.DeadlineExceeded}
+			require(t, m.refresh(ctx))
+			if got := store.materials["101"]; got.Status != "pending" || got.Commit != observation.Commit || cli.submits != 0 {
+				t.Fatalf("failed pinned read should leave preparation pending: %+v", got)
+			}
+			m.config.ProcessHost = host
+			require(t, m.refresh(ctx))
+			cli.finish()
+			require(t, m.tests.service.Observe(ctx))
+			require(t, m.refresh(ctx))
+			if got := store.materials["101"]; got.Status != "ready" || got.Commit != observation.Commit || len(got.TestPlan) == 0 || cli.submits != 1 {
+				t.Fatalf("same pinned commit did not recover once: %+v", got)
+			}
+		})
+	}
+}
+
+func TestNative101GeneratedArrangementStartsWithoutSidecar(t *testing.T) {
+	ctx := context.Background()
+	m, store, cli := pmsFixture(t)
+	repo := m.config.Repository
+	const planPath = "SteerlineFlow/plans/native-101.plan.md"
+	const expected = `{"tests":["N101-CONTENT","N101-SCOPE","demo.progress.roundtrip","demo.progress.retry","demo.progress.cleanup"]}`
+	if source := os.Getenv("STEERLINE_TASK101_REPOSITORY"); source != "" {
+		const fixed = "9d81d9c2652177faf6354d4e9f9f3aec79535d11"
+		pmGit(t, repo, "fetch", "--no-tags", "--", source, fixed)
+		pmGit(t, repo, "-c", "core.hooksPath=/dev/null", "checkout", "-B", "main", fixed)
+		store.contract.SpecRef.Path = "SteerlineFlow/spec/native-101.spec.md"
+	} else {
+		require(t, os.MkdirAll(filepath.Join(repo, filepath.Dir(planPath)), 0700))
+		pmGit(t, repo, "mv", "task.plan.md", planPath)
+		var selection testmodel.Arrangement
+		require(t, json.Unmarshal([]byte(expected), &selection))
+		catalogue := testmanagement.Catalogue{}
+		// Catalogue order differs from the generated execution order.
+		for i := len(selection.Tests) - 1; i >= 0; i-- {
+			id := selection.Tests[i]
+			catalogue.Tests = append(catalogue.Tests, testmanagement.Definition{ID: id, Name: id, Level: "L4", Environment: "isolated", Command: "sample test", Check: "passes"})
+		}
+		raw, err := json.Marshal(catalogue)
+		require(t, err)
+		require(t, os.WriteFile(filepath.Join(repo, testmodel.CataloguePath), raw, 0600))
+		pmGit(t, repo, "add", ".")
+		pmGit(t, repo, "-c", "commit.gpgsign=false", "commit", "-qm", "native 101 materials")
+	}
+	store.contract.PlanRef.Path = planPath
+	store.contract.Digest, _ = taskmodel.ContractDigest(store.contract)
+	pmGit(t, repo, "push", "--force", "origin", "main")
+	_, err := m.check(ctx)
+	require(t, err)
+	require(t, m.refresh(ctx))
+	cli.finish()
+	cli.run.ContentResult.JSON = json.RawMessage(expected)
+	require(t, m.tests.service.Observe(ctx))
+	require(t, m.refresh(ctx))
+	ready := store.materials["101"]
+	if got := ready.Status; got != "ready" {
+		t.Fatal("generation not ready", got)
+	}
+	work := taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contract}
+	fixed, commit, err := m.prepare(ctx, work, false, func(context.Context, taskmodel.FixedWork, bool) (string, error) {
+		return m.current().Commit, nil
+	})
+	require(t, err)
+	run := callerTestRun()
+	snapshot, err := m.config.prepareTestPlan(ctx, fixed, &run)
+	require(t, err)
+	if string(snapshot) != string(ready.TestPlan) || run.ResultFile == nil {
+		t.Fatal("start did not freeze the ready arrangement")
+	}
+	arrangement, err := base64.StdEncoding.DecodeString(run.ResultFile.InitialContentBase64)
+	require(t, err)
+	if string(arrangement) != expected {
+		t.Fatal("generated order changed", string(arrangement))
+	}
+	sidecar := "SteerlineFlow/plans/native-101.tests.json"
+	if pmGit(t, repo, "ls-tree", commit, "--", sidecar) != "" || strings.Contains(run.Workflow.PromptOverrides["implement.execute"], expected) {
+		t.Fatal("arrangement leaked into Git or the prompt")
+	}
+	t.Logf("101 ready/start: base=%s bytes=%d SHA-256=%s", commit, len(arrangement), testmanagement.ContentDigest(arrangement))
 }
 func TestPMSFastForwardAndOriginalUpdateReplay(t *testing.T) {
 	ctx := context.Background()

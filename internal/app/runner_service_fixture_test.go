@@ -8,6 +8,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if runEnvironmentToolFixture() {
+		return
+	}
 	if runUsageResponseFixture() {
 		return
 	}

@@ -2,6 +2,7 @@ package app
 
 import (
 	host "github.com/erranliu/SteerLine/internal/app/host"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
@@ -47,6 +48,7 @@ type Config struct {
 	runtimeTests                api.TestManagementPort
 	runtimeEnvironmentAdmission *environmentAdmission
 	runtimeEnvironment          *environmentPort
+	environmentPolicy           env.AdmissionPolicy
 	runtimeRoadmaps             *roadmapPort
 	startup                     *startupQueries
 

@@ -301,8 +301,7 @@ func (p *Project) environmentCurrentRevision(profile string) uint64 {
 // Validate before any remote refs or Runner requests. Probe materials must not
 // alter any byte of the project's own declared environment basis.
 func (p *Project) validateEnvironmentProbeFiles(probe map[string][]byte) error {
-	key := p.environmentKey(p.Driver.Profile)
-	path := env.DocumentPath(key)
+	path := env.DocumentPath()
 	read := func(path string) ([]byte, error) {
 		return exec.Command("git", "-C", p.Repo, "show", "HEAD:"+path).Output()
 	}

@@ -1,68 +1,60 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { usePageVisible } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
-
+import { useExecutionEnvironments } from "../../shared/api/execution-environments";
 import {
   EnvironmentObservation,
-  environmentStage,
   useEnvironmentReadiness,
   type Environment,
 } from "./use-readiness";
-import { Link, useSearchParams } from "react-router-dom";
-import { EnvironmentCard } from "./environment-card";
-type Snapshot = {
-  version: number;
-  collection_status: string;
-  content_base64?: string;
-  diagnostic?: string;
-};
-type Round = {
-  run?: {
-    summary: string;
-    diagnostic: string;
-    agent_reply: string;
-    agent_reply_verified: boolean;
-  };
-  number: number;
-  deadline: string;
-  run_id: string;
-  settled: boolean;
-  timed_out: boolean;
-  diagnostic: string;
-  result?: Snapshot;
-  report?: {
-    completed: boolean;
-    ready: boolean;
-    details?: unknown;
-    message: string;
-  };
-};
+import { DetectionID, EnvironmentCard } from "./environment-card";
+
 type Record = {
   id: string;
   revision: number;
-  kind: string;
   profile_id: string;
+  environment_key: string;
+  created_at?: string;
   state: string;
   status: string;
   settled: boolean;
+  timed_out?: boolean;
   diagnostic: string;
-  rounds: Round[];
 };
-function content(snapshot?: Snapshot) {
+const recordState: { [key: string]: string } = {
+  ready: "已通过",
+  failed: "未通过",
+  cancelled: "已停止",
+  running: "检测中",
+  queued: "等待检测",
+  stopping: "正在停止",
+  unverified: "结果待核实",
+};
+const linkName = (e: Environment) =>
+  e.adapter === "codex-app-server"
+    ? "Codex 直连"
+    : `Orca → ${e.agent || "Codex"}`;
+
+type Selection = { key: string; profile?: string };
+
+function readSelection(key: string): Selection | null {
   try {
-    return snapshot?.content_base64
-      ? new TextDecoder().decode(
-          Uint8Array.from(atob(snapshot.content_base64), (c) =>
-            c.charCodeAt(0),
-          ),
-        )
-      : "尚无文件内容";
+    const saved: Selection | null = JSON.parse(
+      sessionStorage.getItem(key) ?? "null",
+    );
+    return saved &&
+      typeof saved.key === "string" &&
+      (saved.profile === undefined || typeof saved.profile === "string")
+      ? saved
+      : null;
   } catch {
-    return "文件内容不可显示";
+    return null;
   }
 }
+
 export function ProjectEnvironment() {
   const { api, identity } = useWorkspace();
   return (
@@ -72,7 +64,7 @@ export function ProjectEnvironment() {
   );
 }
 function EnvironmentWorkspace() {
-  const { api, identity, online, busy, send } = useWorkspace();
+  const { api, identity, online, busy, send, requests } = useWorkspace();
   const visible = usePageVisible();
   const scope = [
     api.home,
@@ -81,11 +73,74 @@ function EnvironmentWorkspace() {
     "environment",
   ];
   const options = useEnvironmentReadiness();
-  const [environmentKey, setEnvironmentKey] = useState("");
+  const [params] = useSearchParams();
+  const profile = params.get("profile") || "";
+  const task = params.get("task");
+  const preferenceKey =
+    "steerline-environment:" + JSON.stringify([api.home, identity.project_id]);
+  const [saved] = useState(() => readSelection(preferenceKey));
+  const [selected, setSelected] = useState<Selection | null>(null);
+  const focusProfile = options.data?.profiles.find((p) => p.id === profile);
+  const defaultProfile = options.data?.profiles.find(
+    (p) => p.id === options.data?.default_profile_id,
+  );
+  const savedEnvironment = options.data?.environments.find(
+    (e) => e.environment_key === saved?.key,
+  );
+  const initialProfile = profile ? focusProfile : defaultProfile;
+  const selection =
+    selected ??
+    (!profile && savedEnvironment
+      ? saved
+      : initialProfile && {
+          key: initialProfile.environment_key,
+          profile: profile || undefined,
+        });
+  const environmentKey = selection?.key ?? "";
+  const remember = (next: Selection) => {
+    setSelected(next);
+    try {
+      sessionStorage.setItem(preferenceKey, JSON.stringify(next));
+    } catch {
+      // The selection still works on this page when browser storage is unavailable.
+    }
+  };
+  const hasRemote =
+    options.data?.environments.some(
+      (e) => e.target.kind === "orca_environment",
+    ) ?? false;
+  const machines = useExecutionEnvironments(api.home, api.csrf, hasRemote);
+  const machineName = (e: Environment) =>
+    e.target.kind === "local"
+      ? "本机"
+      : machines.data?.environments?.find(
+          (m) =>
+            m.id === e.target.environment || m.name === e.target.environment,
+        )?.name || "远端机器";
+  const environmentName = (e: Environment) => {
+    const name = `${machineName(e)} · ${linkName(e)}`;
+    const peers =
+      options.data?.environments.filter(
+        (other) => `${machineName(other)} · ${linkName(other)}` === name,
+      ) ?? [];
+    return peers.length > 1
+      ? `${name} · ${e.profiles.map((p) => p.name).join("、")}`
+      : name;
+  };
   const [allActivities, setAllActivities] = useState(false);
-  const activeKey = useRef(environmentKey);
-  activeKey.current = environmentKey;
-  const initialized = useRef(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const environment = options.data?.environments.find(
+    (e) => e.environment_key === environmentKey,
+  );
+  const activityID = environment?.activity_id;
+  const activity = useQuery({
+    queryKey: [...scope, "record", activityID],
+    queryFn: ({ signal }) =>
+      api.get<Record>("/environment/" + activityID, signal),
+    enabled: !!activityID,
+    retry: false,
+    refetchInterval: visible && !!activityID ? 3000 : false,
+  });
   const history = useQuery({
     queryKey: [...scope, "records", environmentKey, allActivities],
     queryFn: ({ signal }) =>
@@ -96,43 +151,46 @@ function EnvironmentWorkspace() {
             : ""),
         signal,
       ),
-    enabled: allActivities || !!environmentKey,
+    enabled: historyOpen && (allActivities || !!environmentKey),
     retry: false,
-    refetchInterval: visible ? 3000 : false,
+    refetchInterval: visible && historyOpen ? 3000 : false,
   });
-  const [params] = useSearchParams();
-  const profile = params.get("profile") || "";
-  const task = params.get("task");
+  const [materialsOpen, setMaterialsOpen] = useState(false);
   const materialQuery = useQuery({
     queryKey: [...scope, "materials", environmentKey],
-    enabled: online && !!environmentKey,
+    enabled: online && !!environmentKey && materialsOpen,
     queryFn: ({ signal }) =>
-      api.get<{
-        document_path: string;
-        document?: string;
-        script_path?: string;
-        source_commit?: string;
-        diagnostic?: string;
-      }>(`/environment/materials?environment_key=${environmentKey}`, signal),
+      api.get<{ document?: string; diagnostic?: string }>(
+        `/environment/materials?environment_key=${environmentKey}`,
+        signal,
+      ),
     retry: false,
-    refetchInterval: visible ? 15000 : false,
   });
-  const [selected, setSelected] = useState("");
   const pending = useRef(false);
   const [submitting, setSubmitting] = useState(false);
-  const detail = useQuery({
-    queryKey: [...scope, selected],
-    enabled: !!selected,
-    queryFn: ({ signal }) =>
-      api.get<Record>("/environment/" + selected, signal),
-    retry: false,
-    refetchInterval: visible && !!selected ? 3000 : false,
-  });
-  const refresh = () => {
-    void options.refetch();
-    void history.refetch();
-    if (environmentKey) void materialQuery.refetch();
-    if (selected) void detail.refetch();
+  const [startingEnvironment, setStartingEnvironment] = useState("");
+  const confirmingStart =
+    !!environmentKey &&
+    (startingEnvironment === environmentKey ||
+      requests?.some(
+        ({ envelope, response }) =>
+          envelope.action === "environment_start" &&
+          envelope.project_id === identity.project_id &&
+          envelope.instance_id === identity.instance_id &&
+          envelope.payload.environment_key === environmentKey &&
+          response?.status !== "applied" &&
+          response?.status !== "rejected",
+      ));
+  const refresh = async (onOptionsRefreshed?: () => void) => {
+    const queries: Promise<unknown>[] = [
+      options.refetch().finally(onOptionsRefreshed),
+    ];
+    if (hasRemote) queries.push(machines.refetch());
+    if (historyOpen && (allActivities || environmentKey))
+      queries.push(history.refetch());
+    if (materialsOpen && environmentKey) queries.push(materialQuery.refetch());
+    if (activityID) queries.push(activity.refetch());
+    await Promise.allSettled(queries);
   };
   const command = async (
     action: string,
@@ -143,58 +201,25 @@ function EnvironmentWorkspace() {
     if (pending.current) return;
     pending.current = true;
     setSubmitting(true);
-    const commandEnvironment = environmentKey;
-    try {
-      const applied = await send(action, target, version, payload);
-      refresh();
-      if (applied && action === "environment_start") {
-        const refreshed = await options.refetch();
-        const activity = refreshed.data?.profiles.find(
-          (p) => p.id === payload.profile_id,
-        )?.activity_id;
-        if (activity && activeKey.current === commandEnvironment)
-          setSelected(activity);
+    if (action === "environment_start") {
+      setStartingEnvironment(environmentKey);
+      if (typeof payload.profile_id === "string") {
+        remember({ key: environmentKey, profile: payload.profile_id });
       }
+    }
+    try {
+      await send(action, target, version, payload);
+      await refresh(
+        action === "environment_start"
+          ? () => setStartingEnvironment("")
+          : undefined,
+      );
     } finally {
       pending.current = false;
       setSubmitting(false);
+      setStartingEnvironment("");
     }
   };
-  const records = history.data?.records ?? [];
-  const displayed =
-    detail.data &&
-    selected === detail.data.id &&
-    !records.some((r) => r.id === selected)
-      ? [detail.data, ...records]
-      : records;
-  const focusProfile = options.data?.profiles.find((p) => p.id === profile);
-  useEffect(() => {
-    if (initialized.current || !options.verified) return;
-    initialized.current = true;
-    const initial = profile
-      ? focusProfile
-      : options.data?.profiles.find(
-          (p) => p.id === options.data?.default_profile_id,
-        );
-    if (initial) setEnvironmentKey(initial.environment_key);
-  }, [options.verified, options.data, profile, focusProfile]);
-  const environment = environmentKey
-    ? options.data?.environments.find(
-        (e) => e.environment_key === environmentKey,
-      )
-    : undefined;
-  const projectName =
-    identity.repository_identity
-      .replace(/\\/g, "/")
-      .split("/")
-      .filter((p) => p && p !== ".git")
-      .at(-1) || "当前项目";
-  const chooseEnvironment = (key: string) => {
-    setEnvironmentKey(key);
-    setSelected("");
-    setAllActivities(false);
-  };
-  const material = materialQuery.data;
   useEffect(() => {
     const node = document.getElementById(
       `environment-${focusProfile?.environment_key || profile}`,
@@ -202,81 +227,58 @@ function EnvironmentWorkspace() {
     node?.scrollIntoView?.({ block: "nearest" });
     node?.focus();
   }, [focusProfile?.environment_key, profile, environmentKey]);
-  useEffect(() => {
-    if (!selected) return;
-    const node = document.getElementById(`activity-${selected}`);
-    node?.scrollIntoView?.({ block: "nearest" });
-    node?.focus();
-  }, [selected, detail.data?.id]);
-  const groups = new Map<string, Environment[]>();
-  for (const e of options.data?.environments || []) {
-    const key = JSON.stringify([e.target.kind, e.target.environment || ""]);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(e);
-  }
+  const chooseEnvironment = (key: string) => {
+    remember({ key });
+    setAllActivities(false);
+    setMaterialsOpen(false);
+  };
   const returnParams = new URLSearchParams();
   if (task) returnParams.set("task", task);
   if (profile) returnParams.set("start_profile", profile);
+  const material = materialQuery.data;
   return (
     <div className="settings-page environment-page">
-      <h1>运行环境</h1>
-      <Button variant="ghost" onClick={refresh}>
-        刷新环境
-      </Button>
-      <p>
-        项目自行检测所选环境并报告结论和原因。SteerLine 调用项目入口，核对结果归属与执行收尾后，消费项目结论授予新任务的环境资格。
-      </p>
+      <div className="environment-header">
+        <h1>项目运行环境</h1>
+        <Button variant="ghost" onClick={() => void refresh()}>
+          刷新环境
+        </Button>
+      </div>
       {task && (
         <Link to={`/projects/${identity.project_id}/runs?${returnParams}`}>
           返回任务
         </Link>
       )}
       <EnvironmentObservation />
-      {options.error && <p role="alert">{String(options.error)}</p>}
+      {options.error && <p role="alert">环境状态查询失败，请刷新重试。</p>}
       {profile && options.verified && !focusProfile && (
         <p role="alert">原执行方案已不存在或不属于开发方案，请重新选择。</p>
       )}
-      <section className="settings-panel" aria-label="选择运行机与链路">
-        <h2>选择运行机与链路</h2>
-        {[...groups].map(([key, environments]) => (
-          <section key={key}>
-            <h3>
-              {environments[0].target.kind === "local"
-                ? "本机"
-                : environments[0].name}
-            </h3>
-            <div className="actions">
-              {environments.map((e) => (
-                <Button
-                  key={e.environment_key || e.profiles[0]?.id}
-                  variant={
-                    environmentKey === e.environment_key ? "default" : "ghost"
-                  }
-                  aria-pressed={
-                    !!environmentKey && environmentKey === e.environment_key
-                  }
-                  disabled={!e.environment_key}
-                  onClick={() => chooseEnvironment(e.environment_key)}
-                >
-                  {e.adapter === "codex-app-server"
-                    ? "Codex 直连"
-                    : `Orca → ${e.agent || "Codex"}`}{" "}
-                  · 环境 {e.environment_key.slice(0, 8)} ·{" "}
-                  {environmentStage[e.stage] ?? "状态待核实"}
-                </Button>
-              ))}
-            </div>
-          </section>
-        ))}
+      <section aria-label="选择运行机与链路">
+        <label>
+          运行环境
+          <select
+            aria-label="运行环境"
+            value={environmentKey}
+            onChange={(event) => chooseEnvironment(event.target.value)}
+          >
+            <option value="">选择运行环境</option>
+            {options.data?.environments.map((e) => (
+              <option
+                key={e.environment_key || e.profiles[0]?.id}
+                value={e.environment_key}
+                disabled={!e.environment_key}
+              >
+                {environmentName(e)}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
       {environmentKey && !environment && options.verified && (
-        <p role="alert">
-          原环境已不在当前配置中，请重新选择；项目全部活动仍可查看。
-        </p>
+        <p role="alert">原环境已不在当前配置中，请重新选择。</p>
       )}
-      {!environment && (
-        <p>请选择当前项目的运行机与链路，再开始项目环境检测。</p>
-      )}
+      {!environment && <p className="muted">选择运行环境后即可开始检测。</p>}
       {options.verified && !options.data?.environments.length && (
         <p>
           尚无开发执行方案。
@@ -284,175 +286,108 @@ function EnvironmentWorkspace() {
         </p>
       )}
       {environment && (
-        <section aria-label="当前准备对象">
-          <h2>
-            {projectName} /{" "}
-            {environment.target.kind === "local" ? "本机" : environment.name} /{" "}
-            {environment.adapter === "codex-app-server"
-              ? "Codex 直连"
-              : `Orca → ${environment.agent || "Codex"}`}
-          </h2>
-          <p role="status">
-            {environmentStage[environment.stage] ?? "状态待核实"} ·{" "}
-            {environment.reason}
-          </p>
-          <section className="settings-panel" id="environment-materials">
-            <h2>准备要求与材料</h2>
-            {materialQuery.isError && (
-              <p role="alert">材料观察待核实：{String(materialQuery.error)}</p>
-            )}
-            <p>
-              先阅读清单，在实际执行账号下准备工具、变量和权限，再开始检测。
-            </p>
-            {material && (
-              <p className="path">
-                {material.document_path} ·{" "}
-                {material.script_path || "检测脚本见准备文档"}
-              </p>
-            )}
-            {material?.source_commit && (
-              <p>材料来源：{material.source_commit}</p>
-            )}
-            {material?.diagnostic && <p role="status">{material.diagnostic}</p>}
-            <details>
-              <summary>阅读项目准备清单</summary>
-              <pre>
-                {material?.document ||
-                  "检测接口尚未适配，请由项目维护要求说明和检测入口，再按正常 Git 流程采用。"}
-              </pre>
-            </details>
-          </section>
-
-          <p>
-            在此运行机的实际执行账号下，按本环境要求准备工具、依赖、变量及权限，然后运行检测。
-          </p>
+        <section aria-label="当前运行环境">
           <EnvironmentCard
             key={`${environmentKey}:${profile}`}
             environment={environment}
             project={identity.project_id}
             defaultProfile={options.data!.default_profile_id}
-            preferred={profile}
+            preferred={selection?.profile}
+            onProfileChange={(profile) =>
+              remember({ key: environmentKey, profile })
+            }
+            confirmingStart={!!confirmingStart}
+            statusVerified={options.verified && !activity.isError}
             disabled={!options.verified || busy || submitting}
+            stopDisabled={!online || activity.isError || busy || submitting}
+            activity={activity.data}
             command={command}
-            onActivity={setSelected}
           />
+          {activity.error && (
+            <p role="status">检测状态查询失败，请刷新重试。</p>
+          )}
+          <details
+            open={materialsOpen}
+            onToggle={(event) => setMaterialsOpen(event.currentTarget.open)}
+          >
+            <summary>查看准备要求</summary>
+            {materialQuery.isError ? (
+              <p role="alert">准备要求读取失败，请刷新重试。</p>
+            ) : materialQuery.isFetching ? (
+              <p>正在读取准备要求…</p>
+            ) : (
+              <pre>
+                {material?.document
+                  ?.replace(/```steerline-environment\s*\n[\s\S]*?\n```/g, "")
+                  .trim() ||
+                  "项目尚未提供准备要求，请联系项目维护者完善检测入口。"}
+              </pre>
+            )}
+          </details>
         </section>
       )}
-      <Button
-        variant="ghost"
-        onClick={() => {
-          setAllActivities(!allActivities);
-          setSelected("");
-        }}
+      <details
+        open={historyOpen}
+        onToggle={(event) => setHistoryOpen(event.currentTarget.open)}
       >
-        {allActivities ? "返回本环境历史" : "项目全部活动"}
-      </Button>
-      <section className="settings-panel">
-        <h2>{allActivities ? "项目全部活动" : "本环境历史"}</h2>
-        {history.error && <p role="alert">{String(history.error)}</p>}
-        <p className="muted">最近 20 条活动，展开后查询原活动文件和报告。</p>
-        {selected && detail.error && <p role="alert">{String(detail.error)}</p>}
-        {displayed.map((summary) => {
-          const r =
-            selected === summary.id && detail.data ? detail.data : summary;
+        <summary>检测历史</summary>
+        <label>
+          查看范围
+          <select
+            aria-label="历史范围"
+            value={allActivities ? "project" : "environment"}
+            onChange={(event) =>
+              setAllActivities(event.target.value === "project")
+            }
+          >
+            <option value="environment">当前环境</option>
+            <option value="project">当前项目全部环境</option>
+          </select>
+        </label>
+        {history.error && <p role="alert">检测历史读取失败，请刷新重试。</p>}
+        {history.isFetching && !history.data && <p>正在读取检测历史…</p>}
+        {history.data?.records.length === 0 && (
+          <p className="muted">暂无检测记录</p>
+        )}
+        {history.data?.records.map((r) => {
+          const matched = options.data?.environments.find(
+            (e) => e.environment_key === r.environment_key,
+          );
           return (
-            <article
-              className="profile"
-              key={r.id}
-              id={`activity-${r.id}`}
-              tabIndex={-1}
-            >
-              <h3>
-                项目环境检测 · {r.profile_id} ·{" "}
-                {r.status === "ready" ? "检测通过" : r.state}
-              </h3>
+            <article className="environment-history-item" key={r.id}>
               <p>
-                <code>{r.id}</code>
+                <strong>
+                  {r.timed_out
+                    ? "检测超时"
+                    : recordState[r.state] || "结果待核实"}
+                </strong>
+                {r.created_at && (
+                  <> · {new Date(r.created_at).toLocaleString("zh-CN")}</>
+                )}
+                {allActivities && (
+                  <> · {matched ? environmentName(matched) : "历史环境"}</>
+                )}
               </p>
-              <p>{r.diagnostic}</p>
-              <Button variant="ghost" onClick={() => setSelected(r.id)}>
-                查看活动详情
-              </Button>
-              {selected === r.id && detail.error && (
-                <p role="alert">{String(detail.error)}</p>
+              {r.diagnostic && r.status !== "ready" && (
+                <p className="environment-reason">{r.diagnostic}</p>
               )}
-              {r.rounds.map((a) => (
-                <section key={a.number}>
-                  <h4>
-                    第 {a.number} 轮 ·{" "}
-                    {a.settled ? "原执行已停止核实" : "待收尾"}
-                  </h4>
-                  <p>
-                    截止 {a.deadline} · Run {a.run_id || "等待原请求核实"}
-                    {a.timed_out && " · 已超时"}
-                  </p>
-                  <p>{a.diagnostic}</p>
-                  {a.report && (
-                    <div>
-                      <p>{a.report.message}</p>
-                      <p>
-                        项目结论：
-                        {a.report.completed
-                          ? a.report.ready
-                            ? "已就绪"
-                            : "未就绪"
-                          : "尚未完成"}
-                      </p>
-                      {a.report.details != null && (
-                        <details>
-                          <summary>项目诊断明细</summary>
-                          <pre>{JSON.stringify(a.report.details, null, 2)}</pre>
-                        </details>
-                      )}
-                      <p className="muted">
-                        以上为项目报告原文；平台不复核业务结论。当前资格以环境状态为准。
-                      </p>
-                    </div>
-                  )}
-                  <details>
-                    <summary>原执行文件与技术详情</summary>
-                    {a.run?.summary && <p>原执行说明：{a.run.summary}</p>}
-                    {a.run?.diagnostic && <p>{a.run.diagnostic}</p>}
-                    {a.run?.agent_reply && (
-                      <details>
-                        <summary>
-                          Agent 回复（
-                          {a.run.agent_reply_verified
-                            ? "原生来源已核实"
-                            : "来源未核实"}
-                          ，仅供排障）
-                        </summary>
-                        <pre>{a.run.agent_reply}</pre>
-                      </details>
-                    )}
-                    <details>
-                      <summary>
-                        检测结果文件（停止后封存一次）· v
-                        {a.result?.version ?? 0} ·{" "}
-                        {a.result?.collection_status ?? "等待停止后取得"}
-                      </summary>
-                      {a.result?.diagnostic && (
-                        <p>结果采集诊断：{a.result.diagnostic}</p>
-                      )}
-                      <pre>{content(a.result)}</pre>
-                    </details>
-                  </details>
-                </section>
-              ))}
+              <DetectionID id={r.id} />
               {!r.settled && (
                 <Button
+                  size="sm"
+                  variant="ghost"
                   disabled={!online || busy || submitting}
                   onClick={() =>
                     void command("environment_stop", r.id, r.revision, {})
                   }
                 >
-                  停止原活动
+                  停止检测
                 </Button>
               )}
             </article>
           );
         })}
-      </section>
+      </details>
     </div>
   );
 }

@@ -69,7 +69,7 @@ func (r *runner) Call(_ context.Context, command string, _ []string, q *runnercl
 	}
 	return runnerclient.Response{}, nil
 }
-func (r *runner) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (r *runner) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	if r.unknown || r.inspectErr {
 		return runnerclient.Inspection{}, errors.New("original request unknown")
 	}
@@ -117,7 +117,7 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
-		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 4, EnvironmentKey: serviceEnvironmentKey(), Script: envmodel.ScriptPath(serviceEnvironmentKey(), "ps1"), Interpreter: "powershell.exe", Dependencies: []string{}}, Input: runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
+		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 5, Script: envmodel.ScriptPath("ps1"), Interpreter: "powershell.exe", Dependencies: []string{}}, Input: runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
 	}}
 	return service, remote, store, &now
 }
@@ -157,6 +157,77 @@ func observe(t *testing.T, s *env.Service) {
 	t.Helper()
 	if e := s.Observe(ctx); e != nil {
 		t.Fatal(e)
+	}
+}
+
+func TestProjectEnvironmentDetectionUsesNativeOrcaCodex(t *testing.T) {
+	for _, tc := range []struct {
+		name, adapter, target, environment, settings, want string
+	}{
+		{
+			name: "default remote Codex", adapter: "orca-terminal", target: "orca_environment", environment: "remote",
+			settings: `{"access_mode":"full_access","transport":{"executable":"orca"},"agent_launch":{"executable":"custom-codex","args":["--search"],"model":"selected","reasoning_effort":"high"}}`,
+			want:     `{"access_mode":"full_access","transport":{"executable":"orca"},"agent_launch":{"model":"selected","reasoning_effort":"high"}}`,
+		},
+		{
+			name: "explicit local Codex", adapter: "orca-terminal", target: "local",
+			settings: `{"agent":"codex","agent_launch":{"runtime_executable":"managed-codex","runtime_sha256":"pinned"}}`,
+			want:     `{"agent":"codex"}`,
+		},
+		{
+			name: "local Pi", adapter: "orca-terminal", target: "local",
+			settings: `{"agent":"pi","agent_launch":{"executable":"custom-pi"}}`,
+			want:     `{"agent":"pi","agent_launch":{"executable":"custom-pi"}}`,
+		},
+		{
+			name: "Codex app server", adapter: "codex-app-server", target: "local",
+			settings: `{"executable":"custom-codex"}`,
+			want:     `{"executable":"custom-codex"}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, _, _ := setup(t)
+			prepare := s.Prepare
+			execution := runnercontract.ExecutionInput{
+				Adapter:  tc.adapter,
+				Target:   runnercontract.ExecutionTarget{Kind: tc.target, Environment: tc.environment},
+				Settings: json.RawMessage(tc.settings),
+			}
+			s.Prepare = func(ctx context.Context, profile string) (envmodel.Prepared, error) {
+				prepared, err := prepare(ctx, profile)
+				prepared.Input.Execution = execution
+				return prepared, err
+			}
+			key, err := envmodel.Key(execution)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id := envmodel.ID()
+			_, err = s.Start(ctx, id, json.RawMessage(`{}`), envmodel.Start{
+				EnvironmentKey: key, Profile: "selected", TimeoutSeconds: 60,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			record := read(t, s, id)
+			var submitted runnercontract.RunInput
+			if err := json.Unmarshal(record.Rounds[0].Request.Input, &submitted); err != nil {
+				t.Fatal(err)
+			}
+			want, err := runnercontract.CanonicalJSON(json.RawMessage(tc.want))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := runnercontract.CanonicalJSON(submitted.Execution.Settings)
+			if err != nil || string(got) != string(want) || submitted.Execution.Target != execution.Target {
+				t.Fatalf("submitted execution = %+v, settings = %s, want %s", submitted.Execution, got, want)
+			}
+			for _, original := range []runnercontract.ExecutionInput{record.Execution, record.Prepared.Input.Execution} {
+				if originalKey, err := envmodel.Key(original); err != nil || originalKey != key || string(original.Settings) != tc.settings {
+					t.Fatalf("stored development execution changed: %s", original.Settings)
+				}
+			}
+		})
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,11 +78,11 @@ func Write(path string, value any) error {
 }
 
 func Git(ctx context.Context, dir string, args ...string) (string, error) {
-	out, err := gitBytes(ctx, dir, args...)
+	out, err := gitBytes(ctx, dir, nil, args...)
 	return strings.TrimSpace(string(out)), err
 }
 
-func gitBytes(ctx context.Context, dir string, args ...string) ([]byte, error) {
+func gitBytes(ctx context.Context, dir string, input io.Reader, args ...string) ([]byte, error) {
 	// A standalone Runner clones its own cache and must not inherit the
 	// fixture repository's local user configuration. Keep identity and Windows
 	// long-path settings scoped to this simulated external Git command.
@@ -102,6 +103,7 @@ func gitBytes(ctx context.Context, dir string, args ...string) ([]byte, error) {
 		}
 	}
 	command := exec.Command("git", argv...)
+	command.Stdin = input
 	// Initial fixture setup also ignores host Git identity, hooks and proxy settings.
 	var env []string
 	for _, v := range os.Environ() {

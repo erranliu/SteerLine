@@ -8,10 +8,12 @@ import (
 
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance"
 	pmm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 type materialStore interface {
@@ -20,6 +22,12 @@ type materialStore interface {
 	MaterialProfile(context.Context, string) string
 	SetMaterialProfile(context.Context, string, string) error
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
+}
+
+func isRetryableMaterialRead(err error) bool {
+	var missing *missingCommittedFileError
+	var nonregular *nonRegularCommittedFileError
+	return !errors.As(err, &missing) && !errors.As(err, &nonregular) && !errors.Is(err, errMismatchedTestWriter)
 }
 
 func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.TaskRecord, commit string) (pmm.Material, error) {
@@ -42,8 +50,24 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 		}
 		values = append(values, r.Path, pmm.TextDigest(b))
 	}
-	sources, e := pm.GenerationSources(contract.PlanRef.Path, func(path string) ([]byte, error) { return m.read(ctx, commit, path) })
+	protocol, e := prompts.TestingRules()
 	if e != nil {
+		return result, e
+	}
+	sources, e := pm.GenerationSources(contract.PlanRef.Path, func(path string) ([]byte, error) { return m.read(ctx, commit, path) }, protocol)
+	if e != nil {
+		return result, e
+	}
+	if e = verifyTestWriter(func(path string) ([]byte, error) { return m.read(ctx, commit, path) }); e != nil {
+		if isRetryableMaterialRead(e) {
+			result.Status = "pending"
+		}
+		return result, e
+	}
+	if _, e = m.config.projectPolicySlots(ctx, commit); e != nil {
+		if isRetryableMaterialRead(e) {
+			result.Status = "pending"
+		}
 		return result, e
 	}
 	for _, source := range sources {
@@ -79,7 +103,7 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 		previous, previousErr := store.Material(ctx, m.config.Identity(), task.TaskID)
 		material := previous
 		var inputErr error
-		if previousErr != nil || previous.Commit != observed.Commit {
+		if previousErr != nil || previous.Commit != observed.Commit || previous.Status == "pending" && previous.Digest == "" {
 			material, inputErr = m.materialInput(ctx, task, observed.Commit)
 		}
 		if previousErr == nil && previous.Commit == observed.Commit && previous.Status == "invalid" && previous.Digest == "" {
@@ -96,6 +120,7 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 		if e != nil {
 			return e
 		}
+		material.TestPlan = nil
 		var chosen *testmanagement.Generation
 		// Prefer a successful version, otherwise keep the newest original attempt.
 		for i := range rows {
@@ -125,7 +150,24 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 			if chosen.State == "generated" {
 				definitions, err := testmanagement.Select(chosen.Result, chosen.Catalogue)
 				if err == nil && (len(definitions) > 0 || testmanagement.AllowsNoTests(chosen.PlanText)) {
-					material.Status = "ready"
+					plan := testmodel.Snapshot{Project: chosen.ProjectEntry, Status: "ready", GenerationID: chosen.ID, Inputs: material.Inputs, PlanPath: material.Contract.PlanRef.Path, Commit: material.Commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)}
+					material.TestPlan, err = json.Marshal(plan)
+					if err == nil {
+						_, err = boundedTestArrangement(plan)
+					}
+					if err == nil {
+						_, err = testmanagement.InitialProgress(plan)
+					}
+					if err == nil {
+						err = m.config.testArrangementTargets()
+					}
+					if err == nil {
+						material.Status = "ready"
+					} else {
+						material.Status = "invalid"
+						material.Diagnostic = err.Error()
+						material.TestPlan = nil
+					}
 				} else {
 					material.Status = "invalid"
 					material.Diagnostic = "测试安排无效或空安排缺少Plan说明"
@@ -257,21 +299,10 @@ func (m *projectMaintenance) prepareLatest(ctx context.Context, w taskmodel.Fixe
 	if material.Status != "ready" {
 		return w, "", &taskmodel.Error{Code: "materials_not_ready", Message: "测试安排尚未就绪：" + material.Status + " " + material.Diagnostic}
 	}
-	g, e := m.store.Generation(ctx, m.config.Identity(), material.GenerationID)
-	if e != nil {
-		return w, "", e
-	}
-	definitions, e := testmanagement.Select(g.Result, g.Catalogue)
-	if e != nil {
-		return w, "", e
-	}
 	w.ConfirmedDigest = w.Contract.Digest
 	w.Contract = material.Contract
 	w.MaterialDigest = material.Digest
-	w.FrozenTestPlan, e = json.Marshal(testmanagement.Snapshot{Project: g.ProjectEntry, Status: "ready", GenerationID: g.ID, Inputs: material.Inputs, PlanPath: w.Contract.PlanRef.Path, Commit: material.Commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)})
-	if e != nil {
-		return w, "", e
-	}
+	w.FrozenTestPlan = append(json.RawMessage(nil), material.TestPlan...)
 	b, e := base(ctx, w, candidate)
 	if e == nil && b != material.Commit {
 		e = errors.New("远端版本已变化，请重新检查后创建候选")
@@ -301,7 +332,7 @@ func (m *projectMaintenance) candidateDocuments(ctx context.Context, id string) 
 	files := []file{}
 	refs := append([]taskmodel.FileReference{c.Contract.SpecRef, c.Contract.PlanRef}, c.Contract.CommonRefs...)
 	refs = append(refs, c.Contract.AcceptanceRefs...)
-	entry, readErr := pmm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, c.BaseRevision, path) })
+	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, c.BaseRevision, path) })
 	if readErr != nil {
 		return nil, readErr
 	}
@@ -362,7 +393,7 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 	files := []document{}
 	refs := append([]taskmodel.FileReference{latest.Contract.SpecRef, latest.Contract.PlanRef}, latest.Contract.CommonRefs...)
 	refs = append(refs, latest.Contract.AcceptanceRefs...)
-	entry, readErr := pmm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, latest.Commit, path) })
+	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, latest.Commit, path) })
 	if readErr != nil {
 		return nil, readErr
 	}

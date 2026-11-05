@@ -160,10 +160,7 @@ func verifyApplicationOfflineCoordinated(ctx context.Context, runnerExecutable s
 		result.runnerService, err = selected.VerifyPreviousServiceStopped(ctx, pin.SHA256, original.Runner.InstanceID, original.Runner.RequestID)
 		if err == nil && runnerHash != pin.SHA256 {
 			originalCLI := runnerclient.Client{Executable: pin.Executable, SHA256: pin.SHA256, StateDir: pin.StateDir}
-			if err = originalCLI.VerifyDrained(ctx); err != nil {
-				return result, err
-			}
-			if err = selected.VerifyDrained(ctx); err != nil {
+			if err = originalCLI.VerifyUpgradeDrained(ctx, selected); err != nil {
 				return result, err
 			}
 			candidate := selected.BuildPin()

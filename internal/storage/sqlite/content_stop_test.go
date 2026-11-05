@@ -24,7 +24,7 @@ type contentStopRace struct {
 func (f *contentStopRace) Submit(context.Context, runnercontract.Request) (runnerclient.Receipt, error) {
 	return runnerclient.Receipt{}, errors.New("close must not submit")
 }
-func (f *contentStopRace) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (f *contentStopRace) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	r := f.run
 	return runnerclient.Inspection{Run: &r}, nil
 }

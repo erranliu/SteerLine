@@ -11,7 +11,9 @@ import (
 
 // Context is solely a preparation projection. Never use it to construct a Run.
 func Context(execution runnercontract.ExecutionInput) (runnercontract.ExecutionInput, error) {
-	if Target(execution) == "" {
+	// Validate this model's accepted context without depending on the global
+	// configuration projection or constructing its target identity.
+	if (execution.Adapter != "codex-app-server" && execution.Adapter != "orca-terminal") || (execution.Target.Kind != "local" && execution.Target.Kind != "orca_environment") || execution.Target.Kind == "local" && execution.Target.Environment != "" || execution.Target.Kind == "orca_environment" && (execution.Adapter != "orca-terminal" || execution.Target.Environment == "") {
 		return execution, errors.New("unsupported environment execution target")
 	}
 	var settings map[string]json.RawMessage
@@ -93,6 +95,11 @@ func View(current Current, record Record, basis string, materialError error) (st
 	switch {
 	case current.Invalidated:
 		return status, "stale", current.Reason
+	case record.TimedOut() && !record.Cancelled:
+		if !record.Settled() {
+			return status, "timed_out", "等待原检测停止并核实结果"
+		}
+		return status, "timed_out", record.Diagnostic
 	case record.ID != "" && !record.Settled():
 		reason = record.Diagnostic
 		if strings.TrimSpace(reason) == "" {

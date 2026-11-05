@@ -7,6 +7,7 @@ import (
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,6 +60,36 @@ func TestEnvironmentStableBasisExcludesUnrelatedCommitAndModel(t *testing.T) {
 		t.Fatal("ephemeral commit/model entered basis", before.Inputs, after.Inputs)
 	}
 }
+func TestEnvironmentQualificationIgnoresProjectTestsAndBusinessDocuments(t *testing.T) {
+	p, c, store := environmentFixture(t)
+	r := seedDetectedEnvironment(t, p, "remote")
+	names := []string{"SteerlineFlow/environment-project.json", "SteerlineFlow/testing/test-list.json", "SteerlineFlow/testing.md", "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/Roadmap/execution-map.md", "README.md", "tools/project-tests.py"}
+	for _, remove := range []bool{false, true} {
+		for _, name := range names {
+			path := filepath.Join(c.Repository, filepath.FromSlash(name))
+			if remove {
+				require(t, os.Remove(path))
+			} else {
+				require(t, os.MkdirAll(filepath.Dir(path), 0700))
+				// These deliberately invalid project files are not environment inputs.
+				require(t, os.WriteFile(path, []byte("invalid project content; never execute\n"), 0600))
+			}
+		}
+		commit := commitEnvironmentMaterials(t, c)
+		require(t, p.observeBasis(context.Background(), commit))
+		proof, _, err := p.admission(context.Background(), "remote", commit, false)
+		require(t, err)
+		if proof.Basis != r.Prepared.Inputs {
+			t.Fatal("project checks entered the runtime basis")
+		}
+		current, err := store.CurrentEnvironment(context.Background(), r.Project, mustEnvironmentKey(t, r.Execution))
+		require(t, err)
+		if current.Invalidated || current.Revision != 1 {
+			t.Fatal("project content revoked runtime qualification", current)
+		}
+	}
+}
+
 func TestEnvironmentRuntimeDependenciesBindBasisWithoutExpandingReadingReferences(t *testing.T) {
 	p, c, _ := environmentFixture(t)
 	before, e := p.prepare(context.Background(), "remote")
@@ -84,16 +115,27 @@ func TestEnvironmentReadFailureDoesNotPersistRevocation(t *testing.T) {
 	r := seedDetectedEnvironment(t, p, "remote")
 	ctx := context.Background()
 	git := p.config.Git
-	p.config.Git.Executable = "missing-environment-git-command"
-	if e := p.observeBasis(ctx, r.Prepared.Commit); e == nil {
-		t.Fatal("read failure accepted")
+	repository := p.config.Repository
+	for _, failure := range []string{"bare-executable", "absolute-executable", "working-directory"} {
+		p.config.Git, p.config.Repository = git, repository
+		switch failure {
+		case "bare-executable":
+			p.config.Git.Executable = "missing-environment-git-command"
+		case "absolute-executable":
+			p.config.Git.Executable = filepath.Join(t.TempDir(), "missing-git.exe")
+		case "working-directory":
+			p.config.Repository = filepath.Join(t.TempDir(), "missing-worktree")
+		}
+		if e := p.observeBasis(ctx, r.Prepared.Commit); e == nil || strings.Contains(e.Error(), "项目尚未接入检测") {
+			t.Fatal("read failure lost its cause or became a missing project document", failure, e)
+		}
+		current, e := store.CurrentEnvironment(ctx, r.Project, mustEnvironmentKey(t, r.Execution))
+		require(t, e)
+		if current.Invalidated || current.Revision != 1 {
+			t.Fatal("read outage revoked", failure, current)
+		}
 	}
-	current, e := store.CurrentEnvironment(ctx, r.Project, mustEnvironmentKey(t, r.Execution))
-	require(t, e)
-	if current.Invalidated || current.Revision != 1 {
-		t.Fatal("read outage revoked", current)
-	}
-	p.config.Git = git
+	p.config.Git, p.config.Repository = git, repository
 	require(t, p.observeBasis(ctx, r.Prepared.Commit))
 	if _, _, e := p.admission(ctx, "remote", "", false); e != nil {
 		t.Fatal(e)

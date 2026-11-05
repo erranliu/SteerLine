@@ -3,12 +3,11 @@ package app
 import (
 	"context"
 	"errors"
-	"os"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -29,7 +28,7 @@ func (p *roadmapPort) documentContext(ctx context.Context, r roadmap.Record) (ro
 		return result, err
 	}
 	result.Tree = strings.TrimSpace(string(tree))
-	entry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, result.Commit, path) })
+	entry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, result.Commit, path) })
 	if err != nil {
 		return result, err
 	}
@@ -75,7 +74,8 @@ func (p *roadmapPort) publicationPreview(ctx context.Context, r roadmap.Record) 
 	sort.Strings(keys)
 	for _, key := range keys {
 		old, err := p.config.runtimeMaintenance.read(ctx, r.CodeCommit, key)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
+		var missing *missingCommittedFileError
+		if err != nil && !errors.As(err, &missing) {
 			return nil, err
 		}
 		out.Files = append(out.Files, change{key, string(old), files[key]})

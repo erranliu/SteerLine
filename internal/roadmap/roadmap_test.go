@@ -69,6 +69,46 @@ func TestRoadmapIdentityDependenciesAndConfirmation(t *testing.T) {
 		}
 	}
 }
+
+func TestRoadmapConfirmationToleratesOnlyCheckoutLineEndings(t *testing.T) {
+	source := sampleSource()
+	source.Body += "\n"
+	source.Digest = model.Digest([]byte(source.Body))
+	a := sampleAnalysis()
+	graph := []model.Existing{{ID: "8", Title: "调度", Predecessors: []string{}}}
+	r := model.Record{State: "review", Source: source, GraphDigest: model.GraphDigest(graph), Analysis: &a}
+	for _, tc := range []struct {
+		name, body string
+		accepted   bool
+	}{
+		{"LF", source.Body, true},
+		{"CRLF", strings.ReplaceAll(source.Body, "\n", "\r\n"), true},
+		{"mixed", strings.Replace(source.Body, "\n", "\r\n", 1), true},
+		{"text", strings.Replace(source.Body, "Alpha", "Changed", 1), false},
+		{"space", source.Body + " ", false},
+		{"blank-line", source.Body + "\n", false},
+		{"no-final-newline", strings.TrimSuffix(source.Body, "\n"), false},
+		{"BOM", "\ufeff" + source.Body, false},
+		{"lone-CR", strings.Replace(source.Body, "\n", "\r", 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			current := source
+			current.Body, current.Digest = tc.body, model.Digest([]byte(tc.body))
+			confirmed, err := model.Confirm(r, current, graph, "confirm")
+			if (err == nil) != tc.accepted {
+				t.Fatalf("accepted=%v: %v", tc.accepted, err)
+			}
+			if tc.accepted && (confirmed.Source.Body != source.Body || confirmed.Source.Digest != source.Digest) {
+				t.Fatal("confirmation rewrote the original snapshot")
+			}
+		})
+	}
+	corrupt := r
+	corrupt.Source.Digest = "wrong"
+	if _, err := model.Confirm(corrupt, source, graph, "confirm"); err == nil {
+		t.Fatal("corrupted original digest accepted")
+	}
+}
 func TestRoadmapReadOnlySourceBoundaries(t *testing.T) {
 	root := t.TempDir()
 	file := filepath.Join(root, filepath.FromSlash(model.Root+"一.md"))
@@ -258,9 +298,24 @@ func (f *roadmapRunner) Submit(_ context.Context, r runnercontract.Request) (run
 	var in runnercontract.GenerateRunInput
 	_ = json.Unmarshal(r.Input, &in)
 	f.run = runnercontract.Run{RunID: "original-run", Revision: 1, Workflow: in.Workflow, Correlation: in.Correlation, InputDigest: "original-input"}
+	for _, file := range in.Generate.Materials {
+		location := filepath.Join(os.TempDir(), "runner-fixture", r.RequestID, filepath.FromSlash(file.Path))
+		f.run.Materials = append(f.run.Materials, runnercontract.Material{Kind: file.Kind, Path: file.Path, Digest: model.Digest([]byte(*file.Content)), SnapshotPath: location, ExecutionLocation: location})
+	}
 	if in.Generate.Repository != nil {
 		source := &runnercontract.RepositorySource{LocalPath: in.Generate.Repository.LocalPath, Commit: in.Generate.Repository.Commit, Tree: strings.Repeat("b", 40)}
 		for path, body := range f.files {
+			if in.Generate.Repository.Paths != nil {
+				selected := false
+				for _, name := range in.Generate.Repository.Paths {
+					if name == path {
+						selected = true
+					}
+				}
+				if !selected {
+					continue
+				}
+			}
 			source.Files = append(source.Files, runnercontract.RepositoryFile{Path: path, Blob: strings.Repeat("c", 40), SHA256: model.Digest(body), SizeBytes: len(body)})
 		}
 		f.run.RepositorySource = source
@@ -270,7 +325,7 @@ func (f *roadmapRunner) Submit(_ context.Context, r runnercontract.Request) (run
 	}
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: "submit", ReceiptStatus: "accepted"}, nil
 }
-func (f *roadmapRunner) Inspect(_ context.Context, selector, id string, _ bool) (runnerclient.Inspection, error) {
+func (f *roadmapRunner) Inspect(_ context.Context, selector, id string) (runnerclient.Inspection, error) {
 	f.inspects++
 	if f.hidden {
 		return runnerclient.Inspection{}, nil
@@ -279,9 +334,14 @@ func (f *roadmapRunner) Inspect(_ context.Context, selector, id string, _ bool) 
 		return runnerclient.Inspection{}, errors.New("replacement request observed")
 	}
 	r := f.run
-	if r.ContentResult != nil && r.ContentResult.RepositorySource == nil {
+	if r.ContentResult != nil {
 		copy := *r.ContentResult
-		copy.RepositorySource = r.RepositorySource
+		if copy.RepositorySource == nil {
+			copy.RepositorySource = r.RepositorySource
+		}
+		if copy.FileMaterials == nil {
+			copy.FileMaterials = r.Materials
+		}
 		r.ContentResult = &copy
 	}
 	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &r.RunID}}, nil
@@ -313,12 +373,11 @@ func generationSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, P
 	runner := &roadmapRunner{}
 	source := sampleSource()
 	source.Head = strings.Repeat("a", 40)
-	graph, _ := json.Marshal([]model.Existing{{ID: "8", Title: "调度", Predecessors: []string{}}})
 	rules, e := prompts.RoadmapParseRules()
 	if e != nil {
 		t.Fatal(e)
 	}
-	files := map[string][]byte{source.Path: []byte(source.Body), GraphPath: graph, MappingPath: []byte(`{}`), ParseRulesPath: rules}
+	files := map[string][]byte{ParseRulesPath: rules}
 	runner.files = files
 	s := &Service{Project: "p", Repository: t.TempDir(), ReadCommitted: func(_ context.Context, commit, path string) ([]byte, error) {
 		body, ok := files[path]
@@ -335,25 +394,32 @@ func generationSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, P
 }
 
 func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
-	for _, mode := range []string{"ready", "missing", "wrong-original", "wrong-graph", "wrong-mapping", "wrong-rules", "unreadable"} {
+	for _, mode := range []string{"ready", "crlf-source", "missing", "wrong-rules", "unreadable", "missing-capability"} {
 		t.Run(mode, func(t *testing.T) {
 			s, store, peer, in := generationSetup(t)
 			switch mode {
+			case "crlf-source":
+				source, _ := s.Source(context.Background(), in.Path)
+				source.Body = strings.ReplaceAll(source.Body, "\n", "\r\n")
+				source.Digest = model.Digest([]byte(source.Body))
+				in.Digest = source.Digest
+				s.Source = func(context.Context, string) (model.Source, error) { return source, nil }
 			case "missing":
 				delete(peer.files, ParseRulesPath)
-			case "wrong-original":
-				peer.files[in.Path] = []byte("same path, different original")
-			case "wrong-graph":
-				peer.files[GraphPath] = []byte(`[]`)
-			case "wrong-mapping":
-				peer.files[MappingPath] = []byte(`{"Alpha":"99"}`)
 			case "wrong-rules":
 				peer.files[ParseRulesPath] = []byte("changed rules")
 			case "unreadable":
 				s.ReadCommitted = func(context.Context, string, string) ([]byte, error) { return nil, os.ErrPermission }
+			case "missing-capability":
+				prepare := s.Prepare
+				s.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+					execution, catalog, err := prepare(ctx, id)
+					catalog.Capabilities.Generate.FileMaterials = nil
+					return execution, catalog, err
+				}
 			}
-			_, err := s.Parse(context.Background(), in)
-			if mode != "ready" {
+			r, err := s.Parse(context.Background(), in)
+			if mode != "ready" && mode != "crlf-source" {
 				if err == nil || peer.submits != 0 || len(store.rows) != 0 {
 					t.Fatal("unprepared materials submitted", err)
 				}
@@ -366,13 +432,25 @@ func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
 			if err = json.Unmarshal(peer.request.Input, &request); err != nil {
 				t.Fatal(err)
 			}
-			if request.Generate.Repository == nil || len(request.Generate.Materials) != 0 {
-				t.Fatal("repository materials missing")
+			if request.Generate.Repository == nil || len(request.Generate.Materials) != 3 ||
+				len(request.Generate.Repository.Paths) != 1 || request.Generate.Repository.Paths[0] != ParseRulesPath {
+				t.Fatal("static Git and dynamic files were mixed")
+			}
+			source := request.Generate.Materials[0]
+			if source.Kind != "file" || source.Path != SourceInputPath || source.Content == nil ||
+				*source.Content != r.Source.Body || r.Source.Digest != in.Digest || r.Source.Digest != model.Digest([]byte(*source.Content)) {
+				t.Fatal("original source bytes were not frozen")
 			}
 			for _, line := range strings.Split(sampleSource().Body, "\n") {
-				if strings.Contains(string(peer.request.Input), line) {
-					t.Fatal("source hidden in instruction/schema", line)
+				if strings.Contains(request.Generate.Instruction, line) || strings.Contains(string(request.Generate.OutputSchema), line) {
+					t.Fatal("original body inlined in prompt or schema")
 				}
+			}
+			if request.Generate.Materials[1].Path != GraphPath || request.Generate.Materials[2].Path != MappingPath {
+				t.Fatal("dynamic owner data absent")
+			}
+			if len(peer.files) != 1 {
+				t.Fatal("dynamic data written to Git fixture")
 			}
 		})
 	}
@@ -396,6 +474,7 @@ func TestRoadmapGenerateDurableRequestUnknownAndConfirm(t *testing.T) {
 	a := sampleAnalysis()
 	raw, _ := json.Marshal(a)
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "result", TurnID: "turn"}}
+	f.run.Status = "completed"
 	f.run.StopStatus = "stopped"
 	f.run.Revision++
 	r, e = s.Observe(ctx, r.ID)
@@ -409,6 +488,68 @@ func TestRoadmapGenerateDurableRequestUnknownAndConfirm(t *testing.T) {
 	before := f.inspects
 	if e = s.ObserveNext(ctx); e != nil || f.inspects != before {
 		t.Fatal("settled content kept polling", e)
+	}
+}
+
+func TestRoadmapFrozenFileMaterialResultValidation(t *testing.T) {
+	for _, mutation := range []string{"none", "missing-run", "missing-result", "digest", "path", "location", "extra"} {
+		t.Run(mutation, func(t *testing.T) {
+			s, _, peer, input := generationSetup(t)
+			r, err := s.Parse(context.Background(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := json.Marshal(sampleAnalysis())
+			peer.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: body, RepositorySource: peer.run.RepositorySource,
+				FileMaterials: append([]runnercontract.Material{}, peer.run.Materials...), Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "parse", TurnID: "turn"}}
+			peer.run.Status, peer.run.StopStatus = "completed", "stopped"
+			switch mutation {
+			case "missing-run":
+				peer.run.Materials = []runnercontract.Material{}
+			case "missing-result":
+				peer.run.ContentResult.FileMaterials = []runnercontract.Material{}
+			case "digest":
+				peer.run.ContentResult.FileMaterials[0].Digest = "wrong"
+			case "path":
+				peer.run.ContentResult.FileMaterials[0].Path = "other"
+			case "location":
+				peer.run.ContentResult.FileMaterials[0].ExecutionLocation = "relative"
+			case "extra":
+				peer.run.ContentResult.FileMaterials = append(peer.run.ContentResult.FileMaterials, peer.run.Materials[0])
+			}
+			observed, err := s.Observe(context.Background(), r.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (observed.State == "review") != (mutation == "none") || mutation != "none" && observed.Analysis != nil {
+				t.Fatal("unverified frozen files adopted", mutation, observed.State, observed.Diagnostic)
+			}
+		})
+	}
+}
+
+func TestRoadmapParseWaitsForNativeSettlement(t *testing.T) {
+	s, _, peer, input := generationSetup(t)
+	r, err := s.Parse(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(sampleAnalysis())
+	peer.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: body,
+		Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "parse", TurnID: "turn"}}
+	peer.run.Status, peer.run.StopStatus = "settling", "pending"
+	waiting, err := s.Observe(context.Background(), r.ID)
+	if err != nil || waiting.Analysis != nil || waiting.State == "review" {
+		t.Fatal("unsettled parse became confirmable", waiting.State, err)
+	}
+	if _, err := s.Confirm(context.Background(), r.ID, strings.Repeat("c", 32), waiting.Revision); err == nil {
+		t.Fatal("unsettled parse confirmed")
+	}
+	peer.run.Status, peer.run.StopStatus = "completed", "stopped"
+	peer.run.Revision++
+	ready, err := s.Observe(context.Background(), r.ID)
+	if err != nil || ready.State != "review" || !ready.ObservationComplete() {
+		t.Fatal("settled parse not ready", ready.State, err)
 	}
 }
 func TestRoadmapCancelledUnknownOnlyStopsOriginal(t *testing.T) {

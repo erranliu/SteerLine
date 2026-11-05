@@ -35,6 +35,7 @@ export type Environment = {
   last_passed_activity_id?: string;
 };
 export type EnvironmentOptions = {
+  environment_readiness_required?: boolean;
   profiles: EnvironmentProfile[];
   environments: Environment[];
   default_profile_id: string;
@@ -43,14 +44,34 @@ export const environmentStage: Record<string, string> = {
   unprepared: "未准备",
   awaiting_user: "待准备与检测",
   verifying: "检测中",
+  timed_out: "检测超时",
   ready: "已就绪",
   blocked: "检测阻断",
   stale: "已失效",
+  unverified: "待核实",
 };
 
 export function useEnvironmentReadiness() {
   const { api, identity, online } = useWorkspace();
   const visible = usePageVisible();
+  const configuration = useQuery({
+    queryKey: [
+      api.home,
+      identity.project_id,
+      identity.instance_id,
+      "environment",
+      "configuration",
+    ],
+    queryFn: ({ signal }) =>
+      api.get<EnvironmentOptions>(
+        "/environment/options?configuration=true",
+        signal,
+      ),
+    enabled: online,
+    retry: false,
+    // Loaded configuration is frozen for this project instance.
+    staleTime: Infinity,
+  });
   const query = useQuery({
     queryKey: [
       api.home,
@@ -65,7 +86,26 @@ export function useEnvironmentReadiness() {
     retry: false,
     refetchInterval: visible ? 15000 : false,
   });
-  return { ...query, verified: online && query.isSuccess && !query.isError };
+  const verified = online && query.isSuccess && !query.isError;
+  const configurationVerified =
+    online && configuration.isSuccess && !configuration.isError;
+  const required =
+    (configurationVerified
+      ? configuration.data?.environment_readiness_required
+      : undefined) ??
+    (verified ? query.data?.environment_readiness_required : undefined) ??
+    true;
+  return {
+    ...query,
+    data: query.data ?? configuration.data,
+    observed: !!query.data,
+    verified,
+    required,
+    refetch: (...args: Parameters<typeof query.refetch>) => {
+      void configuration.refetch();
+      return query.refetch(...args);
+    },
+  };
 }
 
 export function environmentLink(
@@ -84,7 +124,9 @@ export function EnvironmentObservation() {
   if (readiness.verified) return null;
   return (
     <p role="status" className="notice amber">
-      {readiness.data ? "上次已知状态，当前待核实" : "运行环境状态待核实"}
+      {readiness.observed
+        ? "上次已知状态，当前待核实"
+        : "项目运行环境状态待核实"}
       {!!readiness.dataUpdatedAt &&
         ` · 最后成功观察 ${new Date(readiness.dataUpdatedAt).toLocaleString()}`}
     </p>
@@ -97,14 +139,15 @@ export function EnvironmentSummary() {
   const environments = readiness.data?.environments;
   return (
     <NavLink to={`/projects/${identity.project_id}/environment`}>
-      {!environments ? (
-        "运行环境状态待核实"
+      {!readiness.observed ? (
+        "项目运行环境状态待核实"
       ) : (
         <>
           {!readiness.verified && "上次结果 · 当前待核实 · "}
-          {environments.length
-            ? `运行环境已就绪 ${environments.filter((e) => e.status === "ready").length}/${environments.length}`
+          {environments?.length
+            ? `项目运行环境已就绪 ${environments.filter((e) => e.status === "ready").length}/${environments.length}`
             : "尚无开发执行方案"}
+          {!readiness.required && " · 环境就绪阻塞已关闭"}
         </>
       )}
     </NavLink>

@@ -35,14 +35,9 @@ type Store interface {
 }
 type CLI interface {
 	Submit(context.Context, runnerclient.Request) (runnerclient.Receipt, error)
-	Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error)
-	Events(context.Context, string, string) (runnerclient.EventPage, error)
-	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
-}
-
-type snapshotCLI interface {
-	SupportsObservation() bool
+	Inspect(context.Context, string, string) (runnerclient.Inspection, error)
 	Observe(context.Context, string, string) (runnerclient.RunObservation, error)
+	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
 }
 
 func observationOnly(c Candidate) bool {
@@ -57,7 +52,7 @@ func observationOnly(c Candidate) bool {
 	return true
 }
 
-func (b *Bridge) observe(ctx context.Context, cli snapshotCLI, c *Candidate) error {
+func (b *Bridge) observe(ctx context.Context, cli CLI, c *Candidate) error {
 	result, err := cli.Observe(ctx, c.RunID, c.Cursor)
 	if err != nil {
 		return err
@@ -180,7 +175,7 @@ func (b *Bridge) Step(ctx context.Context, project, id string) (resultErr error)
 				return err
 			}
 		}
-		original, lookup := cli.Inspect(ctx, "request-id", c.Submit.RequestID, false)
+		original, lookup := cli.Inspect(ctx, "request-id", c.Submit.RequestID)
 		if lookup == nil {
 			if original.Command == nil || original.Command.Command != "submit" || original.Run == nil {
 				return errors.New("original submission identity is incomplete")
@@ -219,10 +214,10 @@ func (b *Bridge) Step(ctx context.Context, project, id string) (resultErr error)
 			}
 		}
 	}
-	if snapshot, ok := cli.(snapshotCLI); ok && snapshot.SupportsObservation() && observationOnly(c) {
-		return b.observe(ctx, snapshot, &c)
+	if observationOnly(c) {
+		return b.observe(ctx, cli, &c)
 	}
-	inspection, err := cli.Inspect(ctx, "run-id", c.RunID, false)
+	inspection, err := cli.Inspect(ctx, "run-id", c.RunID)
 	if err != nil {
 		return err
 	}
@@ -250,7 +245,7 @@ func (b *Bridge) Step(ctx context.Context, project, id string) (resultErr error)
 	for i := range c.Actions {
 		action := &c.Actions[i]
 		if action.State == "accepted" && action.ActionStatus != "completed" && action.ActionStatus != "failed" && action.ActionStatus != "rejected" && action.ActionStatus != "cancelled" {
-			observed, err := cli.Inspect(ctx, "request-id", action.Request.RequestID, false)
+			observed, err := cli.Inspect(ctx, "request-id", action.Request.RequestID)
 			if err != nil {
 				return err
 			}
@@ -272,7 +267,7 @@ func (b *Bridge) Step(ctx context.Context, project, id string) (resultErr error)
 		if action.State == "unknown" {
 			if c.StopRequested || action.ObserveOnly {
 				// An old reply/resume can only be observed after task withdrawal.
-				result, err := cli.Inspect(ctx, "request-id", action.Request.RequestID, false)
+				result, err := cli.Inspect(ctx, "request-id", action.Request.RequestID)
 				if known(err, "request_not_found") {
 					continue
 				}
@@ -288,37 +283,7 @@ func (b *Bridge) Step(ctx context.Context, project, id string) (resultErr error)
 			}
 		}
 	}
-	if snapshot, ok := cli.(snapshotCLI); ok && snapshot.SupportsObservation() {
-		return b.observe(ctx, snapshot, &c)
-	}
-	page, err := cli.Events(ctx, c.RunID, c.Cursor)
-	if err != nil {
-		return err
-	}
-	c.Cursor = page.NextCursor
-	latest, err := cli.Inspect(ctx, "run-id", c.RunID, false)
-	if err != nil {
-		return err
-	}
-	if latest.Run == nil {
-		return errors.New("bound Run disappeared")
-	}
-	if err := bind(&c, *latest.Run); err != nil {
-		return err
-	}
-	for _, event := range page.Events {
-		if _, err := event.Wait(); err != nil {
-			return err
-		}
-		if event.Revision > latest.Run.Revision {
-			return errors.New("Runner events exceed its observed projection")
-		}
-	}
-	if c.InputsRevoked && latest.Run.NewInputsAllowed {
-		c.InputsRevoked = false
-		c.Stop = nil
-	}
-	return b.save(ctx, &c, page.Events...)
+	return b.observe(ctx, cli, &c)
 }
 
 // RecoverInputs withdraws unused caller authorizations at a service boundary.
@@ -369,7 +334,7 @@ func (b *Bridge) VerifyBinding(ctx context.Context, project, id string) error {
 	}
 	cli := b.Client(c.StateDir)
 	if c.RunID != "" {
-		observed, err := cli.Inspect(ctx, "run-id", c.RunID, false)
+		observed, err := cli.Inspect(ctx, "run-id", c.RunID)
 		if err != nil {
 			return err
 		}
@@ -381,7 +346,7 @@ func (b *Bridge) VerifyBinding(ctx context.Context, project, id string) error {
 	if c.SubmitState != "unknown" {
 		return nil
 	}
-	observed, err := cli.Inspect(ctx, "request-id", c.Submit.RequestID, false)
+	observed, err := cli.Inspect(ctx, "request-id", c.Submit.RequestID)
 	if known(err, "request_not_found") {
 		return nil
 	}
@@ -417,7 +382,7 @@ func bind(c *Candidate, r runnerclient.Run) error {
 	return nil
 }
 func (b *Bridge) deliver(ctx context.Context, cli CLI, c *Candidate, action *Action) error {
-	inspection, err := cli.Inspect(ctx, "request-id", action.Request.RequestID, false)
+	inspection, err := cli.Inspect(ctx, "request-id", action.Request.RequestID)
 	if err == nil {
 		if inspection.Command == nil || inspection.Command.Command != action.Command || inspection.Command.RunID == nil || *inspection.Command.RunID != c.RunID {
 			return errors.New("original control belongs to another Run")
@@ -497,40 +462,4 @@ func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, 
 	request.RequestID = newID()
 	c.Actions = append(c.Actions, Action{CallerRequestID: callerID, CallerRequestDigest: callerDigest, Command: command, Request: request, State: "pending"})
 	return b.save(ctx, &c)
-}
-
-func (b *Bridge) RefreshPR(ctx context.Context, project, id string) (Candidate, time.Time, error) {
-	return b.refreshPR(ctx, project, id, true)
-}
-
-// ObservePR is an explicit read-only provider refresh, including a withdrawn
-// candidate. It grants no delivery participation or native input authority.
-func (b *Bridge) ObservePR(ctx context.Context, project, id string) (Candidate, time.Time, error) {
-	return b.refreshPR(ctx, project, id, false)
-}
-func (b *Bridge) refreshPR(ctx context.Context, project, id string, delivery bool) (Candidate, time.Time, error) {
-	entry, _ := b.locks.LoadOrStore(project+"\x00"+id, &sync.Mutex{})
-	gate := entry.(*sync.Mutex)
-	gate.Lock()
-	defer gate.Unlock()
-	c, err := b.Store.Candidate(ctx, project, id)
-	if err != nil {
-		return c, time.Time{}, err
-	}
-	if c.RunID == "" || delivery && (c.StopRequested || c.Participation != "active") {
-		return c, time.Time{}, errors.New("candidate cannot verify a new delivery")
-	}
-	started := time.Now().UTC()
-	result, err := b.Client(c.StateDir).Inspect(ctx, "run-id", c.RunID, true)
-	if err != nil {
-		return c, started, err
-	}
-	if result.Run == nil {
-		return c, started, errors.New("original Run is missing")
-	}
-	if err := bind(&c, *result.Run); err != nil {
-		return c, started, err
-	}
-	err = b.save(ctx, &c)
-	return c, started, err
 }

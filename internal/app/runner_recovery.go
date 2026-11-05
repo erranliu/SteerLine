@@ -39,7 +39,7 @@ func inspectRunnerRecovery(ctx context.Context, config Config, id string) (api.R
 	if err != nil {
 		return view, err
 	}
-	inspection, err := cli.Inspect(ctx, "run-id", candidate.RunID, false)
+	inspection, err := cli.Inspect(ctx, "run-id", candidate.RunID)
 	if err != nil {
 		return view, err
 	}

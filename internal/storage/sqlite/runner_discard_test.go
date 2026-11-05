@@ -8,10 +8,12 @@ import (
 	"testing"
 	"time"
 
+	model "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 func TestRunnerDiscardRequiresCompleteFreshPRSetAndAtomicStops(t *testing.T) {
@@ -37,7 +39,7 @@ func TestRunnerDiscardRequiresCompleteFreshPRSetAndAtomicStops(t *testing.T) {
 	graph, err = s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	at := time.Now().UTC()
-	commit := ports.RunnerDiscard{Project: project, RequestID: strings.Repeat("e", 32), Intent: taskmodel.DiscardIntent{TaskID: c.TaskID, ExpectedVersion: graph.ByID[c.TaskID].Version, Reason: "operator cancelled", RequestedBy: "operator"}, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, CandidateRevisions: map[string]uint64{c.ID: c.Revision}, VerificationStarted: at}
+	commit := ports.RunnerDiscard{Project: project, RequestID: strings.Repeat("e", 32), Intent: taskmodel.DiscardIntent{TaskID: c.TaskID, ExpectedVersion: graph.ByID[c.TaskID].Version, Reason: "operator cancelled", RequestedBy: "operator"}, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, CandidateRevisions: map[string]uint64{c.ID: c.Revision}, VerificationStarted: at, PRs: map[string]ports.RunnerPRObservation{}}
 	if _, err := s.CommitRunnerDiscard(ctx, commit); err == nil {
 		t.Fatal("unknown original submission was treated as no PR")
 	}
@@ -50,14 +52,12 @@ func TestRunnerDiscardRequiresCompleteFreshPRSetAndAtomicStops(t *testing.T) {
 	c.Revision++
 	require(t, s.SaveCandidate(ctx, c, c.Revision-1, nil))
 	commit.CandidateRevisions[c.ID] = c.Revision
+	merge := strings.Repeat("b", 40)
+	commit.PRs[c.ID] = fixturePRObservation(c, at, "merged", &merge)
 	if _, err := s.CommitRunnerDiscard(ctx, commit); err == nil {
 		t.Fatal("merged candidate was discarded")
 	}
-	c.Projection.PR.Merged = false
-	c.Projection.PR.State = "open"
-	c.Revision++
-	require(t, s.SaveCandidate(ctx, c, c.Revision-1, nil))
-	commit.CandidateRevisions[c.ID] = c.Revision
+	commit.PRs[c.ID] = fixturePRObservation(c, at, "open", nil)
 	_, err = s.db.ExecContext(ctx, `CREATE TRIGGER fail_runner_discard_receipt BEFORE UPDATE ON commands WHEN NEW.kind='runner_discard' BEGIN SELECT RAISE(ABORT,'receipt failure'); END`)
 	require(t, err)
 	if _, err := s.CommitRunnerDiscard(ctx, commit); err == nil {
@@ -72,7 +72,15 @@ func TestRunnerDiscardRequiresCompleteFreshPRSetAndAtomicStops(t *testing.T) {
 	}
 	_, err = s.db.ExecContext(ctx, `DROP TRIGGER fail_runner_discard_receipt`)
 	require(t, err)
-	receipt, err := s.CommitRunnerDiscard(ctx, commit)
+	queries := 0
+	service := taskrunner.Service{Project: project, Store: s, QueryPR: func(_ context.Context, provider model.PRProviderConfig, url string) (model.PRInfo, error) {
+		queries++
+		if provider.Kind != "gitea" || provider.BaseURL != "https://example.invalid" || url != c.PRURL {
+			t.Fatal("discard queried a different provider or PR")
+		}
+		return commit.PRs[c.ID].Fact, nil
+	}}
+	receipt, err := service.Discard(ctx, s, commit.RequestID, commit.Intent)
 	require(t, err)
 	if receipt.Status != "discarded" || len(receipt.StopPending) != 1 {
 		t.Fatal("discard omitted pending native cleanup", receipt)
@@ -82,9 +90,9 @@ func TestRunnerDiscardRequiresCompleteFreshPRSetAndAtomicStops(t *testing.T) {
 	if !old.StopRequested || old.InputsRevoked || old.Participation != "abandoned" {
 		t.Fatal("discard invented native revocation or lost stop obligation")
 	}
-	replayed, err := s.CommitRunnerDiscard(ctx, commit)
+	replayed, err := service.Discard(ctx, s, commit.RequestID, commit.Intent)
 	require(t, err)
-	if digestValue(receipt) != digestValue(replayed) {
+	if queries != 1 || digestValue(receipt) != digestValue(replayed) {
 		t.Fatal("discard replay changed its original receipt")
 	}
 }

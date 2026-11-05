@@ -30,6 +30,7 @@ export interface Profile {
   };
 }
 export interface ExecutionConfig {
+  developer?: { skip_environment_readiness?: boolean };
   version: number;
   runner: { executable: string; version: string; sha256: string };
   default_execution_profile: string;
@@ -46,7 +47,14 @@ export interface Combination {
   efforts: string[];
   workflows: ConfigSnapshot["workflows"];
 }
+export interface RuntimeEnvironment {
+  adapter: string;
+  target: Profile["execution"]["target"];
+  profile_ids: string[];
+}
 export interface ConfigSnapshot {
+  developer_available?: boolean;
+  environments: RuntimeEnvironment[];
   config: ExecutionConfig;
   saved_digest: string;
   writable: boolean;

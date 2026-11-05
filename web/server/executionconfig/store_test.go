@@ -23,7 +23,7 @@ func fixture(t *testing.T) (*Store, Config) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := cfg.Profile{ID: "local", Name: "本机", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"codex.exe","model":"gpt-6-luna","reasoning_effort":"medium"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}
+	p := cfg.Profile{ID: "local", Name: "本机", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access","executable":"codex.exe","model":"gpt-6-luna","reasoning_effort":"medium"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}
 	c := Config{Version: 3, Runner: cfg.Pin{Executable: exe, Version: "fixture", SHA256: cfg.Digest(raw)}, DefaultProfile: "local", Profiles: []cfg.Profile{p}}
 	s := New(t.TempDir())
 	if err = localservice.WritePrivateFile(s.Home, "execution.json", c); err != nil {
@@ -47,6 +47,41 @@ func fixture(t *testing.T) (*Store, Config) {
 		return compileCatalog(caps.Schemas.Config, caps.Workflows, caps.Schemas.Adapters["codex-app-server"])
 	}
 	return s, c
+}
+
+func TestDevelopmentCombinationProjectionUsesValidPermissionMode(t *testing.T) {
+	s, c := fixture(t)
+	snapshot, err := s.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Combinations) == 0 {
+		t.Fatal("no mapped development combinations")
+	}
+	for _, choice := range snapshot.Combinations {
+		if !choice.Supported || len(choice.Workflows) == 0 || len(choice.Efforts) == 0 {
+			t.Fatal("valid published combination was hidden", choice)
+		}
+	}
+	// The projection's sample must not supply defaults to actual saved profiles.
+	var settings map[string]any
+	if err := json.Unmarshal(c.Profiles[0].Execution.Settings, &settings); err != nil {
+		t.Fatal(err)
+	}
+	delete(settings, "access_mode")
+	c.Profiles[0].Execution.Settings, _ = json.Marshal(settings)
+	if _, err := s.Validate(context.Background(), encode(t, c)); err == nil {
+		t.Fatal("saved execution without explicit permission mode was accepted")
+	}
+}
+
+func TestEnvironmentProjectionSurvivesMetadataFailure(t *testing.T) {
+	s, _ := fixture(t)
+	s.ReadCatalog = func(context.Context, cfg.Pin) (*catalog, error) { return nil, errors.New("metadata unavailable") }
+	snapshot, err := s.Snapshot(context.Background())
+	if err != nil || len(snapshot.Environments) != 1 || snapshot.Environments[0].ProfileIDs[0] != "local" || snapshot.Writable || snapshot.Reason != "metadata unavailable" {
+		t.Fatal(snapshot, err)
+	}
 }
 
 func TestGQConcurrencySaveAndValidation(t *testing.T) {
@@ -196,31 +231,45 @@ func TestExecutionConfigSchemaAndPreservation(t *testing.T) {
 	s, c := fixture(t)
 	ctx := context.Background()
 	snapshot, _ := s.Snapshot(ctx)
-	for _, settings := range []string{`{"model":"x","reasoning_effort":"invented"}`, `{"model":"x","extra":1}`, `{"model":"x","model":"y"}`} {
+	for _, settings := range []string{`{"access_mode":"full_access","model":"x","reasoning_effort":"invented"}`, `{"access_mode":"full_access","model":"x","extra":1}`, `{"access_mode":"full_access","model":"x","model":"y"}`, `{"access_mode":"full_access","model":"x","github_auth":{"app_id":1,"installation_id":2,"private_key_env":"EXAMPLE_KEY"}}`} {
 		c.Profiles[0].Execution.Settings = json.RawMessage(settings)
 		if _, err := s.Validate(ctx, encode(t, c)); err == nil {
 			t.Fatal("invalid settings accepted", settings)
 		}
 	}
-	c.Profiles[0].Execution.Settings = json.RawMessage(`{"executable":"codex.exe","model":"manual-unknown-model","reasoning_effort":"high"}`)
+	c.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access","executable":"codex.exe","model":"manual-unknown-model","reasoning_effort":"high"}`)
 	next, err := s.Save(ctx, snapshot.SavedDigest, encode(t, c))
 	if err != nil {
 		t.Fatal("manual schema-valid model rejected", err)
 	}
-	c = next.Config
+	valid := encode(t, next.Config)
+	fresh := func() Config {
+		var config Config
+		if err := json.Unmarshal(valid, &config); err != nil {
+			t.Fatal(err)
+		}
+		return config
+	}
+	c = fresh()
 	c.Profiles[0].Execution.Adapter = "orca-terminal"
 	c.Profiles[0].Execution.Target.Kind = "local"
 	if _, err = s.Validate(ctx, encode(t, c)); err == nil {
 		t.Fatal("abandoned chain accepted")
 	}
-	c = next.Config
-	c.Profiles[0].Execution.Settings = json.RawMessage(`{"executable":"new-arbitrary-program","model":"x"}`)
+	c = fresh()
+	c.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access","executable":"new-arbitrary-program","model":"x"}`)
 	if _, err = s.Validate(ctx, encode(t, c)); err == nil {
 		t.Fatal("new executable accepted")
 	}
-	// Public schema optional fields survive editing a display name exactly.
+	var programError *Error
+	if !errors.As(err, &programError) || programError.Code != "program_read_only" {
+		t.Fatal("new executable did not reach the program boundary", err)
+	}
+	// Current public schema optional fields survive editing a display name exactly.
+	// github_auth is no longer a run-configuration property; the rejection above
+	// must not be bypassed just because old adapter metadata listed it.
 	s, c = fixture(t)
-	c.Profiles[0].Execution.Settings = json.RawMessage(`{"executable":"codex.exe","model":"x","github_auth":{"app_id":1,"installation_id":2,"private_key_env":"EXAMPLE_KEY"}}`)
+	c.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access","executable":"codex.exe","model":"EXAMPLE_KEY","reasoning_effort":"ultra"}`)
 	if err = localservice.WritePrivateFile(s.Home, "execution.json", c); err != nil {
 		t.Fatal(err)
 	}
@@ -232,6 +281,9 @@ func TestExecutionConfigSchemaAndPreservation(t *testing.T) {
 	}
 	if !strings.Contains(string(got.Config.Profiles[0].Execution.Settings), "EXAMPLE_KEY") {
 		t.Fatal("unmodified reference lost")
+	}
+	if !bytes.Equal(got.Config.Profiles[0].Execution.Settings, c.Profiles[0].Execution.Settings) {
+		t.Fatal("renaming changed schema-valid optional settings")
 	}
 }
 func TestExecutionConfigStatusIsReadOnly(t *testing.T) {

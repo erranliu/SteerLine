@@ -25,11 +25,15 @@ function fixture(
     defaults?: boolean;
     lost?: boolean;
     helper?: boolean;
+    helperAgent?: "codex" | "pi";
     piProviders?: boolean;
     remoteAgents?: boolean;
+    remotePair?: boolean;
+    contentWorkflow?: boolean;
   } = {},
 ) {
   let saved: ConfigSnapshot = {
+    environments: [],
     saved_digest: "old",
     writable: !options.readOnly,
     efforts: ["medium", "high", "ultra"],
@@ -104,6 +108,7 @@ function fixture(
             adapter: "codex-app-server",
             target: { kind: "local" },
             settings: {
+              access_mode: "full_access",
               executable: "codex.exe",
               model: options.unknown ? "unconfirmed" : "large",
               reasoning_effort: "ultra",
@@ -119,6 +124,11 @@ function fixture(
       ],
     },
   };
+  if (options.contentWorkflow) {
+    const p = saved.config.execution_profiles[0];
+    p.workflow = { id: "generate", version: 1 };
+    p.execution.settings.access_mode = "read_only";
+  }
   if (options.helper)
     saved.config.execution_profiles.push({
       id: "orca-template",
@@ -127,10 +137,11 @@ function fixture(
         adapter: "orca-terminal",
         target: { kind: "local" },
         settings: {
-          agent: "codex",
+          access_mode: "full_access",
+          agent: options.helperAgent ?? "codex",
           transport: { executable: "orca.exe" },
           agent_launch: {
-            executable: "codex",
+            executable: options.helperAgent === "pi" ? "pi.cmd" : "codex",
             runtime_executable: "C:/deployment/helper.exe",
             runtime_sha256: "a".repeat(64),
           },
@@ -143,6 +154,23 @@ function fixture(
     delete saved.config.execution_profiles[0].execution.settings
       .reasoning_effort;
   }
+  if (options.remotePair) {
+    for (const target of ["one", "two"]) saved.config.execution_profiles.push({
+      id: `remote-${target}`, name: `远端${target}方案`,
+      execution: {adapter: "orca-terminal", target: {kind: "orca_environment", environment: target}, settings: {agent: "codex", agent_launch: {model: "selected"}}},
+      workflow: {id: "development", version: 2},
+    });
+  }
+  const snapshot = () => {
+    const environments: ConfigSnapshot["environments"] = [];
+    for (const profile of saved.config.execution_profiles) {
+      let group = environments.find((g) => g.adapter === profile.execution.adapter &&
+        g.target.kind === profile.execution.target.kind && g.target.environment === profile.execution.target.environment);
+      if (!group) { group = {adapter: profile.execution.adapter, target: profile.execution.target, profile_ids: []}; environments.push(group); }
+      group.profile_ids.push(profile.id);
+    }
+    return {...saved, environments};
+  };
   const writes: unknown[] = [];
   vi.stubGlobal(
     "fetch",
@@ -259,9 +287,9 @@ function fixture(
           saved_digest: "new",
         };
         if (options.lost) throw new TypeError("lost response");
-        return response(saved);
+        return response(snapshot());
       }
-      return response(saved);
+      return response(snapshot());
     }),
   );
   const query = new QueryClient({
@@ -379,6 +407,59 @@ it("reconciles a lost save response before claiming the result", async () => {
   expect(screen.getByLabelText("配置名称")).toHaveValue("回执丢失");
 });
 
+it("shows fixed development access without obsolete permission choices", async () => {
+  const writes = fixture();
+  await screen.findByLabelText("配置名称");
+  fireEvent.click(
+    screen.getByText("更多设置", { selector: "summary", exact: false }),
+  );
+  expect(screen.getByText("开发执行权限固定为完全访问。")).toBeVisible();
+  expect(
+    screen.queryByRole("combobox", { name: "权限模式" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("option", { name: /Runner 默认|沙箱/ }),
+  ).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("配置名称"), {
+    target: { value: "固定开发权限" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(
+    (writes[0] as ConfigSnapshot["config"]).execution_profiles[0].execution
+      .settings.access_mode,
+  ).toBe("full_access");
+});
+
+it("preserves read-only content settings until explicitly switching to development", async () => {
+  const writes = fixture({ contentWorkflow: true });
+  await screen.findByLabelText("配置名称");
+  fireEvent.change(screen.getByLabelText("配置名称"), {
+    target: { value: "内容方案" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(
+    (writes[0] as ConfigSnapshot["config"]).execution_profiles[0].execution
+      .settings.access_mode,
+  ).toBe("read_only");
+  await screen.findByText("配置已保存，待重启生效");
+  fireEvent.click(
+    screen.getByText("更多设置", { selector: "summary", exact: false }),
+  );
+  fireEvent.change(screen.getByLabelText("工作流"), {
+    target: { value: "development/2" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(2));
+  expect(
+    (writes[1] as ConfigSnapshot["config"]).execution_profiles[0],
+  ).toMatchObject({
+    workflow: { id: "development", version: 2 },
+    execution: { settings: { access_mode: "full_access" } },
+  });
+});
+
 it("copies and deletes a saved non-default profile without deleting the default", async () => {
   const writes = fixture();
   await screen.findByLabelText("配置名称");
@@ -398,6 +479,32 @@ it("copies and deletes a saved non-default profile without deleting the default"
   expect(
     (writes[1] as ConfigSnapshot["config"]).default_execution_profile,
   ).toBe("local");
+});
+
+it("creates a local Orca Codex profile from a Pi-only local deployment with explicit development access", async () => {
+  const writes = fixture({ helper: true, helperAgent: "pi" });
+  await screen.findByDisplayValue("本机日常");
+  fireEvent.click(screen.getByRole("button", { name: "新建方案" }));
+  fireEvent.change(screen.getByLabelText("执行链路"), {
+    target: { value: "orca-terminal" },
+  });
+  await screen.findByRole("option", { name: "codex-local" });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  const created = (writes[0] as ConfigSnapshot["config"]).execution_profiles.at(-1)!;
+  expect(created.execution).toMatchObject({
+    adapter: "orca-terminal",
+    target: { kind: "local" },
+    settings: {
+      access_mode: "full_access",
+      agent: "codex",
+      agent_launch: {
+        executable: "codex", model: "codex-local",
+        runtime_executable: "C:/deployment/helper.exe",
+        runtime_sha256: "a".repeat(64),
+      },
+    },
+  });
 });
 
 it("maps local Orca agents, inherits deployment material and strips it remotely", async () => {
@@ -581,4 +688,18 @@ it("configuration reconciles a lost save response and disables writes in a froze
   fixture({ configuration: true, readOnly: true });
   expect(await screen.findByLabelText("生成最大并发数")).toBeDisabled();
   expect(screen.getByRole("button", { name: "保存生成并发" })).toBeDisabled();
+});
+
+it("binds discovery to the complete saved remote target", async () => {
+  fixture({remotePair: true});
+  fireEvent.click(await screen.findByRole("button", {name: /远端one方案/}));
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([, init]) => {
+    const q = init?.body && JSON.parse(String(init.body));
+    return q?.environment === "one" && q.profile_id === "remote-one";
+  })).toBe(true));
+  fireEvent.click(screen.getByRole("button", {name: /远端two方案/}));
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([, init]) => {
+    const q = init?.body && JSON.parse(String(init.body));
+    return q?.environment === "two" && q.profile_id === "remote-two";
+  })).toBe(true));
 });

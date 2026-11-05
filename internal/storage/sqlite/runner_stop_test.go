@@ -153,7 +153,7 @@ func TestRunnerCandidateStopDeliveryRace(t *testing.T) {
 	require(t, s.SaveCandidate(ctx, c, 1, nil))
 	graph, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
-	input := RunnerResult{Project: project, TaskID: c.TaskID, CandidateID: c.ID, TaskVersion: graph.ByID[c.TaskID].Version, CandidateRevision: c.Revision, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, VerificationStarted: at.Add(-time.Second)}
+	input := RunnerResult{Project: project, TaskID: c.TaskID, CandidateID: c.ID, TaskVersion: graph.ByID[c.TaskID].Version, CandidateRevision: c.Revision, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, VerificationStarted: at.Add(-time.Second), PR: fixturePRObservation(c, at, "merged", c.Projection.PR.MergeCommit)}
 	start := make(chan struct{})
 	stopResult, deliveryResult := make(chan error, 1), make(chan error, 1)
 	go func() {

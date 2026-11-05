@@ -33,7 +33,7 @@ func verifyEnvironmentBindings(ctx context.Context, c Config, store env.Store, c
 			if id == "" {
 				selector, id = "request-id", a.Request.RequestID
 			}
-			v, e := cli.Inspect(ctx, selector, id, false)
+			v, e := cli.Inspect(ctx, selector, id)
 			if e != nil {
 				return e
 			}

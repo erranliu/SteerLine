@@ -5,7 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	projectmodel "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
+
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	progresstools "github.com/erranliu/SteerLine/tools"
@@ -119,7 +120,6 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 	t.Helper()
 	rules, err := prompts.TestingRules()
 	require(t, err)
-	key, _ := envmodel.Key(c.RunnerExecution.Profiles[0].Execution)
 	for name, body := range map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`,
 		"SteerlineFlow/spec/task.spec.md":           "# Spec\n\n## Acceptance\n\nFrozen task.\n",
 		"SteerlineFlow/plans/task.plan.md":          "# Plan\n\nFrozen implementation plan. No automated tests are required for this stopped Run fixture.\n",
@@ -128,8 +128,8 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 		"SteerlineFlow/plans/task.tests.json":       `{"tests":["one"]}`,
 		"SteerlineFlow/testing/runtime-progress.md": string(rules),
 		"tools/testing/RuntimeProgress.ps1":         progresstools.PowerShellWriter,
-		envmodel.DocumentPath(key):                  environmentFixtureDocument(key, "ps1", "environment-validation", []string{}),
-		envmodel.ScriptPath(key, "ps1"):             "param($Phase)\n# Lifecycle fixture only.\n",
+		envmodel.DocumentPath():                     environmentFixtureDocument("ps1", []string{}),
+		envmodel.ScriptPath("ps1"):                  "param($Phase)\n# Lifecycle fixture only.\n",
 	} {
 		path := filepath.Join(c.Repository, filepath.FromSlash(name))
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))
@@ -336,7 +336,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 		}
 		result, _ := json.Marshal(map[string]any{"tests": selection})
 		id := strings.Repeat("6", 32)
-		if e = r.store.SaveGeneration(ctx, testmanagement.Generation{ProjectEntry: projectmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Request: runnercontract.Request{RequestID: "fixture-" + id, Protocol: runnercontract.Protocol, Input: json.RawMessage(`{}`)}, ID: id, Project: c.Identity(), Revision: 1, Runner: m.tests.service.Build, PlanText: string(planText), Projection: &runnercontract.Run{StopStatus: "stopped"}, Inputs: mat.Inputs, Command: testmanagement.GenerateCommand{Plan: mat.Contract.PlanRef.Path, Commit: base}, State: "generated", Catalogue: cat, Result: result}, 0); e != nil {
+		if e = r.store.SaveGeneration(ctx, testmanagement.Generation{ProjectEntry: testmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Request: runnercontract.Request{RequestID: "fixture-" + id, Protocol: runnercontract.Protocol, Input: json.RawMessage(`{}`)}, ID: id, Project: c.Identity(), Revision: 1, Runner: m.tests.service.Build, PlanText: string(planText), Projection: &runnercontract.Run{StopStatus: "stopped"}, Inputs: mat.Inputs, Command: testmanagement.GenerateCommand{Plan: mat.Contract.PlanRef.Path, Commit: base}, State: "generated", Catalogue: cat, Result: result}, 0); e != nil {
 			return e
 		}
 		return m.refresh(ctx)

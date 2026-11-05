@@ -7,7 +7,8 @@ import (
 	"errors"
 	"fmt"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
+
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	"strings"
 	"time"
@@ -103,14 +104,14 @@ func (p *testManagementPort) TestCatalogue(ctx context.Context) (json.RawMessage
 		Path       string    `json:"path"`
 		ObservedAt time.Time `json:"observed_at"`
 		Diagnostic string    `json:"diagnostic,omitempty"`
-	}{Tests: []entry{}, Path: pm.ProjectEntryPath, ObservedAt: time.Now().UTC()}
+	}{Tests: []entry{}, Path: testmodel.ProjectEntryPath, ObservedAt: time.Now().UTC()}
 	if p.maintenance == nil {
 		out.Diagnostic = "主分支基线尚未核实"
 		return json.Marshal(out)
 	}
 	out.Commit = p.maintenance.current().Commit
 	seen := map[string]bool{}
-	projectEntry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) { return p.maintenance.read(ctx, out.Commit, path) })
+	projectEntry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return p.maintenance.read(ctx, out.Commit, path) })
 	var raw []byte
 	if err == nil {
 		out.Path = projectEntry.TestingCatalogue

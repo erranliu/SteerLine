@@ -63,7 +63,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 节点和异常规则见[生命周期](worker-lifecycle.md)，配置见[执行方案](execution-profiles.md)，实际通过/未验见[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)。历史 Spec 的迁出前源码链接固定在原 Git 提交，只作追溯。
 
 
-项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；只保留一次检测，manifest4 描述调用，version3 结果包含不可改绑身份、ready/message 和不复核的可选 details。资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 39 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-workflow.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
+项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；只保留一次检测，manifest5 描述调用，version3 结果包含不可改绑身份、ready/message 和不复核的可选 details。资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 39 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-workflow.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
 
 ## Roadmap 规划与入图
 
@@ -75,4 +75,4 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 环境结果 version3 保存项目/环境/活动/轮次/来源提交/依据摘要及稳定调用上下文，项目完成后写 completed/ready/message 与可选 details。平台只验证信封与原执行结算，不解释业务明细；已确认依据变化持久撤销 Current，递增 revision，回退字节也不恢复资格。
 
-项目入口 version1 只声明公共材料和正式测试清单；测试生成及候选快照冻结解析后的入口，持久化拒绝改绑。环境 manifest4 只声明固定入口、解释器和有限依赖，不依赖该任务入口或测试目录。项目要求和检测由项目自己维护；平台不设置 required_checks/gaps 或生成活动。
+项目入口 version1 只声明公共材料和正式测试清单；测试生成及候选快照冻结解析后的入口，持久化拒绝改绑。环境 manifest5 只声明固定入口、解释器和有限依赖，不依赖该任务入口或测试目录。项目要求和检测由项目自己维护；平台不设置 required_checks/gaps 或生成活动。

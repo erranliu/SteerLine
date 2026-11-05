@@ -24,6 +24,10 @@ import {
   type Catalog,
 } from "../../shared/api/execution-configs";
 import { NavigationGuard } from "../../shared/ui/navigation-guard";
+import {
+  executionTargetName,
+  useExecutionEnvironments,
+} from "../../shared/api/execution-environments";
 import "./execution-configs.css";
 
 const clone = <T,>(value: T): T => structuredClone(value);
@@ -84,12 +88,7 @@ export function ExecutionConfigs({
   const [pending, setPending] = useState<(() => void) | null>(null);
   const [deleting, setDeleting] = useState(false);
   const latest = useRef(0);
-  const environments = useQuery({
-    queryKey: [home, "execution-environments"],
-    queryFn: ({ signal }) =>
-      api.discover({ kind: "environments", host: "orca_environment" }, signal),
-    retry: false,
-  });
+  const environments = useExecutionEnvironments(home, csrf);
   useEffect(() => {
     if (!base && query.data) {
       setBase(query.data);
@@ -117,6 +116,7 @@ export function ExecutionConfigs({
       (p) =>
         p.execution.adapter === draft.execution.adapter &&
         p.execution.target.kind === draft.execution.target.kind &&
+        (p.execution.target.environment || "") === (draft.execution.target.environment || "") &&
         agentOf(p) === agentOf(draft),
     );
     let attempts = 0;
@@ -294,7 +294,10 @@ export function ExecutionConfigs({
             execution: {
               adapter: "codex-app-server",
               target: { kind: "local" },
-              settings: { executable: localExecutable },
+              settings: {
+                access_mode: "full_access",
+                executable: localExecutable,
+              },
             },
             workflow: {
               id: "development",
@@ -305,16 +308,6 @@ export function ExecutionConfigs({
           };
     select(p);
     setDefaultChoice(false);
-  }
-  function patchSettings(patch: Partial<Settings>) {
-    if (draft)
-      setDraft({
-        ...draft,
-        execution: {
-          ...draft.execution,
-          settings: { ...draft.execution.settings, ...patch },
-        },
-      });
   }
   function setMain(modelValue: string, effortValue?: string) {
     if (draft) setDraft(changeModel(draft, modelValue, effortValue));
@@ -379,6 +372,7 @@ export function ExecutionConfigs({
           settings.agent_launch.runtime_sha256 = source.runtime_sha256;
       }
     }
+    settings.access_mode = "full_access";
     const choice = base.combinations.find(
       (c) =>
         c.host === kind && c.adapter === chain && c.agent === selectedAgent,
@@ -481,15 +475,7 @@ export function ExecutionConfigs({
       .catch((e) => setError(String(e)));
   }
   const hostName = (p: Profile) =>
-    !remote(p)
-      ? "本机"
-      : (environments.data?.environments?.find(
-          (e) =>
-            e.id === p.execution.target.environment ||
-            e.name === p.execution.target.environment,
-        )?.name ??
-        p.execution.target.environment ??
-        "远端机器");
+    executionTargetName(p.execution.target, environments.data?.environments);
   const queryTitle = loading
     ? "正在获取能力目录…"
     : manual
@@ -593,26 +579,14 @@ export function ExecutionConfigs({
               <span>已保存方案</span>
               <span>{base.config.execution_profiles.length}</span>
             </div>
-            {[
-              ...new Set(
-                base.config.execution_profiles.map((p) =>
-                  JSON.stringify([
-                    p.execution.target.kind,
-                    p.execution.target.environment || "",
-                  ]),
-                ),
-              ),
-            ].map((target) => {
-              const profiles = base.config.execution_profiles.filter(
-                (p) =>
-                  JSON.stringify([
-                    p.execution.target.kind,
-                    p.execution.target.environment || "",
-                  ]) === target,
+            {base.environments.map((environment) => {
+              const profiles = environment.profile_ids.map((id) =>
+                base.config.execution_profiles.find((p) => p.id === id)!,
               );
+              const target = JSON.stringify([environment.adapter, environment.target]);
               return (
                 <section key={target} aria-label={hostName(profiles[0])}>
-                  <h3 className="sl-host-heading">{hostName(profiles[0])}</h3>
+                  <h3 className="sl-host-heading">{hostName(profiles[0])} · {environment.adapter === "orca-terminal" ? "Orca" : "Codex"}</h3>
                   {profiles.map((p) => (
                     <button
                       type="button"
@@ -1008,23 +982,10 @@ export function ExecutionConfigs({
                 <details className="sl-advanced">
                   <summary>
                     <ChevronRight />
-                    更多设置<span className="sl-help">权限与工作流</span>
+                    更多设置<span className="sl-help">工作流</span>
                   </summary>
+                  <p className="sl-help">开发执行权限固定为完全访问。</p>
                   <div className="sl-row">
-                    <div className="sl-field">
-                      <label htmlFor="execution-access">权限模式</label>
-                      <select
-                        id="execution-access"
-                        value={draft.execution.settings.access_mode ?? ""}
-                        onChange={(e) =>
-                          patchSettings({ access_mode: e.target.value })
-                        }
-                      >
-                        <option value="">Runner 默认</option>
-                        <option value="sandbox">沙箱</option>
-                        <option value="full_access">完全访问</option>
-                      </select>
-                    </div>
                     <div className="sl-field">
                       <label htmlFor="execution-workflow">工作流</label>
                       <select
@@ -1047,7 +1008,17 @@ export function ExecutionConfigs({
                             };
                           if (!w.audit_model_required)
                             delete workflow.audit_model;
-                          setDraft({ ...draft, workflow });
+                          setDraft({
+                            ...draft,
+                            execution: {
+                              ...draft.execution,
+                              settings: {
+                                ...draft.execution.settings,
+                                access_mode: "full_access",
+                              },
+                            },
+                            workflow,
+                          });
                         }}
                       >
                         <option

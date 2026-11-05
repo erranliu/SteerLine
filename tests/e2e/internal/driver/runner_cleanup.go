@@ -75,7 +75,7 @@ func CleanupRunner(ctx context.Context, executionConfig, stateDir string, candid
 		if id == "" {
 			selector, id = "request-id", c.Submit.RequestID
 		}
-		original, err := cli.Inspect(ctx, selector, id, false)
+		original, err := cli.Inspect(ctx, selector, id)
 		var failure *runnerclient.Failure
 		if c.RunID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
 			continue
@@ -104,7 +104,7 @@ func CleanupRunner(ctx context.Context, executionConfig, stateDir string, candid
 			if !errors.As(err, &rejected) || rejected.Code != "stale_revision" {
 				return err
 			}
-			fresh, inspectErr := cli.Inspect(ctx, "run-id", run.RunID, false)
+			fresh, inspectErr := cli.Inspect(ctx, "run-id", run.RunID)
 			if inspectErr != nil {
 				return inspectErr
 			}
@@ -121,7 +121,7 @@ func CleanupRunner(ctx context.Context, executionConfig, stateDir string, candid
 			return fmt.Errorf("original Run stop stayed stale after bounded refresh: %w", err)
 		}
 		for {
-			view, err := cli.Inspect(ctx, "run-id", run.RunID, false)
+			view, err := cli.Inspect(ctx, "run-id", run.RunID)
 			if err != nil {
 				return err
 			}

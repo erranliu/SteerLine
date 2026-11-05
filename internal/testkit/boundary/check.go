@@ -60,7 +60,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	case module + "/internal/projectmaintenance":
 		return dependency == module+"/internal/projectmaintenance/model" || dependency == module+"/internal/testmanagement/model"
 	case module + "/internal/executionconfig":
-		return dependency == module+"/internal/runnercontract"
+		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/developerconfig"
 	case module + "/internal/runnerbinding":
 		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate"
 	case hostContract:
@@ -87,7 +87,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -200,7 +200,7 @@ func httpConsumerForbidden(pkg string) bool {
 
 func webConfigDependency(owner, dep string) bool {
 	web := owner == module+"/cmd/steerline-web" || owner == module+"/web/server" || strings.HasPrefix(owner, module+"/web/server/")
-	return web && (dep == module+"/internal/executionconfig" || dep == module+"/internal/runnercontract")
+	return web && (dep == module+"/internal/executionconfig" || dep == module+"/internal/runnercontract" || dep == module+"/internal/developerconfig")
 }
 func httpConsumerPackage(pkg string) bool {
 	if strings.HasPrefix(pkg, module+"/web/server/") {
@@ -504,6 +504,7 @@ func ScanSource(root string) (Report, error) {
 		}
 		if !strings.HasSuffix(entry.Name(), "_test.go") {
 			checkPromptSource(&report, filepath.ToSlash(rel)+"/"+entry.Name(), parsed)
+			checkDeveloperConfigSource(&report, filepath.ToSlash(rel)+"/"+entry.Name(), parsed)
 			for _, decl := range parsed.Decls {
 				names := []string{}
 				switch d := decl.(type) {

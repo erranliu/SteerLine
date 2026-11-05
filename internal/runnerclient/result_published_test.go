@@ -1,10 +1,14 @@
+//go:build runneracceptance
+
 package runnerclient
 
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,9 +23,29 @@ import (
 // One caller/public-EXE boundary test. The native protocol fixture is supplied
 // by Runner; this does not duplicate its collector matrix or prove a real PR.
 func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
+	testPublishedResultFile(t, "")
+}
+
+func TestNative101PublishedArrangement(t *testing.T) {
+	for _, mode := range []string{"readable", "blocked"} {
+		t.Run(mode, func(t *testing.T) { testPublishedResultFile(t, mode) })
+	}
+}
+
+func TestNative101ActualAgentArrangement(t *testing.T) {
+	if os.Getenv("STEERLINE_TASK101_CODEX") == "" || os.Getenv("STEERLINE_TASK101_REPOSITORY") == "" {
+		t.Skip("explicit native Codex and task 101 repository required")
+	}
+	testPublishedResultFile(t, "native")
+}
+
+func testPublishedResultFile(t *testing.T, arrangementMode string) {
+	t.Helper()
+	const arrangement101 = `{"tests":["N101-CONTENT","N101-SCOPE","demo.progress.roundtrip","demo.progress.retry","demo.progress.cleanup"]}`
+	expectedDigest := fmt.Sprintf("%x", sha256.Sum256([]byte(arrangement101)))
 	exe, native := os.Getenv("STEERRUNNER_EXE"), os.Getenv("STEERRUNNER_NATIVE_FIXTURE")
 	if exe == "" || native == "" {
-		t.Skip("explicit pinned Runner and its native protocol fixture required")
+		t.Fatal("explicit pinned Runner and its native protocol fixture required")
 	}
 	root, err := os.MkdirTemp("", "sl-result-")
 	if err != nil {
@@ -36,8 +60,17 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 			t.Error("refuse cleanup outside owned fixture")
 			return
 		}
-		if err := os.RemoveAll(root); err != nil {
-			t.Error(err)
+		deadline := time.Now().Add(8 * time.Second)
+		for {
+			err := os.RemoveAll(root)
+			if err == nil {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Error(err)
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	})
 	check := func(err error) {
@@ -51,11 +84,16 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 	check(os.MkdirAll(state, 0700))
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(root, "gitconfig"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	t.Setenv("CODEX_HOME", state)
+	if arrangementMode != "native" {
+		t.Setenv("CODEX_HOME", state)
+	}
 	t.Setenv("STEERRUNNER_FIXTURE_STATE", state)
 	// This contract exercises collection during a held native Turn. It does
 	// not ask the protocol fixture to recognize or implement business prompts.
 	t.Setenv("STEERRUNNER_CONTENT_FIXTURE", "1")
+	if arrangementMode != "" {
+		t.Setenv("STEERRUNNER_EXPECT_ARRANGEMENT_SHA256", expectedDigest)
+	}
 	check(os.WriteFile(filepath.Join(state, "content-final"), []byte("controlled held Turn"), 0600))
 	provider := filepath.Join(root, "provider.json")
 	t.Setenv("STEERRUNNER_FIXTURE_PROVIDER", provider)
@@ -72,15 +110,30 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 	}
 	git(root, "init", "--bare", bare)
 	git(source, "init", "-b", "main")
-	check(os.WriteFile(filepath.Join(source, "spec.md"), []byte("Controlled caller result contract"), 0600))
-	check(os.WriteFile(filepath.Join(source, "plan.md"), []byte("Hold native fixture; caller stops original Run"), 0600))
-	git(source, "add", ".")
-	git(source, "-c", "user.name=Caller Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture")
+	spec, plan := "spec.md", "plan.md"
+	if task101Source := os.Getenv("STEERLINE_TASK101_REPOSITORY"); (arrangementMode == "readable" || arrangementMode == "native") && task101Source != "" {
+		const fixed = "9d81d9c2652177faf6354d4e9f9f3aec79535d11"
+		git(source, "fetch", "--no-tags", "--", task101Source, fixed)
+		git(source, "-c", "core.hooksPath=/dev/null", "checkout", "-B", "main", fixed)
+		spec, plan = "SteerlineFlow/spec/native-101.spec.md", "SteerlineFlow/plans/native-101.plan.md"
+		if got := git(source, "ls-tree", fixed, "--", "SteerlineFlow/plans/native-101.tests.json"); got != "" {
+			t.Fatal("task 101 fixed commit unexpectedly contains a sidecar")
+		}
+	} else {
+		check(os.WriteFile(filepath.Join(source, spec), []byte("Controlled caller result contract"), 0600))
+		check(os.WriteFile(filepath.Join(source, plan), []byte("Hold native fixture; caller stops original Run"), 0600))
+		if arrangementMode == "blocked" {
+			check(os.Mkdir(filepath.Join(source, ".steerrunner"), 0700))
+			check(os.WriteFile(filepath.Join(source, ".steerrunner", "result"), []byte("blocks result directory creation"), 0600))
+		}
+		git(source, "add", ".")
+		git(source, "-c", "user.name=Caller Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture")
+	}
 	commit := git(source, "rev-parse", "HEAD")
 	git(root, "config", "--global", "url."+filepath.ToSlash(bare)+".insteadOf", "https://controlled.invalid/owner/repo.git")
 	git(source, "remote", "add", "origin", "https://controlled.invalid/owner/repo.git")
 	git(source, "push", "origin", "main")
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	selection := Selection{Executable: exe, Version: os.Getenv("STEERRUNNER_VERSION"), SHA256: os.Getenv("STEERRUNNER_SHA256")}
 	c, version, err := selection.Open(ctx, filepath.Join(root, "runner"), 30*time.Second)
@@ -89,18 +142,38 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 	check(err)
 	var runID string
 	var stop *Request
+	var stopRevision uint64
 	// Cleanup only addresses the original Run/request and original service.
 	stopRun := func() error {
-		v, err := c.Inspect(context.Background(), "run-id", runID, false)
+		v, err := c.Inspect(context.Background(), "run-id", runID)
 		if err != nil || v.Run.StopStatus == "stopped" {
 			return err
 		}
 		if stop == nil {
-			body, _ := json.Marshal(map[string]uint64{"expected_revision": v.Run.Revision})
+			stopRevision = v.Run.Revision
+			body, _ := json.Marshal(map[string]uint64{"expected_revision": stopRevision})
 			stop = &Request{Protocol: Protocol, RequestID: "caller-result-stop", Input: body}
 			_, err = c.Call(context.Background(), "stop", []string{"--run-id", runID}, stop)
 		}
 		return err
+	}
+	observeStoppedArrangement := func() {
+		t.Helper()
+		cursor := ""
+		for ctx.Err() == nil {
+			observation, err := c.Observe(ctx, runID, cursor)
+			check(err)
+			cursor = observation.EventPage.NextCursor
+			if observation.Run.StopStatus == "stopped" {
+				if stop == nil || observation.Run.Revision <= stopRevision {
+					t.Fatal("stop observation did not advance the pre-control revision", stopRevision, observation.Run.Revision)
+				}
+				t.Logf("101 stop observation: Run=%s before=%d after=%d", runID, stopRevision, observation.Run.Revision)
+				return
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		t.Fatal("native arrangement read passed but observe did not confirm stop")
 	}
 	t.Cleanup(func() {
 		if runID != "" {
@@ -128,16 +201,32 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 		t.Fatal("published result schema and frozen caller fixture differ")
 	}
 	c = c.WithCatalog(cat)
-	settings, _ := json.Marshal(map[string]string{"executable": native})
+	engine := native
+	if arrangementMode == "native" {
+		engine = os.Getenv("STEERLINE_TASK101_CODEX")
+	}
+	settings, _ := json.Marshal(map[string]string{"executable": engine, "access_mode": "full_access"})
 	publication, _ := json.Marshal(map[string]any{"base_url": "https://controlled.invalid", "query": map[string]any{"executable": native, "args": []string{"--query", provider}}})
-	input := runnercontract.RunInput{Title: "Caller result contract", Repository: runnercontract.Repository{URL: "https://controlled.invalid/owner/repo.git", LocalPath: source, Remote: "origin", BaseBranch: "main", BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: "spec.md"}, Plan: runnercontract.Document{Path: "plan.md"}}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Publication: runnercontract.Publication{Provider: "command", Repository: "owner/repo", BaseBranch: "main", Settings: publication}, ProgressFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"test.one":false}`))}, ResultFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte("seed"))}}
+	input := runnercontract.RunInput{Title: "Caller result contract", Repository: runnercontract.Repository{URL: "https://controlled.invalid/owner/repo.git", LocalPath: source, Remote: "origin", BaseBranch: "main", BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: spec}, Plan: runnercontract.Document{Path: plan}}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Publication: runnercontract.Publication{Provider: "command", Repository: "owner/repo", BaseBranch: "main", Settings: publication}, ProgressFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"test.one":false}`))}, ResultFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte("seed"))}}
+	if arrangementMode != "" {
+		input.Title = "Native 101"
+		input.Workflow.ProjectPolicySlots = []string{}
+		input.ResultFile.InitialContentBase64 = base64.StdEncoding.EncodeToString([]byte(arrangement101))
+		if arrangementMode == "native" {
+			input.Workflow.PromptOverrides = map[string]string{
+				"implement.execute": "This is a read-only arrangement verification. Use a shell tool to compute the SHA-256 of the original file pointed to by STEERLINE_RESULT_FILE. Write only the hexadecimal digest to a new sibling file named arrangement-proof.txt. Leave the arrangement and progress files untouched. Do not implement, commit, or publish anything. Then report blocked so this diagnostic run stops before publication.",
+			}
+		}
+		check(cat.ValidateResultTarget(input.Execution, input.Workflow))
+		check(cat.ValidateConfiguration(input.Execution, input.Workflow))
+	}
 	body, _ := json.Marshal(input)
 	receipt, err := c.Submit(ctx, Request{Protocol: Protocol, RequestID: "caller-result-submit", Input: body})
 	check(err)
 	runID = receipt.RunID
 	var run *Run
 	for ctx.Err() == nil {
-		v, err := c.Inspect(ctx, "run-id", runID, false)
+		v, err := c.Inspect(ctx, "run-id", runID)
 		check(err)
 		run = v.Run
 		if run.Execution.TurnID != "" {
@@ -152,6 +241,61 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 		t.Fatal("running result was exposed", pending)
 	}
 	path := filepath.Join(run.Execution.Workspace, ".steerrunner", "result", runID, "result.bin")
+	if arrangementMode == "native" {
+		proof := filepath.Join(filepath.Dir(path), "arrangement-proof.txt")
+		for ctx.Err() == nil {
+			data, err := os.ReadFile(proof)
+			if err == nil && strings.EqualFold(strings.TrimSpace(string(data)), expectedDigest) {
+				t.Logf("101 native Agent read: base=%s Run=%s SHA-256=%s", commit, runID, expectedDigest)
+				for ctx.Err() == nil {
+					view, err := c.Inspect(ctx, "run-id", runID)
+					check(err)
+					if view.Run.Execution.NativeOutcome != "" {
+						break
+					}
+					time.Sleep(250 * time.Millisecond)
+				}
+				check(ctx.Err())
+				check(stopRun())
+				observeStoppedArrangement()
+				return
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		t.Fatal("native Agent did not produce the fixed arrangement digest")
+	}
+	if arrangementMode != "" {
+		calls, err := os.ReadFile(filepath.Join(state, "calls.jsonl"))
+		check(err)
+		matched := false
+		for _, line := range bytes.Split(calls, []byte{'\n'}) {
+			var call struct {
+				Method, Path, SHA256 string
+				Readable, Blocked    bool
+			}
+			if json.Unmarshal(line, &call) != nil || call.Method != "arrangement/read" {
+				continue
+			}
+			if filepath.Clean(call.Path) != filepath.Clean(path) || call.Blocked != (arrangementMode == "blocked") || call.Readable != (arrangementMode == "readable") || call.Readable && call.SHA256 != expectedDigest {
+				t.Fatalf("unexpected Agent read trace: %+v", call)
+			}
+			matched = true
+		}
+		if !matched {
+			t.Fatal("Runner did not dispatch a native input with an arrangement read")
+		}
+		progress, err := c.ProgressFile(ctx, runID)
+		check(err)
+		if progress.Version == 0 {
+			t.Fatal("independent progress was not initialized")
+		}
+		t.Logf("101 %s: Runner=%s base=%s Run=%s arrangement SHA-256=%s", arrangementMode, version.SourceCommit, commit, runID, expectedDigest)
+		check(stopRun())
+		if arrangementMode == "readable" {
+			observeStoppedArrangement()
+		}
+		return
+	}
 	final := []byte{0, 255, 'r', '\n'} // Result is opaque, including non-JSON bytes.
 	check(os.WriteFile(path+".tmp", final, 0600))
 	check(os.Rename(path+".tmp", path))
@@ -162,7 +306,7 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 	}
 	check(stopRun())
 	for ctx.Err() == nil {
-		v, err := c.Inspect(ctx, "run-id", runID, false)
+		v, err := c.Inspect(ctx, "run-id", runID)
 		check(err)
 		if v.Run.StopStatus == "stopped" {
 			break

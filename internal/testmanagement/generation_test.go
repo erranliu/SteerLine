@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -142,7 +142,7 @@ func (f *generationCLI) Submit(_ context.Context, r runnerclient.Request) (runne
 	}
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: "submit-command", ReceiptStatus: "accepted"}, nil
 }
-func (f *generationCLI) Inspect(_ context.Context, selector, id string, _ bool) (runnerclient.Inspection, error) {
+func (f *generationCLI) Inspect(_ context.Context, selector, id string) (runnerclient.Inspection, error) {
 	f.inspects++
 	if f.hidden {
 		return runnerclient.Inspection{}, nil
@@ -196,7 +196,7 @@ type slowGenerationCLI struct {
 	seen []string
 }
 
-func (f *slowGenerationCLI) Inspect(ctx context.Context, _, id string, _ bool) (runnerclient.Inspection, error) {
+func (f *slowGenerationCLI) Inspect(ctx context.Context, _, id string) (runnerclient.Inspection, error) {
 	f.seen = append(f.seen, id)
 	if id == "run-a" {
 		<-ctx.Done()
@@ -435,7 +435,7 @@ func TestTMGenerationPersistenceAndUnknown(t *testing.T) {
 
 type missingOriginalGeneration struct{ *generationCLI }
 
-func (f missingOriginalGeneration) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (f missingOriginalGeneration) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	return runnerclient.Inspection{}, &runnerclient.Failure{Code: "request_not_found"}
 }
 
@@ -517,7 +517,7 @@ func TestTMGenerationUsesDeclaredSourcesWithoutLegacyFiles(t *testing.T) {
 		peer.files[path] = peer.files[old]
 		delete(peer.files, old)
 	}
-	peer.files[pm.ProjectEntryPath] = []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`)
+	peer.files[testmodel.ProjectEntryPath] = []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`)
 	r, err := s.Generate(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)

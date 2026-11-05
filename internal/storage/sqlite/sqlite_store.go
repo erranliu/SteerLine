@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+
 	_ "modernc.org/sqlite"
 
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -21,9 +23,16 @@ type SQLiteStore struct {
 	readOnly   bool
 	path       string
 	createdNew bool
+	admission  env.AdmissionPolicy
 }
 
 func OpenSQLiteStore(path string) (_ *SQLiteStore, retErr error) {
+	return OpenSQLiteStoreWithAdmissionPolicy(path, env.AdmissionPolicy{})
+}
+
+// OpenSQLiteStoreWithAdmissionPolicy freezes trusted admission policy for
+// this writer. Candidate payloads never authorize skipping readiness.
+func OpenSQLiteStoreWithAdmissionPolicy(path string, policy env.AdmissionPolicy) (_ *SQLiteStore, retErr error) {
 	defer func() { retErr = storageFailure(retErr, storageports.StorageIO) }()
 	if path == "" {
 		return nil, errors.New("sqlite path is required")
@@ -50,7 +59,7 @@ func OpenSQLiteStore(path string) (_ *SQLiteStore, retErr error) {
 	// Closing idle connections avoids keeping runtime directories undeletable on
 	// Windows when a caller forgets to close an otherwise idle Service.
 	db.SetMaxIdleConns(0)
-	store := &SQLiteStore{db: db, Reader: NewReader(db, nil), path: path, createdNew: createNew}
+	store := &SQLiteStore{db: db, Reader: NewReader(db, nil), path: path, createdNew: createNew, admission: policy}
 	if err := store.ensureSchema(context.Background(), createNew); err != nil {
 		db.Close()
 		store.abortNewDatabase()

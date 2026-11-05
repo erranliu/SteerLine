@@ -126,11 +126,13 @@ export function TaskDetail({
       ? selected?.unavailable_reason || "没有可用执行方案"
       : "";
   const preparation = environment.data?.profiles?.find((p) => p.id === chosen);
-  const environmentReason = !environment.verified
-    ? "运行环境状态待核实"
-    : preparation?.status === "ready"
-      ? ""
-      : preparation?.reason || "环境准备状态尚未核实";
+  const environmentReason = !environment.required
+    ? ""
+    : !environment.verified
+      ? "项目运行环境状态待核实"
+      : preparation?.status === "ready"
+        ? ""
+        : preparation?.reason || "环境准备状态尚未核实";
   const reason = startReason || profileReason || environmentReason;
   if (!task)
     return (
@@ -250,13 +252,16 @@ export function TaskDetail({
             </p>
           ))}
           <p>
-            对应运行环境：
+            对应项目运行环境：
             {environment.verified
               ? environmentStage[preparation?.stage || ""] ||
                 (preparation?.status === "ready" ? "已就绪" : "待核实")
               : "当前待核实"}
           </p>
           {reason && <p className="muted">{reason}</p>}
+          {!environment.required && (
+            <p className="notice amber">环境就绪阻塞已关闭（开发者配置）</p>
+          )}
           {environmentReason && (
             <Link to={environmentLink(api.identity.project_id, chosen, id)}>
               前往环境准备

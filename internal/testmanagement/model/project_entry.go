@@ -45,7 +45,7 @@ func ParseProjectEntry(raw []byte) (ProjectEntry, error) {
 	}
 	seen := map[string]bool{}
 	for _, p := range append(append([]string{}, out.Requirements...), out.TestingCatalogue) {
-		if !ProjectFilePath(p) || p == ProjectEntryPath || p == "SteerlineProjectGuideDoc/environment-adaptation.md" || strings.HasPrefix(p, "SteerlineFlow/environments/") || p == "SteerlineFlow/environment-generation.md" || p == "SteerlineFlow/environment-execution.md" {
+		if !ProjectFilePath(p) || p == ProjectEntryPath || p == "SteerlineProjectGuideDoc/environment-adaptation.md" || p == "SteerlineFlow/environment.md" || p == "SteerlineFlow/scripts/verify-environment.ps1" || p == "SteerlineFlow/scripts/verify-environment.sh" || strings.HasPrefix(p, "SteerlineFlow/environments/") || p == "SteerlineFlow/environment-generation.md" || p == "SteerlineFlow/environment-execution.md" {
 			return out, errors.New("project entry requires finite project-owned regular file paths")
 		}
 	}

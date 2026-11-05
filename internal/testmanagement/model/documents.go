@@ -1,8 +1,9 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"strings"
 )
@@ -12,7 +13,16 @@ const CataloguePath = "SteerlineFlow/testing/test-list.json"
 const WriterPath = "tools/testing/RuntimeProgress.ps1"
 const ProtocolPath = "SteerlineFlow/testing/runtime-progress.md"
 
-// ValidateArrangement compares a real versioned selection with the original
+// FrozenArrangement serializes the original generated selection for the Runner.
+func FrozenArrangement(plan Snapshot) ([]byte, error) {
+	ids := make([]string, 0, len(plan.Definitions))
+	for _, definition := range plan.Definitions {
+		ids = append(ids, definition.ID)
+	}
+	return json.Marshal(Arrangement{Tests: ids})
+}
+
+// ValidateArrangement compares a selection with the original
 // frozen definitions, including order and note. It cannot select new tests.
 func ValidateArrangement(plan Snapshot, raw []byte, catalogue Catalogue) error {
 	selected, err := Select(raw, catalogue)
@@ -29,12 +39,11 @@ func ValidateArrangement(plan Snapshot, raw []byte, catalogue Catalogue) error {
 	}
 	return nil
 }
-func TestReference(doc runnercontract.Document, plan, commit string, ready bool, project pm.ProjectEntry) bool {
-	arrangement, err := ArrangementPath(plan)
-	if err != nil || !ready || project.Version != 1 || !strings.HasSuffix(plan, ".plan.md") || doc.Kind != "" || doc.Content != nil || doc.Commit != "" {
+func TestReference(doc runnercontract.Document, plan string, project ProjectEntry) bool {
+	if project.Version != 1 || !strings.HasSuffix(plan, ".plan.md") || doc.Kind != "" || doc.Content != nil || doc.Commit != "" {
 		return false
 	}
-	for _, path := range append(project.Paths(), WriterPath, ProtocolPath, arrangement) {
+	for _, path := range append(project.Paths(), WriterPath, ProtocolPath) {
 		if doc.Path == path {
 			return true
 		}

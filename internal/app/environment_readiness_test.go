@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +23,93 @@ import (
 )
 
 type readinessTasks struct{ project string }
+
+func TestEnvironmentConfigurationQueryDoesNotTouchProject(t *testing.T) {
+	p, c, store := environmentFixture(t)
+	require(t, store.Close())
+	p.store = nil
+	p.config.Repository = filepath.Join(t.TempDir(), "absent-project")
+	p.config.Git.Executable = "missing-git"
+	c.runtimeEnvironment = p
+	port := &runtimeProjectPort{config: c}
+	value, err := port.environmentRead(context.Background(), "/environment/options", url.Values{"configuration": {"true"}})
+	require(t, err)
+	options := value.(environmentOptions)
+	if len(options.Profiles) != len(c.RunnerExecution.Profiles) || len(options.Environments) == 0 {
+		t.Fatal(options)
+	}
+	for _, item := range options.Environments {
+		if item.Status != "not_ready" || item.Stage != "unverified" || item.ActivityID != "" || item.CurrentRevision != 0 {
+			t.Fatal("configuration claimed project qualification", item)
+		}
+	}
+	for _, query := range []url.Values{{"configuration": {"false"}}, {"configuration": {"true", "true"}}, {"configuration": {"true"}, "extra": {"true"}}} {
+		if _, err := port.environmentRead(context.Background(), "/environment/options", query); err == nil {
+			t.Fatal("accepted invalid query", query)
+		}
+	}
+}
+
+func TestEnvironmentUnqualifiedQueryDoesNotReadDependencyBasis(t *testing.T) {
+	p, c, _ := environmentFixture(t)
+	profile, err := c.RunnerExecution.Profile("remote", "")
+	require(t, err)
+	key, err := env.Key(profile.Execution)
+	require(t, err)
+	path := filepath.Join(c.Repository, filepath.FromSlash(env.DocumentPath()))
+	document := environmentFixtureDocument("ps1", []string{"missing-dependency.md"})
+	require(t, os.WriteFile(path, []byte(document), 0600))
+	commitEnvironmentMaterials(t, c)
+	value, err := p.readinessOptions(context.Background())
+	require(t, err)
+	for _, item := range value.(environmentOptions).Environments {
+		if item.Key == key && (item.Stage != "awaiting_user" || item.Status == "ready") {
+			t.Fatal(item)
+		}
+	}
+	if _, err := p.prepare(context.Background(), "remote"); err == nil || !strings.Contains(err.Error(), "missing-dependency.md") {
+		t.Fatal("start did not validate the full dependency basis", err)
+	}
+}
+
+func TestProjectEnvironmentConfigurationSurvivesProjectFailures(t *testing.T) {
+	for _, failure := range []string{"materials", "source", "storage"} {
+		t.Run(failure, func(t *testing.T) {
+			p, c, store := environmentFixture(t)
+			switch failure {
+			case "materials":
+				fixtureGit(t, c.Repository, "rm", "SteerlineFlow/environment.md")
+				commitEnvironmentMaterials(t, c)
+			case "source":
+				p.config.Branch = "missing-source"
+			case "storage":
+				require(t, store.Close())
+			}
+			value, err := p.readinessOptions(context.Background())
+			require(t, err)
+			raw, _ := json.Marshal(value)
+			var options struct {
+				Environments []environmentView
+				Profiles     []environmentProfileView
+			}
+			require(t, json.Unmarshal(raw, &options))
+			if len(options.Profiles) != len(c.RunnerExecution.Profiles) || len(options.Environments) == 0 {
+				t.Fatal("project failure hid configured targets", string(raw))
+			}
+			for _, item := range options.Environments {
+				if item.Adapter == "" || item.Target.Kind == "" || item.Status == "ready" || item.Reason == "" {
+					t.Fatal("missing target or false qualification", item)
+				}
+				if failure != "materials" && item.Stage != "unverified" {
+					t.Fatal("unavailable state was presented as a detection result", item)
+				}
+				if failure == "materials" && !strings.Contains(item.Reason, "项目尚未接入检测") {
+					t.Fatal(item.Reason)
+				}
+			}
+		})
+	}
+}
 
 func (r readinessTasks) TaskSnapshot(context.Context, string) (taskmodel.Snapshot, error) {
 	task := taskmodel.TaskRecord{ProjectIdentity: r.project, TaskID: "1", Version: 1, Status: "open", Type: "task", Title: "admission probe"}
@@ -173,13 +262,13 @@ func TestProjectEnvironmentReadinessLocalTargetOccupancyAcrossContexts(t *testin
 	require(t, err)
 	key2, err := env.Key(other)
 	require(t, err)
-	if key1 == key2 || env.Target(first) != env.Target(other) || env.Target(first) == "" {
+	if key1 == key2 || executionconfig.Target(first) != executionconfig.Target(other) || executionconfig.Target(first) == "" {
 		t.Fatal("qualification and occupancy keys conflated")
 	}
 	id := env.ID()
 	require(t, store.StartEnvironment(ctx, env.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: profile.ID, Execution: first, State: "running", Requests: []env.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1}}}, 0))
 	admitted := false
-	if err := c.runtimeEnvironmentAdmission.adapt(ctx, env.Target(other), "other", func() error { admitted = true; return nil }); err == nil || admitted {
+	if err := c.runtimeEnvironmentAdmission.adapt(ctx, executionconfig.Target(other), "other", func() error { admitted = true; return nil }); err == nil || admitted {
 		t.Fatal("different local context bypassed original target occupancy", err)
 	}
 }

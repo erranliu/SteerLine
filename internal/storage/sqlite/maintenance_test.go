@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
@@ -47,17 +48,19 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 		material.GenerationID = "generation-" + commit
 		definition := testmanagement.Definition{ID: "one", Name: "One", Level: "L1", Environment: "isolated", Command: "test", Check: "pass"}
 		definitions := []testmanagement.Definition{definition}
-		require(t, s.SaveGeneration(ctx, testmanagement.Generation{ID: material.GenerationID, Project: project, ProjectEntry: pm.ProjectEntry{Version: 1, Requirements: []string{testmodel.RulesPath}, TestingCatalogue: testmodel.CataloguePath}, Revision: 1, Inputs: material.Inputs, State: "generated", Request: runnercontract.Request{RequestID: "request-" + commit}, Result: json.RawMessage(`{"tests":["one"]}`), Catalogue: testmanagement.Catalogue{Tests: definitions}}, 0))
-		require(t, s.SaveMaterial(ctx, project, material))
+		require(t, s.SaveGeneration(ctx, testmanagement.Generation{ID: material.GenerationID, Project: project, ProjectEntry: testmodel.ProjectEntry{Version: 1, Requirements: []string{testmodel.RulesPath}, TestingCatalogue: testmodel.CataloguePath}, Revision: 1, Inputs: material.Inputs, State: "generated", Request: runnercontract.Request{RequestID: "request-" + commit}, Result: json.RawMessage(`{"tests":["one"]}`), Catalogue: testmanagement.Catalogue{Tests: definitions}}, 0))
 		work := task.FixedWork{Record: record, Contract: c, Authority: graph.TaskGraph().Authority, ConfirmedDigest: original.Digest, MaterialDigest: material.Digest}
 		input := runnerclient.RunInput{Title: record.Title, Repository: runnerclient.Repository{URL: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: commit}, Documents: runnerclient.Documents{Spec: runnerclient.Document{Path: c.SpecRef.Path}, Plan: runnerclient.Document{Path: c.PlanRef.Path}}, Publication: runnerclient.Publication{BaseBranch: c.Branch}}
 		raw, _ := json.Marshal(input)
 		candidate := runnerstate.Candidate{Project: project, TaskID: record.TaskID, ID: strings.Repeat(string("abcdef0"[i]), 32), Revision: 1, Explicit: true, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "test", ContractDigest: c.Digest, MaterialDigest: material.Digest, BaseRevision: commit, Participation: "active", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "submit-" + commit, Input: raw}}
-		candidate.TestPlan, _ = json.Marshal(testmanagement.Snapshot{Project: pm.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Status: "ready", PlanPath: c.PlanRef.Path, Commit: commit, GenerationID: material.GenerationID, Inputs: material.Inputs, Definitions: definitions})
-		for _, path := range []string{pm.ProjectEntryPath, testmodel.CataloguePath, testmodel.RulesPath, testmodel.ProtocolPath, testmodel.WriterPath, mustArrangement(t, c.PlanRef.Path)} {
+		candidate.TestPlan, _ = json.Marshal(testmanagement.Snapshot{Project: testmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Status: "ready", PlanPath: c.PlanRef.Path, Commit: commit, GenerationID: material.GenerationID, Inputs: material.Inputs, Definitions: definitions})
+		material.TestPlan = candidate.TestPlan
+		require(t, s.SaveMaterial(ctx, project, material))
+		for _, path := range []string{testmodel.ProjectEntryPath, testmodel.CataloguePath, testmodel.RulesPath, testmodel.ProtocolPath, testmodel.WriterPath} {
 			input.Documents.References = append(input.Documents.References, runnerclient.Document{Path: path})
 		}
 		input.Workflow.PromptOverrides = map[string]string{"implement.execute": testPromptContext(t, candidate.TestPlan, true)}
+		input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"tests":["one"]}`))}
 		candidate.Submit.Input, _ = json.Marshal(input)
 		if i == 0 {
 			bad := material

@@ -4,17 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 )
@@ -22,30 +23,55 @@ import (
 func TestRoadmapPublicationAndAdmissionWithRealGit(t *testing.T) { roadmapPromotionChain(t, false) }
 
 func roadmapPromotionChain(t *testing.T, live bool) {
+	roadmapPromotionChainWithLineEndings(t, live, false)
+}
+
+func TestRoadmapPublicationAndAdmissionWithCRLFCheckout(t *testing.T) {
+	roadmapPromotionChainWithLineEndings(t, false, true)
+}
+
+func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
 	c, _ := nativeTaskFixture(t)
 	ctx := context.Background()
+	if crlf {
+		fixtureGit(t, c.Repository, "config", "core.autocrlf", "true")
+	}
 	fixtureGit(t, c.Repository, "config", "user.name", "Roadmap fixture")
 	fixtureGit(t, c.Repository, "config", "user.email", "roadmap@example.invalid")
 	fixtureGit(t, c.Repository, "config", "commit.gpgsign", "false")
-	// Self-contained rules of the arithmetic fixture project, not SteerLine's
-	// own managed-test framework with unavailable linked prerequisites.
-	rules := map[string]string{
-		"SteerlineFlow/spec/SpecGuide.md":                  "# Spec / Plan 生成规范\n实际读取当前固定版本 logic.go 和 go.mod，按已确认任务与依赖生成完整中文 Spec、Plan、专属验收文件。内部代号不等于正式编号。先整体说明复用、修改所有者和依赖，再逐任务写文档；有关键问题才返回问题。只需读取本文件、testing.md 和 spec-plan-guidelines.md，三份均为本项目完整规范，不引用其他规范。",
-		"SteerlineFlow/environment-project.json":           `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`,
-		"SteerlineFlow/testing/test-list.json":             `{"tests":[]}`,
-		"SteerlineFlow/testing.md":                         "# Arithmetic 测试规范\n项目已有 go.mod。各任务在已有 logic 包新增纯函数与 Go 单元测试，最终验证 go test ./... 和 go vet ./...。计划中写明命令、输入输出断言和证据位置，当前结果均为未验。本项目不使用 SteerLine 仓库的 cmd/test-feedback、L1/L2 或 managed 测试清单，也不需要新增测试基础设施。",
-		"SteerlineProjectGuideDoc/spec-plan-guidelines.md": "# Spec / Plan 编写规范\nSpec 写目标、范围、接口行为、非目标和通过条件；Plan 写具体代码修改、既有模块复用、T1 到 T2 交接、单元测试安排、命令和证据。每个任务生成独立验收文件，自动验收描述必须可执行，纯函数无需人工 UI 体验。禁止兼容层、发布系统或额外任务。",
-		"go.mod": "module example.invalid/arithmetic\n\ngo 1.24.2\n",
+	projectSource := ""
+	if live {
+		projectSource = os.Getenv("STEERLINE_ROADMAP_SOURCE_REPOSITORY")
 	}
-	for name, body := range rules {
-		full := filepath.Join(c.Repository, filepath.FromSlash(name))
-		require(t, os.MkdirAll(filepath.Dir(full), 0700))
-		require(t, os.WriteFile(full, []byte(body), 0600))
-	}
+	actualProject := projectSource != ""
+	if actualProject {
+		if !filepath.IsAbs(projectSource) {
+			t.Fatal("source repository must be absolute")
+		}
+		// Only this test-owned TempDir checkout is reset; the source is fetched read-only.
+		fixtureGit(t, c.Repository, "fetch", "--no-tags", projectSource, "HEAD")
+		fixtureGit(t, c.Repository, "reset", "--hard", "FETCH_HEAD")
+	} else {
+		// Self-contained rules of the arithmetic fixture project, not SteerLine's
+		// own managed-test framework with unavailable linked prerequisites.
+		rules := map[string]string{
+			"SteerlineFlow/spec/SpecGuide.md":                  "# Spec / Plan 生成规范\n实际读取当前固定版本 logic.go 和 go.mod，按已确认任务与依赖生成完整中文 Spec、Plan、专属验收文件。内部代号不等于正式编号。先整体说明复用、修改所有者和依赖，再逐任务写文档；有关键问题才返回问题。只需读取本文件、testing.md 和 spec-plan-guidelines.md，三份均为本项目完整规范，不引用其他规范。",
+			"SteerlineFlow/environment-project.json":           `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`,
+			"SteerlineFlow/testing/test-list.json":             `{"tests":[]}`,
+			"SteerlineFlow/testing.md":                         "# Arithmetic 测试规范\n项目已有 go.mod。各任务在已有 logic 包新增纯函数与 Go 单元测试，最终验证 go test ./... 和 go vet ./...。计划中写明命令、输入输出断言和证据位置，当前结果均为未验。本项目不使用 SteerLine 仓库的 cmd/test-feedback、L1/L2 或 managed 测试清单，也不需要新增测试基础设施。",
+			"SteerlineProjectGuideDoc/spec-plan-guidelines.md": "# Spec / Plan 编写规范\nSpec 写目标、范围、接口行为、非目标和通过条件；Plan 写具体代码修改、既有模块复用、T1 到 T2 交接、单元测试安排、命令和证据。每个任务生成独立验收文件，自动验收描述必须可执行，纯函数无需人工 UI 体验。禁止兼容层、发布系统或额外任务。",
+			"go.mod": "module example.invalid/arithmetic\n\ngo 1.24.2\n",
+		}
+		for name, body := range rules {
+			full := filepath.Join(c.Repository, filepath.FromSlash(name))
+			require(t, os.MkdirAll(filepath.Dir(full), 0700))
+			require(t, os.WriteFile(full, []byte(body), 0600))
+		}
 
-	require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("package logic\n// Extend this pure integer arithmetic package.\n"), 0600))
-	fixtureGit(t, c.Repository, "add", ".")
-	fixtureGit(t, c.Repository, "commit", "-qm", "generation baseline and guidelines")
+		require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("package logic\n// Extend this pure integer arithmetic package.\n"), 0600))
+		fixtureGit(t, c.Repository, "add", ".")
+		fixtureGit(t, c.Repository, "commit", "-qm", "generation baseline and guidelines")
+	}
 
 	root := t.TempDir()
 	bare := filepath.Join(root, "remote.git")
@@ -151,45 +177,99 @@ func roadmapPromotionChain(t *testing.T, live bool) {
 	var code string
 	sourceBody := "# Arithmetic roadmap\nT1: Add a pure Sum(a,b int) int function in package logic; Sum(2,3)=5. Scope is only integer arithmetic and unit tests.\nT2: Add Difference(a,b int) int implemented using Sum(a,-b); Difference(5,2)=3. Depends on T1. Do not implement the functions during planning."
 	sourcePath := roadmap.Root + "publish.md"
+	if actualProject {
+		sourcePath = roadmap.Root + "sample-demo.md"
+	}
 	sourceFile := filepath.Join(c.Repository, filepath.FromSlash(sourcePath))
+	if actualProject {
+		raw, err := os.ReadFile(sourceFile)
+		require(t, err)
+		sourceBody = string(raw)
+	}
 	require(t, os.MkdirAll(filepath.Dir(sourceFile), 0700))
 	require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
-	parseRules, e := prompts.RoadmapParseRules()
+	preparation := port.preparation(ctx)
+	if preparation.Ready {
+		t.Fatal("fresh fixture unexpectedly prepared")
+	}
+	preparePayload, _ := json.Marshal(map[string]string{"commit": preparation.Commit})
+	_, e = port.action(ctx, httpcontract.CommandEnvelope{Action: "roadmap_prepare_static", TargetID: httpcontract.ProjectID(c.Identity()), ExpectedVersion: 1, Payload: preparePayload})
 	require(t, e)
-	docRules, e := prompts.RoadmapDocumentRules()
-	require(t, e)
-	existingGraph, e := port.graph(ctx)
-	require(t, e)
-	graphRaw, e := json.Marshal(existingGraph)
-	require(t, e)
-	for path, body := range map[string][]byte{roadmapservice.GraphPath: graphRaw, roadmapservice.MappingPath: []byte(`{}`), roadmapservice.ParseRulesPath: parseRules, roadmapservice.DocumentRulesPath: docRules} {
-		require(t, os.WriteFile(filepath.Join(c.Repository, path), body, 0600))
+	if port.preparation(ctx).Ready {
+		t.Fatal("initialization treated uncommitted files as published")
 	}
 	fixtureGit(t, c.Repository, "add", ".")
-	fixtureGit(t, c.Repository, "commit", "-qm", "prepare original parse materials")
+	if fixtureGit(t, c.Repository, "status", "--porcelain") != "" {
+		fixtureGit(t, c.Repository, "commit", "-qm", "prepare original parse materials")
+	}
 	fixtureGit(t, c.Repository, "push", "origin", "main")
+	if !port.preparation(ctx).Ready {
+		t.Fatal("published initialization not ready", port.preparation(ctx))
+	}
+	inputOnlyName := ""
+	if live && !actualProject {
+		// The native result must consume uploaded, uncommitted source bytes;
+		// the pinned repository still contains the old function name.
+		inputOnlyName = "SumInput" + roadmapservice.Token()[:8]
+		sourceBody = strings.ReplaceAll(sourceBody, "Sum", inputOnlyName)
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	}
+	if crlf {
+		require(t, os.WriteFile(sourceFile, []byte(strings.ReplaceAll(sourceBody, "\n", "\r\n")), 0600))
+	}
 	source, e := port.source(ctx, sourcePath)
 	require(t, e)
+	if crlf && (source.Modified || source.Body == sourceBody || source.Digest != roadmap.Digest([]byte(source.Body))) {
+		t.Fatal("checkout line endings changed the source state or raw snapshot", source)
+	}
 	parsed := promotionAction(t, port, "roadmap_parse", source.ID, strings.Repeat("a", 32), 1, roadmapservice.ParseInput{RequestID: strings.Repeat("a", 32), Path: sourcePath, Digest: source.Digest, Profile: "fixture"})
 	parsed = awaitPromotion(t, port, parsed, "review")
+	if live && !actualProject {
+		found := false
+		for _, task := range parsed.Analysis.Tasks {
+			if task.Key == "T1" && strings.Contains(task.Evidence, inputOnlyName) {
+				found = true
+			}
+		}
+		if !source.Modified || !found {
+			t.Fatal("native parse did not read the input-only roadmap", source.Modified, parsed.Analysis)
+		}
+	}
+	if crlf {
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	}
+	expectedTasks, expectedEdges := 2, 1
+	if actualProject {
+		expectedTasks, expectedEdges = 6, 6
+		expected := map[string][]string{"demo-tools": {}, "demo-seed": {"demo-tools"}, "demo-left": {"demo-seed"}, "demo-right": {"demo-seed"}, "demo-join": {"demo-left", "demo-right"}, "demo-independent": {"demo-tools"}}
+		if len(parsed.Analysis.Tasks) != expectedTasks {
+			t.Fatal("actual draft task count", parsed.Analysis)
+		}
+		for _, task := range parsed.Analysis.Tasks {
+			deps, ok := expected[task.Key]
+			if !ok || task.ExistingID != "" || len(task.Proposed.Formal) != 0 {
+				t.Fatal("unexpected actual draft task", task)
+			}
+			got := append([]string{}, task.Proposed.Local...)
+			sort.Strings(got)
+			sort.Strings(deps)
+			if strings.Join(got, ",") != strings.Join(deps, ",") {
+				t.Fatal("actual draft dependencies changed", task.Key, got, deps)
+			}
+			delete(expected, task.Key)
+		}
+		if len(expected) != 0 {
+			t.Fatal("actual draft omitted tasks", expected)
+		}
+	}
 	parent := promotionAction(t, port, "roadmap_confirm", parsed.ID, strings.Repeat("1", 32), parsed.Revision, struct{}{})
-	// Explicit normal Git preparation, outside all production commands.
-	planning, e := json.Marshal(struct {
-		Source    string             `json:"source_digest"`
-		Confirmed string             `json:"confirmed_digest"`
-		Analysis  *roadmap.Analysis  `json:"analysis"`
-		Existing  []roadmap.Existing `json:"existing"`
-	}{parent.Source.Digest, parent.ConfirmedDigest, parent.Analysis, parent.Existing})
-	require(t, e)
-	require(t, os.WriteFile(filepath.Join(c.Repository, roadmapservice.PlanningPath), planning, 0600))
-	fixtureGit(t, c.Repository, "add", ".")
-	fixtureGit(t, c.Repository, "commit", "-qm", "prepare confirmed planning material")
-	fixtureGit(t, c.Repository, "push", "origin", "main")
 	code = fixtureGit(t, c.Repository, "rev-parse", "HEAD")
-	require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
+	if !actualProject {
+		require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
+	}
 	r := promotionAction(t, port, "roadmap_generate_documents", parent.ID, strings.Repeat("2", 32), parent.Revision, struct{}{})
 	r = awaitPromotion(t, port, r, "documents-review")
-	if r.CodeCommit != code || len(r.Documents) != 2 || len(r.Mapping) != 0 || len(r.Investigation) == 0 {
+	if r.CodeCommit != code || len(r.Documents) != expectedTasks || len(r.Mapping) != 0 || len(r.Investigation) == 0 {
 		t.Fatal("unverified document result", r)
 	}
 	view, e := port.read(ctx, "/roadmaps/"+r.ID, nil)
@@ -199,7 +279,17 @@ func roadmapPromotionChain(t *testing.T, live bool) {
 		t.Fatal("publication preview incomplete")
 	}
 	// Change the live worktree after freezing: documents still refer to the fixed commit.
-	require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
+	if !actualProject {
+		require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
+	}
+	if crlf {
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody+" "), 0600))
+		rejected, err := port.publish(ctx, r, strings.Repeat("b", 32), roadmap.ReviewDigest(r), true)
+		if err == nil || rejected.Publication != nil {
+			t.Fatal("substantive source change started publication", rejected, err)
+		}
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	}
 	pub, e := port.publish(ctx, r, strings.Repeat("b", 32), roadmap.ReviewDigest(r), true)
 	if e == nil || pub.Publication.State != "pr_unknown" {
 		t.Fatal("missing PR receipt was treated as applied", pub, e)
@@ -231,12 +321,12 @@ func roadmapPromotionChain(t *testing.T, live bool) {
 	// This batch is submitted once; replay after a lost HTTP receipt recovers it.
 	admitted, e := port.admit(ctx, pub, strings.Repeat("c", 32))
 	require(t, e)
-	if admitted.State != "admitted" || len(admitted.Mapping) != 2 {
+	if admitted.State != "admitted" || len(admitted.Mapping) != expectedTasks {
 		t.Fatal(admitted)
 	}
 	graph, e = store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, e)
-	if len(graph.Tasks) != 2 || len(graph.Edges) != 1 {
+	if len(graph.Tasks) != expectedTasks || len(graph.Edges) != expectedEdges {
 		t.Fatal(graph)
 	}
 	recovered, e := port.reconcileAdmission(ctx, admitted)

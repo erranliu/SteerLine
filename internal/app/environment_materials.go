@@ -19,29 +19,25 @@ func (p *environmentPort) targetProfile(key string) (RunnerProfile, error) {
 	return RunnerProfile{}, fmt.Errorf("所选环境不存在于当前开发方案")
 }
 func (p *environmentPort) materials(ctx context.Context, key string) (any, error) {
-	profile, e := p.targetProfile(key)
+	_, e := p.targetProfile(key)
 	if e != nil {
 		return nil, e
 	}
-	out := map[string]any{"environment_key": key, "document_path": model.DocumentPath(key)}
+	out := map[string]any{"environment_key": key, "document_path": model.DocumentPath()}
 	commit, e := p.observedSource(ctx)
 	if e != nil {
 		out["diagnostic"] = e.Error()
 		return out, nil
 	}
 	out["source_commit"] = commit
-	document, e := p.read(ctx, commit, model.DocumentPath(key))
+	document, manifest, _, e := p.invocationAt(ctx, commit)
+	if len(document) > 0 {
+		out["document"] = string(document)
+	}
 	if e != nil {
 		out["diagnostic"] = e.Error()
 		return out, nil
 	}
-	out["document"] = string(document)
-	material, e := p.materialAt(ctx, profile.ID, commit)
-	if e != nil {
-		out["diagnostic"] = e.Error()
-		return out, nil
-	}
-	out["script_path"] = material.Manifest.Script
-	out["inputs"] = material.Inputs
+	out["script_path"] = manifest.Script
 	return out, nil
 }

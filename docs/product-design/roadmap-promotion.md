@@ -2,11 +2,13 @@
 
 Web 的项目导航提供 Roadmap 页面。当前实现读取 `SteerlineFlow/Roadmap/drafts/` 下的普通 UTF-8 Markdown，保留工作树原文、摘要、HEAD 与未提交标记；不创建或改写草稿，不要求用户提供 JSON。
 
+草稿修改标记和跨阶段内容复核容许 LF/CRLF 差异；原文、原始摘要保持。解析自动从 Task owner 取已有图和来源映射，文档生成自动采用已确认规划；这些材料通过 Runner 正式 `kind=file` 交付为私有只读文件，提示只引用路径和摘要。Git 源码/静态规范和动态文件各自核验 manifest，不要求用户手写 JSON 或把动态快照提交到项目。
+
 解析通过 Runner `generate/1`，固定完整原文、已有正式 Task/Spec/DAG 和本来源已有映射。返回内部代号、目标/范围/约束/通过条件、逐字依据、原有和建议依赖、变化理由与待澄清问题。SteerLine 校验引用、环、来源和已有关联；关键问题阻止确认。确认时重新核对原文、图及材料摘要，变化要求重新解析。新任务此时没有正式编号。
 
 ## 固定版本文档生成
 
-2026-10-27 已接入 Runner generate/1 的 repository={local_path,commit}，根据所选构建的公开 capability/schema 开放按钮。Runner 从本地 Git 对象建立固定提交的只读快照；SteerLine 冻结原 Markdown、已确认规划、完整 commit/tree、SpecGuide 与测试/编写规范。没有能力、规范或原文/图材料变化时明确阻止。
+2026-10-27 已接入 Runner generate/1 的 repository={local_path,commit}，根据所选构建的公开 capability/schema 开放按钮。Runner 从本地 Git 对象建立固定提交的只读快照；SteerLine 冻结原 Markdown、已确认规划、完整 commit/tree、SpecGuide 与测试/编写规范。新请求要求 Runner 公布 `frozen_private_files/v1`，原文/图/确认规划由原请求自动供给；恢复只使用该请求已保存的文件，不读当前值重建。没有能力、规范或原文/图材料变化时明确阻止。
 
 文档生成是 purpose=documents 的独立内容记录，通过 parent_id 关联原确认，复用现有队列、原请求、查询、停止及接管。原解析和文档 Run 不混用；排队/未知/失败可观察，不自动换号重发。
 
@@ -51,3 +53,13 @@ Web 的项目导航提供 Roadmap 页面。当前实现读取 `SteerlineFlow/Roa
 发布未知只查原分支/PR。显式继续可以恢复本地准备、已核实推送后的尚未提交 PR 或已核实 PR 后尚未提交的授权合并；未知 POST/merge 不重发。Task 原回执不存在时，显式继续重检前置，仍以保存的原批次及原 Task 请求执行幂等事务。
 
 实现与验证范围以 [专属验收](../../SteerlineFlow/testing/acceptance/roadmap-promotion.md) 为准。真实 Runner/Codex 生成到隔离 Git/SQLite 入图已通过；正式浏览器整链与真实 GitHub PR 发布合并/入图/正常停服及清理已通过；人工体验与安装部署未验。
+
+## 静态材料准备
+
+在已有 Git 项目根执行 `steerline project prepare-roadmap -repository <绝对目录>`，交付当前平台 parse-rules.md、document-rules.md 和缺失的 `SteerlineFlow/spec/SpecGuide.md`；`-check` 只检查。既有自定义 SpecGuide 保留，平台规则不同源会明确报错，需审阅更新，不静默覆盖。将新增静态文档按项目正常流程提交/合入，再使用 Roadmap 页面。命令不纳管、建库或创建任务，完整项目添加仍按其后续范围。
+
+原始动态文件的逻辑名称为 `roadmap-inputs/source.md`、`existing-task-graph.json`、`existing-roadmap-source-map.json` 和 `confirmed-planning.json`。它们由 Runner 给出实际 `file` 读取位置，与源码中的同名文件无关；Run/结果的文件清单须与原上传字节一致。
+
+## 静态初始化入口
+
+Roadmap 页面在解析前展示 HEAD 与已观察目标分支的三份静态材料状态，提供显式“初始化静态材料”；服务按原项目/版本信封生成缺少文件，不调用模型或提交 Git。文件仅在工作树中时显示待提交/合入提示，解析保持禁用；初始化未决请求可按原号只读对账，部分结果保留并明确终止，不自动重跑。CLI `project prepare-roadmap` 仍供仓库准备使用；独立调试包的新项目在首次提交前自动调用同一准备 owner。完整项目添加/纳管仍属于后置范围。细则和验收见 [初始化闭环 Spec](../../SteerlineFlow/spec/roadmap-static-initialization.spec.md)。

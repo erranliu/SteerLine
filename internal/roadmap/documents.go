@@ -56,14 +56,14 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	if err != nil {
 		return r, err
 	}
-	if source.Digest != r.Source.Digest || model.GraphDigest(graph) != r.GraphDigest {
+	if !source.SameContent(r.Source) || model.GraphDigest(graph) != r.GraphDigest {
 		return r, errors.New("来源或已有图材料变化，请重新解析确认")
 	}
 	execution, catalog, err := s.Prepare(ctx, r.Profile)
 	if err != nil {
 		return r, err
 	}
-	if reason := catalog.RepositoryGenerationUnavailable(); reason != "" {
+	if reason := catalog.FileMaterialGenerationUnavailable(); reason != "" {
 		return r, errors.New(reason)
 	}
 	if s.PrepareDocuments == nil {
@@ -95,16 +95,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 			return r, err
 		}
 	}
-	for _, item := range []struct {
-		path     string
-		expected []byte
-	}{{r.Source.Path, []byte(r.Source.Body)}, {PlanningPath, planning}} {
-		file, err := s.fixedFile(ctx, r.CodeCommit, item.path, item.expected, false)
-		if err != nil {
-			return r, err
-		}
-		r.Materials = append(r.Materials, file)
-	}
+	inputs := []runnercontract.Document{fileMaterial(SourceInputPath, []byte(r.Source.Body)), fileMaterial(PlanningPath, planning)}
 	rules, err := prompts.RoadmapDocumentRules()
 	if err != nil {
 		return r, err
@@ -122,7 +113,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
 		Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
 		Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit},
-			Instruction: instruction, Materials: []runnercontract.Document{}, OutputSchema: model.DocumentSchema(r)}}
+			Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(r)}}
 	if err = catalog.ValidateRepositoryGenerate(input); err != nil {
 		return r, err
 	}

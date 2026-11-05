@@ -19,6 +19,41 @@ func TestMain(m *testing.M) {
 		_ = os.WriteFile(os.Getenv("STEERLINE_RUNNER_CLI_CALL"), append([]byte(strings.Join(os.Args[1:], "\n")+"\n--stdin--\n"), body...), 0600)
 		var request Request
 		_ = json.Unmarshal(body, &request)
+		if mode == "upgrade-drain" {
+			name := filepath.Base(os.Args[0])
+			f, err := os.OpenFile(os.Getenv("STEERLINE_UPGRADE_CALLS"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Fprintln(f, name+" "+strings.Join(os.Args[1:], " "))
+			_ = f.Close()
+			key := "STEERLINE_UPGRADE_CANDIDATE_RUN"
+			if strings.HasPrefix(name, "original") {
+				key = "STEERLINE_UPGRADE_ORIGINAL_RUN"
+			}
+			var data any
+			switch {
+			case len(os.Args) > 2 && os.Args[1] == "service" && os.Args[2] == "status":
+				if json.Unmarshal([]byte(os.Getenv("STEERLINE_UPGRADE_SERVICE")), &data) != nil {
+					panic("invalid service fixture")
+				}
+			case len(os.Args) > 2 && os.Args[1] == "service" && os.Args[2] == "verify-stopped":
+				if strings.HasPrefix(name, "original") {
+					panic("old native verifier must not gate its own fix")
+				}
+				if json.Unmarshal([]byte(os.Getenv("STEERLINE_UPGRADE_PROOF")), &data) != nil {
+					panic("invalid proof fixture")
+				}
+			case os.Args[1] == "inspect":
+				if json.Unmarshal([]byte(os.Getenv(key)), &data) != nil {
+					panic("invalid Run fixture")
+				}
+			default:
+				panic("unexpected upgrade command")
+			}
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": Protocol, "ok": true, "request_id": nil, "data": data, "error": nil})
+			os.Exit(0)
+		}
 		if mode == "startup-inspect" {
 			if len(os.Args) > 2 && os.Args[1] == "service" && os.Args[2] == "status" {
 				fmt.Print(os.Getenv("STEERLINE_STARTUP_STATUS"))

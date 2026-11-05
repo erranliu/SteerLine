@@ -2,10 +2,13 @@ package driver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
@@ -32,7 +35,7 @@ func TestTaskListDriverRetainsPublicCandidateAndDeliveryIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := Client{Binary: binary, Config: "fixture-config", Home: t.TempDir()}
+	client := Client{Binary: binary, Config: "fixture-config", Home: t.TempDir(), LogDir: t.TempDir()}
 	page, err := client.Tasks(context.Background())
 	if err != nil || page.Protocol != "native-tasks/v1" || len(page.Tasks) != 1 {
 		t.Fatal("public task page was lost", page, err)
@@ -40,6 +43,27 @@ func TestTaskListDriverRetainsPublicCandidateAndDeliveryIdentity(t *testing.T) {
 	task := page.Tasks[0]
 	if len(task.WorkflowRuns) != 1 || task.WorkflowRuns[0].WorkflowRunID != "candidate" || task.WorkflowRuns[0].ExecutionID != "run" || task.WorkflowRuns[0].CandidateNumber != 2 || task.Delivery == nil || task.Delivery.WorkflowRunID != "candidate" || task.Delivery.ExecutionID != "run" {
 		t.Fatal("CLI task decoder used storage facts instead of public DTOs", task)
+	}
+	raw, err := os.ReadFile(filepath.Join(client.LogDir, "command-0001.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Log keys are stable external evidence, including their exact spelling.
+	var record struct {
+		Command     []string  `json:"command"`
+		StartedAt   time.Time `json:"started_at"`
+		FinishedAt  time.Time `json:"finished_at"`
+		WallSeconds float64   `json:"wall_seconds"`
+	}
+	if err := json.Unmarshal(raw, &record); err != nil {
+		t.Fatal(err)
+	}
+	if len(record.Command) != 5 || record.Command[0] != binary || record.Command[1] != "task" || record.StartedAt.IsZero() || !record.FinishedAt.After(record.StartedAt) || record.WallSeconds <= 0 {
+		t.Fatal("actual CLI timing evidence was lost", string(raw))
+	}
+	difference := time.Duration(record.WallSeconds*float64(time.Second)) - record.FinishedAt.Sub(record.StartedAt)
+	if difference < -time.Microsecond || difference > time.Microsecond {
+		t.Fatal("CLI wall time differs from its actual timestamps", string(raw))
 	}
 }
 

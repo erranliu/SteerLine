@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/developerconfig"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"io"
 	"regexp"
@@ -20,6 +21,8 @@ type Pin struct {
 	SHA256     string `json:"sha256"`
 }
 type File[P any] struct {
+	Developer developerconfig.Config `json:"developer"`
+
 	Version                int             `json:"version"`
 	Runner                 P               `json:"runner"`
 	DefaultProfile         string          `json:"default_execution_profile"`

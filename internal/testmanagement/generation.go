@@ -40,7 +40,7 @@ type GenerationStore interface {
 }
 type GenerationRunner interface {
 	Submit(context.Context, runnerclient.Request) (runnerclient.Receipt, error)
-	Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error)
+	Inspect(context.Context, string, string) (runnerclient.Inspection, error)
 	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
 }
 type GenerationService struct {
@@ -146,7 +146,7 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	if !regexp.MustCompile(`^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`).MatchString(in.Commit) || s.ReadCommitted == nil {
 		return r, errors.New("材料准备不足：测试生成需要固定 Git 提交和正式文件读取能力")
 	}
-	entry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) { return s.ReadCommitted(ctx, in.Commit, path) })
+	entry, err := model.ReadProjectEntry(func(path string) ([]byte, error) { return s.ReadCommitted(ctx, in.Commit, path) })
 	if err != nil {
 		return r, err
 	}
@@ -201,7 +201,7 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	input := runnercontract.GenerateRunInput{Title: "Plan 测试安排: " + in.Plan, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Correlation: map[string]string{"steerline_project": s.Project, "steerline_generation": r.ID}, Generate: runnercontract.GenerateInput{
 		Instruction: instruction,
 		Repository:  &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: in.Commit, Paths: paths},
-		Materials:   materials, OutputSchema: json.RawMessage(`{"type":"object","required":["tests"],"additionalProperties":false,"properties":{"tests":{"type":"array","uniqueItems":true,"items":{"type":"string"}}}}`)}}
+		Materials:   materials, OutputSchema: generationOutputSchema(r.Catalogue)}}
 	if err = catalogue.ValidateRepositoryGenerate(input); err != nil {
 		return r, err
 	}
@@ -231,8 +231,8 @@ func (s *GenerationService) dispatch(ctx context.Context, r Generation) (Generat
 	if err := ctx.Err(); err != nil {
 		return r, err
 	}
-	// No Run exists to take over for an unsent request. A different build must
-	// not execute it and then leave the new Run bound to the old build pin.
+	// No Run exists for an unsent request. A different namespace must not
+	// execute it and leave the new Run bound to the original namespace.
 	if !runnerbinding.SamePath(r.Runner.StateDir, s.Build.StateDir) {
 		return r, errors.New("original Runner namespace differs")
 	}
@@ -371,7 +371,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 	if id == "" || r.InputDigest == "" {
 		selector, id = "request-id", r.Request.RequestID
 	}
-	i, err := s.Runner.Inspect(ctx, selector, id, false)
+	i, err := s.Runner.Inspect(ctx, selector, id)
 	if err != nil {
 		return r, err
 	}

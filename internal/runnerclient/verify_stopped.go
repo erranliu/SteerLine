@@ -21,6 +21,11 @@ type StoppedRun struct {
 	Diagnostic        string `json:"diagnostic,omitempty"`
 }
 
+// An unsettledRunsError carries an otherwise valid inventory.
+type unsettledRunsError struct{ diagnostic string }
+
+func (e *unsettledRunsError) Error() string { return e.diagnostic }
+
 func (c Client) VerifyStopped(ctx context.Context) (StoppedVerification, error) {
 	response, err := c.Call(ctx, "service verify-stopped", nil, nil)
 	if err != nil {
@@ -37,21 +42,22 @@ func (c Client) VerifyStopped(ctx context.Context) (StoppedVerification, error) 
 	if !strings.EqualFold(filepath.Clean(result.StateDir), want) || result.Runs == nil {
 		return result, errors.New("Runner original native resource absence remains unverified")
 	}
-	if !result.ResourcesSettled {
-		diagnostics := []string{"Runner original native resource absence remains unverified"}
-		for _, r := range result.Runs {
-			if !r.ResourcesSettled && r.RunID != "" && r.Diagnostic != "" {
-				diagnostics = append(diagnostics, r.Diagnostic)
-			}
-		}
-		return result, errors.New(strings.Join(diagnostics, "; "))
-	}
 	seen := map[string]bool{}
+	diagnostics := []string{"Runner original native resource absence remains unverified"}
 	for _, r := range result.Runs {
-		if r.RunID == "" || r.InputDigest == "" || seen[r.RunID] || !r.ResourcesSettled || r.Diagnostic != "" {
+		if r.RunID == "" || r.InputDigest == "" || seen[r.RunID] || r.ResourcesSettled != (r.Diagnostic == "") {
 			return result, errors.New("Runner stopped verification contains missing, duplicate or unsettled Run evidence")
 		}
 		seen[r.RunID] = true
+		if !r.ResourcesSettled {
+			diagnostics = append(diagnostics, r.Diagnostic)
+		}
+	}
+	if result.ResourcesSettled != (len(diagnostics) == 1) {
+		return result, errors.New("Runner stopped verification contains inconsistent resource evidence")
+	}
+	if !result.ResourcesSettled {
+		return result, &unsettledRunsError{diagnostic: strings.Join(diagnostics, "; ")}
 	}
 	return result, nil
 }

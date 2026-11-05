@@ -139,11 +139,10 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 		return raw, nil
 	}
 
-	key, err := env.Key(in.Profile.Execution)
-	if err != nil {
+	if _, err := env.Key(in.Profile.Execution); err != nil {
 		return nil, err
 	}
-	document, err := show(env.DocumentPath(key))
+	document, err := show(env.DocumentPath())
 	if err != nil {
 		return nil, err
 	}

@@ -99,7 +99,7 @@ func RunProjectProgress(t *testing.T) {
 	}
 	p.git(p.Repo, "add", "--", "AGENTS.md", "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json")
 	if remote != nil {
-		p.git(p.Repo, "add", "--", env.DocumentPath(p.environmentKey(p.Driver.Profile)))
+		p.git(p.Repo, "add", "--", env.DocumentPath())
 	}
 	p.git(p.Repo, "commit", "--quiet", "-m", "Bind isolated live progress acceptance")
 	head := p.git(p.Repo, "rev-parse", "HEAD")
@@ -202,7 +202,7 @@ func RunProjectProgress(t *testing.T) {
 		if err := controlled.Write(filepath.Join(s.Output, "caller-final-workflow.json"), map[string]any{"snapshot": caller, "error": fmt.Sprint(callerErr)}); err != nil {
 			t.Error(err)
 		}
-		observed, err := runner.Inspect(ctx, "run-id", runID, false)
+		observed, err := runner.Inspect(ctx, "run-id", runID)
 		if err != nil || observed.Run == nil {
 			return // A successful body already retained evidence before stopping.
 		}
@@ -243,7 +243,7 @@ func RunProjectProgress(t *testing.T) {
 	s.Wait("real Runner snapshots and SteerLine progress sequence", func() (bool, error) {
 		ctx, cancel := context.WithTimeout(s.Context, 10*time.Second)
 		defer cancel()
-		observed, err := runner.Inspect(ctx, "run-id", runID, false)
+		observed, err := runner.Inspect(ctx, "run-id", runID)
 		if err != nil {
 			return false, err
 		}
@@ -336,7 +336,7 @@ func RunProjectProgress(t *testing.T) {
 	}
 	var original runnercontract.Run
 	s.Wait("real native final and original project reports", func() (bool, error) {
-		observed, err := runner.Inspect(s.Context, "run-id", runID, false)
+		observed, err := runner.Inspect(s.Context, "run-id", runID)
 		if err != nil || observed.Run == nil {
 			return false, err
 		}

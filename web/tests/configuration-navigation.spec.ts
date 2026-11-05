@@ -45,11 +45,118 @@ test.afterAll(async () => {
   );
 });
 
+test("global developer switches preserve drafts, require restart and disappear in release builds", async ({
+  page,
+}, info) => {
+  let snapshot = structuredClone({
+    ...configSnapshot,
+    developer_available: true,
+  });
+  snapshot.config.developer = { skip_environment_readiness: false };
+  let loaded = "loaded";
+  let available = true;
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  await page.route("**/auth/status", (route) =>
+    route.fulfill({
+      json: {
+        csrf_token: "csrf",
+        identity: {
+          home_id: "developer-browser-home",
+          instance_id: "web",
+          ready: true,
+        },
+      },
+    }),
+  );
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let data: unknown = {};
+    if (path === "/api/web/execution-config") {
+      if (route.request().method() === "PUT") {
+        expect(route.request().headers()["if-match"]).toBe(
+          '"' + snapshot.saved_digest + '"',
+        );
+        snapshot = {
+          ...snapshot,
+          config: route.request().postDataJSON(),
+          saved_digest: "saved",
+        };
+      }
+      data = { ...snapshot, developer_available: available };
+    } else if (path.endsWith("/status"))
+      data = { saved_digest: snapshot.saved_digest };
+    else if (path.endsWith("/projects"))
+      data = { projects: [], loaded_execution_digest: loaded };
+    else if (path.endsWith("/discover"))
+      data = {
+        state: "ready",
+        models: [],
+        environments: [],
+        context_unverified: true,
+      };
+    await route.fulfill({ json: data });
+  });
+  await page.goto(origin + "/settings");
+  const toggle = page.getByRole("switch", { name: "环境未就绪时阻止执行" });
+  await expect(toggle).toBeChecked();
+  await toggle.focus();
+  await page.keyboard.press("Space");
+  await expect(toggle).not.toBeChecked();
+  await expect(
+    page.getByText("当前生效状态：环境就绪阻塞已开启"),
+  ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await expect(toggle).not.toBeChecked();
+  await page.getByRole("button", { name: "保存开发者配置" }).click();
+  await expect(
+    page.getByText("全局配置已保存，待重启生效", { exact: true }),
+  ).toBeVisible();
+  expect(snapshot.config.developer).toEqual({
+    skip_environment_readiness: true,
+  });
+  expect(snapshot.config.execution_profiles).toEqual(
+    configSnapshot.config.execution_profiles,
+  );
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`developer-${width}.png`),
+      fullPage: true,
+    });
+  }
+  loaded = snapshot.saved_digest;
+  await page.reload();
+  await expect(
+    page.getByText("当前生效状态：环境就绪阻塞已关闭"),
+  ).toBeVisible();
+  // The other editor must retain its unsaved protection with both panels mounted.
+  await page.getByLabel("生成最大并发数").fill("7");
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await expect(page.getByLabel("生成最大并发数")).toHaveValue("7");
+  await page.getByRole("button", { name: "取消修改", exact: true }).click();
+  available = false;
+  await page.reload();
+  await expect(page.getByLabel("生成最大并发数")).toBeVisible();
+  await expect(page.getByRole("region", { name: "开发者配置" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("runtime environments keep card actions, failed observations and task return scoped", async ({
   page,
 }, info) => {
   const projects = ["a".repeat(64), "b".repeat(64)];
+  const remoteMachineID = "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8";
   let failOptions = false;
+  let holdQualification = false;
+  let releaseQualification = () => {};
   const writes: unknown[] = [];
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -73,7 +180,10 @@ test("runtime environments keep card actions, failed observations and task retur
   const environments = stages.map((stage, i) => ({
     environment_key: String(i + 1).repeat(64),
     name: "本机",
-    target: { kind: "local" },
+    target:
+      i === 1
+        ? { kind: "orca_environment", environment: remoteMachineID }
+        : { kind: "local" },
     adapter: i === 0 ? "codex-app-server" : "orca-terminal",
     agent: "Codex",
     status: stage === "ready" ? "ready" : "not_ready",
@@ -81,11 +191,12 @@ test("runtime environments keep card actions, failed observations and task retur
     reason: `原原因 ${stage}`,
     current_revision: i + 1,
     activity_settled: true,
+    activity_id: i === 0 ? "d".repeat(32) : undefined,
     profiles:
       i === 0 ? profiles : [{ id: `profile-${stage}`, name: `方案-${stage}` }],
     document_path: "SteerlineFlow/environment.md",
     document: "共享的准备清单",
-    script_path: "scripts/verify-environment.ps1",
+    script_path: "SteerlineFlow/scripts/verify-environment.ps1",
     source_commit: "c".repeat(40),
   }));
   await page.route("**/auth/status", (route) =>
@@ -122,6 +233,15 @@ test("runtime environments keep card actions, failed observations and task retur
       workflow_runs: [],
     };
     let data: unknown = {};
+    if (
+      path === "/api/web/execution-config/discover" &&
+      route.request().postDataJSON()?.kind === "environments"
+    ) {
+      await route.fulfill({
+        json: { environments: [{ id: remoteMachineID, name: "远程工作站" }] },
+      });
+      return;
+    }
     if (route.request().method() !== "GET") {
       writes.push(route.request().postDataJSON());
       await route.fulfill({
@@ -131,14 +251,34 @@ test("runtime environments keep card actions, failed observations and task retur
       return;
     }
     if (path.endsWith("/environment/options")) {
-      if (failOptions) {
+      const configuration =
+        new URL(route.request().url()).searchParams.get("configuration") ===
+        "true";
+      if (!configuration && holdQualification)
+        await new Promise<void>((resolve) => {
+          releaseQualification = resolve;
+        });
+      if (!configuration && failOptions) {
         await route.fulfill({
           status: 503,
           json: { message: "fixture unavailable" },
         });
         return;
       }
-      const visible = project === projects[0] ? environments : [];
+      const visible =
+        project === projects[0]
+          ? environments.map((e) =>
+              configuration
+                ? {
+                    ...e,
+                    status: "not_ready",
+                    stage: "unverified",
+                    reason: "项目运行环境状态待核实",
+                    current_revision: 0,
+                  }
+                : e,
+            )
+          : [];
       data = {
         environments: visible,
         profiles: visible.flatMap((e) =>
@@ -156,12 +296,27 @@ test("runtime environments keep card actions, failed observations and task retur
       };
     } else if (path.endsWith("/environment/materials"))
       data = {
-        document_path: "SteerlineFlow/environments/selected/environment.md",
+        document_path: "SteerlineFlow/environment.md",
         document: "Target requirements",
         generation_ready: false,
         generation_diagnostic: "生成输入待维护",
       };
     else if (path.endsWith("/environment")) data = { records: [] };
+    else if (path.endsWith("/environment/" + "d".repeat(32)))
+      data = {
+        id: "d".repeat(32),
+        revision: 1,
+        settled: true,
+        state: "ready",
+        status: "ready",
+        created_at: "2026-11-02T06:30:00Z",
+        rounds: [
+          {
+            run_id: "opaque-run-id",
+            result: { content_base64: "opaque-file" },
+          },
+        ],
+      };
     else if (path.endsWith("/projects"))
       data = {
         projects: projects.map((id, i) => ({
@@ -223,56 +378,139 @@ test("runtime environments keep card actions, failed observations and task retur
   environments[0].stage = "stale";
   await page.getByRole("button", { name: "刷新查询" }).click();
   // Explicit navigation also covers a refresh with serialized task/profile.
+  holdQualification = true;
   await page.goto(
     `${origin}/projects/${projects[0]}/environment?profile=alternate&task=38`,
   );
   await expect(
-    page.getByRole("heading", { name: "运行环境", exact: true }),
+    page.getByRole("heading", { name: "项目运行环境", exact: true }),
   ).toBeVisible();
   const first = page.locator(".environment-card").first();
-  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
-  await expect(first.getByLabel("验收所用方案").locator("option:checked")).toHaveText("alternate · model-high · high");
+  await expect(
+    page.getByRole("option", {
+      name: "远程工作站 · Orca → Codex",
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByLabel("运行环境", { exact: true }).locator("option"),
+  ).toHaveCount(7);
+  await expect(first.getByRole("heading")).toHaveText("状态待核实");
+  await expect(
+    first.getByRole("button", { name: /开始检测|重新检测/ }),
+  ).toBeDisabled();
+  await page.screenshot({
+    path: info.outputPath("configuration-visible-qualification-pending.png"),
+    fullPage: true,
+  });
+  holdQualification = false;
+  releaseQualification();
+  await expect(first.getByRole("heading")).toHaveText("已失效");
+  await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
+  await expect(
+    first.getByLabel("检测所用方案").locator("option:checked"),
+  ).toHaveText("alternate · model-high · high");
   await expect(first).toBeFocused();
-  await expect(page.getByText("阅读项目准备清单", { exact: true })).toHaveCount(
-    1,
-  );
+  await expect(page.getByText("查看准备要求", { exact: true })).toHaveCount(1);
   await page.reload();
-  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
   await page.getByRole("link", { name: "返回任务", exact: true }).click();
   await expect(page.getByLabel("本次执行方案")).toHaveValue("alternate");
   await page.getByRole("link", { name: "前往环境准备", exact: true }).click();
-  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
   environments[0].stage = "ready";
   environments[0].status = "ready";
   await page.getByRole("button", { name: "刷新环境" }).click();
-  await expect(first.getByRole("heading")).toHaveText("Codex 直连 · 已就绪");
-  for (const label of [
-    "待准备与验收",
-    "验收中",
-    "验收阻断",
+  await expect(first.getByRole("heading")).toHaveText("已就绪");
+  const labels = [
+    "已就绪",
+    "待准备与检测",
+    "检测中",
+    "检测阻断",
     "已失效",
     "未准备",
-  ]) {
-    await expect(
-      page
-        .getByRole("region", { name: "选择运行机与链路" })
-        .getByRole("button")
-        .filter({ hasText: label }),
-    ).toHaveCount(1);
+  ];
+  for (const [index, label] of labels.entries()) {
+    await page
+      .getByLabel("运行环境", { exact: true })
+      .selectOption(String(index + 1).repeat(64));
+    await expect(first.getByRole("heading")).toHaveText(label);
   }
+  await page
+    .getByLabel("运行环境", { exact: true })
+    .selectOption("1".repeat(64));
   failOptions = true;
   await page.getByRole("button", { name: "刷新环境" }).click();
   await expect(page.getByText(/上次已知状态，当前待核实/)).toBeVisible();
-  await expect(first.getByRole("button", { name: "提交验收" })).toBeDisabled();
+  await expect(
+    first.getByRole("button", { name: /开始检测|重新检测/ }),
+  ).toBeDisabled();
   failOptions = false;
   await page.getByRole("button", { name: "刷新环境" }).click();
-  await expect(first.getByRole("button", { name: "提交验收" })).toBeEnabled();
-  const invalidation = first.getByText("标记失效", { exact: true });
+  await expect(
+    first.getByRole("button", { name: /开始检测|重新检测/ }),
+  ).toBeEnabled();
+  const invalidation = first.locator("summary").filter({ hasText: "更多设置" });
   await invalidation.focus();
   await page.keyboard.press("Enter");
   await expect(first.getByLabel("环境失效原因")).toBeVisible();
   await invalidation.focus();
   await page.keyboard.press("Enter");
+  await page.evaluate(
+    ({ project }) =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("steerline-web:runtime-ui-home", 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction("requests", "readwrite");
+          const envelope = {
+            request_id: "opaque-request-id",
+            project_id: project,
+            instance_id: "instance-a",
+            action: "environment_start",
+            target_id: project,
+            expected_version: 1,
+            payload: {},
+          };
+          tx.objectStore("requests").put({
+            envelope,
+            created_at: "2026-11-02T06:30:00Z",
+            response: {
+              ...envelope,
+              status: "applied",
+              diagnostic: "opaque-receipt-detail",
+            },
+          });
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+          };
+        };
+      }),
+    { project: projects[0] },
+  );
+  await expect(page.getByRole("region", { name: "操作结果" })).toHaveText(
+    "开始检测：操作成功",
+  );
+  await expect(first.getByText("d".repeat(32), { exact: true })).toBeVisible();
+  const bodyText = await page.locator("body").innerText();
+  for (const hidden of [
+    remoteMachineID,
+    "1".repeat(64),
+    "c".repeat(40),
+    "instance-a",
+    "opaque-run-id",
+    "opaque-request-id",
+    "opaque-receipt-detail",
+    "操作回执",
+  ]) {
+    expect(bodyText).not.toContain(hidden);
+  }
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 1000 });
     expect(
@@ -407,6 +645,12 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
     "href",
     target,
   );
+  await page.locator("summary").filter({ hasText: "更多设置" }).click();
+  await expect(page.getByText("开发执行权限固定为完全访问。")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "权限模式" })).toHaveCount(0);
+  await expect(
+    page.getByRole("option", { name: /Runner 默认|沙箱/ }),
+  ).toHaveCount(0);
   await page.screenshot({
     path: info.outputPath("profiles-desktop.png"),
     fullPage: true,

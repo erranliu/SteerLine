@@ -68,10 +68,9 @@ type blockedObservation struct {
 	immediate bool
 }
 
-func (c *blockedObservation) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (c *blockedObservation) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	return runnerclient.Inspection{Run: &c.run}, nil
 }
-func (*blockedObservation) SupportsObservation() bool { return true }
 func (c *blockedObservation) Observe(ctx context.Context, _, _ string) (runnerclient.RunObservation, error) {
 	if c.immediate {
 		return runnerclient.RunObservation{Contract: runnerclient.RunObservationContract, Run: c.run, EventPage: runnerclient.EventPage{Events: []runnerclient.Event{}, NextCursor: "next"}}, nil

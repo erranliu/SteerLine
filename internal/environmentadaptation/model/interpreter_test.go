@@ -1,11 +1,8 @@
-package model_test
+package model
 
 import (
 	"fmt"
-	"strings"
 	"testing"
-
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 )
 
 func TestManifestDeclaresWindowsPowerShellOrBash(t *testing.T) {
@@ -21,9 +18,8 @@ func TestManifestDeclaresWindowsPowerShellOrBash(t *testing.T) {
 		{"ps1", "", false},
 	} {
 		t.Run(tc.script+"-"+tc.interpreter, func(t *testing.T) {
-			key := strings.Repeat("a", 64)
-			doc := fmt.Sprintf("```steerline-environment\n{\"version\":4,\"environment_key\":%q,\"script\":%q,\"interpreter\":%q,\"dependencies\":[]}\n```", key, env.ScriptPath(key, tc.script), tc.interpreter)
-			_, err := env.ParseManifest([]byte(doc))
+			doc := fmt.Sprintf("```steerline-environment\n{\"version\":5,\"script\":%q,\"interpreter\":%q,\"dependencies\":[]}\n```", ScriptPath(tc.script), tc.interpreter)
+			_, err := ParseManifest([]byte(doc))
 			if (err == nil) != tc.valid {
 				t.Fatalf("valid=%v err=%v", tc.valid, err)
 			}

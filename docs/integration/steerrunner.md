@@ -1,5 +1,12 @@
 # SteerRunner 依赖与运行
 
+## 任务候选观察
+
+正常项目运行要求 Runner 在线 catalog 提供 `steerrunner-run-observation/v1`、`same_snapshot: true` 及至少 100 条每页。已绑定任务候选使用 `observe` 获取 Run 和事件页。原 `request_id` 对账、启动前离线读取和控制前 revision 仍走 `inspect`。启动前先完成停止信封交接，再检查在线观察能力。见[同快照观察 Spec](../../SteerlineFlow/spec/task-run-observation.spec.md)。
+
+## Git 型新 Run 的启动边界
+
+SteerLine 校验固定 commit 的项目材料及接入条件，冻结候选与请求。Runner 按该 commit 创建新 worktree，沿创建回执绑定原资源，随后自主推进 Workflow。成功创建即满足该路径的工作区启动条件。自动生成的测试安排随冻结请求进入既有文件渠道，由 Agent 在工作区使用时读取。请求形成时发现的缺项由 SteerLine 阻断，运行期读不到安排由 Agent 报告。旧 Run 恢复继续走独立流程。见[启动边界 Spec](../../SteerlineFlow/spec/fresh-worktree-startup.spec.md)。
 
 2026-10-28 调用方提示词改为短指令与固定文档：新请求仅保留动作、引用及少量参数，完整安排、规则、原文和报告通过既有固定仓库/工作区读取；缺文件或版本不符在投递前阻断，无 inline 兜底。generate 使用固定 `generate.repository` 且 materials 为空；schema 仅保留结构，结果仍核对原文和 manifest。完整冻结安排与原报告保存在原 owner；环境下一轮缺少完整报告到新工作区的正式渠道时停止创建新 Run。用户完整回答最多 2000 UTF-8 字节，超限拒绝；旧请求仅观察原冻结输入。[设计与供给边界](../../SteerlineFlow/spec/caller-prompt-convergence.spec.md)、[实际验收](../../SteerlineFlow/testing/acceptance/caller-prompt-convergence.md)。
 
@@ -10,11 +17,13 @@
 2026-10-24：候选测试汇报改用 [progress-file 单文件通道](runtime-progress.md)，调用方冻结布尔字段、独立保存快照并解释展示。候选侧原 R2 收集、workspace-git 当前通过判定和自动转测试历史已移除；下文 2026-10-20 的 R2 接入只记录历史版本。独立标准报告与显式登记保留。安装及旧现场不自动迁移。
 
 
-执行页“用量与费用”消费 Runner #47 / `61d9317524b56f148b2b31e2f23a4acc1de58081` 的 `run-usage`、`estimate-run-cost`，以同一用量快照估算候选累计主会话费用。页面不触发日志补采或执行输入；缺价表仍显示 Token，未知不显示零，部分费用标记“已计价部分”。当前资格为 Orca 本机 Codex/Pi/DSH 和远端 Codex；`codex-app-server` 与远端 Pi/DSH 未由本次接入扩展。接入与测试范围见[Plan](../../SteerlineFlow/plans/run-usage-cost-ui.plan.md)和[验收](../../SteerlineFlow/testing/acceptance/run-usage-cost-ui.md)。
+执行页“用量与费用”消费 Runner 的 `run-usage` 和 `estimate-run-cost`，以同一用量快照估算候选累计主会话费用。页面不触发日志补采或执行输入；缺价表仍显示 Token，未知不显示零，部分费用标记“已计价部分”。采集范围以所用 Runner 的 `capabilities.run_usage.matrix` 为准。支持本机 `codex-app-server` 用量的 Runner 从原生通知读取 Token，并按原会话与回合归属及去重。该通知缺少逐响应的计价依据，因此费用保持未知。页面接入范围见[验收](../../SteerlineFlow/testing/acceptance/run-usage-cost-ui.md)。
 
 `execution.json` 的可选顶层 `pricing_policy` 为 Runner 所在机器上的绝对 JSON 文件路径，例如 `"pricing_policy": "C:/MySteerLine/pricing-policy.json"`。价表使用所选 Runner 发布的 `run-pricing-policy/v1`，明确 ID、版本、来源、币种、生效区间和模型费率；不内置价格、不联网抓价。金额是 token 的 API 等价估算，不是实际扣费，排除订阅/credits 结算与工具/外部 API 附加费。价表在估价时由 Runner 独立读取，刷新可以按新策略重算，用量事实不变；设置或更换文件路径需保存配置并显式重启 SteerLine。
 
 本机采集沿 Runner 默认策略。远端采集需要在 `execution.json` 顶层显式配置 Runner 的 `usage_policy`，启动时原样传入原 `service start`；例如关闭远端新增目录登记的策略为 `{"enabled":true,"remote_log_access":{"mode":"disabled","grants":[]}}`。允许远端登记时使用 Runner 公开 schema 的 `temporary` 模式，并显式指定 environment、已核实的稳定 host_id 和受限 session_roots。不要使用账号 home 或凭据根作为授权范围；具体根资格由 Runner 验证。策略省略不扩权，页面读取不授权；更改须经正式停服/启动，冲突不热更新。Web 编辑执行 profile 时保留这两项部署字段。
+
+SteerLine 按候选冻结的 provider 查询已绑定 PR，交付和废弃共用平台查询，并在本地事务重核原候选和版本。Runner 自主核验 Workflow 发布，独立调用方仍可使用 `inspect --refresh-pr`。详见[任务 PR 核验 Spec](../../SteerlineFlow/spec/task-pr-merge-ownership.spec.md)。
 
 SteerLine 只通过 `steerrunner-cli/v1` 调用独立 EXE。Runner 同一个 EXE 提供短命 CLI 与常驻服务；CLI 连接同一 state-dir 的现有实例，读请求不自动启动服务。任务、DAG、候选参与及 TaskDelivery 留在 SteerLine。
 

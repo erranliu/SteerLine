@@ -9,8 +9,9 @@ import (
 
 // GenerateCapability mirrors the published generate capability, not a new workflow.
 type GenerateCapability struct {
-	Workflow   string `json:"workflow"`
-	Repository struct {
+	FileMaterials *GenerateFileCapability `json:"file_materials,omitempty"`
+	Workflow      string                  `json:"workflow"`
+	Repository    struct {
 		InputProperty    string `json:"input_property"`
 		Source           string `json:"source"`
 		Commit           string `json:"commit"`
@@ -24,6 +25,27 @@ type GenerateCapability struct {
 	Source             string `json:"source"`
 	MaxResultUTF8Bytes int    `json:"max_result_utf8_bytes"`
 	OutputSchema       string `json:"output_schema"`
+}
+
+type GenerateFileCapability struct {
+	Contract      string `json:"contract"`
+	InputProperty string `json:"input_property"`
+	Kind          string `json:"kind"`
+	Manifest      string `json:"manifest"`
+	MaxFiles      int    `json:"max_files"`
+	MaxBytes      int    `json:"max_bytes"`
+}
+
+func (c *Catalog) FileMaterialGenerationUnavailable() string {
+	if reason := c.RepositoryGenerationUnavailable(); reason != "" {
+		return reason
+	}
+	f := c.Capabilities.Generate.FileMaterials
+	if f == nil || f.Contract != "frozen_private_files/v1" || f.InputProperty != "generate.materials" || f.Kind != "file" ||
+		f.Manifest != "run.materials/content_result.file_materials" || f.MaxFiles < 1 || f.MaxBytes < 1 {
+		return "所选 Runner 未公布正式冻结文件材料能力"
+	}
+	return ""
 }
 
 // VerifyRepositoryFiles consumes the existing public snapshot manifest. It is
@@ -85,6 +107,25 @@ func (c *Catalog) ValidateRepositoryGenerate(in runnercontract.GenerateRunInput)
 	}
 	if in.Generate.Repository == nil {
 		return errors.New("文档生成必须固定仓库与完整提交")
+	}
+	count, size := 0, 0
+	for _, material := range in.Generate.Materials {
+		if material.Kind == "file" {
+			if material.Content == nil {
+				return errors.New("file material content is required")
+			}
+			count++
+			size += len(*material.Content)
+		}
+	}
+	if count > 0 {
+		if reason := c.FileMaterialGenerationUnavailable(); reason != "" {
+			return errors.New(reason)
+		}
+		limits := c.Capabilities.Generate.FileMaterials
+		if count > limits.MaxFiles || size > limits.MaxBytes {
+			return errors.New("frozen file materials exceed Runner limits")
+		}
 	}
 	return c.ValidateGenerate(in)
 }

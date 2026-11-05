@@ -32,9 +32,15 @@ func TestSharedRunnerProjects(t *testing.T) {
 			b.Database = filepath.Join(strings.TrimSpace(strings.TrimPrefix(line, "run_dir")), "steerline.db")
 		}
 	}
+	// Both projects need their own public qualification before testing shared
+	// business execution. Directory visibility is not an admission proof.
+	a.WriteControlledEnvironment()
+	b.WriteControlledEnvironment()
 	a.CreateTasks()
 	b.Service = a.Service
 	b.CreateTasks()
+	a.ValidateDeclaredControlledEnvironment("controlled")
+	b.ValidateDeclaredControlledEnvironment("controlled")
 	requestID := strings.Repeat("5", 32)
 	for _, p := range []*testenv.Project{a, b} {
 		s.Must(p.Driver.Control(s.Context, s.Run.Helper, "resume_dispatch", ""))

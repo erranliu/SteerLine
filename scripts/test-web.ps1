@@ -1,5 +1,20 @@
 param([string]$DebugConfig = '', [string]$EvidenceDir = '')
+# Build once, then delegate Web and all seven HTTP/metadata owner packages to
+# their registered definitions. Every HTTP package must execute real tests.
 $ErrorActionPreference = 'Stop'
+function Invoke-WebTestFeedback([string[]]$Arguments, [string]$LogPath) {
+    # Windows PowerShell treats native stderr as ErrorRecord even on exit 0.
+    # Preserve it in the log and use the native exit code as the result.
+    $feedbackGo = (Get-Command go -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    $savedNativeAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $global:LASTEXITCODE = 127
+        & $feedbackGo @Arguments *> $LogPath
+        $feedbackExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $savedNativeAction }
+    if ($feedbackExit -ne 0) { throw "Registered test failed; preserve $LogPath" }
+}
 $webTestRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $EvidenceDir) { $EvidenceDir = Join-Path ([IO.Path]::GetTempPath()) ('steerline-web-check-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff')) }
 if (Test-Path -LiteralPath $EvidenceDir) { throw 'EvidenceDir must be a new directory' }
@@ -8,10 +23,8 @@ Push-Location $webTestRepo
 try {
     & npm --prefix web run build *> (Join-Path $EvidenceDir 'build.log')
     if ($LASTEXITCODE -ne 0) { throw 'Web build failed' }
-    & npm --prefix web test *> (Join-Path $EvidenceDir 'client-tests.log')
-    if ($LASTEXITCODE -ne 0) { throw 'Web client tests failed' }
-    & go run ./cmd/test-feedback -- ./web/server ./internal/product/httpapi ./internal/product/httpclient -count=1 *> (Join-Path $EvidenceDir 'server-tests.log')
-    if ($LASTEXITCODE -ne 0) { throw 'Web server tests failed' }
+    Invoke-WebTestFeedback -Arguments @('run', './cmd/test-feedback', '-level=L4', '-suite=web', '-scenario', 'web.unit', '-out', (Join-Path $EvidenceDir 'web-unit')) -LogPath (Join-Path $EvidenceDir 'client-tests.log')
+    Invoke-WebTestFeedback -Arguments @('run', './cmd/test-feedback', '-level=L4', '-suite=go', '-scenario', 'go.http', '-out', (Join-Path $EvidenceDir 'go-http')) -LogPath (Join-Path $EvidenceDir 'server-tests.log')
     if ($DebugConfig) {
         $savedWebConfig = $env:STEERLINE_WEB_CONFIG
         $savedWebEvidence = $env:STEERLINE_WEB_EVIDENCE

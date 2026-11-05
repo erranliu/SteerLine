@@ -1474,6 +1474,15 @@ textarea {
 .environment-page label { display: grid; gap: 6px; margin: 12px 0; }
 .environment-page select, .environment-page input { width: 100%; min-width: 0; padding: 8px; border: 1px solid #32473a; border-radius: 5px; background: #101614; color: inherit; }
 .environment-page .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.environment-page { max-width: 760px; }
+.environment-header, .detection-id { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.environment-header { justify-content: space-between; }
+.environment-header h1 { margin: 0; }
+.detection-id { color: var(--color-muted, #8ba595); font-size: 12px; }
+.detection-id > span { min-width: 0; overflow-wrap: anywhere; }
+.environment-history-item { border-top: 1px solid var(--color-border, #32473a); padding: 12px 0; }
+.environment-reason { overflow-wrap: anywhere; white-space: pre-line; }
+.environment-operation-results { margin-top: 16px; font-size: 13px; }
 .configuration-panels .settings-panel {
   margin: 0;
 }
@@ -1500,6 +1509,12 @@ textarea {
   border-radius: 5px;
   background: #101614;
   color: #e5ede8;
+}
+.configuration-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: #99e6c5;
 }
 @media (max-width: 620px) {
   .topbar {

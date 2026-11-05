@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"io"
 	"os"
 	"os/exec"
@@ -18,7 +19,7 @@ import (
 	"time"
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
@@ -226,11 +227,11 @@ func RunnerCLI(args []string) (bool, error) {
 					return true, e
 				}
 			}
-			var entry pm.ProjectEntry
+			var entry testmodel.ProjectEntry
 			for _, material := range materials {
-				if material.Path == pm.ProjectEntryPath && material.Content != nil {
+				if material.Path == testmodel.ProjectEntryPath && material.Content != nil {
 					var e error
-					entry, e = pm.ParseProjectEntry([]byte(*material.Content))
+					entry, e = testmodel.ParseProjectEntry([]byte(*material.Content))
 					if e != nil {
 						return true, e
 					}
@@ -366,20 +367,7 @@ func RunnerCLI(args []string) (bool, error) {
 				run.Revision++
 			}
 			if hasArgument(args, "--refresh-pr") {
-				if err := recordProviderQuery(providerPath); err != nil {
-					return true, err
-				}
-				pr, err := ProviderPR(provider, run.PR.URL)
-				if err != nil {
-					return true, err
-				}
-				b, _ := json.Marshal(pr)
-				var fact runnercontract.PRFact
-				json.Unmarshal(b, &fact)
-				fact.Provider = "command"
-				fact.Number, _ = strconv.Atoi(pr.URL[strings.LastIndex(pr.URL, "/")+1:])
-				fact.CheckedAt = time.Now().UTC()
-				run.PR = &fact
+				return respond(nil, "unexpected_runner_pr_refresh")
 			}
 		}
 		s.Runs[runID] = run
@@ -495,7 +483,6 @@ func prepareFixturePR(path string, s *State, repo, branch string) (model.PRInfo,
 // public capability even when the helper is built directly rather than packaged.
 func controlledCapabilities() map[string]any {
 	caps := protocol.RunnerServiceCapabilities("caller-fixture-v1")
-	caps["run_observation"] = map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100}
 	caps["configuration_schemas"].(map[string]any)["adapters"].(map[string]any)["orca-terminal"] = map[string]string{"type": "object"}
 	for _, workflow := range caps["workflows"].([]any) {
 		workflow.(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}

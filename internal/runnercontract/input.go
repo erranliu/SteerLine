@@ -35,6 +35,7 @@ type Workflow struct {
 	ID                     string            `json:"id"`
 	Version                int               `json:"version"`
 	PromptOverrides        map[string]string `json:"prompt_overrides,omitempty"`
+	ProjectPolicySlots     []string          `json:"project_policy_slots,omitzero"`
 	AuditModel             *ModelSettings    `json:"audit_model,omitempty"`
 }
 

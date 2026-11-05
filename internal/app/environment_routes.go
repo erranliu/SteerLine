@@ -195,6 +195,9 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 		return nil, errors.New("project environment unavailable")
 	}
 	key := values.Get("environment_key")
+	if route == "/environment/options" && len(values) == 1 && len(values["configuration"]) == 1 && values.Get("configuration") == "true" {
+		return port.configurationOptions(), nil
+	}
 	if len(values) > 0 && (len(values) != 1 || len(values["environment_key"]) != 1 || !env.ValidKey(key) || route != "/environment" && route != "/environment/materials") {
 		return nil, errors.New("invalid environment query")
 	}
@@ -214,7 +217,7 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 			if len(out) == 20 {
 				break
 			}
-			out = append(out, map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "diagnostic": r.Diagnostic, "rounds": []any{}})
+			out = append(out, map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.Diagnostic, "rounds": []any{}})
 		}
 		return map[string]any{"records": out}, nil
 	}

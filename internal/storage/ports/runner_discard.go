@@ -11,4 +11,5 @@ type RunnerDiscard struct {
 	AuthorityVersion, GraphRevision uint64
 	CandidateRevisions              map[string]uint64
 	VerificationStarted             time.Time
+	PRs                             map[string]RunnerPRObservation
 }

@@ -30,7 +30,7 @@ func openRunnerNativeSession(ctx context.Context, config Config, target api.Nati
 	if !strings.EqualFold(filepath.Clean(candidate.StateDir), filepath.Clean(cli.StateDir)) {
 		return errors.New("Runner 状态目录与原候选不一致")
 	}
-	inspection, err := cli.Inspect(ctx, "run-id", candidate.RunID, false)
+	inspection, err := cli.Inspect(ctx, "run-id", candidate.RunID)
 	if err != nil {
 		return err
 	}

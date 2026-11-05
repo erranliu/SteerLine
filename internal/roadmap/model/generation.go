@@ -19,18 +19,26 @@ type DocumentContext struct {
 	Materials    []runnercontract.Document
 }
 type Investigation struct {
+	Source string `json:"source"`
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256"`
 	Reason string `json:"reason"`
 }
+
+// The model chooses references; immutable file digests are platform facts.
+type InvestigationReference struct {
+	Source string `json:"source"`
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
 type GeneratedDocuments struct {
-	SourceDigest    string          `json:"source_digest"`
-	ConfirmedDigest string          `json:"confirmed_digest"`
-	CodeCommit      string          `json:"code_commit"`
-	Design          string          `json:"design"`
-	Investigation   []Investigation `json:"investigation"`
-	Questions       []string        `json:"questions"`
-	Documents       []Documents     `json:"documents"`
+	SourceDigest    string                   `json:"source_digest"`
+	ConfirmedDigest string                   `json:"confirmed_digest"`
+	CodeCommit      string                   `json:"code_commit"`
+	Design          string                   `json:"design"`
+	Investigation   []InvestigationReference `json:"investigation"`
+	Questions       []string                 `json:"questions"`
+	Documents       []Documents              `json:"documents"`
 }
 
 func PlannedDocuments(r Record) []Documents {
@@ -88,7 +96,7 @@ func DocumentSchema(r Record) json.RawMessage {
 		"code_commit":      map[string]any{"const": r.CodeCommit},
 		"design":           map[string]any{"type": "string", "minLength": 1},
 		"questions":        map[string]any{"type": "array", "items": str},
-		"investigation":    map[string]any{"type": "array", "minItems": 1, "items": object(map[string]any{"path": str, "sha256": str, "reason": str})},
+		"investigation":    map[string]any{"type": "array", "minItems": 1, "items": object(map[string]any{"source": map[string]any{"enum": []string{"repository", "input_file"}}, "path": str, "reason": str})},
 		"documents":        map[string]any{"type": "array", "minItems": len(entries), "maxItems": len(entries), "prefixItems": entries},
 	}
 	schema := object(props)
@@ -149,13 +157,42 @@ func DecodeDocuments(r Record, raw []byte, source *runnercontract.RepositorySour
 			return r, fmt.Errorf("生成规范不属于固定版本：%s", guideline.Path)
 		}
 	}
-	for _, ref := range out.Investigation {
-		f, ok := files[strings.ToLower(ref.Path)]
-		if !ok || f.Path != ref.Path || ref.SHA256 != f.SHA256 || strings.TrimSpace(ref.Reason) == "" {
-			return r, fmt.Errorf("调查引用不属于固定版本：%s", ref.Path)
+	var request runnercontract.GenerateRunInput
+	if err := json.Unmarshal(r.Request.Input, &request); err != nil {
+		return r, errors.New("原固定文件请求不可读")
+	}
+	inputs := map[string]string{}
+	for _, input := range request.Generate.Materials {
+		if input.Kind == "file" && input.Content != nil {
+			inputs[input.Path] = Digest([]byte(*input.Content))
 		}
 	}
-	r.Design, r.Investigation, r.Questions = out.Design, out.Investigation, out.Questions
+	repositoryRefs := 0
+	verifiedReferences := []Investigation{}
+	for _, ref := range out.Investigation {
+		valid := false
+		digest := ""
+		if ref.Source == "repository" {
+			f, ok := files[strings.ToLower(ref.Path)]
+			valid = ok && f.Path == ref.Path
+			digest = f.SHA256
+			if valid {
+				repositoryRefs++
+			}
+		} else if ref.Source == "input_file" {
+			var exists bool
+			digest, exists = inputs[ref.Path]
+			valid = exists
+		}
+		if !valid || strings.TrimSpace(ref.Reason) == "" {
+			return r, fmt.Errorf("调查引用不属于固定版本：%s", ref.Path)
+		}
+		verifiedReferences = append(verifiedReferences, Investigation{Source: ref.Source, Path: ref.Path, SHA256: digest, Reason: ref.Reason})
+	}
+	if repositoryRefs == 0 {
+		return r, errors.New("缺少固定仓库调查引用")
+	}
+	r.Design, r.Investigation, r.Questions = out.Design, verifiedReferences, out.Questions
 	if len(out.Questions) > 0 {
 		for _, q := range out.Questions {
 			if strings.TrimSpace(q) == "" {

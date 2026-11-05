@@ -15,7 +15,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	pmm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -226,7 +226,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	}
 	runner.InstanceID = status.InstanceID
 	proof.RunnerSHA256 = catalog.Runner.SHA256
-	gen, err := runner.Inspect(ctx, "run-id", generation.RunID, false)
+	gen, err := runner.Inspect(ctx, "run-id", generation.RunID)
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 		return d.tmStopOriginalRun(stopCtx, out, runner, original)
 	}
 	err = tmPoll(ctx, func() (bool, error) {
-		v, e := runner.Inspect(ctx, "run-id", candidate.ExecutionID, false)
+		v, e := runner.Inspect(ctx, "run-id", candidate.ExecutionID)
 		if e != nil {
 			return false, e
 		}
@@ -313,7 +313,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	ownedHead = original.Execution.Branch
 	proof.CandidateRun = original.RunID
 	// Verify latest public worktree paths and the exact frozen prompt context.
-	projectEntry, e := pm.ReadProjectEntry(func(path string) ([]byte, error) { text, err := d.git("show", head+":"+path); return []byte(text), err })
+	projectEntry, e := testmanagementmodel.ReadProjectEntry(func(path string) ([]byte, error) { text, err := d.git("show", head+":"+path); return []byte(text), err })
 	if e != nil {
 		return e
 	}
@@ -481,7 +481,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 func (d *debugRelease) tmStopOriginalRun(ctx context.Context, out string, runner runnerclient.Client, original runnercontract.Run) error {
 	// service stop closes the caller, not the Run's durable business authority.
 	// Explicitly stop only this fixture's original Run before requesting settlement.
-	latest, err := runner.Inspect(ctx, "run-id", original.RunID, false)
+	latest, err := runner.Inspect(ctx, "run-id", original.RunID)
 	if err != nil {
 		return err
 	}
@@ -501,7 +501,7 @@ func (d *debugRelease) tmStopOriginalRun(ctx context.Context, out string, runner
 	stopCtx, stopCancel := context.WithTimeout(ctx, 45*time.Second)
 	defer stopCancel()
 	err = tmPoll(stopCtx, func() (bool, error) {
-		v, e := runner.Inspect(stopCtx, "request-id", stop.RequestID, false)
+		v, e := runner.Inspect(stopCtx, "request-id", stop.RequestID)
 		if e != nil {
 			return false, e
 		}

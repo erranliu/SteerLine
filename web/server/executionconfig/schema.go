@@ -59,7 +59,7 @@ func (s *Store) contract(ctx context.Context, pin cfg.Pin) (*catalog, error) {
 	if s.catalog != nil && s.catalogPin == pin {
 		return s.catalog, nil
 	}
-	reader := readCatalog
+	reader := func(ctx context.Context, pin cfg.Pin) (*catalog, error) { return readCatalog(ctx, s.Home, pin) }
 	if s.ReadCatalog != nil {
 		reader = s.ReadCatalog
 	}
@@ -71,7 +71,7 @@ func (s *Store) contract(ctx context.Context, pin cfg.Pin) (*catalog, error) {
 	s.catalogPin = pin
 	return cat, nil
 }
-func readCatalog(ctx context.Context, pin cfg.Pin) (*catalog, error) {
+func readCatalog(ctx context.Context, home string, pin cfg.Pin) (*catalog, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	type metadata struct {
@@ -87,7 +87,7 @@ func readCatalog(ctx context.Context, pin cfg.Pin) (*catalog, error) {
 	}
 	read := func(args []string) (metadata, error) {
 		var result metadata
-		raw, err := nativequery.Run(ctx, pin.Executable, args)
+		raw, err := nativequery.Run(ctx, home, pin.Executable, args)
 		if err != nil {
 			return result, errors.New("Runner offline configuration contract is unavailable")
 		}
@@ -214,14 +214,16 @@ func (c *catalog) project(doc any) {
 			if w.ID != "development" && w.ID != "development-audited" {
 				continue
 			}
-			settings := map[string]any{"model": "web-schema-model"}
+			settings := map[string]any{"access_mode": "full_access"}
 			if choice.Adapter == "orca-terminal" {
 				launch := map[string]any{"model": "web-schema-model"}
 				if choice.Host == "local" {
 					launch["runtime_executable"] = "C:/deployment/steerrunner-agent.exe"
 					launch["runtime_sha256"] = strings.Repeat("a", 64)
 				}
-				settings = map[string]any{"agent": choice.Agent, "agent_launch": launch}
+				settings["agent"], settings["agent_launch"] = choice.Agent, launch
+			} else {
+				settings["model"] = "web-schema-model"
 			}
 			raw, _ := json.Marshal(settings)
 			p := cfg.Profile{Execution: runnercontract.ExecutionInput{Adapter: choice.Adapter, Target: runnercontract.ExecutionTarget{Kind: choice.Host}, Settings: raw}, Workflow: runnercontract.Workflow{ID: w.ID, Version: w.Version}}

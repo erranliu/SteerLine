@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	projectmodel "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -36,11 +36,19 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	run := callerTestRun()
 	got, e := c.prepareTestPlan(context.Background(), work, &run)
 	require(t, e)
-	if string(got) != string(raw) || len(run.Documents.References) != 6 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, raw, true)) {
+	if string(got) != string(raw) || len(run.Documents.References) != 5 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, raw, true)) {
 		t.Fatal("system context was not frozen", run)
 	}
 	if run.ProgressFile == nil {
 		t.Fatal("progress was not frozen with candidate")
+	}
+	if run.ResultFile == nil {
+		t.Fatal("generated test arrangement was not frozen as required input")
+	}
+	arrangement, err := base64.StdEncoding.DecodeString(run.ResultFile.InitialContentBase64)
+	require(t, err)
+	if string(arrangement) != `{"tests":["one"]}` {
+		t.Fatal(string(arrangement))
 	}
 	for _, key := range []string{"implement.report", "publish", "publish.report"} {
 		if !strings.HasSuffix(run.Workflow.PromptOverrides[key], testReadOnlyPrompt(t)) {
@@ -61,18 +69,19 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 		t.Fatal("missing published prompts accepted")
 	}
 	work.FrozenTestPlan = nil
+	run = callerTestRun()
 	got, e = c.prepareTestPlan(context.Background(), work, &run)
 	require(t, e)
 	var missing testmanagement.Snapshot
 	require(t, json.Unmarshal(got, &missing))
-	if missing.Status != "missing" || run.ProgressFile != nil {
+	if missing.Status != "missing" || run.ProgressFile != nil || run.ResultFile != nil {
 		t.Fatal("missing snapshot fell back to repository arrangement")
 	}
 }
 
 func callerFrozenWork(t *testing.T, m *projectMaintenance, contract taskmodel.TaskContract) taskmodel.FixedWork {
 	t.Helper()
-	entry, err := projectmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(context.Background(), contract.PlanRef.Commit, path) })
+	entry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(context.Background(), contract.PlanRef.Commit, path) })
 	require(t, err)
 	body, err := m.read(context.Background(), contract.PlanRef.Commit, entry.TestingCatalogue)
 	require(t, err)
@@ -135,7 +144,7 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 				if !strings.Contains(run.Workflow.PromptOverrides["publish"], testReadOnlyPrompt(t)) || strings.Contains(run.Workflow.PromptOverrides["publish"], "Set-RuntimeProgress") {
 					t.Fatal("publication got writer")
 				}
-				if len(run.Documents.References) != 6 {
+				if len(run.Documents.References) != 5 {
 					t.Fatal("writer path not bound")
 				}
 			}
@@ -149,7 +158,7 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 		})
 	}
 	work := callerFrozenWork(t, m, store.contract)
-	for _, mode := range []string{"digest", "definition", "note", "commit", "plan-digest", "missing-protocol", "wrong-protocol", "missing-arrangement", "wrong-arrangement", "missing-rules", "missing-catalogue"} {
+	for _, mode := range []string{"digest", "definition", "note", "commit", "plan-digest", "missing-protocol", "wrong-protocol", "missing-rules", "missing-catalogue", "runner-no-result-file"} {
 		t.Run(mode, func(t *testing.T) {
 			next := work
 			var snap testmanagement.Snapshot
@@ -167,6 +176,17 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 				snap.Commit = strings.Repeat("f", 40)
 			case "plan-digest":
 				next.Contract.PlanRef.SHA256 = strings.Repeat("0", 64)
+			case "runner-no-result-file":
+				cat := testPathCatalog(t)
+				cat.Capabilities.ResultFile = nil
+				config := m.config
+				config.runtimeCatalog = cat
+				run := callerTestRun()
+				_, err := config.prepareTestPlan(ctx, next, &run)
+				if err == nil || run.ResultFile != nil {
+					t.Fatal("Runner without result file capability accepted", err)
+				}
+				return
 			default:
 				pmGit(t, m.config.Repository, "restore", "--source", store.contract.PlanRef.Commit, "--staged", "--worktree", "--", ".")
 				path := testmodel.RulesPath
@@ -176,10 +196,6 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 				switch mode {
 				case "missing-protocol", "wrong-protocol":
 					path = testmodel.ProtocolPath
-				case "missing-arrangement", "wrong-arrangement":
-					arrangement, err := testmodel.ArrangementPath(snap.PlanPath)
-					require(t, err)
-					path = arrangement
 				}
 				if strings.HasPrefix(mode, "wrong-") {
 					require(t, os.WriteFile(filepath.Join(m.config.Repository, path), []byte(`{"tests":[]}`), 0600))
@@ -228,7 +244,7 @@ func TestTMCommittedPlanUsesSameCustomProjectSources(t *testing.T) {
 		require(t, os.WriteFile(filepath.Join(m.config.Repository, path), body, 0600))
 		require(t, os.Remove(filepath.Join(m.config.Repository, old)))
 	}
-	require(t, os.WriteFile(filepath.Join(m.config.Repository, projectmodel.ProjectEntryPath), []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`), 0600))
+	require(t, os.WriteFile(filepath.Join(m.config.Repository, testmodel.ProjectEntryPath), []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`), 0600))
 	pmGit(t, m.config.Repository, "add", ".")
 	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "-qm", "custom sources")
 	contract := store.contract

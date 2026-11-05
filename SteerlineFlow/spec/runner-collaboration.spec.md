@@ -23,7 +23,7 @@ Runner 既有能力以其固定版本的[流程选择 Spec](https://github.com/e
 | PR / TaskDelivery | 请求刷新绑定 PR，核对事实与版本；唯一交付、Task 关闭、后继释放同事务提交 | 执行发布、查询 provider 并提供公开核验事实；不自行关闭 Task |
 | 服务 | 固定 EXE、项目独立 state-dir、启停协调和原实例结算核对 | 同目录单写服务、逐 Run 原生资源及最终停止证据 |
 
-PR 平台是实际 PR/合并事实来源；Runner 的 provider 核验是供调用方消费的事实。自然语言成功、审计通过、轮次结束、pr_ready、服务退出均不等于 TaskDelivery。
+PR 平台是实际 PR 和合入事实来源。Runner 核验 Workflow 发布并公开原 PR 绑定。SteerLine 在交付和废弃前按该绑定直接查询平台，详见[任务 PR 核验 Spec](task-pr-merge-ownership.spec.md)。自然语言成功、审计通过、轮次结束、pr_ready、服务退出均不等于 TaskDelivery。
 
 SteerLine 数据库存任务、候选、原 outbox、公开投影及交付；Runner 数据库存执行和原生资源。公开状态副本不是第二执行权威。SteerLine 不导入 Runner 内部 Go 包，不读其 SQLite、codec、原生日志或私有认证文件，不解释模型正文来驱动流程。
 

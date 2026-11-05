@@ -27,12 +27,13 @@
 | `docs/prompt-governance.md`、`.github/workflows/prompt-governance.yml` | 提示词变更说明、原生测试 job 与保护接入边界；远端是否生效另按专属验收核实。 |
 | `SteerlineProjectGuideDoc/` | SteerLine 统一提供的固定规范；本项目流程定制归 SteerlineFlow。 |
 | `SteerlineFlow/README.md`、`SteerlineFlow/paths.md` | 流程内容索引与本路径清单。 |
-| `SteerlineFlow/environments/<完整环境键>/environment.md`、同目录 `verify-environment.ps1/sh` | 项目自有环境要求及检测入口；manifest4 仅声明入口、解释器和有限依赖，version3 最终结果通过 Runner 封存。项目自行检测闭环，平台只调用一次并消费结果，无平台协议副本或阶段编排。材料存在不等于 ready。 |
+| `SteerlineFlow/environment.md`、`SteerlineFlow/scripts/verify-environment.ps1/sh` | 所有目标共用的项目环境要求及检测入口，资格按项目×运行机×链路分别保存；manifest5 仅声明入口、解释器及检测辅助程序/运行要求配置，version3 最终结果通过 Runner 封存。项目测试、业务文档、Spec/Plan、roadmap 不属于资格依据。平台只调用一次并消费结果，无平台协议副本或阶段编排。材料存在不等于 ready。 |
 | `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan；执行时还须固定实际 commit。 |
 | `SteerlineFlow/Roadmap/execution-map.md` | 已确认任务、依赖、执行及验收汇总。 |
 | `SteerlineFlow/Roadmap/RoadmapGuide.md` | 本项目定制的 roadmap 维护规则。 |
+| `SteerlineFlow/Roadmap/parse-rules.md`、`document-rules.md`、`SteerlineFlow/spec/SpecGuide.md` | `project prepare-roadmap` 显式初始化/检查的静态材料；规则和默认指南的唯一打包来源为 internal/prompts/materials，不在运行时补写。 |
 | `SteerlineFlow/Roadmap/drafts/`、`SteerlineFlow/Roadmap/task-ids/` | 候选讨论与永久任务身份；身份分配不等于执行授权。 |
-| `SteerlineFlow/environment-project.json` | version1 任务测试入口，仅定位任务测试公共要求与正式清单；测试安排、候选测试及记录共用同提交来源。环境检测不依赖此文件，项目可自行把它声明为环境依赖。 |
+| `SteerlineFlow/environment-project.json` | version1 任务测试入口，仅定位任务测试公共要求与正式清单；测试安排、候选测试及记录共用同提交来源。 |
 | `SteerlineFlow/testing.md`、`SteerlineFlow/testing/test-list.json` | 本仓库入口声明的测试规范和机器定义，其他受管项目可声明自己的实际路径。与 Plan 及固定测试协议一起作为系统测试安排输入。 |
 | `SteerlineFlow/testing/l1.md` 至 `l4.md` | 可读测试列表；ID、级别、环境及入口须与清单一致。 |
 | `SteerlineFlow/testing/reports.md` | 报告格式、Git 历史导出和读取规则；不是某次原始报告。 |
@@ -69,7 +70,7 @@ C:\SteerlineDebug\<scope-id>\
 | `go run ./cmd/test-feedback` | 默认 `<系统临时目录>/steerline-test-feedback/<UTC纳秒时间>/`；`-out <绝对路径>` 精确指定本次根目录，放在 `--` 之前。实际执行接受不存在或已存在但为空的目录，拒绝非空目录。 |
 | `scripts/test-l2.ps1`、`test-live-delivery.ps1`、`test-audited-workflow.ps1` | `-OutDir` 直接传给该次 test-feedback；使用对应级别的独立叶目录。 |
 | `scripts/test-runtime-isolation.ps1` | 在 `-OutDir` 下再追加 `L3/` 或 `L4/`。给它一份独占的包装器调用目录，实际报告根为 `<OutDir>/<级别>/`，不要按其他脚本的语义推断。 |
-| `scripts/test-web.ps1` | `-EvidenceDir` 指定独占目录；默认 `<系统临时目录>/steerline-web-check-<时间>/`，保留 `build.log`、`client-tests.log`、`server-tests.log` 及实际产生的浏览器日志。该脚本的服务器测试另由 test-feedback 返回其报告路径，不能仅凭 server-tests.log 推断全部原始产物都在外层目录。 |
+| `scripts/test-web.ps1` | `-EvidenceDir` 指定独占目录；默认 `<系统临时目录>/steerline-web-check-<时间>/`，保留 `build.log`、`client-tests.log`、`server-tests.log` 及实际产生的浏览器日志。正式前端/HTTP 报告分别位于 EvidenceDir/web-unit 与 EvidenceDir/go-http，原始日志按各自 summary 定位。 |
 | `scripts/new-debug-release.ps1` | 默认 `C:\SteerlineDebug/<release-id>/`；本约定显式传 `-DebugRoot C:\SteerlineDebug\<scope-id>\packages`，返回本次包的精确 root。 |
 
 这些包装器有的另建原生进程代理目录，不能把代理日志当成业务报告。未支持输出参数的专项沿其现有真实输出路径登记，不能手工搬动活动现场来伪装成统一布局。
@@ -80,11 +81,12 @@ test-feedback 每次输出根统一以 `summary.json` 为结果入口；受管�
 
 | 范围 | 正常执行的稳定路径 |
 | --- | --- |
-| L1 | `summary.json`、`managed-l1.minimum.json`；各分组在 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`。 |
+| L1 | `summary.json`、`managed-l1.minimum.json`；Go 分组在 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`；`quick-web/vitest.json`、`quick-web/stdout.txt`、`quick-web/stderr.txt` 保留原生前端证据。 |
 | L2 | `summary.json`、`managed-smoke.delivery.json`、`build/frozen-binaries.json`、`scenarios/smoke.delivery/scenario.json`；包级原始日志见下方 E2E 树。 |
 | L3 | `summary.json`；每个实际选择的 ID 对应一份 `managed-<test-id>.json` 和 `scenarios/<scenario-id>/scenario.json`。 |
 | L4 E2E | 与 L3 相同；受控/真实环境及所选范围由原 summary 及冻结定义表达，不仅凭目录名判断。 |
 | L4 Go 全集 | `summary.json`、`managed-go.full.json`；分组原日志为 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`。 |
+| L4 本地 owner/Web | `summary.json`、`managed-<test-id>.json`；Go 为 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`：单组使用 `go-owner`，环境专项为 `go-environment-owner` / `go-environment-app`，部署为 `go-deployment-host/service/app/upgrade`（其他平台无service组），Roadmap为 `go-roadmap-owner/app/host`（斜杠展开为同前缀各组名），Runner contract 为 `go-runner-app` / `go-runner-client`。Web 为 `web-unit/vitest.json`、`stdout.txt`、`stderr.txt`（同在 web-unit 下）；实际日志路径以 summary 为准。 |
 | 定向 Go / build-only | `summary.json`、`go-test.jsonl`、`go-test.stderr.txt`；不生成完整登记测试集的通过报告，归 diagnostics。 |
 | `-summarize-log <原日志>` | 只读取已有 Go JSONL 并写 `summary.json`，其中 `source_json_log` 定位原日志；不执行测试、不复制原日志或生成受管报告，也不适用实际执行的非空目录检查。应显式选择独立的 diagnostics 叶目录以免覆盖旧摘要。 |
 
@@ -183,3 +185,7 @@ roadmap-runner 的仓库外状态目录约定为 `<CODEX_HOME>/task-state/roadma
 源码中的 `.evidence/` 是已忽略的本地临时证据区，不是本约定的仓库外并行调试根；新建持续现场使用上面的外部 scope。`SteerlineFlow/testing/acceptance/` 和 archive/ 也不放运行中的数据库、认证、服务锁或大体积原始现场。
 
 路径调整应同步本清单、调用说明、实际读取者和相关夹具。当前实现定位：[测试执行器](../cmd/test-feedback/main.go)、[分组日志](../cmd/test-feedback/scoped.go)、[E2E 输出](../cmd/test-feedback/e2e.go)、[受管报告](../cmd/test-feedback/managed.go)、[调试生成器](../scripts/new-debug-release.ps1)、[Runner 短目录](../internal/runnerstatepath/path.go)、[应用 home](../internal/app/config.go)。本次清单整理只统一显式路径和定位规则，不迁移已有运行现场或修改服务状态。
+
+## Roadmap 动态输入文件
+
+`roadmap-inputs/` 是 Runner file 材料的逻辑 namespace，不是项目必须维护的 Git 目录。原文、已有图/映射和确认规划由 SteerLine 冻结进原请求，Runner 保存为该 Run 私有普通文件并公开真实读取位置/摘要；静态规范/源码仍属于固定 Git manifest。动态材料不写项目、安装目录或共享临时文件；恢复只核验原快照，不从当前状态重建。详见[材料准备 Spec](spec/roadmap-material-preparation.spec.md)。

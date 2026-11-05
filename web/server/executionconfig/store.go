@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/erranliu/SteerLine/internal/developerconfig"
 	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	privatefs "github.com/erranliu/SteerLine/internal/product/httpfs"
@@ -31,7 +32,10 @@ func (e *Error) Error() string                       { return e.Message }
 func failure(status int, code, message string) error { return &Error{status, code, message} }
 
 type Snapshot struct {
+	DeveloperAvailable bool `json:"developer_available"`
+
 	Config       Config                          `json:"config"`
+	Environments []cfg.Environment               `json:"environments"`
 	SavedDigest  string                          `json:"saved_digest"`
 	Writable     bool                            `json:"writable"`
 	Reason       string                          `json:"reason,omitempty"`
@@ -119,7 +123,7 @@ func (s *Store) Snapshot(ctx context.Context) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	out := Snapshot{Config: c, SavedDigest: cfg.Digest(raw), Writable: s.writeReason() == "", Reason: s.writeReason(), Efforts: []string{}, Workflows: []runnercontract.WorkflowChoice{}}
+	out := Snapshot{DeveloperAvailable: developerconfig.Available, Config: c, Environments: cfg.Environments(c.Profiles), SavedDigest: cfg.Digest(raw), Writable: s.writeReason() == "", Reason: s.writeReason(), Efforts: []string{}, Workflows: []runnercontract.WorkflowChoice{}}
 	cat, err := s.contract(ctx, c.Runner)
 	if err != nil {
 		out.Writable = false
@@ -144,6 +148,9 @@ func (s *Store) validate(ctx context.Context, raw []byte) (Config, error) {
 	}
 	if err := cfg.Decode(raw, &proposed); err != nil {
 		return proposed, failure(400, "invalid_configuration", err.Error())
+	}
+	if err := proposed.Developer.Validate(); err != nil {
+		return proposed, failure(400, "developer_disabled", err.Error())
 	}
 	current, _, err := s.read()
 	if err != nil {
@@ -396,5 +403,5 @@ func (s *Store) Save(ctx context.Context, expected string, raw []byte) (Snapshot
 		}
 		digest = cfg.Digest(published)
 	}
-	return Snapshot{Config: c, SavedDigest: digest, Writable: true, Workflows: s.catalog.Workflows, Efforts: s.catalog.Efforts, Combinations: s.catalog.Combinations, LocalHelper: helperStatus(c)}, nil
+	return Snapshot{DeveloperAvailable: developerconfig.Available, Config: c, Environments: cfg.Environments(c.Profiles), SavedDigest: digest, Writable: true, Workflows: s.catalog.Workflows, Efforts: s.catalog.Efforts, Combinations: s.catalog.Combinations, LocalHelper: helperStatus(c)}, nil
 }

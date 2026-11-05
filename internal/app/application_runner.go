@@ -98,6 +98,9 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 		cli = cli.WithCatalog(catalog)
 	}
 	r.client, r.catalog = cli, catalog
+	if err == nil && !cli.SupportsObservation() {
+		return errors.New("selected Runner must support same-snapshot run observation (steerrunner-run-observation/v1, max_events >= 100)")
+	}
 	return err
 }
 
@@ -115,7 +118,7 @@ func bindApplicationRunnerBuild(ctx context.Context, home string, cli runnerclie
 		if runnerbinding.SameBuild(old, pin) {
 			return nil
 		}
-		if err := cli.VerifyDrained(ctx); err != nil {
+		if err := cli.VerifyInstalledUpgradeDrained(ctx, old.SHA256); err != nil {
 			return err
 		}
 		return localservice.Write(dir, "runner-build.json", pin)

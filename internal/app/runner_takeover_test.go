@@ -3,15 +3,18 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
+	testprotocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 func TestStartupCancellationOutboxIsDurableBeforeRunnerStart(t *testing.T) {
@@ -61,6 +64,33 @@ func TestStartupCancellationOutboxIsDurableBeforeRunnerStart(t *testing.T) {
 	require(t, err)
 	if info.Status != "not_running" {
 		t.Fatal("outbox preparation started Runner")
+	}
+
+	// Exercise the actual cold handoff even when the selected build cannot
+	// subsequently admit normal task observation.
+	caps := testprotocol.RunnerServiceCapabilities(cli.BuildVersion)
+	delete(caps, "run_observation")
+	require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-capabilities-fixture.json"), mustJSON(caps), 0600))
+	capture := filepath.Join(t.TempDir(), "start-input.json")
+	t.Setenv("STEERLINE_TEST_RUNNER_START_INPUT", capture)
+	var owner applicationRunner
+	t.Cleanup(func() { _ = owner.shutdown(ctx) })
+	err = owner.start(ctx, c.RunnerExecution, c.runnerHome(), 5*time.Second, func(ctx context.Context, original *runnerclient.Client) ([]runnercontract.PendingStop, error) {
+		return prepareProjectRunnerStops(ctx, &c, original)
+	})
+	if err == nil || !strings.Contains(err.Error(), "same-snapshot run observation") {
+		t.Fatal("normal runtime accepted a build without observe", err)
+	}
+	raw, err := os.ReadFile(capture)
+	require(t, err)
+	var input runnercontract.ServiceStartInput
+	require(t, json.Unmarshal(raw, &input))
+	if !bytes.Equal(mustJSON(stops), mustJSON(input.PendingStops)) {
+		t.Fatal("startup did not hand off the durable original stop", input.PendingStops)
+	}
+	require(t, owner.shutdown(ctx))
+	if !owner.result().Settled() {
+		t.Fatal("observe admission failure lost original service settlement", owner.result())
 	}
 }
 

@@ -25,16 +25,12 @@ func (p *Project) WriteControlledEnvironment() string {
 	if p.Chain != "" || s.Run.Remote != nil {
 		s.t.Fatal("controlled environment helper cannot prepare a live project")
 	}
-	profiles := p.environmentProfiles()
-	files := map[string][]byte{}
-	for _, profile := range profiles {
-		key, err := env.Key(profile.Execution)
-		s.Must(err)
-		script := env.ScriptPath(key, "ps1")
-		manifest, err := json.Marshal(env.Manifest{Version: 4, EnvironmentKey: key, Script: script, Interpreter: "powershell.exe", Dependencies: []string{}})
-		s.Must(err)
-		files[env.DocumentPath(key)] = []byte("# Controlled environment\n```steerline-environment\n" + string(manifest) + "\n```\n")
-		files[script] = []byte("throw 'Scripted public peer fixture; native execution is forbidden'\n")
+	script := env.ScriptPath("ps1")
+	manifest, err := json.Marshal(env.Manifest{Version: 5, Script: script, Interpreter: "powershell.exe", Dependencies: []string{}})
+	s.Must(err)
+	files := map[string][]byte{
+		env.DocumentPath(): []byte("# Controlled environment\n```steerline-environment\n" + string(manifest) + "\n```\n"),
+		script:             []byte("throw 'Scripted public peer fixture; native execution is forbidden'\n"),
 	}
 	for path, body := range files {
 		target := filepath.Join(p.Repo, path)
@@ -61,7 +57,7 @@ func (p *Project) ValidateDeclaredControlledEnvironment(profile string) {
 
 func (p *Project) validateControlledEnvironment(profile, commit string) {
 	s := p.Scenario
-	script, err := os.ReadFile(filepath.Join(p.Repo, env.ScriptPath(p.environmentKey(profile), "ps1")))
+	script, err := os.ReadFile(filepath.Join(p.Repo, env.ScriptPath("ps1")))
 	s.Must(err)
 	expectedScriptDigest := env.Digest(script)
 	p.StartService()
@@ -119,8 +115,10 @@ func (p *Project) validateControlledEnvironment(profile, commit string) {
 		Data struct{ Run runnercontract.Run }
 	}
 	s.Must(json.Unmarshal(raw, &observed))
+	// Preserve the original public result even when its binding assertion fails.
+	s.Must(controlled.Write(filepath.Join(s.Output, p.Name+"-"+profile+"-environment-proof.json"), view))
 	if round.Result.CollectionStatus != "closed" || round.Result.Version != 1 || observed.Data.Run.StopStatus != "stopped" || round.Report.Commit != commit || !round.Report.Passed() {
-		s.t.Fatal("unverified controlled adaptation provenance")
+		s.t.Fatalf("unverified controlled adaptation provenance: result=%s/%d stop=%s commit=%s expected=%s ready=%v", round.Result.CollectionStatus, round.Result.Version, observed.Data.Run.StopStatus, round.Report.Commit, commit, round.Report.Passed())
 	}
 	s.Must(controlled.Write(filepath.Join(s.Output, p.Name+"-environment-proof.json"), view))
 }

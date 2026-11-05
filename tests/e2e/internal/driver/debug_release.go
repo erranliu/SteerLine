@@ -20,6 +20,7 @@ import (
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/prompts"
+	"github.com/erranliu/SteerLine/internal/roadmap"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
@@ -311,6 +312,9 @@ func (d *debugRelease) git(args ...string) (string, error) {
 
 func (d *debugRelease) initialize() error {
 	if _, err := os.Stat(filepath.Join(d.repo, ".git")); os.IsNotExist(err) {
+		if _, err := roadmap.PrepareStatic(d.repo, false); err != nil {
+			return err
+		}
 		rules, err := prompts.TestingRules()
 		if err != nil {
 			return err

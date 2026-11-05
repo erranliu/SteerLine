@@ -465,6 +465,7 @@ func TestTM07StorageBoundary(t *testing.T) {
 		{"roadmap_values_in_storage", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/roadmap/model\"\n", ""},
 		{"roadmap_service_in_values", "internal/roadmap/model", "package model\nimport _ \"" + module + "/internal/roadmap\"\n", "pure ownership dependency"},
 		{"environment_service_in_storage", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/environmentadaptation\"\n", "storage sqlite forbidden dependency"},
+		{"developer_configuration_in_storage", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/developerconfig\"\n", "storage sqlite forbidden dependency"},
 		{"environment_values_in_storage", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/environmentadaptation/model\"\n", ""},
 		{"environment_service_in_values", "internal/environmentadaptation/model", "package model\nimport _ \"" + module + "/internal/environmentadaptation\"\n", "pure ownership dependency"},
 		{"product_DTO_alias", "internal/storage/sqlite", "package sqlite\nimport api \"" + module + "/internal/product/api\"\ntype Filter = api.ConversationFilter\n", "storage sqlite forbidden dependency"},
