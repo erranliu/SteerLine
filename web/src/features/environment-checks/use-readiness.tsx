@@ -48,6 +48,7 @@ export const environmentStage: Record<string, string> = {
   ready: "已就绪",
   blocked: "检测阻断",
   stale: "已失效",
+  unverified: "待核实",
 };
 
 export function useEnvironmentReadiness() {

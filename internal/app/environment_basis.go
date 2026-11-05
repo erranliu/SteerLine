@@ -9,6 +9,14 @@ import (
 type invalidEnvironmentBasis struct{ error }
 
 func (e *invalidEnvironmentBasis) Unwrap() error { return e.error }
+
+func confirmedEnvironmentBasisError(err error) bool {
+	var invalid *invalidEnvironmentBasis
+	var nonregular *nonRegularCommittedFileError
+	var missing *missingCommittedFileError
+	return errors.As(err, &missing) || errors.As(err, &invalid) || errors.As(err, &nonregular)
+}
+
 func (p *environmentPort) observeBasis(ctx context.Context, commit string) error {
 	if p.store == nil {
 		return nil
@@ -31,11 +39,7 @@ func (p *environmentPort) observeBasis(ctx context.Context, commit string) error
 			continue
 		}
 		material, err := p.materialAt(ctx, profile.ID, commit)
-		var invalid *invalidEnvironmentBasis
-		var nonregular *nonRegularCommittedFileError
-		var missing *missingCommittedFileError
-		confirmed := errors.As(err, &missing) || errors.As(err, &invalid) || errors.As(err, &nonregular)
-		if err != nil && !confirmed {
+		if err != nil && !confirmedEnvironmentBasisError(err) {
 			return err
 		}
 		if err == nil && material.Inputs == record.Prepared.Inputs {

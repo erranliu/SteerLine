@@ -33,3 +33,18 @@
 文档链接检查：654 个 Markdown、4069 个本地导航链接、零错误；`git diff --check` 通过。
 
 提 PR 前无冲突 rebase 到 `cf934675`（新增开发者配置边界检查，业务代码未变），补跑固定 L1：complete=true / passed=true，执行 41.0 秒，证据 `test-results/L1/20261102T104808133Z-pr/summary.json`。此前各结果仍沿原受测基线与证据，不将其改写为 rebase 后重验。
+
+## 2026-11-05 检测状态和切页回归
+
+检测运行期间，环境卡片和默认派发环境显示“检测中”。状态查询或依据读取失败显示“待核实”。普通切页返回时，在当前浏览器会话中按项目恢复运行环境和检测方案。任务链接指定方案时按链接定位。环境资格仍由原检测及其已结算报告确定。
+
+受测源码为 `e010373e8e21adbd2efe6a39319e904e9b99ccd9` 加本次工作树差异。报告根为 `C:/SteerlineDebug/wt-aeef-environment-status-2e59dbe2/test-results/`。
+
+| 检查 | 结果 | 报告 |
+| --- | --- | --- |
+| 固定 L1 | 通过 | `L1/minimum/summary.json` |
+| 固定 L2 | 通过，清理完成 | `L2/delivery/summary.json` |
+| go.environment | 通过 | `L4/environment/summary.json` |
+| web.unit | 268 项通过，零失败和跳过 | `L4/web-unit/summary.json` |
+
+TypeScript 检查和 19 项定向前端测试通过。沙箱内的首次 web.unit 断言通过，但 Windows 拒绝写入受管报告。上述正式报告来自独立目录重跑。验证范围为工作树和隔离测试现场。
