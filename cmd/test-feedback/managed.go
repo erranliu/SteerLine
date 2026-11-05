@@ -72,7 +72,7 @@ func freezeManagedReports(opts options) (*managedRun, error) {
 		actualEnvironments["l1.minimum"] = "isolated"
 	} else if def, ok := selectLocalSuite(opts); ok {
 		selected = []string{def.ID}
-		actualEnvironments[def.ID] = "isolated"
+		actualEnvironments[def.ID] = def.environment()
 	} else {
 		scenarios, e := selectE2E(root, opts)
 		if e != nil {

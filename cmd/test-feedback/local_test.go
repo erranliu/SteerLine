@@ -12,13 +12,19 @@ import (
 
 func TestLocalSuitesRequireExactSelection(t *testing.T) {
 	for _, def := range localSuites {
-		opts, err := parseOptions([]string{"-level=L4", "-suite=" + def.Suite, "-scenario=" + def.ID})
+		args := []string{"-level=L4", "-suite=" + def.Suite, "-scenario=" + def.ID}
+		if def.Live {
+			args = append(args, "-env=live")
+		}
+		opts, err := parseOptions(args)
 		selected, ok := selectLocalSuite(opts)
-		if err != nil || !ok || selected.ID != def.ID || opts.e2eEnv != "isolated" {
+		if err != nil || !ok || selected.ID != def.ID || opts.e2eEnv != def.environment() {
 			t.Fatal(def.ID, opts, err)
 		}
 	}
 	for _, args := range [][]string{
+		{"-level=L4", "-suite=usage", "-scenario=usage.remote-codex"},
+		{"-level=L4", "-suite=usage", "-scenario=usage.remote-codex", "-env=isolated"},
 		{"-level=L3", "-suite=web", "-env=isolated", "-scenario=web.unit"},
 		{"-level=L4", "-suite=web", "-env=controlled"},
 		{"-level=L4", "-suite=go", "-scenario=go.http,go.storage"},

@@ -4,6 +4,152 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 
 const config = process.env.STEERLINE_WEB_CONFIG;
+test("web.smoke.billing: isolated settings save, conflict, versions and narrow layout", async ({
+  page,
+  context,
+}, testInfo) => {
+  if (!config) throw new Error("fresh debug package config required");
+  const root = resolve(dirname(config), "..", "..");
+  const manifest = JSON.parse(
+    readFileSync(join(root, "manifest.json"), "utf8"),
+  );
+  const scheme = JSON.parse(readFileSync(join(root, "scheme.json"), "utf8"));
+  if (
+    !root.toLowerCase().startsWith("c:\\steerlinedebug\\") ||
+    manifest.status !== "ready" ||
+    scheme.scheme !== "simulate"
+  )
+    throw new Error("isolated ready simulate package required");
+  const env = { ...process.env, STEERLINE_HOME: resolve(dirname(config), "..") };
+  let opening = "";
+  let openingError = "";
+  await expect
+    .poll(
+      () => {
+        try {
+          opening = execFileSync(
+            join(root, "bin", "steerline-web.exe"),
+            ["open", "-print-url"],
+            { env, encoding: "utf8", stdio: "pipe", timeout: 30000 },
+          ).trim();
+          return !!opening;
+        } catch (error) {
+          openingError = String((error as { stderr?: Buffer }).stderr ?? error);
+          return false;
+        }
+      },
+      { timeout: 180000 },
+    )
+    .toBe(true)
+    .catch(async (error) => {
+      await testInfo.attach("opening-error", {
+        body: openingError,
+        contentType: "text/plain",
+      });
+      throw error;
+    });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(opening);
+  await expect
+    .poll(async () =>
+      (
+        await page.request.get(new URL("/auth/status", opening).toString())
+      ).status(),
+    )
+    .toBe(200);
+  await page.goto(new URL("/settings#billing", opening).toString());
+  const panel = page.getByRole("region", { name: "计费设置" });
+  await expect(panel.getByRole("combobox", { name: "价表版本" })).toBeVisible();
+  await panel
+    .getByRole("textbox", { name: "价格来源", exact: true })
+    .fill("浏览器隔离合成测试价，非供应商报价");
+  await panel.getByRole("button", { name: "添加模型费率" }).click();
+  await panel
+    .getByRole("textbox", { name: "Provider 1", exact: true })
+    .fill("fixture-provider");
+  await panel
+    .getByRole("textbox", { name: "实际模型 1", exact: true })
+    .fill("fixture-model");
+  await panel
+    .getByRole("textbox", { name: "生效时间 1", exact: true })
+    .fill("2026-11-01T00:00:00Z");
+  for (const [label, price] of [
+    ["非缓存输入", "1"],
+    ["缓存读取", "0.1"],
+    ["缓存写入", "0"],
+    ["输出（含推理）", "2"],
+  ])
+    await panel
+      .getByRole("textbox", { name: label + " 1", exact: true })
+      .fill(price);
+  await panel.getByRole("button", { name: "保存为新价表版本" }).click();
+  await expect(panel.getByRole("status")).toHaveText(/价表已保存并立即/);
+  const versions = panel.getByRole("combobox", { name: "价表版本" });
+  const first = await versions.inputValue();
+  await panel
+    .getByRole("textbox", { name: "价格来源", exact: true })
+    .fill("第二版隔离合成测试价");
+  await panel.getByRole("button", { name: "保存为新价表版本" }).click();
+  await expect.poll(() => versions.locator("option").count()).toBe(2);
+  const second = await versions.inputValue();
+  expect(second).not.toBe(first);
+  await versions.selectOption(first);
+  await expect(
+    panel.getByRole("textbox", { name: "价格来源", exact: true }),
+  ).toHaveValue("浏览器隔离合成测试价，非供应商报价");
+  const other = await context.newPage();
+  await other.goto(new URL("/settings#billing", opening).toString());
+  const otherPanel = other.getByRole("region", { name: "计费设置" });
+  await expect(
+    otherPanel.getByRole("textbox", { name: "价格来源", exact: true }),
+  ).toBeVisible();
+  await panel
+    .getByRole("textbox", { name: "价格来源", exact: true })
+    .fill("必须保留的并发草稿");
+  await otherPanel
+    .getByRole("combobox", { name: "价表版本" })
+    .selectOption(second);
+  await expect(
+    otherPanel.getByRole("textbox", { name: "价格来源", exact: true }),
+  ).toHaveValue("第二版隔离合成测试价");
+  await panel.getByRole("button", { name: "保存为新价表版本" }).click();
+  await expect(panel.getByRole("alert")).toBeVisible();
+  await expect(
+    panel.getByRole("textbox", { name: "价格来源", exact: true }),
+  ).toHaveValue("必须保留的并发草稿");
+  await panel
+    .getByRole("button", { name: "重新读取（放弃未保存修改）" })
+    .click();
+  await expect(
+    panel.getByRole("textbox", { name: "价格来源", exact: true }),
+  ).toHaveValue("第二版隔离合成测试价");
+  await page.screenshot({
+    path: testInfo.outputPath("billing-wide.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await panel.scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    )
+    .toBe(true);
+  await panel.getByRole("textbox", { name: "价格来源", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(
+    panel.getByRole("textbox", { name: "Provider 1", exact: true }),
+  ).toBeFocused();
+  await page.screenshot({
+    path: testInfo.outputPath("billing-narrow.png"),
+    fullPage: true,
+  });
+  await expect(
+    page.getByRole("region", { name: "用量采集设置" }),
+  ).toContainText("远端读取默认关闭");
+  expect(errors).toEqual([]);
+  await other.close();
+});
 test("web.smoke: original browser, task, feedback draft, final, delivery and offline", async ({
   page,
   context,

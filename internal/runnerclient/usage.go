@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path/filepath"
-	"regexp"
+	"math/big"
 	"strconv"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -29,6 +29,9 @@ func (c Client) RunUsage(ctx context.Context, run string) (runnercontract.UsageS
 		return v, errors.New("Runner usage coverage is invalid")
 	}
 	if v.Tokens != nil {
+		if err := validateUsageCounters(*v.Tokens); err != nil {
+			return v, err
+		}
 		for _, n := range []*int64{v.Tokens.InputTotal, v.Tokens.InputUncached, v.Tokens.CacheRead, v.Tokens.CacheWrite, v.Tokens.Output, v.Tokens.Reasoning, v.Tokens.Total} {
 			if n != nil && *n < 0 {
 				return v, errors.New("Runner usage has negative tokens")
@@ -38,42 +41,127 @@ func (c Client) RunUsage(ctx context.Context, run string) (runnercontract.UsageS
 	return v, nil
 }
 
-var costDecimal = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
-var costCurrency = regexp.MustCompile(`^[A-Z]{3}$`)
+// RunUsageEvents reads a bounded complete immutable event set, never latest.
+func (c Client) RunUsageEvents(ctx context.Context, usage runnercontract.UsageSnapshot) ([]runnercontract.UsageEvent, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	var events []runnercontract.UsageEvent
+	cursor := ""
+	seenCursor := map[string]bool{}
+	seenID := map[string]bool{}
+	counted := int64(0)
+	bytes := 0
+	for {
+		args := []string{"--run-id", usage.RunID, "--snapshot-revision", strconv.FormatUint(usage.Revision, 10), "--limit", "200"}
+		if cursor != "" {
+			args = append(args, "--after", cursor)
+		}
+		response, err := c.Call(ctx, "run-usage-events", args, nil)
+		if err != nil {
+			return nil, err
+		}
+		bytes += len(response.Data)
+		if bytes > 16<<20 {
+			return nil, errors.New("usage event byte budget exceeded")
+		}
+		var page runnercontract.UsagePage
+		if json.Unmarshal(response.Data, &page) != nil || page.RunID != usage.RunID || page.Revision != usage.Revision || len(page.Events) > 200 {
+			return nil, errors.New("usage page differs from fixed snapshot")
+		}
+		for _, e := range page.Events {
+			if err := validateUsageCounters(e.Tokens); err != nil {
+				return nil, err
+			}
+			if e.RunID != usage.RunID || e.ID == "" || seenID[e.ID] {
+				return nil, errors.New("invalid or duplicate usage event")
+			}
+			seenID[e.ID] = true
+			for _, n := range []*int64{e.Tokens.InputTotal, e.Tokens.InputUncached, e.Tokens.CacheRead, e.Tokens.CacheWrite, e.Tokens.Output, e.Tokens.Reasoning, e.Tokens.Total} {
+				if n != nil && *n < 0 {
+					return nil, errors.New("negative event tokens")
+				}
+			}
+			if e.Decision == "counted" {
+				counted++
+			}
+			events = append(events, e)
+		}
+		if len(events) > 50000 {
+			return nil, errors.New("usage record budget exceeded")
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		if seenCursor[page.NextCursor] || len(page.Events) == 0 {
+			return nil, errors.New("nonterminating usage cursor")
+		}
+		seenCursor[page.NextCursor] = true
+		cursor = page.NextCursor
+	}
+	if counted != usage.Coverage.CountedResponses {
+		return nil, errors.New("usage summary and counted events disagree")
+	}
+	if usage.Tokens != nil {
+		summary := counterFields(*usage.Tokens)
+		for i, want := range summary {
+			sum := new(big.Int)
+			known := true
+			for _, e := range events {
+				if e.Decision != "counted" {
+					continue
+				}
+				n := counterFields(e.Tokens)[i]
+				if n == nil {
+					known = false
+				} else {
+					sum.Add(sum, big.NewInt(*n))
+				}
+			}
+			if known {
+				if !sum.IsInt64() || want == nil || *want != sum.Int64() {
+					return nil, errors.New("usage summary differs from event counters")
+				}
+			} else if want != nil {
+				return nil, errors.New("unknown event counter became a known summary")
+			}
+		}
+	}
+	return events, nil
+}
 
-// The estimator must consume exactly the snapshot just read; never recalculate latest.
-func (c Client) EstimateRunCost(ctx context.Context, usage runnercontract.UsageSnapshot, policy string) (runnercontract.CostEstimate, error) {
-	var v runnercontract.CostEstimate
-	if usage.RunID == "" || usage.Revision == 0 || !filepath.IsAbs(policy) {
-		return v, errors.New("cost query requires a fixed usage snapshot and absolute price file")
-	}
-	response, err := c.Call(ctx, "estimate-run-cost", []string{"--run-id", usage.RunID, "--usage-revision", strconv.FormatUint(usage.Revision, 10), "--pricing-policy", policy}, nil)
-	if err != nil {
-		return v, err
-	}
-	if json.Unmarshal(response.Data, &v) != nil || v.Schema != "run-cost-estimate/v1" || v.RunID != usage.RunID || v.UsageRevision != usage.Revision || v.Scope != usage.Scope || v.UsageStatus != usage.Status || v.Basis != "api_equivalent" || v.Priced < 0 || v.Unpriced < 0 {
-		return v, errors.New("Runner cost differs from the fixed usage snapshot")
-	}
-	for _, amount := range []*string{v.Total, v.Covered} {
-		if amount != nil && (len(*amount) > 128 || !costDecimal.MatchString(*amount) || !costCurrency.MatchString(v.Currency)) {
-			return v, errors.New("Runner cost amount or currency is invalid")
+func counterFields(t runnercontract.UsageTokens) []*int64 {
+	return []*int64{t.InputTotal, t.InputUncached, t.CacheRead, t.CacheWrite, t.Output, t.Reasoning, t.Total}
+}
+func validateUsageCounters(t runnercontract.UsageTokens) error {
+	for _, n := range counterFields(t) {
+		if n != nil && *n < 0 {
+			return errors.New("negative usage counter")
 		}
 	}
-	switch v.Status {
-	case "estimated":
-		if v.Total == nil || v.Covered == nil || usage.Status != "available" || !usage.Coverage.Finalized || usage.Coverage.ExpectedSources == nil || *usage.Coverage.ExpectedSources != usage.Coverage.VerifiedSources || v.Unpriced != 0 || v.Priced != usage.Coverage.CountedResponses {
-			return v, errors.New("Runner total cost coverage is incomplete")
+	check := func(total *int64, parts ...*int64) error {
+		if total == nil {
+			return nil
 		}
-	case "partial":
-		if v.Total != nil || v.Covered == nil || v.Priced == 0 || v.Priced != usage.Coverage.CountedResponses-v.Unpriced {
-			return v, errors.New("Runner partial cost is invalid")
+		sum := new(big.Int)
+		for _, n := range parts {
+			if n == nil {
+				return nil
+			}
+			sum.Add(sum, big.NewInt(*n))
 		}
-	case "unavailable":
-		if v.Total != nil || v.Covered != nil {
-			return v, errors.New("Runner unavailable cost has an amount")
+		if !sum.IsInt64() || sum.Int64() != *total {
+			return errors.New("inconsistent usage token categories")
 		}
-	default:
-		return v, errors.New("Runner cost status is invalid")
+		return nil
 	}
-	return v, nil
+	if err := check(t.InputTotal, t.InputUncached, t.CacheRead, t.CacheWrite); err != nil {
+		return err
+	}
+	if err := check(t.Total, t.InputTotal, t.Output); err != nil {
+		return err
+	}
+	if t.Reasoning != nil && t.Output != nil && *t.Reasoning > *t.Output {
+		return errors.New("reasoning exceeds output")
+	}
+	return nil
 }

@@ -3,7 +3,6 @@ package executionconfig
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -14,7 +13,6 @@ func TestRunUsageConfigPreservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.PricingPolicy = filepath.Join(t.TempDir(), "price file.json")
 	c.UsagePolicy = json.RawMessage(`{"enabled":true,"remote_log_access":{"mode":"disabled","grants":[]}}`)
 	saved, err := s.Save(context.Background(), base.SavedDigest, encode(t, c))
 	if err != nil {
@@ -29,7 +27,7 @@ func TestRunUsageConfigPreservation(t *testing.T) {
 	var want, got any
 	_ = json.Unmarshal(c.UsagePolicy, &want)
 	_ = json.Unmarshal(current.UsagePolicy, &got)
-	if err != nil || current.PricingPolicy != c.PricingPolicy || !reflect.DeepEqual(want, got) {
+	if err != nil || !reflect.DeepEqual(want, got) {
 		t.Fatal("deployment telemetry settings lost", current, err)
 	}
 }

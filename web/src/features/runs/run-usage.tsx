@@ -1,4 +1,7 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { billingStatus } from "../../shared/api/billing";
+import { usageCollection } from "../../shared/api/usage-collection";
 import { useWorkspace } from "../../app/context";
 import { projectQueries } from "../../shared/api/queries";
 import { useQueryVisibility } from "../../shared/query-visibility";
@@ -8,13 +11,12 @@ import { Button } from "../../shared/ui/button";
 import "./run-usage.css";
 
 const reasons: Record<string, string> = {
+  USAGE_DETAILS_UNSUPPORTED: "当前 Runner 用量明细契约不足，Token 仍可查看",
   USAGE_UNSUPPORTED: "当前 Runner 暂不支持用量查询",
-  COST_UNSUPPORTED: "当前 Runner 暂不支持费用估算",
+  COST_CALCULATION_FAILED: "费用计算失败，Token 用量仍可查看",
   PRICE_POLICY_NOT_CONFIGURED: "未配置价表",
-  PRICE_POLICY_INVALID: "价表必须配置为绝对文件路径",
+  PRICE_POLICY_INVALID: "价表配置无效或无法读取",
   COST_QUERY_FAILED: "费用读取失败，可刷新重试",
-  COST_POLICY_INVALID: "价表无效或无法读取",
-  ESTIMATION_DISABLED: "费用估算已关闭",
   PRICE_NOT_FOUND: "部分模型缺少适用价格",
   MODEL_UNKNOWN: "模型信息未核实",
   PRICING_METADATA_CONFLICT: "计价信息存在冲突",
@@ -58,7 +60,7 @@ export function usagePollInterval(view: RunUsageView | undefined) {
   if (view?.reason === "USAGE_UNSUPPORTED") return false;
   if (
     view?.usage?.status === "unavailable" &&
-    view.usage.issues.some((code) =>
+    view.usage.issues.some(({ code }) =>
       [
         "PRODUCTION_BINDING_UNSUPPORTED",
         "FORMAT_UNSUPPORTED",
@@ -80,7 +82,30 @@ export function usagePollInterval(view: RunUsageView | undefined) {
 
 export function RunUsage({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
-  const options = projectQueries(api).runUsage(run);
+  const statusEnabled = useQueryVisibility(online, [
+    api.home,
+    "usage-settings-status",
+  ]);
+  const prices = useQuery({
+    queryKey: [api.home, "billing-status"],
+    queryFn: ({ signal }) => billingStatus(signal),
+    enabled: statusEnabled,
+    refetchInterval: statusEnabled ? 5000 : false,
+    retry: false,
+  });
+  const collection = useQuery({
+    queryKey: [api.home, "usage-collection-status"],
+    queryFn: ({ signal }) => usageCollection(signal, true),
+    enabled: statusEnabled,
+    refetchInterval: statusEnabled ? 5000 : false,
+    retry: false,
+  });
+  const generation = prices.data?.generation;
+  const options = projectQueries(api).runUsage(
+    run,
+    generation,
+    collection.data?.usage_policy_revision,
+  );
   const enabled = useQueryVisibility(
     online && !!run.execution_id,
     options.queryKey,
@@ -93,7 +118,25 @@ export function RunUsage({ run }: { run: Candidate }) {
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   });
-  const view = query.data;
+  useEffect(() => {
+    const changed = () => {
+      void prices.refetch();
+    };
+    window.addEventListener("billing-settings-changed", changed);
+    return () =>
+      window.removeEventListener("billing-settings-changed", changed);
+  }, [prices.refetch]);
+  const identity = JSON.stringify(options.queryKey.slice(0, -2));
+  const retained = useRef<{ identity: string; view: RunUsageView } | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    if (query.data) retained.current = { identity, view: query.data };
+  }, [identity, query.data]);
+  const previous =
+    retained.current?.identity === identity ? retained.current.view : undefined;
+  const view = query.data ?? previous;
+  const showingPrevious = !query.data && !!previous;
   const usage = view?.usage;
   const cost = view?.cost;
   const amount =
@@ -104,10 +147,14 @@ export function RunUsage({ run }: { run: Candidate }) {
     amount != null && cost ? formatAmount(amount, cost.currency) : "";
   const unsupported =
     view?.reason === "USAGE_UNSUPPORTED" ||
-    usage?.issues.includes("PRODUCTION_BINDING_UNSUPPORTED") ||
-    usage?.issues.includes("FORMAT_UNSUPPORTED");
-  const label =
-    amount != null && cost
+    usage?.issues.some((i) => i.code === "PRODUCTION_BINDING_UNSUPPORTED") ||
+    usage?.issues.some((i) => i.code === "FORMAT_UNSUPPORTED");
+  const remoteUnauthorized = usage?.issues.some(
+    (i) => i.code === "REMOTE_LOG_ACCESS_NOT_CONFIGURED",
+  );
+  const label = remoteUnauthorized
+    ? "远端用量未授权"
+    : amount != null && cost
       ? `${cost.status === "estimated" ? "费用估算" : "已计价部分"} ${formatted.startsWith("<") ? "" : "≈ "}${formatted}`
       : usage?.status === "pending"
         ? "等待用量数据"
@@ -122,7 +169,7 @@ export function RunUsage({ run }: { run: Candidate }) {
               : "费用未估算";
   const issues = [
     ...new Set([
-      ...(usage?.issues ?? []),
+      ...(usage?.issues.map((i) => i.code) ?? []),
       ...(cost?.issues ?? []),
       ...(view?.reason ? [view.reason] : []),
       ...(view?.cost_reason ? [view.cost_reason] : []),
@@ -138,7 +185,15 @@ export function RunUsage({ run }: { run: Candidate }) {
             {usage?.status === "partial" ? " · 已核实部分" : ""}
           </span>
           {view?.cost_reason === "PRICE_POLICY_NOT_CONFIGURED" && (
-            <span className="muted">未配置价表</span>
+            <a href="/settings#billing">未配置价表 · 打开计费设置</a>
+          )}
+          {remoteUnauthorized && (
+            <a
+              href="/settings#usage-collection"
+              onClick={(e) => e.stopPropagation()}
+            >
+              配置远端用量读取
+            </a>
           )}
           <span className="usage-expand">用量与费用</span>
         </summary>
@@ -159,10 +214,10 @@ export function RunUsage({ run }: { run: Candidate }) {
             <dd>{tokens(usage?.tokens?.output)}</dd>
           </div>
           <div>
-            <dt>已计价响应</dt>
+            <dt>完整计价记录 / 全部记录</dt>
             <dd>
               {cost
-                ? `${cost.priced_responses} / ${usage?.counted_responses ?? "—"}`
+                ? `${cost.fully_priced_records} / ${cost.record_count}`
                 : "—"}
             </dd>
           </div>
@@ -179,6 +234,10 @@ export function RunUsage({ run }: { run: Candidate }) {
             </dd>
           </div>
           <div>
+            <dt>价格来源</dt>
+            <dd>{cost?.pricing_source ?? "—"}</dd>
+          </div>
+          <div>
             <dt>数据观察时间</dt>
             <dd>
               {usage?.observed_at ? (
@@ -193,24 +252,25 @@ export function RunUsage({ run }: { run: Candidate }) {
             </dd>
           </div>
         </dl>
+        {cost?.matches.map((match) => (
+          <p className="muted" key={match.rule_id} title={match.rule_id}>
+            {match.provider} / {match.model} · {match.records} 条记录 ·{" "}
+            {formatAmount(match.amount, cost.currency)}
+          </p>
+        ))}
         {issues.map((code) => (
           <p className="muted" key={code}>
             {reason(code)}
           </p>
         ))}
-        {cost?.assumptions
-          ?.filter((text) => !text.startsWith("Token-only API-equivalent"))
-          .map((text) => (
-            <p className="muted" key={text}>
-              {text ===
-              "Policy explicitly uses native completion time as the request-time proxy."
-                ? "价表允许以原生响应完成时间代替请求时间。"
-                : text}
-            </p>
-          ))}
+        {cost?.assumptions?.map((text) => (
+          <p className="muted" key={text}>
+            {text}
+          </p>
+        ))}
         <p className="output-hint">
-          API 等价估算，非实际扣费；不含订阅额度结算及工具、外部 API
-          费用。主会话范围不包含未关联的子会话。
+          按配置价表估算，非实际账单；历史用量按当前价表重算。不含订阅额度结算及工具、外部
+          API 费用。主会话范围不包含未关联的子会话。
         </p>
         <Button
           size="sm"
@@ -224,6 +284,16 @@ export function RunUsage({ run }: { run: Candidate }) {
       {query.error && (
         <p className="muted" role="status">
           用量刷新失败，保留最后观察；可展开重试。
+        </p>
+      )}
+      {showingPrevious && (
+        <p className="muted" role="status">
+          暂显示原价表版本的最后估算，当前设置的重算尚未成功。
+        </p>
+      )}
+      {(prices.error || collection.error) && view && (
+        <p className="muted" role="status">
+          设置状态刷新失败，已显示的价表版本保留；当前价格或采集策略尚未核实。
         </p>
       )}
       {!online && <p className="muted">服务离线，已暂停刷新。</p>}

@@ -295,6 +295,15 @@
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.roadmap",
       "check": "isolated；三组串行：internal/roadmap普通owner全量、App固定11根及全部子项、host状态重开守卫一根。覆盖静态初始化/原请求恢复/固定材料、真实本地Git与受控provider、LF/CRLF、文档发布/未知回执/原PR对账/准入原子性和目录拒绝。排除e2e标签live根，不调用真实模型或远端PR。源/标签/平台及正式定义漂移阻断，每包非零，缺失/重复/额外/skip或任何不完整终态整体不通过；count1/25m/p1/parallel1。",
       "note": "按影响选择；本专项不能代替go.full或原L3/live；源码Web构建与E2E/Full/压力任务安排串行，使用全新外部-out。实际组command与execution_parameters必须对应，原断言与期限不变。"
+    },
+    {
+      "id": "usage.remote-codex",
+      "name": "远端 Codex 用量授权与本地费用消费",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=usage -env=live -scenario usage.remote-codex",
+      "check": "固定独立 Runner EXE、全新隔离 home/独立Git clone、外部冻结execute/1请求；默认未授权→公开发现最小host/session叶目录→显式grant正式停启→同原Run可信Token/同revision明细与SteerLine本地估价状态→重读不重复→撤权保留历史及正式stop/资源结算；无PR/安装变更。非零、零skip、缺前置/原生证据/清理失败不通过。",
+      "note": "显式STEERRUNNER_EXE/VERSION/SHA256、STEERLINE_USAGE_LIVE_INPUT和不存在的STEERLINE_USAGE_LIVE_ROOT（C:/SteerlineDebug下）。会在指定远端环境发起一次冻结请求的模型调用；仅精确选择，单项串行；不得使用安装原Run/数据库或猜授权根。输出根保留原请求/原Run/用量/调用方视图/cleanup精选JSON，正式日志见summary。"
     }
   ]
 }

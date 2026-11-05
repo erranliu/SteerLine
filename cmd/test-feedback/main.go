@@ -338,8 +338,8 @@ func parseOptions(args []string) (options, error) {
 		if opts.e2eEnv == "" && opts.level == "L2" {
 			opts.e2eEnv = "controlled"
 		}
-		_, local := selectLocalSuite(opts)
-		if local && opts.e2eEnv == "" {
+		localDef, local := selectLocalSuite(opts)
+		if local && !localDef.Live && opts.e2eEnv == "" {
 			opts.e2eEnv = "isolated"
 		}
 		live := opts.level == "L4" && opts.e2eEnv == "live" && (opts.suite == "smoke" && opts.scenario == "smoke.local-codex" ||
@@ -348,8 +348,8 @@ func parseOptions(args []string) (options, error) {
 			opts.suite == "configuration" && opts.scenario == remotetest.Discovery ||
 			opts.suite == "testing" && (opts.scenario == remotetest.Progress || opts.scenario == remotetest.Environment || opts.scenario == remotetest.LocalEnvironment))
 		if local {
-			if opts.e2eEnv != "isolated" {
-				return opts, fmt.Errorf("L4 local regression requires isolated environment")
+			if opts.e2eEnv != localDef.environment() {
+				return opts, fmt.Errorf("selected L4 suite requires its explicit environment")
 			}
 		} else if opts.suite == "go" || opts.suite == "web" || opts.e2eEnv != "controlled" && !live {
 			return opts, fmt.Errorf("unsupported test selection/environment %q", opts.e2eEnv)

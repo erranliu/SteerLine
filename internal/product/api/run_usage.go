@@ -1,6 +1,9 @@
 package api
 
-import "time"
+import (
+	"github.com/erranliu/SteerLine/internal/billing"
+	"time"
+)
 
 // Read-only telemetry; it grants no execution or recovery authority.
 type RunUsageView struct {
@@ -27,21 +30,14 @@ type UsageSummary struct {
 	Tokens              *UsageTokens `json:"tokens"`
 	Finalized           bool         `json:"finalized"`
 	CountedResponses    int64        `json:"counted_responses"`
-	Issues              []string     `json:"issues"`
+	Issues              []UsageIssue `json:"issues"`
 	AccessCleanupStatus string       `json:"access_cleanup_status"`
 	ObservedAt          time.Time    `json:"observed_at"`
 }
-type CostSummary struct {
-	Status        string   `json:"status"`
-	UsageRevision uint64   `json:"usage_revision"`
-	PolicyID      string   `json:"pricing_policy"`
-	PolicyVersion string   `json:"pricing_policy_version"`
-	PolicyDigest  string   `json:"pricing_policy_digest"`
-	Currency      string   `json:"currency"`
-	Covered       *string  `json:"covered_estimated_amount"`
-	Total         *string  `json:"total_estimated_amount"`
-	Priced        int64    `json:"priced_responses"`
-	Unpriced      int64    `json:"unpriced_responses"`
-	Assumptions   []string `json:"assumptions"`
-	Issues        []string `json:"issues"`
+type CostSummary = billing.Estimate
+type UsageIssue struct {
+	Category  string `json:"category"`
+	Code      string `json:"code"`
+	Retryable bool   `json:"retryable"`
+	SourceRef string `json:"source_ref,omitempty"`
 }

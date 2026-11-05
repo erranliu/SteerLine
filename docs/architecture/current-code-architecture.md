@@ -232,3 +232,7 @@ sequenceDiagram
 暂不建议把 Task、候选、交付拆成独立服务/数据库，也不建议引入通用事件总线、插件注册框架或重建 workflow 层。当前一个原子交付事务、每项目资源 owner、Runner 单写执行事实的关系是必要的一致性边界。业务规则、生命周期和真实支持范围分别归[整体架构](../architecture.md)、[Worker 生命周期](../product-design/worker-lifecycle.md)及[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)维护。
 
 Runner 的 Orca 协议能力层共用本机/远端目录读取，通过 native-catalog 返回目标注册 Agent 及模型/provider/effort 事实。Web 每次查询重新调用固定 EXE，仅合并同上下文在途请求，失败时保留明确过期结果。配置owner独立发布可生成组合并验证完整schema；前端合并展示。模型provider凭据留在原Agent，Web不建key配置、provider发现或账号数据库；Go执行服务仍仅消费execution.json。
+
+## 用量与费用所有权
+
+`internal/runnercontract` 只声明公开用量事实，`internal/runnerclient` 校验同 revision 的完整事件集合；`internal/billing` 是无 IO 的精确计算 owner，`internal/billingconfig` 是 home/billing.json 的唯一文件 owner。`internal/app/runner_usage.go` 固定候选、用量和价格版本后组合两者，Web 只维护全局计费设置与展示。远端授权由原 executionconfig 保存，经应用目录的 usage-collection 端口核验当前服务策略/来源需求。无额外用量账本、任务汇总或执行副作用。边界与验收见[计费 Spec](../../SteerlineFlow/spec/billing-ownership.spec.md)。

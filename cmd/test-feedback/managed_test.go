@@ -108,7 +108,7 @@ func TestTMRegisteredCatalogueMatchesExecutableManifest(t *testing.T) {
 	}
 	for _, def := range localSuites {
 		d, ok := byID[def.ID]
-		if !ok || d.Level != "L4" || d.Environment != "isolated" {
+		if !ok || d.Level != "L4" || d.Environment != def.environment() {
 			t.Fatal("local suite differs from catalogue", def.ID)
 		}
 	}
