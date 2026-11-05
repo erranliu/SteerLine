@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+任务启动与测试安排就绪衔接（2026-11-05）：[修复与验证](task-start-test-readiness.md)。测试安排未就绪时阻断首次/并行启动并显示当前准备状态；历史拒绝与当前状态分开展示，原请求保留。L1/L2、Web/HTTP 全集、定向 owner 及生产构建通过，未部署安装版。
+
 环境提交预算与首次错误保留（2026-11-05）：[修复与隔离回归](environment-submission-budget.md)。环境观察脱离 actor 五秒预算，原提交错误独立持久化，后续查询保留两类原因。
 
 历史本机 Orca PID 阻塞 Runner 升级（2026-11-05）：[修复与验证](deployment-historical-pid.md)。

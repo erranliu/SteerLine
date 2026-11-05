@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { SafeLink } from "../../shared/ui/status";
 import { GenerationProgress, type GenerationProgressValue } from "./generation-progress";
+import { testPreparationNames as names } from "../tasks/use-test-readiness";
 
 export type Commit = {sha:string;title:string;author:string;time:string;url:string;prs:string[];pr_diagnostic?:string};
 export type MaintenanceView = {
@@ -13,7 +14,6 @@ export type MaintenanceView = {
  profiles:{id:string;name:string}[];profile:string;
  generation_progress?: GenerationProgressValue;
 };
-const names:Record<string,string>={ready:"测试安排已就绪",pending:"等待生成测试安排",queued:"测试安排排队中",accepted:"测试安排生成中",unknown:"原生成结果待核实",failed:"测试安排生成失败",invalid:"材料或测试安排无效",rejected:"测试安排生成被拒绝",cancelled:"测试生成已取消",configuration_required:"需要配置测试生成"};
 const time=(value?:string)=>value?new Date(value).toLocaleString():"时间未知";
 
 function CommitDetails({commit}:{commit:Commit}) {

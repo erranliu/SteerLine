@@ -430,6 +430,15 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.config.runtimeMaintenance.candidateDocuments(ctx, strings.TrimSuffix(strings.TrimPrefix(route, "/runs/"), "/documents"))
 	}
 	if strings.HasPrefix(route, "/maintenance") || strings.HasPrefix(route, "/tests/generations/") {
+		if strings.HasPrefix(route, "/maintenance/tasks/") && len(values) > 0 {
+			if len(values) != 1 || len(values["view"]) != 1 || values.Get("view") != "status" {
+				return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unsupported or repeated maintenance query"}
+			}
+			if p.config.runtimeMaintenance == nil {
+				return nil, errors.New("maintenance unavailable")
+			}
+			return p.config.runtimeMaintenance.taskReadiness(ctx, strings.TrimPrefix(route, "/maintenance/tasks/"))
+		}
 		for key, list := range values {
 			if (route != "/maintenance" && route != "/maintenance/log") || (key != "page" && key != "scope") || len(list) != 1 {
 				return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unsupported or repeated maintenance query"}
