@@ -98,6 +98,9 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 		cli = cli.WithCatalog(catalog)
 	}
 	r.client, r.catalog = cli, catalog
+	if err == nil && !cli.SupportsObservation() {
+		return errors.New("selected Runner must support same-snapshot run observation (steerrunner-run-observation/v1, max_events >= 100)")
+	}
 	return err
 }
 

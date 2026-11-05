@@ -40,7 +40,7 @@ type GenerationStore interface {
 }
 type GenerationRunner interface {
 	Submit(context.Context, runnerclient.Request) (runnerclient.Receipt, error)
-	Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error)
+	Inspect(context.Context, string, string) (runnerclient.Inspection, error)
 	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
 }
 type GenerationService struct {
@@ -371,7 +371,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 	if id == "" || r.InputDigest == "" {
 		selector, id = "request-id", r.Request.RequestID
 	}
-	i, err := s.Runner.Inspect(ctx, selector, id, false)
+	i, err := s.Runner.Inspect(ctx, selector, id)
 	if err != nil {
 		return r, err
 	}

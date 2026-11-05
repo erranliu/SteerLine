@@ -277,9 +277,9 @@ SteerLine 与 Runner 各自持久化原请求是跨权威边界的必要安排�
 
 ### 合并观察与不可变校验时保留边界
 
-没有同快照能力时，inspect、events、再次 inspect 保持 revision 与事件一致性核验。本批已接通 Runner 公开的同快照读取：在自身同一个只读数据库事务中返回原 Run/input、revision、该 Run 的有界事件页及 next cursor，事件 revision 不得超过该投影。游标只越过实际消费的事件，分页截断不跳到未消费的末尾，空页后新提交的事件仍可从原游标读到。SteerLine 继续在原 CAS 事务保存投影、事件和游标；身份错配、revision 倒退或事件超界则整页拒绝。
+任务候选正常同步统一使用 Runner 公开的 `observe`。Runner 在同一个只读数据库事务中返回原 Run/input、revision、该 Run 的有界事件页及 next cursor。游标只越过实际消费的事件，空页后新提交的事件仍可从原游标读到。SteerLine 在原 CAS 事务保存投影、事件和游标。身份错配、revision 倒退或事件超界时整页拒绝。在线 catalog 缺少同快照能力时阻断正常项目运行。
 
-该读取不启动服务、不采集原生副作用、不刷新 PR；交付前的权威 PR 刷新保持独立。发布并验证该公开能力后，才将已覆盖观察分支替换为一次调用；未覆盖的入口保留现有读取，不静默拼接为假同快照。
+原请求回执和启动前离线证明继续通过 `inspect` 获取。停止控制先读取目标 revision，受理回执单独落盘，随后用 `observe` 读取新的持久快照。交付前的 PR 事实继续由 SteerLine 查询平台。见[同快照观察 Spec](../../SteerlineFlow/spec/task-run-observation.spec.md)。
 
 散列缓存从首版明确移除。所选 EXE 仍在每次实际调用和替换边界核验；配置解析只可共享已固定的同一份内存字节，不跨变化窗口缓存放行。该批不增加长期缓存、全局证明版本或批量事件总线。
 

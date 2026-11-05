@@ -111,7 +111,7 @@ func (p *Project) observeAuditedProduct(expected runnerstate.Candidate, final bo
 		}
 		p.AuditObservations["audit-results"] = "verified"
 		cli := runnerclient.Client{Executable: s.Run.Runner, SHA256: expected.RunnerBuild.SHA256, StateDir: expected.StateDir}
-		comparison, err := cli.Inspect(s.Context, "run-id", expected.RunID, false)
+		comparison, err := cli.Inspect(s.Context, "run-id", expected.RunID)
 		s.Must(err)
 		if comparison.Run == nil || comparison.Run.InputDigest != run.InputDigest || comparison.Run.Workflow.ID != run.RunnerWorkflow.ID || comparison.Run.Audit == nil || comparison.Run.Audit.Model != run.Audit.Model {
 			s.t.Fatal("Runner comparison differs from public product", comparison)

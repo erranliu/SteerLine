@@ -27,7 +27,7 @@ type Store interface {
 }
 type Runner interface {
 	Submit(context.Context, runnercontract.Request) (runnerclient.Receipt, error)
-	Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error)
+	Inspect(context.Context, string, string) (runnerclient.Inspection, error)
 	Call(context.Context, string, []string, *runnercontract.Request) (runnerclient.Response, error)
 }
 type Queue interface {
@@ -260,7 +260,7 @@ func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, er
 	if id == "" || r.InputDigest == "" {
 		selector, id = "request-id", r.Request.RequestID
 	}
-	observation, e := s.Runner.Inspect(ctx, selector, id, false)
+	observation, e := s.Runner.Inspect(ctx, selector, id)
 	if e != nil {
 		return r, e
 	}

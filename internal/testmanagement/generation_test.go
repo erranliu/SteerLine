@@ -142,7 +142,7 @@ func (f *generationCLI) Submit(_ context.Context, r runnerclient.Request) (runne
 	}
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: "submit-command", ReceiptStatus: "accepted"}, nil
 }
-func (f *generationCLI) Inspect(_ context.Context, selector, id string, _ bool) (runnerclient.Inspection, error) {
+func (f *generationCLI) Inspect(_ context.Context, selector, id string) (runnerclient.Inspection, error) {
 	f.inspects++
 	if f.hidden {
 		return runnerclient.Inspection{}, nil
@@ -196,7 +196,7 @@ type slowGenerationCLI struct {
 	seen []string
 }
 
-func (f *slowGenerationCLI) Inspect(ctx context.Context, _, id string, _ bool) (runnerclient.Inspection, error) {
+func (f *slowGenerationCLI) Inspect(ctx context.Context, _, id string) (runnerclient.Inspection, error) {
 	f.seen = append(f.seen, id)
 	if id == "run-a" {
 		<-ctx.Done()
@@ -435,7 +435,7 @@ func TestTMGenerationPersistenceAndUnknown(t *testing.T) {
 
 type missingOriginalGeneration struct{ *generationCLI }
 
-func (f missingOriginalGeneration) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (f missingOriginalGeneration) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	return runnerclient.Inspection{}, &runnerclient.Failure{Code: "request_not_found"}
 }
 

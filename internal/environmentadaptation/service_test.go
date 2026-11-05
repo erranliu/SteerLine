@@ -69,7 +69,7 @@ func (r *runner) Call(_ context.Context, command string, _ []string, q *runnercl
 	}
 	return runnerclient.Response{}, nil
 }
-func (r *runner) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (r *runner) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	if r.unknown || r.inspectErr {
 		return runnerclient.Inspection{}, errors.New("original request unknown")
 	}

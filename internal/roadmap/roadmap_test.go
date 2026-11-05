@@ -325,7 +325,7 @@ func (f *roadmapRunner) Submit(_ context.Context, r runnercontract.Request) (run
 	}
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: "submit", ReceiptStatus: "accepted"}, nil
 }
-func (f *roadmapRunner) Inspect(_ context.Context, selector, id string, _ bool) (runnerclient.Inspection, error) {
+func (f *roadmapRunner) Inspect(_ context.Context, selector, id string) (runnerclient.Inspection, error) {
 	f.inspects++
 	if f.hidden {
 		return runnerclient.Inspection{}, nil
