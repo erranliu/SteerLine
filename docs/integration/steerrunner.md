@@ -17,7 +17,7 @@ SteerLine 校验固定 commit 的项目材料及接入条件，冻结候选与�
 2026-10-24：候选测试汇报改用 [progress-file 单文件通道](runtime-progress.md)，调用方冻结布尔字段、独立保存快照并解释展示。候选侧原 R2 收集、workspace-git 当前通过判定和自动转测试历史已移除；下文 2026-10-20 的 R2 接入只记录历史版本。独立标准报告与显式登记保留。安装及旧现场不自动迁移。
 
 
-执行页“用量与费用”消费 Runner #47 / `61d9317524b56f148b2b31e2f23a4acc1de58081` 的 `run-usage`、`estimate-run-cost`，以同一用量快照估算候选累计主会话费用。页面不触发日志补采或执行输入；缺价表仍显示 Token，未知不显示零，部分费用标记“已计价部分”。当前资格为 Orca 本机 Codex/Pi/DSH 和远端 Codex；`codex-app-server` 与远端 Pi/DSH 未由本次接入扩展。接入与测试范围见[Plan](../../SteerlineFlow/plans/run-usage-cost-ui.plan.md)和[验收](../../SteerlineFlow/testing/acceptance/run-usage-cost-ui.md)。
+执行页“用量与费用”消费 Runner 的 `run-usage` 和 `estimate-run-cost`，以同一用量快照估算候选累计主会话费用。页面不触发日志补采或执行输入；缺价表仍显示 Token，未知不显示零，部分费用标记“已计价部分”。采集范围以所用 Runner 的 `capabilities.run_usage.matrix` 为准。支持本机 `codex-app-server` 用量的 Runner 从原生通知读取 Token，并按原会话与回合归属及去重。该通知缺少逐响应的计价依据，因此费用保持未知。页面接入范围见[验收](../../SteerlineFlow/testing/acceptance/run-usage-cost-ui.md)。
 
 `execution.json` 的可选顶层 `pricing_policy` 为 Runner 所在机器上的绝对 JSON 文件路径，例如 `"pricing_policy": "C:/MySteerLine/pricing-policy.json"`。价表使用所选 Runner 发布的 `run-pricing-policy/v1`，明确 ID、版本、来源、币种、生效区间和模型费率；不内置价格、不联网抓价。金额是 token 的 API 等价估算，不是实际扣费，排除订阅/credits 结算与工具/外部 API 附加费。价表在估价时由 Runner 独立读取，刷新可以按新策略重算，用量事实不变；设置或更换文件路径需保存配置并显式重启 SteerLine。
 
