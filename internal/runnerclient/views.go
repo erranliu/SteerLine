@@ -18,8 +18,8 @@ type Inspection = runnercontract.Inspection
 type Event = runnercontract.Event
 type EventPage = runnercontract.EventPage
 
-func (c Client) Inspect(ctx context.Context, selector, id string, refresh bool) (Inspection, error) {
-	return c.inspect(ctx, selector, id, refresh, false)
+func (c Client) Inspect(ctx context.Context, selector, id string) (Inspection, error) {
+	return c.inspect(ctx, selector, id, false)
 }
 
 // InspectBeforeStart never starts a service. A cold query is explicitly leased
@@ -35,17 +35,17 @@ func (c Client) InspectBeforeStart(ctx context.Context, selector, id string) (In
 			return Inspection{}, false, err
 		}
 		c.InstanceID = info.InstanceID
-		value, err := c.inspect(ctx, selector, id, false, false)
+		value, err := c.inspect(ctx, selector, id, false)
 		return value, false, err
 	case "not_running":
 		c.InstanceID = ""
-		value, err := c.inspect(ctx, selector, id, false, true)
+		value, err := c.inspect(ctx, selector, id, true)
 		return value, true, err
 	default:
 		return Inspection{}, false, errors.New("original Runner ownership/startup is unverified")
 	}
 }
-func (c Client) inspect(ctx context.Context, selector, id string, refresh, offline bool) (Inspection, error) {
+func (c Client) inspect(ctx context.Context, selector, id string, offline bool) (Inspection, error) {
 	switch selector {
 	case "run-id", "request-id", "command-id":
 	default:
@@ -54,12 +54,6 @@ func (c Client) inspect(ctx context.Context, selector, id string, refresh, offli
 	args := []string{"--" + selector, id}
 	if offline {
 		args = append(args, "--offline")
-	}
-	if refresh {
-		if selector != "run-id" {
-			return Inspection{}, &Failure{Code: "invalid_arguments", Message: "PR refresh requires Run identity", Exit: 2}
-		}
-		args = append(args, "--refresh-pr")
 	}
 	response, err := c.Call(ctx, "inspect", args, nil)
 	if err != nil {
@@ -76,29 +70,6 @@ func (c Client) inspect(ctx context.Context, selector, id string, refresh, offli
 	}
 	if json.Unmarshal(response.Data, &result) != nil || result.Run != nil && (result.Run.RunID == "" || result.Run.Revision == 0) || selector == "run-id" && (result.Run == nil || result.Run.RunID != id) || selector == "request-id" && (result.Command == nil || result.Command.RequestID != id) || selector == "command-id" && (result.Command == nil || result.Command.CommandID != id) || result.Command != nil && result.Command.RunID != nil && (result.Run == nil || result.Run.RunID != *result.Command.RunID) {
 		return Inspection{}, &Failure{Code: "runner_unavailable", Message: "Runner inspection identity could not be verified", Exit: 4}
-	}
-	return result, nil
-}
-func (c Client) Events(ctx context.Context, id, after string) (EventPage, error) {
-	args := []string{"--run-id", id, "--limit", "100"}
-	if after != "" {
-		args = append(args, "--after", after)
-	}
-	response, err := c.Call(ctx, "events", args, nil)
-	if err != nil {
-		return EventPage{}, err
-	}
-	var result EventPage
-	if json.Unmarshal(response.Data, &result) != nil || result.NextCursor == "" {
-		return EventPage{}, &Failure{Code: "runner_unavailable", Message: "Runner event page is invalid", Exit: 4}
-	}
-	for _, event := range result.Events {
-		if err := c.validateWaitEvent(event); err != nil {
-			return EventPage{}, waitFailure(err)
-		}
-		if event.EventID == "" || event.RunID != id || event.Revision == 0 {
-			return EventPage{}, &Failure{Code: "runner_unavailable", Message: "Runner event identity is invalid", Exit: 4}
-		}
 	}
 	return result, nil
 }

@@ -79,7 +79,7 @@ func (f *environmentWorkflowPeer) Call(_ context.Context, command string, _ []st
 	}
 	return runnerclient.Response{}, nil
 }
-func (f *environmentWorkflowPeer) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (f *environmentWorkflowPeer) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	copy := f.run
 	return runnerclient.Inspection{Run: &copy}, nil
 }

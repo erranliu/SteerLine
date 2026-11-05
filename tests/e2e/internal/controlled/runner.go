@@ -483,7 +483,6 @@ func prepareFixturePR(path string, s *State, repo, branch string) (model.PRInfo,
 // public capability even when the helper is built directly rather than packaged.
 func controlledCapabilities() map[string]any {
 	caps := protocol.RunnerServiceCapabilities("caller-fixture-v1")
-	caps["run_observation"] = map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100}
 	caps["configuration_schemas"].(map[string]any)["adapters"].(map[string]any)["orca-terminal"] = map[string]string{"type": "object"}
 	for _, workflow := range caps["workflows"].([]any) {
 		workflow.(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}

@@ -52,7 +52,7 @@ func (f *fixtureCLI) Submit(_ context.Context, r runnerclient.Request) (runnercl
 	}
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: "submit-command", ReceiptStatus: "accepted", ActionStatus: "pending"}, nil
 }
-func (f *fixtureCLI) Inspect(_ context.Context, selector, id string, _ bool) (runnerclient.Inspection, error) {
+func (f *fixtureCLI) Inspect(_ context.Context, selector, id string) (runnerclient.Inspection, error) {
 	f.reads++
 	copy := f.run
 	if selector == "run-id" {
@@ -64,8 +64,8 @@ func (f *fixtureCLI) Inspect(_ context.Context, selector, id string, _ bool) (ru
 	}
 	return runnerclient.Inspection{Command: &command, Run: &copy}, nil
 }
-func (f *fixtureCLI) Events(context.Context, string, string) (runnerclient.EventPage, error) {
-	return runnerclient.EventPage{NextCursor: "cursor", Events: []runnerclient.Event{{EventID: "stable", RunID: f.run.RunID, Revision: 1, Type: "accepted"}}}, nil
+func (f *fixtureCLI) Observe(context.Context, string, string) (runnerclient.RunObservation, error) {
+	return runnerclient.RunObservation{Contract: runnerclient.RunObservationContract, Run: f.run, EventPage: runnerclient.EventPage{NextCursor: "cursor", Events: []runnerclient.Event{{EventID: "stable", RunID: f.run.RunID, Revision: 1, Type: "accepted"}}}}, nil
 }
 func (f *fixtureCLI) Call(_ context.Context, command string, _ []string, r *runnerclient.Request) (runnerclient.Response, error) {
 	if command == "stop" {

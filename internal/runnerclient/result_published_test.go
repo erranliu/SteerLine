@@ -142,18 +142,38 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 	check(err)
 	var runID string
 	var stop *Request
+	var stopRevision uint64
 	// Cleanup only addresses the original Run/request and original service.
 	stopRun := func() error {
-		v, err := c.Inspect(context.Background(), "run-id", runID, false)
+		v, err := c.Inspect(context.Background(), "run-id", runID)
 		if err != nil || v.Run.StopStatus == "stopped" {
 			return err
 		}
 		if stop == nil {
-			body, _ := json.Marshal(map[string]uint64{"expected_revision": v.Run.Revision})
+			stopRevision = v.Run.Revision
+			body, _ := json.Marshal(map[string]uint64{"expected_revision": stopRevision})
 			stop = &Request{Protocol: Protocol, RequestID: "caller-result-stop", Input: body}
 			_, err = c.Call(context.Background(), "stop", []string{"--run-id", runID}, stop)
 		}
 		return err
+	}
+	observeStoppedArrangement := func() {
+		t.Helper()
+		cursor := ""
+		for ctx.Err() == nil {
+			observation, err := c.Observe(ctx, runID, cursor)
+			check(err)
+			cursor = observation.EventPage.NextCursor
+			if observation.Run.StopStatus == "stopped" {
+				if stop == nil || observation.Run.Revision <= stopRevision {
+					t.Fatal("stop observation did not advance the pre-control revision", stopRevision, observation.Run.Revision)
+				}
+				t.Logf("101 stop observation: Run=%s before=%d after=%d", runID, stopRevision, observation.Run.Revision)
+				return
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		t.Fatal("native arrangement read passed but observe did not confirm stop")
 	}
 	t.Cleanup(func() {
 		if runID != "" {
@@ -206,7 +226,7 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 	runID = receipt.RunID
 	var run *Run
 	for ctx.Err() == nil {
-		v, err := c.Inspect(ctx, "run-id", runID, false)
+		v, err := c.Inspect(ctx, "run-id", runID)
 		check(err)
 		run = v.Run
 		if run.Execution.TurnID != "" {
@@ -228,7 +248,7 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 			if err == nil && strings.EqualFold(strings.TrimSpace(string(data)), expectedDigest) {
 				t.Logf("101 native Agent read: base=%s Run=%s SHA-256=%s", commit, runID, expectedDigest)
 				for ctx.Err() == nil {
-					view, err := c.Inspect(ctx, "run-id", runID, false)
+					view, err := c.Inspect(ctx, "run-id", runID)
 					check(err)
 					if view.Run.Execution.NativeOutcome != "" {
 						break
@@ -237,15 +257,8 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 				}
 				check(ctx.Err())
 				check(stopRun())
-				for ctx.Err() == nil {
-					view, err := c.Inspect(ctx, "run-id", runID, false)
-					check(err)
-					if view.Run.StopStatus == "stopped" {
-						return
-					}
-					time.Sleep(250 * time.Millisecond)
-				}
-				t.Fatal("native arrangement read passed but the Run did not confirm stop")
+				observeStoppedArrangement()
+				return
 			}
 			time.Sleep(250 * time.Millisecond)
 		}
@@ -278,6 +291,9 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 		}
 		t.Logf("101 %s: Runner=%s base=%s Run=%s arrangement SHA-256=%s", arrangementMode, version.SourceCommit, commit, runID, expectedDigest)
 		check(stopRun())
+		if arrangementMode == "readable" {
+			observeStoppedArrangement()
+		}
 		return
 	}
 	final := []byte{0, 255, 'r', '\n'} // Result is opaque, including non-JSON bytes.
@@ -290,7 +306,7 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 	}
 	check(stopRun())
 	for ctx.Err() == nil {
-		v, err := c.Inspect(ctx, "run-id", runID, false)
+		v, err := c.Inspect(ctx, "run-id", runID)
 		check(err)
 		if v.Run.StopStatus == "stopped" {
 			break

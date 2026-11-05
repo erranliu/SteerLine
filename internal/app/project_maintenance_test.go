@@ -200,7 +200,7 @@ func (f *pmsCLI) Submit(_ context.Context, r runnerclient.Request) (runnerclient
 	}
 	return runnerclient.Receipt{RunID: f.run.RunID, ReceiptStatus: "accepted"}, nil
 }
-func (f *pmsCLI) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (f *pmsCLI) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	run := f.run
 	return runnerclient.Inspection{Run: &run, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &run.RunID}}, nil
 }

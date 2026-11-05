@@ -1,5 +1,9 @@
 # SteerRunner 依赖与运行
 
+## 任务候选观察
+
+正常项目运行要求 Runner 在线 catalog 提供 `steerrunner-run-observation/v1`、`same_snapshot: true` 及至少 100 条每页。已绑定任务候选使用 `observe` 获取 Run 和事件页。原 `request_id` 对账、启动前离线读取和控制前 revision 仍走 `inspect`。启动前先完成停止信封交接，再检查在线观察能力。见[同快照观察 Spec](../../SteerlineFlow/spec/task-run-observation.spec.md)。
+
 ## Git 型新 Run 的启动边界
 
 SteerLine 校验固定 commit 的项目材料及接入条件，冻结候选与请求。Runner 按该 commit 创建新 worktree，沿创建回执绑定原资源，随后自主推进 Workflow。成功创建即满足该路径的工作区启动条件。自动生成的测试安排随冻结请求进入既有文件渠道，由 Agent 在工作区使用时读取。请求形成时发现的缺项由 SteerLine 阻断，运行期读不到安排由 Agent 报告。旧 Run 恢复继续走独立流程。见[启动边界 Spec](../../SteerlineFlow/spec/fresh-worktree-startup.spec.md)。

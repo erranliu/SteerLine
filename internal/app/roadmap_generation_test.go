@@ -100,7 +100,7 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 		Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: q.RequestID, TurnID: "controlled-turn"}}
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: q.RequestID, ReceiptStatus: "accepted"}, nil
 }
-func (f *promotionRunner) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+func (f *promotionRunner) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
 	r := f.run
 	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &r.RunID}}, nil
 }

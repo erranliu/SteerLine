@@ -23,7 +23,7 @@ func (s *Scenario) stopOriginalRun(runner runnerclient.Client, runID, digest, pr
 	}
 	accepted := false
 	for attempt := 0; attempt < 5; attempt++ {
-		observed, err := runner.Inspect(s.Context, "run-id", runID, false)
+		observed, err := runner.Inspect(s.Context, "run-id", runID)
 		s.Must(err)
 		if observed.Run == nil || observed.Run.RunID != runID || observed.Run.InputDigest != digest {
 			t.Fatal("original Run identity lost before stop")
@@ -53,7 +53,7 @@ func (s *Scenario) stopOriginalRun(runner runnerclient.Client, runID, digest, pr
 		t.Fatal("original Run stop remained stale")
 	}
 	s.Wait("original public Run native stop settlement", func() (bool, error) {
-		observed, err := runner.Inspect(s.Context, "run-id", runID, false)
+		observed, err := runner.Inspect(s.Context, "run-id", runID)
 		if err != nil || observed.Run == nil {
 			return false, err
 		}

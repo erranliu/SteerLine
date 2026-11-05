@@ -24,7 +24,7 @@ type Store interface {
 }
 type Runner interface {
 	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
-	Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error)
+	Inspect(context.Context, string, string) (runnerclient.Inspection, error)
 	ResultFile(context.Context, string) (runnercontract.ResultFile, error)
 }
 type Service struct {
@@ -309,7 +309,7 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 	if id == "" {
 		selector, id = "request-id", a.Request.RequestID
 	}
-	v, e := s.Runner.Inspect(ctx, selector, id, false)
+	v, e := s.Runner.Inspect(ctx, selector, id)
 	if e != nil {
 		if a.Run == nil || !(r.Cancelled || !s.now().Before(a.Deadline) || a.Stop != nil) {
 			return e
@@ -375,7 +375,7 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 			}
 			a.StopState = "accepted"
 		} else {
-			v, e := s.Runner.Inspect(ctx, "request-id", a.Stop.RequestID, false)
+			v, e := s.Runner.Inspect(ctx, "request-id", a.Stop.RequestID)
 			if e != nil {
 				return e
 			}
