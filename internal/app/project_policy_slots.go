@@ -10,10 +10,13 @@ import (
 // empty selection records that SteerLine checked all of them.
 func (c Config) projectPolicySlots(ctx context.Context, commit string) ([]string, error) {
 	reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
-	slots := []string{"git", "command", "testing"}
+	slots, err := c.runtimeCatalog.ProjectPolicySlots()
+	if err != nil {
+		return nil, err
+	}
 	paths := make([]string, len(slots))
 	for i, slot := range slots {
-		paths[i] = "SteerlineFlow/runner-policies/" + slot + ".md"
+		paths[i] = slot.Path
 	}
 	files, err := reader.readPinnedFiles(ctx, commit, paths, true)
 	if err != nil {
@@ -22,7 +25,7 @@ func (c Config) projectPolicySlots(ctx context.Context, commit string) ([]string
 	selected := make([]string, 0, len(slots))
 	for i, path := range paths {
 		if _, ok := files[path]; ok {
-			selected = append(selected, slots[i])
+			selected = append(selected, slots[i].Slot)
 		}
 	}
 	return selected, nil

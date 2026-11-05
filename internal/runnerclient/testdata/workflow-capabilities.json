@@ -1,4 +1,553 @@
 {
+  "native_catalog": {
+    "command": "native-catalog",
+    "contract": "steerrunner-native-catalog/v1",
+    "limits": {
+      "cleanup_timeout_ms": 5000,
+      "input_bytes": 65536,
+      "output_bytes": 1048576,
+      "timeout_ms": 30000
+    },
+    "queries": [
+      {
+        "kind": "environments"
+      },
+      {
+        "adapter": "orca-terminal",
+        "kind": "agents",
+        "target_kind": "local"
+      },
+      {
+        "adapter": "orca-terminal",
+        "kind": "agents",
+        "target_kind": "orca_environment"
+      },
+      {
+        "adapter": "orca-terminal",
+        "kind": "models",
+        "target_kind": "local"
+      },
+      {
+        "adapter": "orca-terminal",
+        "kind": "models",
+        "target_kind": "orca_environment"
+      },
+      {
+        "adapter": "codex-app-server",
+        "kind": "models",
+        "target_kind": "local"
+      }
+    ],
+    "query_only": true,
+    "request_schema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "environments"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "agents"
+            },
+            "adapter": {
+              "const": "orca-terminal"
+            },
+            "target": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "local"
+                    },
+                    "environment": {
+                      "const": ""
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "orca_environment"
+                    },
+                    "environment": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "environment"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "adapter",
+            "target"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "models"
+            },
+            "adapter": {
+              "const": "orca-terminal"
+            },
+            "target": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "local"
+                    },
+                    "environment": {
+                      "const": ""
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "orca_environment"
+                    },
+                    "environment": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "environment"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "agent": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          "required": [
+            "kind",
+            "adapter",
+            "target",
+            "agent"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "models"
+            },
+            "adapter": {
+              "const": "codex-app-server"
+            },
+            "target": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "local"
+                },
+                "environment": {
+                  "const": ""
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "agent": {
+              "const": "codex"
+            },
+            "executable": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "kind",
+            "adapter",
+            "target",
+            "agent"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "requires_service": false,
+    "response_schema": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "steerrunner-native-catalog/v1"
+        },
+        "kind": {
+          "enum": [
+            "environments",
+            "agents",
+            "models"
+          ]
+        },
+        "adapter": {
+          "enum": [
+            "orca-terminal",
+            "codex-app-server"
+          ]
+        },
+        "target": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "local"
+                },
+                "environment": {
+                  "const": ""
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "orca_environment"
+                },
+                "environment": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                }
+              },
+              "required": [
+                "kind",
+                "environment"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "agent": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "ready",
+            "loading"
+          ]
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "context_unverified": {
+          "const": true
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "executable_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{64}$"
+            },
+            "resource_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{64}$"
+            },
+            "native_version": {
+              "type": "string"
+            },
+            "runtime_id": {
+              "type": "string"
+            },
+            "protocol": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "version",
+            "executable_sha256",
+            "resource_digest"
+          ],
+          "additionalProperties": false
+        },
+        "origin": {
+          "type": "string"
+        },
+        "native_fetched_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "listing_in_progress": {
+          "type": "boolean"
+        },
+        "environments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "directory"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "label": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "default_effort": {
+                "type": "string"
+              },
+              "is_default": {
+                "type": "boolean"
+              },
+              "efforts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "is_default",
+              "efforts"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "contract",
+        "kind",
+        "state",
+        "complete",
+        "observed_at",
+        "context_unverified",
+        "source",
+        "origin",
+        "listing_in_progress"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ready"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "complete": {
+                "const": true
+              },
+              "listing_in_progress": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "loading"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "complete": {
+                "const": false
+              },
+              "listing_in_progress": {
+                "const": true
+              }
+            }
+          }
+        }
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "environments"
+            }
+          },
+          "required": [
+            "environments"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "agents"
+                ]
+              },
+              {
+                "required": [
+                  "models"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "agents"
+            }
+          },
+          "required": [
+            "agents"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "environments"
+                ]
+              },
+              {
+                "required": [
+                  "models"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "models"
+            }
+          },
+          "required": [
+            "models"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "environments"
+                ]
+              },
+              {
+                "required": [
+                  "agents"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "model_input_contract": {"contract":"steerrunner-model-input/v1","workflow":{"project_policies":{"slots":[{"slot":"git","path":"SteerlineFlow/runner-policies/git.md"},{"slot":"command","path":"SteerlineFlow/runner-policies/command.md"},{"slot":"testing","path":"SteerlineFlow/runner-policies/testing.md"}]}}},
   "workflows": [
     {
       "id": "development",

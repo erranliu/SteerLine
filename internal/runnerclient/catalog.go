@@ -27,6 +27,7 @@ type RecoveryCapability struct {
 }
 
 type Capabilities struct {
+	ModelInputContract json.RawMessage           `json:"model_input_contract"`
 	Recovery           *RecoveryCapability       `json:"recovery,omitempty"`
 	OfflineInspect     *OfflineInspectCapability `json:"offline_inspect,omitempty"`
 	Generate           *GenerateCapability       `json:"generate,omitempty"`
@@ -259,4 +260,12 @@ func validatePublicValue(schema *jsonschema.Schema, value any) error {
 		return err
 	}
 	return schema.Validate(v)
+}
+
+// ProjectPolicySlots is optional until a new development request needs preflight.
+func (c *Catalog) ProjectPolicySlots() ([]runnercontract.ProjectPolicySlot, error) {
+	if c == nil {
+		return nil, errors.New("Runner 项目策略目录不可用")
+	}
+	return runnercontract.ProjectPolicySlots(c.Capabilities.ModelInputContract)
 }

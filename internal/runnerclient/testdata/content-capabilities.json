@@ -1,4 +1,5 @@
 {
+  "model_input_contract": {"contract":"steerrunner-model-input/v1","workflow":{"project_policies":{"slots":[{"slot":"git","path":"SteerlineFlow/runner-policies/git.md"},{"slot":"command","path":"SteerlineFlow/runner-policies/command.md"},{"slot":"testing","path":"SteerlineFlow/runner-policies/testing.md"}]}}},
   "protocol": "steerrunner-cli/v1",
   "version": "0.2.0-dev.3-r2",
   "resource_version": 2,
