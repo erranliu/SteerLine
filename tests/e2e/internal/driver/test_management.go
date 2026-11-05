@@ -335,29 +335,19 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	}
 	sum := sha256.Sum256(expectedSnapshot)
 	snapshotDigest := hex.EncodeToString(sum[:])
-	referencedWriter := false
-	for _, value := range original.Materials {
-		referencedWriter = referencedWriter || value.Path == testmanagementmodel.WriterPath
-	}
-	testContext, e := prompts.TestingContext(expectedSnapshot, referencedWriter)
+	testContext, e := prompts.TestingContext(expectedSnapshot)
 	if e != nil {
 		return e
 	}
-	if !strings.Contains(original.Workflow.PromptOverrides["implement.execute"], testContext) {
+	if !strings.HasSuffix(original.Workflow.PromptOverrides["implement.execute"], testContext) {
 		return errors.New("Runner did not freeze exact system test prompt")
 	}
-	arrangementPath, e := testmanagement.ArrangementPath(material.Contract.PlanRef.Path)
-	if e != nil {
-		return e
-	}
 	expectedPaths := map[string]bool{material.Contract.SpecRef.Path: false, material.Contract.PlanRef.Path: false}
-	for _, path := range projectEntry.Paths() {
-		expectedPaths[path] = false
+	for _, ref := range material.Contract.CommonRefs {
+		expectedPaths[ref.Path] = false
 	}
-	expectedPaths[arrangementPath] = false
-	expectedPaths[testmanagementmodel.ProtocolPath] = false
-	if referencedWriter {
-		expectedPaths[testmanagementmodel.WriterPath] = false
+	for _, ref := range material.Contract.AcceptanceRefs {
+		expectedPaths[ref.Path] = false
 	}
 	for _, value := range original.Materials {
 		if _, ok := expectedPaths[value.Path]; !ok {

@@ -3,9 +3,6 @@ package model
 import (
 	"encoding/json"
 	"errors"
-
-	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"strings"
 )
 
 const RulesPath = "SteerlineFlow/testing.md"
@@ -38,15 +35,4 @@ func ValidateArrangement(plan Snapshot, raw []byte, catalogue Catalogue) error {
 		}
 	}
 	return nil
-}
-func TestReference(doc runnercontract.Document, plan string, project ProjectEntry) bool {
-	if project.Version != 1 || !strings.HasSuffix(plan, ".plan.md") || doc.Kind != "" || doc.Content != nil || doc.Commit != "" {
-		return false
-	}
-	for _, path := range append(project.Paths(), WriterPath, ProtocolPath) {
-		if doc.Path == path {
-			return true
-		}
-	}
-	return false
 }

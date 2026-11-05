@@ -56,7 +56,7 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 	if err != nil {
 		return nil, err
 	}
-	workflow, err := c.runtimeCatalog.WithTestProgressContext(run.Workflow, work.FrozenTestPlan, true)
+	workflow, err := c.runtimeCatalog.WithTestProgressContext(run.Workflow, work.FrozenTestPlan)
 	if err != nil {
 		return nil, fmt.Errorf("所选Runner无法绑定系统测试安排：%w", err)
 	}
@@ -66,16 +66,6 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 	run.ProgressFile = progress
 	run.Workflow = workflow
 	run.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(arrangement)}
-	seen := map[string]bool{run.Documents.Spec.Path: true, run.Documents.Plan.Path: true}
-	for _, ref := range run.Documents.References {
-		seen[ref.Path] = true
-	}
-	for _, path := range append(plan.Project.Paths(), testmodel.ProtocolPath, testmodel.WriterPath) {
-		if !seen[path] {
-			run.Documents.References = append(run.Documents.References, runnerclient.Document{Path: path})
-			seen[path] = true
-		}
-	}
 	return append(json.RawMessage(nil), work.FrozenTestPlan...), nil
 }
 

@@ -293,7 +293,7 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(snapshot) == 0 || len(run.Documents.References) != 5 || run.ResultFile == nil || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
+	if len(snapshot) == 0 || len(run.Documents.References) != 0 || run.ResultFile == nil || !strings.HasSuffix(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot)) {
 		t.Fatal("compact system context not frozen")
 	}
 	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: b, TestPlan: snapshot}

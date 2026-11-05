@@ -165,23 +165,11 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			input.ResultFile.InitialContentBase64 != base64.StdEncoding.EncodeToString(arrangement) {
 			return nativeErr("contract_mismatch", "Runner test input file differs from the frozen generated arrangement")
 		}
-		referencedWriter := false
-		for _, doc := range input.Documents.References {
-			if doc.Path == testmodel.WriterPath {
-				referencedWriter = true
-			}
-		}
-		context, err := prompts.TestingContext(c.TestPlan, referencedWriter)
+		context, err := prompts.TestingContext(c.TestPlan)
 		if err != nil {
 			return nativeErr("contract_mismatch", err.Error())
 		}
-		bound := false
-		for _, body := range input.Workflow.PromptOverrides {
-			if context != "" && strings.Contains(body, context) {
-				bound = true
-			}
-		}
-		if !bound {
+		if !strings.HasSuffix(input.Workflow.PromptOverrides["implement.execute"], context) {
 			return nativeErr("contract_mismatch", "system test snapshot is absent from frozen prompt context")
 		}
 	} else if input.ResultFile != nil {
@@ -194,9 +182,6 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		}
 		seenRefs[doc.Path] = true
 		ref, ok := want[doc.Path]
-		if !ok && testingReady && testmodel.TestReference(doc, testing.PlanPath, testing.Project) {
-			continue
-		}
 		if !ok || !matches(doc, ref) {
 			return nativeErr("contract_mismatch", "Runner reference differs from the task contract")
 		}
@@ -204,13 +189,6 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 	}
 	if len(want) != 0 {
 		return nativeErr("contract_mismatch", "Runner input omits fixed task references")
-	}
-	if testingReady {
-		for _, path := range append(testing.Project.Paths(), testmodel.WriterPath, testmodel.ProtocolPath) {
-			if !seenRefs[path] {
-				return nativeErr("contract_mismatch", "Runner input omits required prepared test file: "+path)
-			}
-		}
 	}
 	// Freeze the public naming hint with the authoritative candidate number,
 	// before the submission can be observed or sent by the bridge.
