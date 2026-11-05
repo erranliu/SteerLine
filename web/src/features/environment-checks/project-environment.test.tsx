@@ -12,9 +12,11 @@ import { identity, mountFeature, testClient } from "../../test/workspace";
 import { Navigate } from "react-router-dom";
 import type { EnvironmentOptions } from "./use-readiness";
 import { ProjectEnvironment } from "./project-environment";
+import { Dispatch } from "../tasks/dispatch";
 
 afterEach(() => {
   cleanup();
+  sessionStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -253,6 +255,74 @@ it("requires a scheme selection only for shared environments without a default",
   expect(send).not.toHaveBeenCalled();
 });
 
+it("restores the selected environment and scheme after switching pages", async () => {
+  const { api, client, send } = fixture();
+  await loaded();
+  const key = "f".repeat(64);
+  await updateOptions(client, (options) => {
+    options.environments.push({
+      ...options.environments[0],
+      environment_key: key,
+      target: { kind: "local" },
+      profiles: [
+        { ...options.profiles[0], id: "local-one", environment_key: key },
+        { ...options.profiles[0], id: "local-two", environment_key: key },
+      ],
+    });
+  });
+  const options = client.getQueryData<EnvironmentOptions>(optionsKey)!;
+  const read = vi.mocked(api.get).getMockImplementation()!;
+  vi.mocked(api.get).mockImplementation(async (path, signal) =>
+    path.startsWith("/environment/options")
+      ? (options as never)
+      : read(path, signal),
+  );
+  fireEvent.change(screen.getByLabelText("运行环境"), {
+    target: { value: key },
+  });
+  fireEvent.change(screen.getByLabelText("检测所用方案"), {
+    target: { value: "local-two" },
+  });
+  cleanup();
+  const otherPage = mountFeature(<Dispatch />, api, client);
+  otherPage.unmount();
+  mountFeature(<ProjectEnvironment />, api, client, true, { send });
+  expect(await screen.findByLabelText("运行环境")).toHaveValue(key);
+  expect(screen.getByLabelText("检测所用方案")).toHaveValue("local-two");
+  fireEvent.click(screen.getByRole("button", { name: "重新检测" }));
+  expect(send).toHaveBeenCalledWith(
+    "environment_start",
+    identity.project_id,
+    1,
+    expect.objectContaining({ environment_key: key, profile_id: "local-two" }),
+  );
+});
+
+it("shows the running default detection on the dispatch page and labels read failures unverified", async () => {
+  const { api, client } = fixture();
+  await loaded();
+  const options = structuredClone(
+    client.getQueryData<EnvironmentOptions>(optionsKey)!,
+  );
+  options.profiles[0].stage = "verifying";
+  const read = vi.mocked(api.get).getMockImplementation()!;
+  vi.mocked(api.get).mockImplementation(async (path, signal) =>
+    path === "/environment/options" ? (options as never) : read(path, signal),
+  );
+  cleanup();
+  mountFeature(<Dispatch />, api, client);
+  expect(await screen.findByText(/默认执行环境检测中/)).toBeVisible();
+  vi.mocked(api.get).mockImplementation(async (path, signal) => {
+    if (path === "/environment/options") throw new Error("read failed");
+    return read(path, signal);
+  });
+  await act(async () => {
+    await client.refetchQueries({ queryKey: optionsKey });
+  });
+  expect(await screen.findByText(/默认执行环境待核实/)).toBeVisible();
+  expect(screen.queryByText(/默认执行环境阻断/)).not.toBeInTheDocument();
+});
+
 it("stops the exact current activity even outside the history window and never starts a replacement", async () => {
   const { client, record, send } = fixture(
     true,
@@ -295,6 +365,7 @@ it("keeps stop available after qualification observation fails while disabling n
   });
   await client.refetchQueries({ queryKey: optionsKey });
   expect(await screen.findByText(/上次已知状态，当前待核实/)).toBeVisible();
+  expect(screen.getByRole("heading", { name: "待核实" })).toBeVisible();
   expect(screen.queryByText(/raw ID and diagnostics/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByText("更多设置", { selector: "summary" }));
   fireEvent.change(screen.getByLabelText("环境失效原因"), {

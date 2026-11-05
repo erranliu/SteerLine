@@ -100,6 +100,9 @@ func TestProjectEnvironmentConfigurationSurvivesProjectFailures(t *testing.T) {
 				if item.Adapter == "" || item.Target.Kind == "" || item.Status == "ready" || item.Reason == "" {
 					t.Fatal("missing target or false qualification", item)
 				}
+				if failure != "materials" && item.Stage != "unverified" {
+					t.Fatal("unavailable state was presented as a detection result", item)
+				}
 				if failure == "materials" && !strings.Contains(item.Reason, "项目尚未接入检测") {
 					t.Fatal(item.Reason)
 				}

@@ -38,6 +38,23 @@ const linkName = (e: Environment) =>
     ? "Codex 直连"
     : `Orca → ${e.agent || "Codex"}`;
 
+type Selection = { key: string; profile?: string };
+
+function readSelection(key: string): Selection | null {
+  try {
+    const saved: Selection | null = JSON.parse(
+      sessionStorage.getItem(key) ?? "null",
+    );
+    return saved &&
+      typeof saved.key === "string" &&
+      (saved.profile === undefined || typeof saved.profile === "string")
+      ? saved
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function ProjectEnvironment() {
   const { api, identity } = useWorkspace();
   return (
@@ -56,6 +73,38 @@ function EnvironmentWorkspace() {
     "environment",
   ];
   const options = useEnvironmentReadiness();
+  const [params] = useSearchParams();
+  const profile = params.get("profile") || "";
+  const task = params.get("task");
+  const preferenceKey =
+    "steerline-environment:" + JSON.stringify([api.home, identity.project_id]);
+  const [saved] = useState(() => readSelection(preferenceKey));
+  const [selected, setSelected] = useState<Selection | null>(null);
+  const focusProfile = options.data?.profiles.find((p) => p.id === profile);
+  const defaultProfile = options.data?.profiles.find(
+    (p) => p.id === options.data?.default_profile_id,
+  );
+  const savedEnvironment = options.data?.environments.find(
+    (e) => e.environment_key === saved?.key,
+  );
+  const initialProfile = profile ? focusProfile : defaultProfile;
+  const selection =
+    selected ??
+    (!profile && savedEnvironment
+      ? saved
+      : initialProfile && {
+          key: initialProfile.environment_key,
+          profile: profile || undefined,
+        });
+  const environmentKey = selection?.key ?? "";
+  const remember = (next: Selection) => {
+    setSelected(next);
+    try {
+      sessionStorage.setItem(preferenceKey, JSON.stringify(next));
+    } catch {
+      // The selection still works on this page when browser storage is unavailable.
+    }
+  };
   const hasRemote =
     options.data?.environments.some(
       (e) => e.target.kind === "orca_environment",
@@ -78,7 +127,6 @@ function EnvironmentWorkspace() {
       ? `${name} · ${e.profiles.map((p) => p.name).join("、")}`
       : name;
   };
-  const [environmentKey, setEnvironmentKey] = useState("");
   const [allActivities, setAllActivities] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const environment = options.data?.environments.find(
@@ -107,9 +155,6 @@ function EnvironmentWorkspace() {
     retry: false,
     refetchInterval: visible && historyOpen ? 3000 : false,
   });
-  const [params] = useSearchParams();
-  const profile = params.get("profile") || "";
-  const task = params.get("task");
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const materialQuery = useQuery({
     queryKey: [...scope, "materials", environmentKey],
@@ -156,7 +201,12 @@ function EnvironmentWorkspace() {
     if (pending.current) return;
     pending.current = true;
     setSubmitting(true);
-    if (action === "environment_start") setStartingEnvironment(environmentKey);
+    if (action === "environment_start") {
+      setStartingEnvironment(environmentKey);
+      if (typeof payload.profile_id === "string") {
+        remember({ key: environmentKey, profile: payload.profile_id });
+      }
+    }
     try {
       await send(action, target, version, payload);
       await refresh(
@@ -170,18 +220,6 @@ function EnvironmentWorkspace() {
       setStartingEnvironment("");
     }
   };
-  const focusProfile = options.data?.profiles.find((p) => p.id === profile);
-  const initialized = useRef(false);
-  useEffect(() => {
-    if (initialized.current || !options.data) return;
-    initialized.current = true;
-    const initial = profile
-      ? focusProfile
-      : options.data.profiles.find(
-          (p) => p.id === options.data?.default_profile_id,
-        );
-    if (initial) setEnvironmentKey(initial.environment_key);
-  }, [options.data, profile, focusProfile]);
   useEffect(() => {
     const node = document.getElementById(
       `environment-${focusProfile?.environment_key || profile}`,
@@ -190,7 +228,7 @@ function EnvironmentWorkspace() {
     node?.focus();
   }, [focusProfile?.environment_key, profile, environmentKey]);
   const chooseEnvironment = (key: string) => {
-    setEnvironmentKey(key);
+    remember({ key });
     setAllActivities(false);
     setMaterialsOpen(false);
   };
@@ -254,10 +292,14 @@ function EnvironmentWorkspace() {
             environment={environment}
             project={identity.project_id}
             defaultProfile={options.data!.default_profile_id}
-            preferred={profile}
+            preferred={selection?.profile}
+            onProfileChange={(profile) =>
+              remember({ key: environmentKey, profile })
+            }
             confirmingStart={!!confirmingStart}
+            statusVerified={options.verified && !activity.isError}
             disabled={!options.verified || busy || submitting}
-            stopDisabled={!online || busy || submitting}
+            stopDisabled={!online || activity.isError || busy || submitting}
             activity={activity.data}
             command={command}
           />

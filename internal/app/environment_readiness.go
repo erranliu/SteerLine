@@ -107,8 +107,10 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			}
 		}
 		item.Status, item.Stage, item.Reason = env.View(current, record, basis, materialErr)
-		if historyErr != nil || readErr != nil || item.Key == "" {
-			item.Status, item.Stage = "not_ready", "blocked"
+		basisUnverified := materialErr != nil && !confirmedEnvironmentBasisError(materialErr) &&
+			!current.Invalidated && (current.ActivityID == "" || record.Status() == "ready")
+		if historyErr != nil || readErr != nil || item.Key == "" || basisUnverified {
+			item.Status, item.Stage = "not_ready", "unverified"
 			item.Reason = "项目运行环境状态无法核验"
 			if materialErr != nil {
 				item.Reason += "：" + materialErr.Error()

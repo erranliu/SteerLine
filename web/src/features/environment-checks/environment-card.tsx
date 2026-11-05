@@ -40,7 +40,9 @@ export function EnvironmentCard({
   project,
   defaultProfile,
   preferred,
+  onProfileChange,
   confirmingStart,
+  statusVerified,
   disabled,
   stopDisabled,
   activity,
@@ -49,8 +51,10 @@ export function EnvironmentCard({
   environment: Environment;
   project: string;
   defaultProfile: string;
-  preferred: string;
+  preferred?: string;
+  onProfileChange: (profile: string) => void;
   confirmingStart: boolean;
+  statusVerified: boolean;
   disabled: boolean;
   stopDisabled: boolean;
   activity?: {
@@ -61,14 +65,14 @@ export function EnvironmentCard({
   };
   command: EnvironmentCommand;
 }) {
-  const initial = e.profiles.some((p) => p.id === preferred)
-    ? preferred
-    : e.profiles.length === 1
-      ? e.profiles[0].id
-      : e.profiles.some((p) => p.id === defaultProfile)
-        ? defaultProfile
-        : "";
-  const [profile, setProfile] = useState(initial);
+  const profile =
+    preferred === "" || e.profiles.some((p) => p.id === preferred)
+      ? preferred
+      : e.profiles.length === 1
+        ? e.profiles[0].id
+        : e.profiles.some((p) => p.id === defaultProfile)
+          ? defaultProfile
+          : "";
   const [timeout, setTimeout] = useState(3600);
   const [reason, setReason] = useState("");
   const chosen = e.profiles.find((p) => p.id === profile);
@@ -84,9 +88,13 @@ export function EnvironmentCard({
       <h2 aria-live="polite">
         {confirmingStart
           ? "正在确认启动"
-          : (environmentStage[e.stage] ?? "状态待核实")}
+          : (environmentStage[statusVerified ? e.stage : "unverified"] ??
+            environmentStage.unverified)}
       </h2>
-      {!confirmingStart && e.stage !== "ready" && e.reason && <p>{e.reason}</p>}
+      {!confirmingStart &&
+        statusVerified &&
+        e.stage !== "ready" &&
+        e.reason && <p>{e.reason}</p>}
       {!confirmingStart && activity?.created_at && (
         <p className="muted">
           最近检测：{new Date(activity.created_at).toLocaleString("zh-CN")}
@@ -101,7 +109,7 @@ export function EnvironmentCard({
           <select
             aria-label="检测所用方案"
             value={profile}
-            onChange={(event) => setProfile(event.target.value)}
+            onChange={(event) => onProfileChange(event.target.value)}
           >
             <option value="">选择本次检测方案</option>
             {e.profiles.map((p) => (
@@ -135,6 +143,8 @@ export function EnvironmentCard({
             disabled={
               disabled ||
               confirmingStart ||
+              !statusVerified ||
+              e.stage === "unverified" ||
               !e.environment_key ||
               !chosen ||
               !Number.isInteger(timeout) ||

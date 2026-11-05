@@ -12,6 +12,8 @@ export function Dispatch() {
   const selected = preparation.data?.profiles?.find(
     (p) => p.id === preparation.data?.default_profile_id,
   );
+  const unverified =
+    !preparation.verified || !selected || selected.stage === "unverified";
   const page = snapshot?.connection.snapshot.page;
   if (!page) return null;
   const { control } = page;
@@ -74,19 +76,19 @@ export function Dispatch() {
       {!preparation.required && (
         <p className="notice amber">环境就绪阻塞已关闭（开发者配置）</p>
       )}
-      {preparation.required &&
-        (!preparation.verified || selected?.status !== "ready") && (
-          <p className="muted">
-            默认执行环境阻断：
-            {!preparation.verified
-              ? "当前状态待核实"
-              : selected?.reason || "环境准备状态尚未核实"}{" "}
-            ·{" "}
-            <NavLink to={environmentLink(identity.project_id, selected?.id)}>
-              前往准备
-            </NavLink>
-          </p>
-        )}
+      {preparation.required && (unverified || selected.status !== "ready") && (
+        <p className="muted">
+          {unverified
+            ? "默认执行环境待核实"
+            : selected.stage === "verifying"
+              ? "默认执行环境检测中"
+              : "默认执行环境阻断"}
+          {preparation.verified && selected?.reason && `：${selected.reason}`} ·{" "}
+          <NavLink to={environmentLink(identity.project_id, selected?.id)}>
+            前往准备
+          </NavLink>
+        </p>
+      )}
       {control.blockers?.length > 0 && (
         <p className="muted">
           {control.blockers.map((b) => b.Reason).join("；")}
