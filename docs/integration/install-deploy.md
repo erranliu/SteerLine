@@ -52,6 +52,8 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 
 兼容同一 v8 状态目录的升级，由已校验的候选 Runner 通过公开 `service verify-stopped` 核对资源，再分别用原 EXE 和候选 EXE 的离线 inspect 核对同一 Run/input 集合及业务终态。已持久化、绑定原 runtime/worktree/terminal/incarnation 的 confirmed 停止回执可证明原 Orca 终端已停止，后续远端重启或工作区移除不撤销该事实。只存 `stop_status=stopped`、accepted/unknown 回执、资源身份或冻结范围不符仍不足；未确认停止仍须查询原资源。证明范围保持 `orca_terminal`，不扩展为脱离终端的后台进程或凭据已清理。
 
+本机 Orca Codex 的历史 PID 若无法查询，升级预检和换版后的首次启动会核对原构建的 Runner 停机结算回执，并要求受影响的 Run 在相同证据范围内有已确认的停止操作。仍须核对 Run/input、业务终态和未完成控制。发现原进程仍存活或停机证据缺失时阻断升级。
+
 共享短目录以规范化 home 和固定 v8 身份派生，同一 home 的项目仍共用一个 Runner。旧 `runner-build.json` 指向其他命名空间时明确阻断，并保留原 EXE、配置、数据库、任务和原目录。先用原安装版本处理、停止并核实全部旧资源，再部署到一个全新的、与原安装分离的 InstallHome，例如：
 
 ```powershell

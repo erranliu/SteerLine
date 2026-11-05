@@ -115,7 +115,7 @@ func bindApplicationRunnerBuild(ctx context.Context, home string, cli runnerclie
 		if runnerbinding.SameBuild(old, pin) {
 			return nil
 		}
-		if err := cli.VerifyDrained(ctx); err != nil {
+		if err := cli.VerifyInstalledUpgradeDrained(ctx, old.SHA256); err != nil {
 			return err
 		}
 		return localservice.Write(dir, "runner-build.json", pin)

@@ -34,7 +34,9 @@ func TestMain(m *testing.M) {
 			var data any
 			switch {
 			case len(os.Args) > 2 && os.Args[1] == "service" && os.Args[2] == "status":
-				data = ServiceInfo{Protocol: Protocol, StateDir: os.Getenv("STEERLINE_UPGRADE_DIR"), Status: os.Getenv("STEERLINE_UPGRADE_SERVICE")}
+				if json.Unmarshal([]byte(os.Getenv("STEERLINE_UPGRADE_SERVICE")), &data) != nil {
+					panic("invalid service fixture")
+				}
 			case len(os.Args) > 2 && os.Args[1] == "service" && os.Args[2] == "verify-stopped":
 				if strings.HasPrefix(name, "original") {
 					panic("old native verifier must not gate its own fix")
