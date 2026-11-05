@@ -52,7 +52,7 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 
 只有确认不再继续本安装的旧执行时，双击根目录 `build-deploy-discard-runs.bat`，或用 `build-deploy-discard-runs.bat -NoPause` 自动调用。该入口固定传入 `-UpdateRunner -DiscardRuns`，其余参数原样转发，保留退出码；也可继续使用 `build-deploy-all.bat -DiscardRuns`。`-DiscardRuns` 必须与 `-UpdateRunner` 一起使用，作用范围是所选 InstallHome 的全部项目，不是某一个 Run；不传此开关时保持原停止、排空与升级规则。
 
-此模式仍先完成构建及候选离线能力校验，再停止原应用，核对宿主/Web 退出、项目集合、冻结配置及锁。任务定义和依赖先在独立位置通过正式任务校验与创建入口构造好；原固定 Runner 从公开冷查询取得全部 Run/input，对允许停止的原 Run 持久保存 stop 信封，在 worker 启动前受理，沿原请求查询结果，再停止原服务并核实全部原生资源结算。未知停止、已停止但有未完成恢复授权、创建/输入归属不明、项目或配置变化、缺失锁/证明仍会阻断，不强杀、不把“放弃”当作资源不存在。
+此模式仍先完成构建及候选离线能力校验，再停止原应用，核对宿主/Web 退出、项目集合、原检查点归属及锁。已保存待重启的执行方案、默认方案和开发配置允许与原进程冻结摘要不同；原检查点继续保留原摘要，仓库路径/身份、remote、分支及固定 Runner 绑定必须一致，准备期间再次修改配置仍阻断。任务定义和依赖先在独立位置通过正式任务校验与创建入口构造好；原固定 Runner 从公开冷查询取得全部 Run/input，对允许停止的原 Run 持久保存 stop 信封，在 worker 启动前受理，沿原请求查询结果，再停止原服务并核实全部原生资源结算。未知停止、已停止但有未完成恢复授权、创建/输入归属不明、项目归属变化、缺失锁/证明仍会阻断，不强杀、不把“放弃”当作资源不存在。
 
 通过后自动把原项目 state、应用/Web 状态及原 Runner 目录移入 `<home>/maintenance/discard-runs-<调用ID>/`，将准备好的任务库切换到原位置，然后按原流程安装新程序。保留项目/Web 配置、执行方案及默认方案、任务编号/标题/类型/优先级/目标/完整固定契约和依赖，保留业务 Git 与远端 PR。**全部任务重新变为 open，所有项目设为 manual 且派发暂停**，旧领取、执行、交付、环境资格、测试生成、Roadmap 及控制历史只留在归档中，不恢复为新执行状态。已完成或已放弃的任务也会重新 open，恢复派发前应按实际业务选择任务。
 
@@ -60,7 +60,7 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 
 归档切换开始后若中断，`<home>/deployment-discard.json` 会保留，正常 start/serve、后续部署和升级预检均拒绝继续，避免把半完成的切换当作空安装。检查该记录及对应归档后完成现场恢复；不自动重发未知 stop、不自动回滚或循环重试。开始切换前失败则原执行目录不移动，服务可能已停止，原请求和诊断保留在本次维护目录。
 
-同构建重启可保留原后台执行，核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、冻结配置、checkpoint 和 Run/input；资源未结算诊断保持。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。原资源丢失时，Runner 返回 `blocked/manual_intervention_required`，由用户显式 resume 做有界原操作只读对账；不重建资源或自动重发输入。
+同构建重启可保留原后台执行，核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、原 checkpoint 归属和 Run/input；资源未结算诊断保持。具有匹配停机回执和 stopped 检查点时，普通部署及重启同样允许已保存待重启的执行配置，原执行沿历史信封核验，新进程加载保存后的配置。缺少当前实例停机回执的中断恢复仍要求原冻结摘要与当前文件相同。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。原资源丢失时，Runner 返回 `blocked/manual_intervention_required`，由用户显式 resume 做有界原操作只读对账；不重建资源或自动重发输入。
 
 当前 Runner 使用 `steerrunner-state/v8`，已删除 `service verify-takeover --candidate`，不支持跨构建活动任务接管。部署先构建、校验版本和执行配置，再通过 `prepare-deployment` 停服及核验，随后在替换之前调用 `verify-runner-upgrade --home <InstallHome>`，核验候选公开的离线 capabilities；换构建还须核实原服务已退出、公开 verify-stopped 资源结算以及每个原 Run 的业务终态。`pr_ready`、仅停止服务或资源仍未知均不足以升级。排空校验失败时原服务可能已停止，原 EXE、配置和数据库保持；按原诊断使用原版本处理未完成业务后重跑。该校验不自动停止 Run、不迁移或清空数据，也不是持续持有的 writer lease。
 

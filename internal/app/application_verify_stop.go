@@ -204,6 +204,9 @@ func verifyApplicationOfflineCoordinated(ctx context.Context, runnerExecutable s
 		}
 		result.Projects = append(result.Projects, proof)
 	}
+	if !sameApplicationCatalog(d, loadApplicationCatalog(HomeDir())) {
+		return result, errors.New("project or execution configuration changed during stop verification")
+	}
 	result.VerifiedAt = time.Now().UTC()
 	return result, nil
 }
@@ -265,11 +268,15 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 		p.InstanceID = snapshot.Checkpoint.Service.InstanceID
 		proof.InstanceID = p.InstanceID
 	}
-	if err = verifyCheckpointHost(snapshot.Checkpoint, c.configDigest, p, id); err != nil {
+	if interrupted {
+		if err = verifyCheckpointHost(snapshot.Checkpoint, p, id); err != nil {
+			return proof, err
+		}
+		if snapshot.Checkpoint.Service.ConfigDigest != c.configDigest {
+			return proof, errors.New("interrupted project frozen configuration differs")
+		}
+	} else if err = verifyStoppedCheckpoint(snapshot.Checkpoint, c, p, id); err != nil {
 		return proof, err
-	}
-	if !interrupted && (snapshot.Checkpoint.Service.Status != "stopped" || snapshot.Checkpoint.Service.Ready) {
-		return proof, errors.New("original stopped project checkpoint or frozen configuration differs")
 	}
 	generations, err := reader.Generations(ctx, c.Identity())
 	if err != nil {
@@ -383,16 +390,32 @@ func matchRestartBindings(c Config, cp *hostcontract.ServiceCheckpoint, candidat
 	return runnerbinding.ValidateRestartBindings(pin, candidates)
 }
 
-func verifyStoppedCheckpoint(cp *hostcontract.ServiceCheckpoint, digest string, p contract.ProjectShutdown, id contract.Identity) error {
+func verifyStoppedCheckpoint(cp *hostcontract.ServiceCheckpoint, c Config, p contract.ProjectShutdown, id contract.Identity) error {
 	if cp == nil || cp.Service.Status != "stopped" || cp.Service.Ready {
-		return errors.New("original stopped project checkpoint or frozen configuration differs")
+		return errors.New("original project stopped checkpoint is unverified")
 	}
-	return verifyCheckpointHost(cp, digest, p, id)
+	if err := verifyCheckpointHost(cp, p, id); err != nil {
+		return err
+	}
+	// Saved configuration belongs to the next host. The closed host is proved
+	// by its checkpoint/receipt identity, not by equality with editable files.
+	// Repository and Runner ownership must still describe the original runtime.
+	if canonicalPath(cp.Repository.Path) != canonicalPath(c.Repository) || canonicalPath(cp.Repository.Identity) != canonicalPath(c.Identity()) || cp.Repository.Remote != c.Remote || cp.Repository.Branch != c.Branch {
+		return errors.New("original project repository binding differs")
+	}
+	pin, selected := cp.Service.RunnerBuild, c.RunnerExecution.Runner
+	if pin == nil || !runnerbinding.SamePath(pin.Executable, selected.Executable) || pin.SHA256 != selected.SHA256 || pin.Version != selected.Version || !runnerbinding.SamePath(pin.StateDir, runnerstatepath.Directory(c.runnerHome())) {
+		return errors.New("saved configuration differs from the original Runner binding")
+	}
+	return nil
 }
 
-func verifyCheckpointHost(cp *hostcontract.ServiceCheckpoint, digest string, p contract.ProjectShutdown, id contract.Identity) error {
-	if cp == nil || cp.Service.InstanceID != p.InstanceID || cp.Service.ConfigDigest != digest || cp.Service.ProcessIdentity == nil {
-		return errors.New("original project checkpoint or frozen configuration differs")
+func verifyCheckpointHost(cp *hostcontract.ServiceCheckpoint, p contract.ProjectShutdown, id contract.Identity) error {
+	if cp == nil || cp.Service.InstanceID != p.InstanceID || cp.Service.ProcessIdentity == nil {
+		return errors.New("original project checkpoint identity differs")
+	}
+	if digest, err := hex.DecodeString(cp.Service.ConfigDigest); err != nil || len(digest) != sha256.Size {
+		return errors.New("original project frozen configuration digest is missing or invalid")
 	}
 	process := cp.Service.ProcessIdentity
 	if process.Kind != id.Process.Kind || process.PID != id.Process.PID || process.Created != id.Process.Created || process.Executable != id.Process.Executable {

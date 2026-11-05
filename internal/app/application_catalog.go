@@ -77,3 +77,15 @@ func readConfiguration(path string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+func sameApplicationCatalog(a, b *applicationCatalog) bool {
+	if a.err != nil || b.err != nil || string(a.global) != string(b.global) || len(a.entries) != len(b.entries) {
+		return false
+	}
+	for i := range a.entries {
+		if a.entries[i].view.ConfigID != b.entries[i].view.ConfigID || string(a.entries[i].data) != string(b.entries[i].data) {
+			return false
+		}
+	}
+	return true
+}
