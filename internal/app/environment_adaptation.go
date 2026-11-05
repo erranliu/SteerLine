@@ -21,6 +21,24 @@ type environmentPort struct {
 	store   *sqlite.SQLiteStore
 }
 
+// Environment submissions use the project's lifetime, independently of the
+// actor's five-second auxiliary observation slice and delivery preemption.
+// Shutdown cancels the CLI and joins this loop before closing its store.
+func (p *environmentPort) observe(ctx context.Context) {
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
+	for ctx.Err() == nil {
+		budget, cancel := context.WithTimeout(ctx, positiveDuration(p.config.CommandTimeout, 30*time.Second))
+		_ = p.service.Observe(budget)
+		cancel()
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
 func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *environmentPort {
 	p := &environmentPort{config: c, store: store}
 	s := &env.Service{Project: c.Identity(), Store: store, Runner: cli, Build: cli.BuildPin(), Admit: admit}

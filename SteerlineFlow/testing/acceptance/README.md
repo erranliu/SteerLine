@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+环境提交预算与首次错误保留（2026-11-05）：[修复与隔离回归](environment-submission-budget.md)。环境观察脱离 actor 五秒预算，原提交错误独立持久化，后续查询保留两类原因。
+
 历史本机 Orca PID 阻塞 Runner 升级（2026-11-05）：[修复与验证](deployment-historical-pid.md)。
 
 环境检测切换到 Orca 原生执行器（2026-11-04）：[修复与真实检测](environment-native-orca-executor.md)。保留原开发配置，SteerlineTest 已部署并完成远端检测。

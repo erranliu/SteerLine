@@ -250,9 +250,13 @@ func (s *Service) Observe(ctx context.Context) error {
 		if e := s.observe(ctx, &r); e != nil {
 			r.Diagnostic = e.Error()
 			all = append(all, e)
-			if saveErr := s.save(ctx, &r); saveErr != nil {
+			// Persist the actual cause even if the external call exhausted its
+			// budget or the project stopped. This only extends the local write.
+			saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			if saveErr := s.save(saveCtx, &r); saveErr != nil {
 				all = append(all, saveErr)
 			}
+			cancel()
 		}
 	}
 	return errors.Join(all...)
@@ -289,21 +293,30 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 		}
 		a.Submission = "unknown"
 		if e := s.save(ctx, r); e != nil {
+			// No external call crossed this failed persistence boundary.
+			a.Submission = "pending"
 			return e
 		}
-		_, e := s.Runner.Call(ctx, "submit", nil, &a.Request)
+		e := ctx.Err()
+		unattempted := e != nil
+		if !unattempted {
+			_, e = s.Runner.Call(ctx, "submit", nil, &a.Request)
+		}
+		saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
 		if e != nil {
+			a.SubmissionDiagnostic = e.Error()
 			var f *runnerclient.Failure
-			if errors.As(e, &f) && !f.Unknown && f.Exit != 4 {
+			if unattempted || errors.As(e, &f) && !f.Unknown && f.Exit != 4 {
 				a.Submission = "rejected"
 				a.Diagnostic = e.Error()
 				a.Settled = true
-				return s.next(ctx, r)
+				return s.next(saveCtx, r)
 			}
 			return e
 		}
 		a.Submission = "accepted"
-		return s.save(ctx, r)
+		return s.save(saveCtx, r)
 	}
 	selector, id := "run-id", a.RunID
 	if id == "" {

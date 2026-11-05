@@ -33,6 +33,103 @@ type environmentWorkflowPeer struct {
 	succeedsFirst bool
 }
 
+type slowEnvironmentSubmit struct {
+	*environmentWorkflowPeer
+	started         chan time.Duration
+	finished        chan struct{}
+	waitForShutdown bool
+}
+
+func (f *slowEnvironmentSubmit) Call(ctx context.Context, command string, args []string, request *runnerclient.Request) (runnerclient.Response, error) {
+	if command != "submit" {
+		return f.environmentWorkflowPeer.Call(ctx, command, args, request)
+	}
+	deadline, _ := ctx.Deadline()
+	f.started <- time.Until(deadline)
+	delay := time.NewTimer(6 * time.Second)
+	defer delay.Stop()
+	if f.waitForShutdown {
+		<-ctx.Done()
+	} else {
+		select {
+		case <-delay.C:
+			response, err := f.environmentWorkflowPeer.Call(ctx, command, args, request)
+			close(f.finished)
+			return response, err
+		case <-ctx.Done():
+		}
+	}
+	close(f.finished)
+	return runnerclient.Response{}, &runnerclient.Failure{Code: "request_outcome_unknown", Message: ctx.Err().Error(), Unknown: true}
+}
+
+func testEnvironmentObserverSubmission(t *testing.T, shutdown bool) {
+	p, c, store := environmentFixture(t)
+	p.config.CommandTimeout = "30s"
+	peer := &slowEnvironmentSubmit{environmentWorkflowPeer: &environmentWorkflowPeer{}, started: make(chan time.Duration, 1), finished: make(chan struct{}), waitForShutdown: shutdown}
+	p.service.Runner = peer
+	key, _ := env.Key(c.RunnerExecution.Profiles[1].Execution)
+	id := env.ID()
+	_, err := p.service.Start(context.Background(), id, json.RawMessage(`{}`), env.Start{EnvironmentKey: key, Profile: "remote", TimeoutSeconds: 60})
+	require(t, err)
+	lifetime, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); p.observe(lifetime) }()
+	defer func() { cancel(); <-done }()
+	select {
+	case remaining := <-peer.started:
+		if remaining <= 5*time.Second || remaining > 31*time.Second {
+			t.Fatal("submission inherited actor slice or lost its bound", remaining)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("environment observer never submitted")
+	}
+	if shutdown {
+		cancel()
+	}
+	select {
+	case <-peer.finished:
+	case <-time.After(8 * time.Second):
+		t.Fatal("submit neither completed nor honored project shutdown")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("environment observer did not join before store close")
+	}
+	saved, err := store.Environment(context.Background(), c.Identity(), id)
+	require(t, err)
+	if shutdown {
+		if saved.Rounds[0].Submission != "unknown" || !strings.Contains(saved.Rounds[0].SubmissionDiagnostic, "context canceled") {
+			t.Fatal("shutdown lost the original submission uncertainty", saved)
+		}
+	} else if peer.submits != 1 || saved.Rounds[0].Submission != "accepted" {
+		t.Fatal("six-second submission did not finish under its own budget", saved, peer.submits)
+	}
+	// Both the detail and history DTOs retain the first cause alongside reads.
+	saved.Diagnostic = "request_not_found"
+	if saved.Rounds[0].SubmissionDiagnostic == "" {
+		saved.Rounds[0].SubmissionDiagnostic = "original submit timed out"
+	}
+	original := saved.Rounds[0].SubmissionDiagnostic
+	saved.Revision++
+	require(t, store.SaveEnvironment(context.Background(), saved, saved.Revision-1))
+	port := &runtimeProjectPort{config: c, store: store}
+	for _, route := range []string{"/environment", "/environment/" + id} {
+		view, err := port.environmentRead(context.Background(), route, nil)
+		require(t, err)
+		raw, err := json.Marshal(view)
+		require(t, err)
+		if !strings.Contains(string(raw), original) || !strings.Contains(string(raw), "request_not_found") {
+			t.Fatal("public diagnostic lost one of the causes", string(raw))
+		}
+		if route != "/environment" && !strings.Contains(string(raw), `"submission_diagnostic"`) {
+			t.Fatal("detail omitted separate submission cause", string(raw))
+		}
+	}
+}
+
 type environmentReserveProbe struct {
 	*sqlite.SQLiteStore
 	reservations int
@@ -103,6 +200,8 @@ func (f *environmentWorkflowPeer) ResultFile(context.Context, string) (runnercon
 }
 
 func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.T) {
+	t.Run("independent submission budget", func(t *testing.T) { testEnvironmentObserverSubmission(t, false) })
+	t.Run("submission cancelled on shutdown", func(t *testing.T) { testEnvironmentObserverSubmission(t, true) })
 	for _, pass := range []bool{false, true} {
 		t.Run(fmt.Sprint(pass), func(t *testing.T) {
 			port, c, store := environmentFixture(t)
