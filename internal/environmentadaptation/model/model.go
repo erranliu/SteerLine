@@ -112,21 +112,22 @@ type Request struct {
 	Action   string          `json:"action"`
 }
 type Round struct {
-	Number        int                        `json:"number"`
-	Request       runnercontract.Request     `json:"request"`
-	Submission    string                     `json:"submission"`
-	RunID         string                     `json:"run_id"`
-	InputDigest   string                     `json:"input_digest"`
-	Deadline      time.Time                  `json:"deadline"`
-	Run           *runnercontract.Run        `json:"run,omitempty"`
-	Result        *runnercontract.ResultFile `json:"result,omitempty"`
-	Report        *Report                    `json:"report,omitempty"`
-	Diagnostic    string                     `json:"diagnostic,omitempty"`
-	Stop          *runnercontract.Request    `json:"stop,omitempty"`
-	StopState     string                     `json:"stop_state,omitempty"`
-	RejectedStops []runnercontract.Request   `json:"rejected_stops,omitempty"`
-	Settled       bool                       `json:"settled"`
-	TimedOut      bool                       `json:"timed_out"`
+	Number               int                        `json:"number"`
+	Request              runnercontract.Request     `json:"request"`
+	Submission           string                     `json:"submission"`
+	SubmissionDiagnostic string                     `json:"submission_diagnostic,omitempty"`
+	RunID                string                     `json:"run_id"`
+	InputDigest          string                     `json:"input_digest"`
+	Deadline             time.Time                  `json:"deadline"`
+	Run                  *runnercontract.Run        `json:"run,omitempty"`
+	Result               *runnercontract.ResultFile `json:"result,omitempty"`
+	Report               *Report                    `json:"report,omitempty"`
+	Diagnostic           string                     `json:"diagnostic,omitempty"`
+	Stop                 *runnercontract.Request    `json:"stop,omitempty"`
+	StopState            string                     `json:"stop_state,omitempty"`
+	RejectedStops        []runnercontract.Request   `json:"rejected_stops,omitempty"`
+	Settled              bool                       `json:"settled"`
+	TimedOut             bool                       `json:"timed_out"`
 }
 type Record struct {
 	ID             string                        `json:"id"`
@@ -164,6 +165,19 @@ func (r Record) Status() string {
 		return "ready"
 	}
 	return "not_ready"
+}
+
+// DiagnosticText keeps the first submit failure visible alongside later reads.
+// A recovered ready result keeps its normal explanation; the original failure
+// remains in the round's durable submission_diagnostic for inspection.
+func (r Record) DiagnosticText() string {
+	if r.Status() != "ready" && len(r.Rounds) > 0 {
+		original := r.Rounds[len(r.Rounds)-1].SubmissionDiagnostic
+		if original != "" && original != r.Diagnostic {
+			return "首次提交：" + original + "；当前观察：" + r.Diagnostic
+		}
+	}
+	return r.Diagnostic
 }
 
 type Report struct {

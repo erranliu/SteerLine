@@ -93,6 +93,9 @@ func saveEnvironmentTx(ctx context.Context, tx *sql.Tx, r env.Record, expected u
 		}
 		for i, a := range old.Rounds {
 			b := r.Rounds[i]
+			if a.SubmissionDiagnostic != "" && a.SubmissionDiagnostic != b.SubmissionDiagnostic {
+				return errors.New("original environment submission diagnostic changed")
+			}
 			stopChanged := a.Stop != nil && env.DigestJSON(a.Stop) != env.DigestJSON(b.Stop)
 			if stopChanged && (a.StopState != "rejected" || len(b.RejectedStops) != len(a.RejectedStops)+1 || env.DigestJSON(b.RejectedStops[len(b.RejectedStops)-1]) != env.DigestJSON(*a.Stop)) {
 				return errors.New("unverified original stop cannot be replaced")

@@ -34,6 +34,8 @@ type runner struct {
 	stopUnknown      bool
 	inspectRevision  uint64
 	inspectErr       bool
+	submitFailure    error
+	inspectFailure   error
 }
 
 func (r *runner) Call(_ context.Context, command string, _ []string, q *runnerclient.Request) (runnerclient.Response, error) {
@@ -47,6 +49,9 @@ func (r *runner) Call(_ context.Context, command string, _ []string, q *runnercl
 		}
 		if r.unknown {
 			return runnerclient.Response{}, &runnerclient.Failure{Unknown: true, Code: "unknown"}
+		}
+		if r.submitFailure != nil {
+			return runnerclient.Response{}, r.submitFailure
 		}
 	}
 	if command == "stop" {
@@ -70,6 +75,9 @@ func (r *runner) Call(_ context.Context, command string, _ []string, q *runnercl
 	return runnerclient.Response{}, nil
 }
 func (r *runner) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
+	if r.inspectFailure != nil {
+		return runnerclient.Inspection{}, r.inspectFailure
+	}
 	if r.unknown || r.inspectErr {
 		return runnerclient.Inspection{}, errors.New("original request unknown")
 	}

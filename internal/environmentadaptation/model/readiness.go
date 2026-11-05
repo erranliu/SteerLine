@@ -99,9 +99,9 @@ func View(current Current, record Record, basis string, materialError error) (st
 		if !record.Settled() {
 			return status, "timed_out", "等待原检测停止并核实结果"
 		}
-		return status, "timed_out", record.Diagnostic
+		return status, "timed_out", record.DiagnosticText()
 	case record.ID != "" && !record.Settled():
-		reason = record.Diagnostic
+		reason = record.DiagnosticText()
 		if strings.TrimSpace(reason) == "" {
 			reason = "原检测正在执行或停止待核实"
 		}
@@ -112,7 +112,7 @@ func View(current Current, record Record, basis string, materialError error) (st
 		}
 		return status, "awaiting_user", "请按项目要求准备环境并开始检测"
 	case record.Status() != "ready":
-		return status, "blocked", "当前检测未就绪：" + record.Diagnostic
+		return status, "blocked", "当前检测未就绪：" + record.DiagnosticText()
 	case materialError != nil:
 		return status, "blocked", materialError.Error()
 	default:
