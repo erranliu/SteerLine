@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+SteerLine 与 SteerRunner 职责边界收口（2026-11-05，已实施）：[Spec](runner-boundary-consolidation.spec.md) · [Plan](../plans/runner-boundary-consolidation.plan.md) · [审计与验收](../testing/acceptance/runner-boundary-consolidation.md)。原生目录迁到 Runner 无服务 CLI，策略预检消费已有公开目录，内容生成共用纯绑定核验。实际正式测试、固定构建和真实目录页面证据分别登记于验收记录。
+
 [Roadmap 静态初始化闭环](roadmap-static-initialization.spec.md)：显式初始化、固定发布门槛、原请求恢复与现有项目材料采用。
 
 App领域专项与实际参数报告（2026-11-03，已实施，自动验收与独立审核通过）：[Spec](app-domain-test-suites.spec.md) · [Plan](../plans/app-domain-test-suites.plan.md) · [验收规划与重型断言梳理](../testing/acceptance/app-domain-test-suites.md)。新增部署/Roadmap两个L4专项并修正各组实际参数报告；重型用例只做断言与层级梳理，不改断言、期限或原分级，不启动roadmap。

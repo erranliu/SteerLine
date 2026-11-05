@@ -1,5 +1,4 @@
-// Package discovery is owned exclusively by the Web process. It reads native
-// capability catalogs and never creates business sessions or execution input.
+// Package discovery owns Web query subscriptions and product projections.
 package discovery
 
 import (
@@ -7,12 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	repository "github.com/erranliu/SteerLine/web/server/executionconfig"
-	"github.com/erranliu/SteerLine/web/server/nativequery"
-	"os"
-	"path/filepath"
 	"regexp"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -72,15 +68,10 @@ type pending struct {
 	result      Result
 	err         error
 }
-type cacheEntry struct {
-	result   Result
-	storedAt time.Time
-}
 type Manager struct {
 	Store    *repository.Store
-	OrcaData string
 	mu       sync.Mutex
-	cache    map[string]cacheEntry
+	previous map[string]Result
 	flights  map[string]*pending
 	slots    chan struct{}
 	ctx      context.Context
@@ -91,7 +82,7 @@ type Manager struct {
 
 func New(store *repository.Store) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Manager{Store: store, cache: map[string]cacheEntry{}, flights: map[string]*pending{}, slots: make(chan struct{}, 2), ctx: ctx, cancel: cancel}
+	return &Manager{Store: store, previous: map[string]Result{}, flights: map[string]*pending{}, slots: make(chan struct{}, 2), ctx: ctx, cancel: cancel}
 }
 func (m *Manager) Close() { m.mu.Lock(); m.closed = true; m.cancel(); m.mu.Unlock(); m.wg.Wait() }
 func (m *Manager) await(ctx context.Context, flight *pending) (Result, error) {
@@ -141,82 +132,53 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	program := "codex"
-	if runtime.GOOS == "windows" {
-		program = "codex.exe"
+	input := runnercontract.NativeCatalogRequest{Kind: q.Kind}
+	if q.Kind != "environments" {
+		input.Adapter = q.Adapter
+		input.Target = &runnercontract.ExecutionTarget{Kind: q.Host, Environment: q.Environment}
+		if q.Kind == "models" {
+			input.Agent = q.Agent
+		}
 	}
 	if q.ProfileID != "" {
-		matched := false
-		for _, p := range config.Profiles {
-			if p.ID != q.ProfileID {
+		found := false
+		for _, profile := range config.Profiles {
+			if profile.ID != q.ProfileID {
 				continue
 			}
 			var settings struct {
 				Executable string `json:"executable"`
 				Agent      string `json:"agent"`
 			}
-			if err := json.Unmarshal(p.Execution.Settings, &settings); err != nil {
+			if err = json.Unmarshal(profile.Execution.Settings, &settings); err != nil {
 				return Result{}, err
 			}
-			if settings.Agent == "" || p.Execution.Adapter == "codex-app-server" {
+			if settings.Agent == "" || profile.Execution.Adapter == "codex-app-server" {
 				settings.Agent = "codex"
 			}
-			if q.Kind == "environments" || p.Execution.Adapter != q.Adapter || p.Execution.Target.Kind != q.Host || p.Execution.Target.Environment != q.Environment || settings.Agent != q.Agent {
+			if q.Kind == "environments" || profile.Execution.Adapter != q.Adapter || profile.Execution.Target.Kind != q.Host || profile.Execution.Target.Environment != q.Environment || settings.Agent != q.Agent {
 				return Result{}, errors.New("discovery profile and target/agent differ")
 			}
-			matched = true
-			if q.Adapter == "codex-app-server" && settings.Executable != "" {
-				program = settings.Executable
+			found = true
+			if q.Kind == "models" && q.Adapter == "codex-app-server" {
+				input.Executable = settings.Executable
 			}
 			break
 		}
-		if !matched {
+		if !found {
 			return Result{}, errors.New("discovery profile does not exist")
 		}
 	}
 	if q.Kind != "environments" && q.Adapter == "codex-app-server" && (q.Host != "local" || q.Agent != "codex") {
-		return Result{State: "unsupported", Origin: "unknown", Diagnostic: "Codex 直连仅提供本机 Codex 目录", ContextUnverified: true}, nil
+		return Result{State: "unsupported", Origin: "unknown", ContextUnverified: true}, nil
 	}
-	resolved := ""
-	var executableIdentity any
-	if q.Host == "local" && q.Adapter == "codex-app-server" && q.Kind != "environments" {
-		resolved, err = nativequery.Executable(program)
-		if err != nil {
-			return Result{State: "unavailable", Diagnostic: err.Error(), ContextUnverified: true}, nil
-		}
-		info, e := os.Stat(resolved)
-		if e != nil {
-			return Result{}, errors.New("native executable is unavailable")
-		}
-		executableIdentity = []any{resolved, info.Size(), info.ModTime()}
-	}
-	var env nativeEnvironment
-	if q.Kind != "environments" && q.Host == "orca_environment" {
-		env, err = m.environment(q.Environment)
-		if err != nil {
-			return Result{State: "unavailable", Diagnostic: err.Error(), ContextUnverified: true}, nil
-		}
-	}
-	var local localRuntime
-	if q.Kind != "environments" && q.Host == "local" && q.Adapter == "orca-terminal" {
-		local, err = m.localRuntime()
-		if err != nil {
-			return Result{State: "unavailable", Diagnostic: err.Error(), ContextUnverified: true}, nil
-		}
-	}
-	identity, _ := json.Marshal([]any{m.Store.Home, q.Kind, q.Host, q.Adapter, q.Environment, q.Agent, executableIdentity, env.pairingKey(), m.dataPath(), local.identity(), os.Getenv("CODEX_HOME")})
+	snapshot, _ := json.Marshal(config)
+	identity, _ := json.Marshal([]any{m.Store.Home, string(snapshot), input})
 	key := cfg.Digest(identity)
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
 		return Result{}, context.Canceled
-	}
-	entry, hasCache := m.cache[key]
-	cached := entry.result
-	if !q.Refresh && hasCache && time.Since(entry.storedAt) < 5*time.Minute {
-		cached.Freshness = "cached"
-		m.mu.Unlock()
-		return cached, nil
 	}
 	if flight := m.flights[key]; flight != nil {
 		flight.subscribers++
@@ -231,82 +193,102 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 	}
 	queryCtx, cancel := context.WithTimeout(m.ctx, 30*time.Second)
 	flight := &pending{done: make(chan struct{}), subscribers: 1, cancel: cancel}
+	previous, hasPrevious := m.previous[key]
 	m.flights[key] = flight
 	m.wg.Add(1)
 	m.mu.Unlock()
-	// A shared query belongs to Web, rather than the first browser subscriber.
 	go func() {
 		defer m.wg.Done()
 		defer func() { <-m.slots }()
 		defer cancel()
-		result := Result{Origin: "unknown", ContextKey: key, ContextUnverified: true, Freshness: "fresh", Scope: "原生账号与目录查询；未验证方案的 provider、权限或启动参数"}
-		var e error
-		if q.Kind == "environments" {
-			result.Environments, e = m.environments(queryCtx)
-			result.State = "ready"
-			result.Origin = "registered"
-		} else if q.Host == "local" && q.Adapter == "orca-terminal" {
-			result, e = localOrcaCatalog(queryCtx, local, q.Kind, q.Agent, result)
-		} else if q.Host == "local" {
-			if q.Kind == "agents" {
-				result.Agents = []Agent{{ID: "codex", Directory: "product"}}
-				result.State = "ready"
-				result.Origin = "product"
-			} else {
-				result.Models, result.Version, e = codexModels(queryCtx, m.Store.Home, resolved)
-				result.State = "ready"
-				result.Origin = "probe"
-			}
+		out := Result{State: "unavailable", Origin: "unknown", ContextKey: key, ContextUnverified: true, Freshness: "fresh", Scope: "原生目录查询，未验证方案的账号、权限或执行资格"}
+		var queryErr error
+		if q.Adapter == "codex-app-server" && q.Kind == "agents" {
+			out.Agents = []Agent{{ID: "codex", Directory: "product"}}
+			out.State = "ready"
+			out.Origin = "product"
+			out.FetchedAt = time.Now().UTC()
 		} else {
-			result, e = orcaCatalog(queryCtx, env, q.Kind, q.Agent, result)
-		}
-		if e != nil {
-			result.State = "unavailable"
-			result.Diagnostic = e.Error()
-			if hasCache {
-				result = cached
-				result.Freshness = "expired"
-				result.Diagnostic = e.Error()
+			var result runnercontract.NativeCatalogResult
+			result, queryErr = m.Store.QueryNativeCatalog(queryCtx, config.Runner, input)
+			if queryErr == nil {
+				out.State = result.State
+				if out.State == "loading" {
+					out.State = "in_progress"
+				}
+				out.Origin = result.Origin
+				out.FetchedAt = result.ObservedAt
+				if result.NativeFetchedAt != nil {
+					out.FetchedAt = *result.NativeFetchedAt
+				}
+				out.Version = result.Source.NativeVersion
+				out.Protocol = result.Source.Protocol
+				if result.Source.RuntimeID != "" {
+					out.RuntimeDigest = cfg.Digest([]byte(result.Source.RuntimeID))
+				}
+				if q.Adapter == "orca-terminal" {
+					out.Channel = "paired-websocket"
+					if q.Host == "local" {
+						out.Channel = "named-pipe"
+					}
+				}
+				if result.Environments != nil {
+					out.Environments = []Environment{}
+					for _, e := range *result.Environments {
+						out.Environments = append(out.Environments, Environment{ID: e.ID, Name: e.Name})
+					}
+				}
+				if result.Agents != nil {
+					out.Agents = []Agent{}
+					for _, a := range *result.Agents {
+						out.Agents = append(out.Agents, Agent{ID: a.ID, Directory: a.Directory})
+					}
+				}
+				if result.Models != nil {
+					out.Models = []Model{}
+					for _, model := range *result.Models {
+						efforts := []Effort{}
+						for _, e := range model.Efforts {
+							efforts = append(efforts, Effort{Value: e.Value, Label: e.Label})
+						}
+						out.Models = append(out.Models, Model{ID: model.ID, Label: model.Label, Provider: model.Provider, Default: model.Default, DefaultEffort: model.DefaultEffort, Efforts: efforts})
+					}
+				}
 			}
 		}
-		if result.FetchedAt.IsZero() {
-			result.FetchedAt = time.Now().UTC()
+		latest, e := m.Store.Current()
+		latestRaw, _ := json.Marshal(latest)
+		if e != nil || string(latestRaw) != string(snapshot) {
+			queryErr = errors.New("配置已变化，请重新探测")
+			hasPrevious = false
+			out = Result{State: "unavailable", Freshness: "expired", Origin: "unknown", ContextUnverified: true, ContextKey: key}
+		}
+		if queryErr != nil {
+			out.Diagnostic = queryErr.Error()
+			var unsupported *repository.Error
+			if errors.As(queryErr, &unsupported) && unsupported.Code == "unsupported_capability" {
+				out.State = "unsupported"
+			}
+			if hasPrevious {
+				out = previous
+				out.Freshness = "expired"
+				out.Diagnostic = queryErr.Error()
+			}
 		}
 		m.mu.Lock()
-		if e == nil && result.State == "ready" {
-			if len(m.cache) >= 128 {
-				for k := range m.cache {
-					delete(m.cache, k)
+		if queryErr == nil && out.State == "ready" {
+			if len(m.previous) >= 128 {
+				for k := range m.previous {
+					delete(m.previous, k)
 					break
 				}
 			}
-			m.cache[key] = cacheEntry{result: result, storedAt: time.Now()}
+			m.previous[key] = out
 		}
-		flight.result = result
+		flight.result = out
 		delete(m.flights, key)
 		close(flight.done)
 		m.mu.Unlock()
 	}()
 	return m.await(ctx, flight)
-}
-func (m *Manager) dataPath() string {
-	if m.OrcaData != "" {
-		return m.OrcaData
-	}
-	if p := os.Getenv("ORCA_USER_DATA_PATH"); p != "" {
-		return p
-	}
-	home, _ := os.UserHomeDir()
-	switch runtime.GOOS {
-	case "windows":
-		return filepath.Join(os.Getenv("APPDATA"), "orca")
-	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", "orca")
-	default:
-		base := os.Getenv("XDG_CONFIG_HOME")
-		if base == "" {
-			base = filepath.Join(home, ".config")
-		}
-		return filepath.Join(base, "orca")
-	}
 }

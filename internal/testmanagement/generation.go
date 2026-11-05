@@ -367,10 +367,9 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 	if !runnerbinding.SamePath(r.Runner.StateDir, s.Build.StateDir) {
 		return r, errors.New("original Runner namespace differs")
 	}
-	selector, id := "run-id", r.RunID
-	if id == "" || r.InputDigest == "" {
-		selector, id = "request-id", r.Request.RequestID
-	}
+	binding := contentBinding(r)
+	binding.Project = s.Project
+	selector, id := binding.Selector()
 	i, err := s.Runner.Inspect(ctx, selector, id)
 	if err != nil {
 		return r, err
@@ -378,23 +377,16 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 	if i.Run == nil {
 		return r, nil
 	}
-	if selector == "request-id" && (i.Command == nil || i.Command.Command != "submit" || i.Command.RequestID != r.Request.RequestID || i.Command.RunID == nil || *i.Command.RunID != i.Run.RunID) {
-		return r, errors.New("original generation request binding is unverified")
-	}
 	run := i.Run
-	if run.Correlation["steerline_project"] != s.Project || run.Correlation["steerline_generation"] != r.ID || run.Workflow.ID != "generate" || run.Workflow.Version != 1 || r.RunID != "" && r.RunID != run.RunID || r.InputDigest != "" && r.InputDigest != run.InputDigest {
-		return r, errors.New("generation Run identity/input mismatch")
-	}
-	if r.Projection != nil && run.Revision < r.Projection.Revision {
-		return r, errors.New("generation projection revision moved backwards")
+	if err := runnerbinding.ValidateContent(binding, i); err != nil {
+		return r, err
 	}
 	r.RunID, r.InputDigest, r.Projection = run.RunID, run.InputDigest, run
 	r.Diagnostic = run.Diagnostic
 	if r.Cancelled {
 		r.State = "cancelled"
-		if (r.StopRequest == nil || r.StopState == "rejected") && run.StopStatus != "stopped" {
-			body, _ := json.Marshal(map[string]any{"expected_revision": run.Revision})
-			r.StopRequest = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: randomID(), Input: body}
+		if runnerbinding.NeedsContentStop(r.StopRequest, r.StopState, run.StopStatus) {
+			r.StopRequest = runnerbinding.ContentStop(randomID(), run.Revision)
 			r.StopState = "unknown"
 			r.Revision++
 			if err = s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
@@ -547,4 +539,12 @@ func repositorySourceDiffers(a, b *runnercontract.RepositorySource) bool {
 	x, _ := json.Marshal(a)
 	y, _ := json.Marshal(b)
 	return !bytes.Equal(x, y)
+}
+
+func contentBinding(r Generation) runnerbinding.Content {
+	revision := uint64(0)
+	if r.Projection != nil {
+		revision = r.Projection.Revision
+	}
+	return runnerbinding.Content{StateDir: r.Runner.StateDir, Request: r.Request, RunID: r.RunID, InputDigest: r.InputDigest, Revision: revision, Project: r.Project, ObjectKey: "steerline_generation", ObjectID: r.ID, WorkflowID: "generate", WorkflowVersion: 1, RequireDigest: false}
 }

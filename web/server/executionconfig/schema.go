@@ -21,10 +21,12 @@ import (
 )
 
 type catalog struct {
-	Schema       *jsonschema.Schema
-	Workflows    []runnercontract.WorkflowChoice
-	Efforts      []string
-	Combinations []Combination
+	Native         json.RawMessage
+	ResourceDigest string
+	Schema         *jsonschema.Schema
+	Workflows      []runnercontract.WorkflowChoice
+	Efforts        []string
+	Combinations   []Combination
 }
 type noRemoteSchema struct{}
 
@@ -75,9 +77,10 @@ func readCatalog(ctx context.Context, home string, pin cfg.Pin) (*catalog, error
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	type metadata struct {
-		Protocol             string `json:"protocol"`
-		Version              string `json:"version"`
-		ResourceDigest       string `json:"resource_digest"`
+		Native               json.RawMessage `json:"native_catalog"`
+		Protocol             string          `json:"protocol"`
+		Version              string          `json:"version"`
+		ResourceDigest       string          `json:"resource_digest"`
 		ConfigurationSchemas struct {
 			Version          int                        `json:"version"`
 			RunConfiguration json.RawMessage            `json:"run_configuration"`
@@ -115,7 +118,13 @@ func readCatalog(ctx context.Context, home string, pin cfg.Pin) (*catalog, error
 	if version.Version != pin.Version || caps.Version != pin.Version || len(version.ResourceDigest) != 64 || caps.ResourceDigest != version.ResourceDigest || caps.ConfigurationSchemas.Version != 1 {
 		return nil, errors.New("Runner offline configuration identity differs from its release")
 	}
-	return compileCatalog(caps.ConfigurationSchemas.RunConfiguration, caps.Workflows, caps.ConfigurationSchemas.Adapters["codex-app-server"])
+	result, err := compileCatalog(caps.ConfigurationSchemas.RunConfiguration, caps.Workflows, caps.ConfigurationSchemas.Adapters["codex-app-server"])
+	if err != nil {
+		return nil, err
+	}
+	result.Native = caps.Native
+	result.ResourceDigest = caps.ResourceDigest
+	return result, nil
 }
 func compileCatalog(raw json.RawMessage, workflows []runnercontract.WorkflowChoice, adapter json.RawMessage) (*catalog, error) {
 	if len(raw) == 0 || len(workflows) == 0 {

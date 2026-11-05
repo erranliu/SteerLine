@@ -20,6 +20,54 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
+func TestZeroProjectOfflineVerificationRequiresAbsentRunner(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("STEERLINE_HOME", home)
+	backend, _ := components(home)
+	process, err := httpclient.CurrentProcessIdentity()
+	require(t, err)
+	process.Created = "previous-os-generation"
+	homeID, err := localservice.HomeID(home)
+	require(t, err)
+	id := contract.Identity{Protocol: contract.Protocol, HomeID: homeID, InstanceID: localservice.Token(), Process: process, Address: "127.0.0.1:1", Ready: true}
+	require(t, localservice.Write(backend.dir, "instance.json", id))
+	original := contract.Shutdown{Version: 2, Identity: id, Projects: []contract.ProjectShutdown{}, Runner: &contract.RunnerShutdown{ResourcesSettled: true}, Clean: true}
+	require(t, localservice.Write(backend.dir, "shutdown.json", original))
+	exe, err := os.Executable()
+	require(t, err)
+	proof, err := VerifyApplicationStopped(context.Background(), exe)
+	require(t, err)
+	if !proof.Runner.ResourcesSettled || proof.Runner.StateDir != "" || len(proof.Projects) != 0 {
+		t.Fatal(proof)
+	}
+	restarted, err := VerifyApplicationRestartable(context.Background(), exe)
+	require(t, err)
+	if !restarted.Restartable {
+		t.Fatal(restarted)
+	}
+	original.Runner.ResourcesSettled = false
+	require(t, localservice.Write(backend.dir, "shutdown.json", original))
+	if _, err = VerifyApplicationStopped(context.Background(), exe); err == nil {
+		t.Fatal("unsettled receipt accepted")
+	}
+	original.Runner.ResourcesSettled = true
+	require(t, localservice.Write(backend.dir, "shutdown.json", original))
+	require(t, localservice.Write(backend.dir, "runner-build.json", runnercontract.BuildPin{StateDir: "original"}))
+	if _, err = VerifyApplicationStopped(context.Background(), exe); err == nil {
+		t.Fatal("existing Runner binding ignored")
+	}
+	require(t, os.Remove(filepath.Join(backend.dir, "runner-build.json")))
+	state := runnerstatepath.Directory(home)
+	if _, err = os.Lstat(state); !os.IsNotExist(err) {
+		t.Fatal("fixture state already exists", err)
+	}
+	require(t, os.MkdirAll(state, 0700))
+	t.Cleanup(func() { require(t, os.Remove(state)) })
+	if _, err = VerifyApplicationStopped(context.Background(), exe); err == nil {
+		t.Fatal("existing Runner state ignored")
+	}
+}
+
 func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
 	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")

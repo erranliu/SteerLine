@@ -217,6 +217,7 @@ func RunRunnerServiceFixture() bool {
 func RunnerServiceCapabilities(version string) map[string]any {
 	digest := strings.Repeat("a", 64)
 	return map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
+		"model_input_contract":  json.RawMessage(`{"contract":"steerrunner-model-input/v1","workflow":{"project_policies":{"slots":[{"slot":"git","path":"SteerlineFlow/runner-policies/git.md"},{"slot":"command","path":"SteerlineFlow/runner-policies/command.md"},{"slot":"testing","path":"SteerlineFlow/runner-policies/testing.md"}]}}}`),
 		"recovery":              map[string]any{"state_format": "steerrunner-state/v8", "same_build_restart": true, "resource_rebuild": false, "upgrade": "drain original resources and controls"},
 		"execution_wait":        RunnerExecutionWaitCapability(),
 		"run_observation":       map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100},

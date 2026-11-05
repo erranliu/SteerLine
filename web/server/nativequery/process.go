@@ -107,7 +107,15 @@ func (p *Process) Close() error {
 	})
 	return result
 }
-func Run(ctx context.Context, home, executable string, args []string) (raw []byte, err error) {
+func Run(ctx context.Context, home, executable string, args []string) ([]byte, error) {
+	raw, err := RunInput(ctx, home, executable, args, nil)
+	if err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func RunInput(ctx context.Context, home, executable string, args []string, input []byte) (raw []byte, err error) {
 	p, err := Start(ctx, home, executable, args...)
 	if err != nil {
 		return nil, err
@@ -117,6 +125,11 @@ func Run(ctx context.Context, home, executable string, args []string) (raw []byt
 			err = e
 		}
 	}()
+	if len(input) > 0 {
+		if _, err = p.Input.Write(input); err != nil {
+			return nil, errors.New("cannot write metadata query")
+		}
+	}
 	p.Input.Close()
 	raw, err = io.ReadAll(io.LimitReader(p.Output, Limit+1))
 	if err != nil {
@@ -126,7 +139,7 @@ func Run(ctx context.Context, home, executable string, args []string) (raw []byt
 		return nil, errors.New("metadata query exceeds 1 MiB")
 	}
 	if err = p.Wait(); err != nil {
-		return nil, errors.New("metadata query failed or timed out")
+		return raw, errors.New("metadata query failed or timed out")
 	}
 	return raw, nil
 }

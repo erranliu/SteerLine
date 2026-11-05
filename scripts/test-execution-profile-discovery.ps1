@@ -2,6 +2,9 @@ param(
     [Parameter(Mandatory)][string]$SteerRunnerExe,
     [string]$RemoteProfile = '',
     [string]$OutRoot = '',
+    [string]$DebugRoot = '',
+    [string]$CatalogEnvironment = '',
+    [switch]$ZeroProjects,
     [switch]$LocalOrca,
     [switch]$IndependentProcess
 )
@@ -31,11 +34,17 @@ if (-not $IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
     $driverArgs = @('-SteerRunnerExe', $SteerRunnerExe)
     $driverArgs += '-LocalOrca'
+    if ($OutRoot) { $driverArgs += @('-OutRoot', $OutRoot) }
+    if ($DebugRoot) { $driverArgs += @('-DebugRoot', $DebugRoot) }
+    if ($CatalogEnvironment) { $driverArgs += @('-CatalogEnvironment', $CatalogEnvironment) }
+    if ($ZeroProjects) { $driverArgs += '-ZeroProjects' }
     Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $driverArgs -Timeout ([TimeSpan]::FromMinutes(15))
     return
 }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$generated = & (Join-Path $PSScriptRoot 'new-debug-release.ps1') -SteerRunnerExe $SteerRunnerExe
+$generatorArgs = @{SteerRunnerExe=$SteerRunnerExe}
+if ($DebugRoot) { $generatorArgs['DebugRoot'] = $DebugRoot }
+$generated = & (Join-Path $PSScriptRoot 'new-debug-release.ps1') @generatorArgs
 $package = ($generated | Select-Object -Last 1) | ConvertFrom-Json
 if (-not $package.root.StartsWith('C:\SteerlineDebug\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Expected a new independent debug package' }
 $oldHome = $env:STEERLINE_HOME
@@ -43,17 +52,29 @@ $oldWeb = $env:STEERLINE_CONFIG_WEB
 $oldTarget = $env:STEERLINE_CONFIG_REMOTE
 $oldLocal = $env:STEERLINE_CONFIG_LOCAL_ORCA
 $oldEvidence = $env:STEERLINE_WEB_EVIDENCE
-$evidence = Join-Path $package.root 'evidence\native-discovery'
+$oldZeroProjects = $env:STEERLINE_CONFIG_ZERO_PROJECTS
+$evidence = if ($OutRoot) { [IO.Path]::GetFullPath($OutRoot) } else { Join-Path $package.root 'evidence\native-discovery' }
 New-Item -ItemType Directory -Path $evidence | Out-Null
 $env:STEERLINE_HOME = Join-Path $package.root 'home'
 $env:STEERLINE_CONFIG_WEB = Join-Path $package.root 'bin\steerline-web.exe'
-$env:STEERLINE_CONFIG_REMOTE = ''
+$env:STEERLINE_CONFIG_REMOTE = $CatalogEnvironment
 $env:STEERLINE_CONFIG_LOCAL_ORCA = if($LocalOrca) { '1' } else { '' }
 $env:STEERLINE_WEB_EVIDENCE = Join-Path $evidence 'browser'
+$env:STEERLINE_CONFIG_ZERO_PROJECTS = if ($ZeroProjects) { '1' } else { '' }
 $cli = Join-Path $package.root 'bin\steerline.exe'
 $failed = $null
 Push-Location $repo
 try {
+    if ($ZeroProjects) {
+        $fixtureEtc = Join-Path $package.root 'home\etc'
+        $fixtureRegistrations = @(Get-ChildItem -LiteralPath $fixtureEtc -Filter '*.json' -File)
+        $fixtureRemoved = @()
+        foreach ($registration in $fixtureRegistrations) {
+            $fixtureRemoved += @{name=$registration.Name;sha256=(Get-FileHash -LiteralPath $registration.FullName -Algorithm SHA256).Hash}
+            Remove-Item -LiteralPath $registration.FullName
+        }
+        @{scope='new debug package only; zero registered projects before startup';removed=$fixtureRemoved} | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $evidence 'zero-project-fixture.json')
+    }
     & $cli start --no-open *> (Join-Path $evidence 'start.log')
     if ($LASTEXITCODE -ne 0) { throw 'Independent package startup failed' }
     $savedErrorAction = $ErrorActionPreference
@@ -76,6 +97,7 @@ try {
     $env:STEERLINE_CONFIG_REMOTE = $oldTarget
     $env:STEERLINE_CONFIG_LOCAL_ORCA = $oldLocal
     $env:STEERLINE_WEB_EVIDENCE = $oldEvidence
+    $env:STEERLINE_CONFIG_ZERO_PROJECTS = $oldZeroProjects
     Pop-Location
 }
 Write-Output "Native discovery evidence: $evidence"
