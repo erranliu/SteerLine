@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,7 +32,7 @@ func bindDeliveryCandidate(t *testing.T, s *SQLiteStore, c runnerbridge.Candidat
 }
 
 func TestAutomaticDeliveryActorKeepsStopPriority(t *testing.T) {
-	for _, mode := range []string{"stop before result", "result signal before stop", "delivery before stop", "first unmerged", "provider timeout", "shutdown"} {
+	for _, mode := range []string{"stop before result", "result signal before stop", "delivery before stop", "auxiliary uses its full budget", "first unmerged", "provider timeout", "shutdown"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -136,14 +137,34 @@ func TestAutomaticDeliveryActorKeepsStopPriority(t *testing.T) {
 			if observed.Projection.Revision != first.Projection.Revision+3 || dispatchChecks != 3 || len(entered) != 0 {
 				t.Fatal("platform wait stalled observation/dispatch or allowed duplicate queries", observed.Revision, dispatchChecks)
 			}
+			if mode == "auxiliary uses its full budget" {
+				var yielded bool
+				actor.ObserveAuxiliary = func(work context.Context) error {
+					deadline, ok := work.Deadline()
+					if !ok || time.Until(deadline) < 4*time.Second {
+						t.Fatal("auxiliary did not start with its normal five-second budget")
+					}
+					close(release)
+					<-work.Done() // Without a handoff, this holds the actor for all five seconds.
+					yielded = work.Err() == context.Canceled
+					return errors.Join(work.Err())
+				}
+				require(t, actor.RunWork(ctx, actor.TickDecision))
+				graph, err := s.TaskGraphSnapshot(ctx, project)
+				require(t, err)
+				if !yielded || graph.Deliveries[first.TaskID].SelectedWorkflowRunID != first.ID || actor.State.Service.Error != nil || len(entered) != 0 {
+					t.Fatal("auxiliary wait lost the ready proof or left a cancellation diagnostic", graph.Deliveries, actor.State.Service.Error)
+				}
+				return
+			}
 			advance := func(beforeHandle func()) {
 				t.Helper()
 				select {
-				case signal := <-actor.Signals():
+				case <-actor.DeliveryWakeup():
 					if beforeHandle != nil {
 						beforeHandle()
 					}
-					require(t, actor.RunWork(ctx, func(context.Context) error { return actor.HandleSignal(signal) }))
+					require(t, actor.RunWork(ctx, actor.TickDelivery))
 				case <-time.After(5 * time.Second):
 					t.Fatal("query did not return an actor result")
 				}

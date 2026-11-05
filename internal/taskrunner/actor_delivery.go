@@ -17,8 +17,8 @@ type automaticDeliveryResult struct {
 	err   error
 }
 
-// Only the actor reads or mutates the cycle. A worker returns one result to
-// this actor's signal channel and never reads or writes the store.
+// Only the actor reads or mutates the cycle. A worker publishes one result
+// through the actor's mailbox and never reads or writes the store.
 type automaticDeliveryCycle struct {
 	remaining []deliveryCandidate
 	running   bool
@@ -35,18 +35,50 @@ func (a *Actor) TickPR(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return nil
 	}
-	if a.delivery == nil {
-		snapshot, err := a.options.Store.ReadRunnerSnapshot(ctx, a.options.Tasks.Project)
-		if err != nil {
-			return err
-		}
-		a.delivery = &automaticDeliveryCycle{}
-		for _, c := range snapshot.Candidates {
-			if automaticDeliveryEligible(snapshot.Graph.ByID[c.TaskID], c) {
-				a.delivery.remaining = append(a.delivery.remaining, deliveryCandidate{c.TaskID, c.ID})
-			}
+	if a.delivery != nil {
+		return a.TickDelivery(ctx)
+	}
+	snapshot, err := a.options.Store.ReadRunnerSnapshot(ctx, a.options.Tasks.Project)
+	if err != nil {
+		return err
+	}
+	a.delivery = &automaticDeliveryCycle{}
+	for _, c := range snapshot.Candidates {
+		if automaticDeliveryEligible(snapshot.Graph.ByID[c.TaskID], c) {
+			a.delivery.remaining = append(a.delivery.remaining, deliveryCandidate{c.TaskID, c.ID})
 		}
 	}
+	return a.advanceAutomaticDelivery(ctx)
+}
+
+func (a *Actor) DeliveryWakeup() <-chan struct{} { return a.deliveryWakeup }
+
+// Observation checkpoints only yield for actionable merge evidence. The
+// scheduler consumes open PRs and query errors after the observation tick.
+func (a *Actor) handoffReadyDelivery(ctx context.Context) error {
+	a.workMu.Lock()
+	ready := a.readyDelivery.canYieldObservation()
+	a.workMu.Unlock()
+	if !ready {
+		return nil
+	}
+	return a.TickDelivery(ctx)
+}
+
+func (a *Actor) TickDelivery(ctx context.Context) error {
+	if a.delivery == nil {
+		return nil
+	}
+	a.workMu.Lock()
+	if a.controlPending || ctx.Err() != nil {
+		a.workMu.Unlock()
+		return nil
+	}
+	if a.readyDelivery != nil {
+		a.delivery.running = false
+		a.delivery.result, a.readyDelivery = a.readyDelivery, nil
+	}
+	a.workMu.Unlock()
 	return a.advanceAutomaticDelivery(ctx)
 }
 
@@ -128,14 +160,71 @@ func (a *Actor) startAutomaticDeliveryQuery(input ports.RunnerResult, target por
 	a.deliveryQueries.Go(func() {
 		observation, err := queryTaskPR(ctx, query, target, input.PR)
 		input.PR = observation
-		call := actorCall{run: func(work context.Context) error {
-			a.delivery.running = false
-			a.delivery.result = &automaticDeliveryResult{input: input, err: err}
-			return a.advanceAutomaticDelivery(work)
-		}}
+		a.workMu.Lock()
+		if ctx.Err() != nil {
+			a.workMu.Unlock()
+			return
+		}
+		a.readyDelivery = &automaticDeliveryResult{input: input, err: err}
+		if a.readyDelivery.canYieldObservation() && a.yieldAuxiliary != nil {
+			a.yieldAuxiliary(errDeliveryReady)
+		}
+		a.workMu.Unlock()
 		select {
-		case a.calls <- call:
-		case <-ctx.Done():
+		case a.deliveryWakeup <- struct{}{}:
+		default:
 		}
 	})
+}
+
+var errDeliveryReady = errors.New("automatic delivery result is ready")
+
+func (r *automaticDeliveryResult) canYieldObservation() bool {
+	if r == nil || r.err != nil {
+		return false
+	}
+	fact := r.input.PR.Fact
+	return fact.State == "merged" && fact.Merged && fact.MergedAt != nil && !fact.MergedAt.IsZero() &&
+		fact.MergeCommit != nil && taskmodel.ValidCommit(*fact.MergeCommit)
+}
+
+func (a *Actor) observeAuxiliaryForDecision(ctx context.Context) error {
+	budget, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	auxiliary, yield := context.WithCancelCause(budget)
+	defer yield(nil)
+	a.workMu.Lock()
+	a.yieldAuxiliary = yield
+	if a.readyDelivery.canYieldObservation() {
+		yield(errDeliveryReady)
+	}
+	a.workMu.Unlock()
+	var err error
+	if auxiliary.Err() == nil {
+		err = a.ObserveAuxiliary(auxiliary)
+	}
+	a.workMu.Lock()
+	a.yieldAuxiliary = nil
+	a.workMu.Unlock()
+	if context.Cause(auxiliary) == errDeliveryReady && auxiliaryCanceledOnly(err) {
+		return nil
+	}
+	return err
+}
+
+// Auxiliary stages can join failures. Keep any independent failure when the
+// remaining wait was deliberately yielded to a ready delivery.
+func auxiliaryCanceledOnly(err error) bool {
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, child := range joined.Unwrap() {
+			if !auxiliaryCanceledOnly(child) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped := errors.Unwrap(err); wrapped != nil {
+		return auxiliaryCanceledOnly(wrapped)
+	}
+	return err == nil || err == context.Canceled
 }

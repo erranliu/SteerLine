@@ -55,6 +55,9 @@ type Actor struct {
 	wakeup           chan struct{}
 	delivery         *automaticDeliveryCycle
 	deliveryQueries  sync.WaitGroup
+	deliveryWakeup   chan struct{}
+	readyDelivery    *automaticDeliveryResult // protected by workMu
+	yieldAuxiliary   context.CancelCauseFunc  // protected by workMu
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
@@ -81,7 +84,7 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	if viewerAvailable {
 		checkpoint.Service.Capabilities = append(checkpoint.Service.Capabilities, "open_native_session")
 	}
-	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall), wakeup: make(chan struct{}, 1)}, nil
+	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall), wakeup: make(chan struct{}, 1), deliveryWakeup: make(chan struct{}, 1)}, nil
 }
 
 func (a *Actor) ControlWakeup() <-chan struct{} { return a.wakeup }
@@ -156,9 +159,6 @@ func (a *Actor) HandleSignal(call actorCall) error {
 	if ctx == nil {
 		ctx = a.ctx
 	}
-	if call.result == nil {
-		return call.run(ctx)
-	}
 	call.result <- call.run(ctx)
 	return nil
 }
@@ -191,14 +191,15 @@ func (a *Actor) Call(ctx context.Context, run func(context.Context) error) error
 func (a *Actor) TickDecision(ctx context.Context) error {
 	// Publish live candidates before spending time on auxiliary records. A failed
 	// auxiliary query must never suppress this tick's Runner observation.
-	reconcileErr := a.options.Tasks.Reconcile(ctx)
+	reconcileErr := a.options.Tasks.Reconcile(ctx, a.handoffReadyDelivery)
 	if err := a.observeError(ctx, reconcileErr); err != nil {
 		return err
 	}
 	if a.ObserveAuxiliary != nil {
-		auxiliary, cancel := context.WithTimeout(ctx, 5*time.Second)
-		err := a.ObserveAuxiliary(auxiliary)
-		cancel()
+		err := a.observeAuxiliaryForDecision(ctx)
+		if deliveryErr := a.handoffReadyDelivery(ctx); deliveryErr != nil {
+			return deliveryErr
+		}
 		return a.observeError(ctx, errors.Join(reconcileErr, err))
 	}
 	return nil
@@ -282,8 +283,8 @@ func (a *Actor) TickControl(ctx context.Context, _ context.CancelFunc) error {
 		return err
 	}
 	// A delivery result may have reached the actor just as a stop woke it.
-	if a.delivery != nil && !a.delivery.running {
-		return a.RunWork(ctx, a.advanceAutomaticDelivery)
+	if a.delivery != nil {
+		return a.RunWork(ctx, a.TickDelivery)
 	}
 	return nil
 }

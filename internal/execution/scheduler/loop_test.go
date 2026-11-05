@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 )
@@ -109,5 +110,51 @@ func TestRunRejectsUnknownDispatchModeBeforeStartingActor(t *testing.T) {
 	}
 	if a.begin || a.initialize || a.ended {
 		t.Fatalf("invalid mode reached actor lifecycle: %+v", a)
+	}
+}
+
+type deliveryPriorityActor struct {
+	lifecycleActor
+	stop, delivery, ordinary chan struct{}
+	order                    []string
+}
+
+func (*deliveryPriorityActor) Initialize(context.Context, context.CancelFunc) error { return nil }
+func (a *deliveryPriorityActor) ControlWakeup() <-chan struct{}                     { return a.stop }
+func (a *deliveryPriorityActor) DeliveryWakeup() <-chan struct{}                    { return a.delivery }
+func (a *deliveryPriorityActor) Signals() <-chan struct{}                           { return a.ordinary }
+func (*deliveryPriorityActor) RunWork(ctx context.Context, run func(context.Context) error) error {
+	return run(ctx)
+}
+func (a *deliveryPriorityActor) TickControl(context.Context, context.CancelFunc) error {
+	if len(a.order) == 0 {
+		a.order = append(a.order, "startup")
+		a.stop <- struct{}{}
+		a.delivery <- struct{}{}
+		a.ordinary <- struct{}{}
+		return nil
+	}
+	a.order = append(a.order, "stop")
+	return nil
+}
+func (a *deliveryPriorityActor) TickDelivery(context.Context) error {
+	a.order = append(a.order, "delivery")
+	return nil
+}
+func (a *deliveryPriorityActor) HandleSignal(struct{}) error {
+	a.order = append(a.order, "ordinary")
+	a.cancel()
+	return nil
+}
+
+func TestRunReadyDeliveryFollowsStopBeforeOrdinaryWork(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	a := &deliveryPriorityActor{lifecycleActor: lifecycleActor{cancel: cancel}, stop: make(chan struct{}, 1), delivery: make(chan struct{}, 1), ordinary: make(chan struct{}, 1)}
+	if err := Run(ctx, a, Schedule{TaskPoll: time.Hour, PRPoll: time.Hour, Heartbeat: time.Hour}, "manual"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(a.order, []string{"startup", "stop", "delivery", "ordinary"}) {
+		t.Fatal("ready delivery did not follow urgent stop ahead of ordinary work", a.order)
 	}
 }

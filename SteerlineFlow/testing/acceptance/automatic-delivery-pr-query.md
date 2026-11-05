@@ -26,3 +26,11 @@
 - `provider-and-binding/summary.json` 共 15 项通过。包含 command 子进程和本机 Gitea HTTP 夹具的冻结配置与认证引用、自动交付的绑定变化反例和原废弃事务反例。
 - 固定 L1 `l1.minimum`、L2 `smoke.delivery`、L3 `recovery.waiting-merge-restart` 均通过。L2 与 L3 的 `cleanup_complete=true`。命令、源码和原始证据随各自 `summary.json` 保存。
 - 真实平台、真实模型和实际安装环境未验。
+
+## #449 结果交接复验
+
+审计用例在原 `10258f3d` 上让辅助观察耗尽五秒，稳定绑定的已合入结果连续两轮过期。修复以该提交加本次工作树差异验证，输出根为 `C:\SteerlineDebug\automatic-delivery-handoff-20261105`。
+
+- `owner-final/summary.json` 的 34 项定向用例通过。新增屏障在辅助观察取得原五秒预算后释放平台结果。观察按既有取消路径让出，同一原绑定只查询一次即完成交付。调度测试验证 stop、结果和普通工作同时就绪时的顺序。原撤回、事务、过期证据和 command/Gitea 冻结引用回归通过。
+- L4 `go.storage` 通过，见 `storage-final/summary.json`。SQLite 的证据时间和校验沿原实现。
+- 最终源码的 L1 `l1.minimum`、L2 `smoke.delivery` 和 L3 `recovery.waiting-merge-restart` 均通过。L2、L3 的 `cleanup_complete=true`。证据见 `L1-final`、`L2-final`、`L3` 各自的 `summary.json`。真实平台和实际安装环境仍待单独验收。

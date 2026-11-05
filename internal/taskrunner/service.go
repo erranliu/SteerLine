@@ -195,7 +195,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	}
 	return s.Store.Candidate(ctx, s.Project, c.ID)
 }
-func (s *Service) Reconcile(ctx context.Context) error {
+func (s *Service) Reconcile(ctx context.Context, afterCandidate func(context.Context) error) error {
 	rows, err := s.Store.RunnerCandidates(ctx, s.Project, "")
 	if err != nil {
 		return err
@@ -210,6 +210,9 @@ func (s *Service) Reconcile(ctx context.Context) error {
 		}
 		if err := s.Bridge.Step(ctx, s.Project, c.ID); err != nil {
 			failures = append(failures, err)
+		}
+		if err := afterCandidate(ctx); err != nil {
+			return errors.Join(append(failures, err)...)
 		}
 	}
 	return errors.Join(failures...)

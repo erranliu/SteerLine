@@ -34,6 +34,12 @@ type InterruptibleControl interface {
 	RunWork(context.Context, func(context.Context) error) error
 }
 
+// ReadyDelivery admits a completed platform observation on the serial actor.
+type ReadyDelivery interface {
+	DeliveryWakeup() <-chan struct{}
+	TickDelivery(context.Context) error
+}
+
 func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string) (retErr error) {
 	if mode != "manual" && mode != "auto" {
 		return errors.New("dispatch mode must be manual or auto")
@@ -97,6 +103,11 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 		return err
 	}
 	var wakeup <-chan struct{}
+	var deliveryReady <-chan struct{}
+	delivery, _ := any(actor).(ReadyDelivery)
+	if delivery != nil {
+		deliveryReady = delivery.DeliveryWakeup()
+	}
 	work := func(run func(context.Context) error) error { return run(ctx) }
 	if control, ok := any(actor).(InterruptibleControl); ok {
 		wakeup = control.ControlWakeup()
@@ -116,6 +127,14 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 		select {
 		case <-wakeup:
 			if err := actor.TickControl(ctx, cancel); err != nil {
+				return err
+			}
+			continue
+		default:
+		}
+		select {
+		case <-deliveryReady:
+			if err := work(delivery.TickDelivery); err != nil {
 				return err
 			}
 			continue
@@ -148,6 +167,10 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 			}
 		case <-wakeup:
 			if err := actor.TickControl(ctx, cancel); err != nil {
+				return err
+			}
+		case <-deliveryReady:
+			if err := work(delivery.TickDelivery); err != nil {
 				return err
 			}
 		case <-prTick.C:
