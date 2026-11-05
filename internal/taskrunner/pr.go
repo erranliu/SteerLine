@@ -14,16 +14,21 @@ func (s *Service) observeTaskPR(ctx context.Context, c runnerstate.Candidate, br
 	if err != nil {
 		return ports.RunnerPRObservation{}, err
 	}
-	if s.QueryPR == nil {
+	return queryTaskPR(ctx, s.QueryPR, target, ports.RunnerPRObservation{CandidateID: c.ID, RunID: c.RunID, CandidateRevision: c.Revision})
+}
+
+func queryTaskPR(ctx context.Context, query ports.RunnerPRQuery, target ports.RunnerPRTarget, observation ports.RunnerPRObservation) (ports.RunnerPRObservation, error) {
+	if query == nil {
 		return ports.RunnerPRObservation{}, errors.New("task PR platform query is unavailable")
 	}
-	started := time.Now().UTC()
-	fact, err := s.QueryPR(ctx, target.Provider, target.URL)
+	observation.StartedAt = time.Now().UTC()
+	fact, err := query(ctx, target.Provider, target.URL)
 	if err != nil {
 		return ports.RunnerPRObservation{}, failure("pr_query_unavailable", "PR merge state could not be checked: "+err.Error())
 	}
 	if !target.Matches(fact) {
 		return ports.RunnerPRObservation{}, failure("immutable_task", "platform PR differs from the frozen candidate target")
 	}
-	return ports.RunnerPRObservation{CandidateID: c.ID, RunID: c.RunID, CandidateRevision: c.Revision, StartedAt: started, CheckedAt: time.Now().UTC(), Fact: fact}, nil
+	observation.Fact, observation.CheckedAt = fact, time.Now().UTC()
+	return observation, nil
 }

@@ -53,6 +53,8 @@ type Actor struct {
 	cancelWork       context.CancelFunc
 	controlPending   bool
 	wakeup           chan struct{}
+	delivery         *automaticDeliveryCycle
+	deliveryQueries  sync.WaitGroup
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
@@ -148,11 +150,14 @@ func (a *Actor) Initialize(ctx context.Context, _ context.CancelFunc) error {
 }
 func (a *Actor) Signals() <-chan actorCall   { return a.calls }
 func (a *Actor) HistoryErrors() <-chan error { return nil }
-func (a *Actor) WaitSources()                {}
+func (a *Actor) WaitSources()                { a.deliveryQueries.Wait() }
 func (a *Actor) HandleSignal(call actorCall) error {
 	ctx := a.workContext
 	if ctx == nil {
 		ctx = a.ctx
+	}
+	if call.result == nil {
+		return call.run(ctx)
 	}
 	call.result <- call.run(ctx)
 	return nil
@@ -273,35 +278,14 @@ func (a *Actor) TickControl(ctx context.Context, _ context.CancelFunc) error {
 			failures = append(failures, err)
 		}
 	}
-	return a.observeError(ctx, errors.Join(failures...))
-}
-func (a *Actor) TickPR(ctx context.Context) error {
-	snapshot, err := a.options.Store.ReadRunnerSnapshot(ctx, a.options.Tasks.Project)
-	if err != nil {
+	if err := a.observeError(ctx, errors.Join(failures...)); err != nil {
 		return err
 	}
-	delivered := map[string]bool{}
-	var failures []error
-	for _, c := range snapshot.Candidates {
-		if ctx.Err() != nil {
-			break
-		}
-		task := snapshot.Graph.ByID[c.TaskID]
-		if delivered[c.TaskID] || task.Status != "in_progress" || c.StopRequested || c.Participation != "active" || c.Projection == nil || c.Projection.PR == nil {
-			continue
-		}
-		_, err := a.options.Tasks.Deliver(ctx, c.TaskID, c.ID, task.Version)
-		if err == nil {
-			delivered[c.TaskID] = true
-			continue
-		}
-		var domain *taskmodel.Error
-		if errors.As(err, &domain) && domain.Code == "merge_state_unknown" {
-			continue
-		}
-		failures = append(failures, err)
+	// A delivery result may have reached the actor just as a stop woke it.
+	if a.delivery != nil && !a.delivery.running {
+		return a.RunWork(ctx, a.advanceAutomaticDelivery)
 	}
-	return a.observeError(ctx, errors.Join(failures...))
+	return nil
 }
 func (a *Actor) observeError(ctx context.Context, err error) error {
 	a.mu.Lock()

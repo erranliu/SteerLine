@@ -51,14 +51,19 @@ func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerRe
 		if err != nil {
 			return err
 		}
-		if c.TaskID != input.TaskID || c.Revision != input.CandidateRevision || c.Participation != "active" || c.StopRequested || c.RunID == "" || c.SubmitState != "accepted" || c.Claimant != record.Claimant {
+		if c.TaskID != input.TaskID || (input.AutomaticBinding == nil && c.Revision != input.CandidateRevision) || c.Participation != "active" || c.StopRequested || c.RunID == "" || c.SubmitState != "accepted" || c.Claimant != record.Claimant {
 			return nativeErr("candidate_inactive", "selected Run binding changed during verification")
 		}
 		contract := c.Contract
 		if c.ContractDigest != contract.Digest {
 			return nativeErr("contract_mismatch", "candidate lost the fixed task contract")
 		}
-		target, err := storageports.VerifyRunnerPR(c, graph.Authority.Branch, input.VerificationStarted, input.PR)
+		var target storageports.RunnerPRTarget
+		if input.AutomaticBinding == nil {
+			target, err = storageports.VerifyRunnerPR(c, graph.Authority.Branch, input.VerificationStarted, input.PR)
+		} else {
+			target, err = storageports.VerifyAutomaticDelivery(c, graph.Authority.Branch, input, now())
+		}
 		if err != nil {
 			return err
 		}

@@ -20,4 +20,5 @@ type RunnerResult struct {
 	TaskVersion, CandidateRevision, AuthorityVersion, GraphRevision uint64
 	VerificationStarted                                             time.Time
 	PR                                                              RunnerPRObservation
+	AutomaticBinding                                                *AutomaticDeliveryBinding
 }
