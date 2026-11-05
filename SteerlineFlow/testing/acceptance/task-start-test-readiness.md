@@ -33,7 +33,7 @@
 | `go run ./cmd/test-feedback -out <目录> -- ./internal/app -run <本次正则> -count=1` | 23 项通过，零跳过；326.669 秒。`diagnostics/20261105T074402237Z/summary.json`、`go-test.jsonl`。 |
 | `go run ./cmd/test-feedback -level=L1 -out <目录>` | 通过，准备 0.682 秒、执行 51.662 秒。`test-results/L1/20261105T074536546Z/summary.json`。 |
 | `go run ./cmd/test-feedback -level=L2 -out <目录>` | 通过，准备 59.047 秒、执行 227.022 秒。`test-results/L2/20261105T074703585Z/summary.json`；`scenarios/smoke.delivery/scenario.json` 的 cleanup_complete=true。 |
-| `go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit -out <目录>` | 35 个测试文件、281 项断言通过，零失败/跳过；43.497 秒。`test-results/L4-web/20261105T074706641Z/summary.json`、`web-unit/vitest.json`。 |
+| `go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit -out <目录>` | 34 个测试文件（35 个 suite）、281 项断言通过，零失败/跳过；43.497 秒。`test-results/L4-web/20261105T074706641Z/summary.json`、`web-unit/vitest.json`。 |
 | `go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.http -out <目录>` | 七包、164 项通过，零失败/跳过；86.990 秒。`test-results/L4-http/20261105T075220267Z/summary.json`、`go-owner/test.jsonl`。与本轮 L2 串行。 |
 | `npm --prefix web run build` | TypeScript 检查和 Vite 生产构建通过。 |
 
@@ -42,3 +42,22 @@ App owner 的实际 `-run` 参数为 `Test(TaskReadiness|PM)`，匹配本次新�
 预备默认沙箱 L1 未通过：返回 quick-core/quick-boundary 失败，并在写 managed 报告时出现 Access is denied；返回的沙箱临时目录后续已不可读，未取得完整原始失败日志，不能确认这些失败的具体根因。该轮不计入通过；上表正式 L1 在正常权限的独立临时目录重新执行并完整保存报告。初轮前端历史用例因模拟服务仍返回 ready 而覆盖模拟 accepted 失败，已修正为随阶段改变服务状态；状态视图夹具的多余 files 字段也经构建检查清理，上表记录最终版本。
 
 没有运行真实模型、远端 PR、完整 Go 全集或浏览器人工体验。安装版仍需后续部署才能呈现上述行为。
+
+## PR 前审计与主干集成复验
+
+同日用户授权“审计后提 PR”。当前聊天逐文件核对首次/并行启动准入、确认面板状态变化、查询失败时的缓存行为、历史回执与当前状态隔离、轻量查询只读边界、参数校验、轮询开销及原后端门禁；没有未解决的功能阻断发现，未修改固定提示词或其接线。
+
+审计修正两处测试/证据问题：候选历史用例原先把原请求对象与同一引用比较，现改为独立深拷贝后比较；补齐 taskReadiness 查询在 home/项目/实例/任务之间的缓存隔离、取消晚到响应及轻量 URL 断言。另按原生 JSON 修正前一轮把 35 个 suite 写成文件数的表述，实际为 34 个文件。
+
+分支已同步 `origin/main` 的 `83f181c11e90b28da7ba96ddf162683425d7d6da`；唯一冲突是验收索引，保留双方记录。以下复验固定干净实现提交 `1df386ac7ac29e8c87c0f1a315dd5dd61c5314ab`，之后仅补充本验收文档。所有路径相对前述报告根。
+
+| 范围 | 结果与证据 |
+| --- | --- |
+| 固定 L1 | 通过，准备 1.232 秒、执行 103.537 秒，超出一分钟目标，未缩小选择或改断言。`pr-audit/L1/20261105T080441941Z/summary.json`。 |
+| 固定 L2 | 通过，准备 12.816 秒、执行 176.207 秒；汇总与场景均 cleanup_complete=true。`pr-audit/L2/20261105T080836658Z/summary.json`、`scenarios/smoke.delivery/scenario.json`。与本轮 HTTP 专项串行。 |
+| `web.unit` | 34 文件（35 suite）、282 项通过，零失败/跳过，48.088 秒。`pr-audit/web/20261105T080447691Z/summary.json`、`web-unit/vitest.json`。 |
+| `go.http` | 七包、164 项通过，零失败/跳过，127.057 秒。`pr-audit/http/20261105T080547241Z/summary.json`、`go-owner/test.jsonl`。 |
+| App 定向 owner | 同一 `Test(TaskReadiness\|PM)` 范围，显式 timeout=10m，23 项通过，零失败/跳过，301.555 秒。`pr-audit/owner/20261105T080446929Z/summary.json`、`go-test.jsonl`。 |
+| 生产构建与静态检查 | TypeScript/Vite 构建通过；文档导航与 `git diff --check` 通过。 |
+
+审计不等同于独立人员的远端批准；本次仅提交 PR，不合并或部署。
