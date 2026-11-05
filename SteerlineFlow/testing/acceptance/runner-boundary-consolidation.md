@@ -84,4 +84,8 @@ Runner `formal-final` L1 已通过：853 根、21 扩展、原 16 个允许 opt-
 
 创建本仓 PR 前刷新并接入 `origin/main=c94cc5aa047e3449703c1868e8d8a6628c350616`。上游新增部署丢弃根，本次新增零项目核验根，两边原先各自计为 10/9，组合必须为 Windows **11** / 其他平台 **10**。保留两个显式源条目，并同步正式定义、测试断言和指南；唯一文本冲突为测试清单的覆盖说明，保留双方行为范围。上游 discardMode/仓库锁规则与本次中性 Content 核验、严格未启动 Runner 分支全部保留。
 
-本 PR 相对该 main 的 `internal/prompts`/黄金样本差异为空。上游已精简首轮测试上下文，因此不能把历史 2706 字节样本视为接入后固定大小；新的正常 PrepareTestPlan 对照为完整 Run 输入 **1796→1796 字节、全文相等**，四段正文为 implement.execute **167→167**、implement.report **312→312**、publish **372→372**、publish.report **319→319**。`pr-integration/policy-bytes` 实际通过，历史正文/旧样本与报告不覆盖。计数/提示词接线合并另经独立只读复核；主干接入后的正式复验结果在完成后补录，不能继承旧构建资格。
+本 PR 相对该 main 的 `internal/prompts`/黄金样本差异为空。上游已精简首轮测试上下文，因此不能把历史 2706 字节样本视为接入后固定大小；新的正常 PrepareTestPlan 对照为完整 Run 输入 **1796→1796 字节、全文相等**，四段正文为 implement.execute **167→167**、implement.report **312→312**、publish **372→372**、publish.report **319→319**。`pr-integration/policy-bytes` 实际通过，历史正文/旧样本与报告不覆盖。计数/提示词接线合并另经独立只读复核，不能继承旧构建资格。
+
+主干接入提交为 `51583503`。该提交上的 `pr-integration/core`（计数/提示词/纯契约/绑定）、`pr-integration/policy-bytes`、正式 `pr-integration/L1`、完整 `pr-integration/L2`、正式 `pr-integration/deployment` 全部通过；部署 App 实际执行 11 根及原子项，零失败/skip，包含上游 Discard 和本次 ZeroProject。完整 L2 的 cleanup_complete=true；原实现阶段 HTTP/Web/Roadmap/L3 与真实目录联验仍保留原构建范围，没有冒称新主干真实模型资格。
+
+分支已推送并创建 [SteerLine PR #456](https://github.com/erranliu/SteerLine/pull/456)，与 [Runner PR #117](https://github.com/erranliu/SteerRunner/pull/117) 互链。GitHub 已分别确认文件可合并，未执行合并；CI/人工审批状态以 PR 当前显示为准。
