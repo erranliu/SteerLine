@@ -87,9 +87,24 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 	}
 	lock.Close()
 	global := before[GlobalExecutionConfigPath()]
-	require(t, os.WriteFile(GlobalExecutionConfigPath(), append(append([]byte{}, global...), '\n'), 0600))
-	if _, err = VerifyApplicationStopped(ctx, exe); err == nil {
-		t.Fatal("changed frozen configuration accepted")
+	var saved RunnerExecutionConfig
+	require(t, json.Unmarshal(global, &saved))
+	saved.Profiles[0].Name = "Saved while the original host was running"
+	updated := mustJSON(saved)
+	require(t, os.WriteFile(GlobalExecutionConfigPath(), updated, 0600))
+	if _, err = VerifyApplicationStopped(ctx, exe); err != nil {
+		t.Fatal("saved execution profile blocked stopped verification", err)
+	}
+	for _, path := range paths {
+		after, err := os.ReadFile(path)
+		require(t, err)
+		expected := before[path]
+		if path == GlobalExecutionConfigPath() {
+			expected = updated
+		}
+		if !bytes.Equal(expected, after) {
+			t.Fatal("saved-profile verification changed original state", path)
+		}
 	}
 	require(t, os.WriteFile(GlobalExecutionConfigPath(), global, 0600))
 	original.Projects[0].LocalClosed = false
@@ -149,9 +164,40 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 		}
 		original.Projects[0].LocalClosed = true
 		require(t, localservice.Write(backend.dir, "shutdown.json", original))
-		require(t, os.WriteFile(GlobalExecutionConfigPath(), append(append([]byte{}, global...), '\n'), 0600))
-		if _, err := VerifyApplicationRestartable(ctx, exe); err == nil {
-			t.Fatal("restart accepted changed frozen configuration")
+		require(t, os.WriteFile(GlobalExecutionConfigPath(), updated, 0600))
+		_, err = VerifyApplicationRestartable(ctx, exe)
+		require(t, err)
+	})
+
+	t.Run("saved_profiles_preserve_checkpoint_ownership", func(t *testing.T) {
+		for _, fault := range []string{"instance", "process", "digest", "repository", "remote", "branch", "runner", "running", "ready"} {
+			t.Run(fault, func(t *testing.T) {
+				var bad hostcontract.ServiceCheckpoint
+				require(t, json.Unmarshal(mustJSON(cp), &bad))
+				switch fault {
+				case "instance":
+					bad.Service.InstanceID += "foreign"
+				case "process":
+					bad.Service.ProcessIdentity.Created += "foreign"
+				case "digest":
+					bad.Service.ConfigDigest = ""
+				case "repository":
+					bad.Repository.Identity += "foreign"
+				case "remote":
+					bad.Repository.Remote += "foreign"
+				case "branch":
+					bad.Repository.Branch += "foreign"
+				case "runner":
+					bad.Service.RunnerBuild.SHA256 = strings.Repeat("f", 64)
+				case "running":
+					bad.Service.Status = "running"
+				case "ready":
+					bad.Service.Ready = true
+				}
+				if err := verifyStoppedCheckpoint(&bad, c, p, id); err == nil {
+					t.Fatal("saved-profile verification accepted foreign or active checkpoint", fault)
+				}
+			})
 		}
 	})
 

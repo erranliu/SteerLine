@@ -155,6 +155,12 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 }
 
 func testDiscardOfflineFlow(t *testing.T) {
+	for _, fault := range []string{"original", "saved-profile", "changed-during-preparation", "changed-runner"} {
+		t.Run(fault, func(t *testing.T) { testDiscardOfflineConfiguration(t, fault) })
+	}
+}
+
+func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	c, _ := nativeTaskFixture(t)
 	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
 	exe, err := os.Executable()
@@ -199,8 +205,39 @@ func testDiscardOfflineFlow(t *testing.T) {
 	require(t, localservice.Write(backend.dir, "instance.json", id))
 	original := contract.Shutdown{Version: 2, Runner: d.runner.result(), Identity: id, Projects: d.ShutdownResults(), Clean: true}
 	require(t, localservice.Write(backend.dir, "shutdown.json", original))
-	result, err := prepareApplicationDiscard(ctx, exe, strings.Repeat("c", 32), func() error { return nil })
+	global.Profiles[0].Name = "Saved profile for the next host"
+	if fault != "original" {
+		if fault == "changed-runner" {
+			global.Runner.Version = "another-build"
+		}
+		require(t, os.WriteFile(GlobalExecutionConfigPath(), mustJSON(global), 0600))
+	}
+	saved, err := os.ReadFile(GlobalExecutionConfigPath())
 	require(t, err)
+	result, err := prepareApplicationDiscard(ctx, exe, strings.Repeat("c", 32), func() error {
+		if fault == "changed-during-preparation" {
+			require(t, os.WriteFile(GlobalExecutionConfigPath(), append(saved, '\n'), 0600))
+		}
+		return nil
+	})
+	if fault == "changed-during-preparation" || fault == "changed-runner" {
+		if err == nil {
+			t.Fatal("discard accepted changed ownership or concurrent configuration", fault)
+		}
+		if _, err := os.Stat(filepath.Join(c.RunDir, "steerline.db")); err != nil {
+			t.Fatal("blocked discard moved original state", err)
+		}
+		if _, err := os.Stat(filepath.Join(backend.dir, "shutdown.json")); err != nil {
+			t.Fatal("blocked discard moved original host", err)
+		}
+		return
+	}
+	require(t, err)
+	after, err := os.ReadFile(GlobalExecutionConfigPath())
+	require(t, err)
+	if string(after) != string(saved) {
+		t.Fatal("discard overwrote saved execution profiles")
+	}
 	if result.Outcome != "prepared" || result.Discard == nil || result.Discard.Phase != "complete" || result.Facts.NativeResources != "verified" || len(result.Discard.Projects) != 1 {
 		t.Fatal(result)
 	}

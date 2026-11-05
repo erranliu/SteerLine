@@ -182,8 +182,8 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 		if readErr != nil {
 			return fail(readErr)
 		}
-		if err := verifyStoppedCheckpoint(snapshot.Checkpoint, c.configDigest, p, *b.Identity); err != nil {
-			return fail(err)
+		if err := verifyStoppedCheckpoint(snapshot.Checkpoint, c, p, *b.Identity); err != nil {
+			return fail(fmt.Errorf("%s: %w", p.ConfigID, err))
 		}
 		configs = append(configs, c)
 		stateNames[filepath.Base(c.RunDir)] = true
@@ -237,7 +237,7 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 		return fail(err)
 	}
 	current := loadApplicationCatalog(result.Home)
-	if !sameDiscardCatalog(catalog, current) {
+	if !sameApplicationCatalog(catalog, current) {
 		return fail(errors.New("project or execution configuration changed during discard preparation"))
 	}
 	journal.Moves = []discardMove{
@@ -261,18 +261,6 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	result.Outcome, result.Source, result.VerifiedAt = "prepared", "discarded_runs", time.Now().UTC()
 	result.Facts = DeploymentFacts{"verified", "verified", "verified", "not_applicable", "verified"}
 	return result, nil
-}
-
-func sameDiscardCatalog(a, b *applicationCatalog) bool {
-	if b.err != nil || string(a.global) != string(b.global) || len(a.entries) != len(b.entries) {
-		return false
-	}
-	for i := range a.entries {
-		if a.entries[i].view.ConfigID != b.entries[i].view.ConfigID || string(a.entries[i].data) != string(b.entries[i].data) {
-			return false
-		}
-	}
-	return true
 }
 
 func discardPlainPath(path string) error {
