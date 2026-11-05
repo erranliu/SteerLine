@@ -9,8 +9,8 @@ function Get-DeploymentPackageDigest([string]$CLI, [string]$RunnerExe) {
     try { return [BitConverter]::ToString($digest.ComputeHash([Text.Encoding]::UTF8.GetBytes(($lines -join '')))).Replace('-','').ToLowerInvariant() } finally { $digest.Dispose() }
 }
 
-function Stop-DeploymentApplication([string]$CLI, [string]$RunnerExe, [switch]$AllowRestart) {
-    $goal = if ($AllowRestart) { 'update' } else { 'replace' }
+function Stop-DeploymentApplication([string]$CLI, [string]$RunnerExe, [switch]$AllowRestart, [switch]$DiscardRuns) {
+    $goal = if ($DiscardRuns) { 'discard-runs' } elseif ($AllowRestart) { 'update' } else { 'replace' }
     if (-not $env:STEERLINE_HOME -or -not [IO.Path]::IsPathRooted($env:STEERLINE_HOME)) {
         throw 'Deployment requires an explicit absolute STEERLINE_HOME.'
     }

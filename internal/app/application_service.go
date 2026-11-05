@@ -12,6 +12,9 @@ import (
 )
 
 func ServeApplication(ctx context.Context) error {
+	if err := checkDeploymentDiscard(HomeDir()); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	endpoint, err := localservice.Prepare(HomeDir(), filepath.Join(HomeDir(), "application-api"), contract.Protocol, "127.0.0.1:0")

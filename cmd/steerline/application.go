@@ -20,7 +20,7 @@ func runApplication(command string, args []string) error {
 	detached := flags.Bool("detached", false, "verify resident process lifetime before opening resources")
 	jsonOutput := flags.Bool("json", false, "print verified application status as JSON")
 	runnerExe := flags.String("runner-exe", "", "verification/deployment: absolute selected Runner executable")
-	goal := flags.String("goal", "", "prepare-deployment: update or replace")
+	goal := flags.String("goal", "", "prepare-deployment: update, replace or explicit discard-runs")
 	invocation := flags.String("invocation-id", "", "prepare-deployment: fresh 128-bit invocation identity")
 	packageSHA := flags.String("package-sha256", "", "prepare-deployment: digest of all three staged programs")
 	if err := flags.Parse(args); err != nil {

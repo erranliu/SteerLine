@@ -245,6 +245,9 @@ func StartApplication(ctx context.Context, noOpen bool) (ApplicationStatus, erro
 		return ApplicationStatus{}, err
 	}
 	defer release()
+	if err := checkDeploymentDiscard(HomeDir()); err != nil {
+		return ApplicationStatus{}, err
+	}
 	backend, web := components(HomeDir())
 	if _, err = ensureComponent(ctx, HomeDir(), backend); err != nil {
 		status, _ := StatusApplication(ctx)

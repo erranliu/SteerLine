@@ -2,6 +2,10 @@
 
 环境提交预算与首次错误保留（2026-11-05）：[修复与隔离回归](environment-submission-budget.md)。环境观察脱离 actor 五秒预算，原提交错误独立持久化，后续查询保留两类原因。
 
+部署显式放弃旧运行选项（2026-11-05）：[实现与隔离验证](deployment-discard-runs-option.md)，自动结算、归档并恢复任务，派发暂停，默认部署门禁保留。
+
+放弃旧运行后的安装部署恢复（2026-11-05）：[用户授权归档、Runner 升级及任务恢复](deployment-discarded-runs-20261105.md)。
+
 历史本机 Orca PID 阻塞 Runner 升级（2026-11-05）：[修复与验证](deployment-historical-pid.md)。
 
 环境检测切换到 Orca 原生执行器（2026-11-04）：[修复与真实检测](environment-native-orca-executor.md)。保留原开发配置，SteerlineTest 已部署并完成远端检测。
