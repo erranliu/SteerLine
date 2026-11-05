@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+历史本机 Orca PID 阻塞 Runner 升级（2026-11-05）：[修复与验证](deployment-historical-pid.md)。
+
 环境检测切换到 Orca 原生执行器（2026-11-04）：[修复与真实检测](environment-native-orca-executor.md)。保留原开发配置，SteerlineTest 已部署并完成远端检测。
 
 App领域专项与实际参数报告（2026-11-03，已实施，自动验收与独立审核通过）：[专属验收及断言矩阵](app-domain-test-suites.md)。部署/Roadmap两个L4专项、真实参数报告、四个重型根的层级梳理；重型源码不改，按Plan验证，不放宽断言。
