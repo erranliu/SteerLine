@@ -27,6 +27,25 @@ type unsettledRunsError struct{ diagnostic string }
 func (e *unsettledRunsError) Error() string { return e.diagnostic }
 
 func (c Client) VerifyStopped(ctx context.Context) (StoppedVerification, error) {
+	result, err := c.StoppedResourceInventory(ctx)
+	if err != nil {
+		return result, err
+	}
+	if !result.ResourcesSettled {
+		diagnostics := []string{"Runner original native resource absence remains unverified"}
+		for _, run := range result.Runs {
+			if !run.ResourcesSettled {
+				diagnostics = append(diagnostics, run.Diagnostic)
+			}
+		}
+		return result, &unsettledRunsError{diagnostic: strings.Join(diagnostics, "; ")}
+	}
+	return result, nil
+}
+
+// StoppedResourceInventory validates a cold inventory, including unsettled Runs.
+// Its success validates the inventory, not resource settlement or deletion.
+func (c Client) StoppedResourceInventory(ctx context.Context) (StoppedVerification, error) {
 	response, err := c.Call(ctx, "service verify-stopped", nil, nil)
 	if err != nil {
 		return StoppedVerification{}, err
@@ -55,9 +74,6 @@ func (c Client) VerifyStopped(ctx context.Context) (StoppedVerification, error) 
 	}
 	if result.ResourcesSettled != (len(diagnostics) == 1) {
 		return result, errors.New("Runner stopped verification contains inconsistent resource evidence")
-	}
-	if !result.ResourcesSettled {
-		return result, &unsettledRunsError{diagnostic: strings.Join(diagnostics, "; ")}
 	}
 	return result, nil
 }

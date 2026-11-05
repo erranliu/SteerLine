@@ -21,8 +21,9 @@ const DeploymentPreparationContract = "steerline-deployment-preparation/v1"
 type DeploymentGoal string
 
 const (
-	DeploymentUpdate  DeploymentGoal = "update"
-	DeploymentReplace DeploymentGoal = "replace"
+	DeploymentUpdate      DeploymentGoal = "update"
+	DeploymentReplace     DeploymentGoal = "replace"
+	DeploymentDiscardRuns DeploymentGoal = "discard-runs"
 )
 
 // These facts have different meanings. In particular, restart eligibility does
@@ -50,6 +51,7 @@ type DeploymentPreparation struct {
 	Stopped        *ApplicationStopVerification    `json:"stopped,omitempty"`
 	Restart        *ApplicationRestartVerification `json:"restart,omitempty"`
 	Diagnostic     string                          `json:"diagnostic,omitempty"`
+	Discard        *DeploymentDiscard              `json:"discard,omitempty"`
 }
 
 // PrepareApplicationDeployment owns the deployment decision, not the later
@@ -77,7 +79,18 @@ func PrepareApplicationDeployment(ctx context.Context, runner string, goal Deplo
 	if digest != packageSHA {
 		return fail(errors.New("staged package differs from this deployment invocation"))
 	}
-	result, err := prepareApplicationDeployment(ctx, runner, goal, cycleOriginalInstallation)
+	var result DeploymentPreparation
+	if goal == DeploymentDiscardRuns {
+		result, err = prepareApplicationDiscard(ctx, runner, invocationID, func() error {
+			current, e := deploymentPackageDigest(dir)
+			if e != nil || current != digest {
+				return errors.Join(errors.New("staged package changed before discarding state"), e)
+			}
+			return nil
+		})
+	} else {
+		result, err = prepareApplicationDeployment(ctx, runner, goal, cycleOriginalInstallation)
+	}
 	result.InvocationID, result.PackageSHA256 = invocationID, digest
 	if err == nil {
 		current, readErr := deploymentPackageDigest(dir)
@@ -133,6 +146,9 @@ func prepareApplicationDeployment(ctx context.Context, runner string, goal Deplo
 		return fail(err)
 	}
 	defer release()
+	if err := checkDeploymentDiscard(result.Home); err != nil {
+		return fail(err)
+	}
 	stopCtx, stopCancel := context.WithTimeout(ctx, 120*time.Second)
 	stopErr := stopAllCoordinated(stopCtx, result.Home)
 	stopCancel()

@@ -23,6 +23,7 @@ type domainTestSource struct {
 // Execution uses these explicit roots. Parsing validates drift on every host,
 // including excluded live sources and files for another platform.
 var appDomainSources = map[string]domainTestSource{
+	"internal/app/deployment_discard_test.go":          {Suite: "go.deployment", Roots: []string{"TestDeploymentDiscardRuns"}},
 	"internal/app/deployment_prepare_test.go":          {Suite: "go.deployment", Roots: []string{"TestDeploymentPreparation", "TestDeploymentPreparationPackage"}},
 	"internal/app/deployment_recovery_test.go":         {Suite: "go.deployment", Roots: []string{"TestDeploymentRecoveryReadiness", "TestDeploymentInterruptedRecovery"}},
 	"internal/app/deployment_record_windows_test.go":   {Suite: "go.deployment", GOOS: "windows", Roots: []string{"TestDeploymentRecordScriptMeetsRecoveryACL"}},

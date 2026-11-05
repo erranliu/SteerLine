@@ -43,18 +43,18 @@ function Invoke-StagedFixture {
     $proof | ConvertTo-Json -Depth 8 -Compress
 }
 try {
-    foreach ($script:expectedGoal in @('replace','update')) {
+    foreach ($script:expectedGoal in @('replace','update','discard-runs')) {
         $script:calls.Clear()
         $script:mode='valid'
         $script:stagedHash='candidate'
-        $proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart:($script:expectedGoal -eq 'update')
+        $proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart:($script:expectedGoal -eq 'update') -DiscardRuns:($script:expectedGoal -eq 'discard-runs')
         if ($script:calls.Count -ne 1 -or $proof.goal -ne $script:expectedGoal -or $proof.facts.native_resources -ne 'unverified') { throw 'Go result was reinterpreted or lifecycle orchestration was duplicated.' }
         foreach ($script:mode in @('failure','malformed','wrong-contract','wrong-home','wrong-goal','wrong-candidate','wrong-invocation','wrong-package','changing-package','blocked','missing-time','changing-runner')) {
             $script:calls.Clear()
             $script:stagedHash='same'
             $script:packageDigest='a'*64
             $failed=$false
-            try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart:($script:expectedGoal -eq 'update') } catch { $failed=$true }
+            try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart:($script:expectedGoal -eq 'update') -DiscardRuns:($script:expectedGoal -eq 'discard-runs') } catch { $failed=$true }
             if (-not $failed -or $script:calls.Count -ne 1) { throw "Accepted $script:mode or retried deployment outside Go." }
         }
     }
