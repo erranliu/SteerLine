@@ -61,10 +61,7 @@ func TestingGenerate(plan, commit string, project testmodel.ProjectEntry) (strin
 	return render("testing-generate", struct{ Plan, Commit, ProjectFiles string }{plan, commit, strings.Join(project.Paths(), "、")})
 }
 func TestingReadOnly() (string, error) { return render("testing-readonly", nil) }
-func TestingContext(snapshot []byte, preparedWriter bool) (string, error) {
-	if !preparedWriter {
-		return "", errors.New("materials_not_ready: a verified project writer is required; inline fallback is disabled")
-	}
+func TestingContext(snapshot []byte) (string, error) {
 	var plan testmodel.Snapshot
 	if err := json.Unmarshal(snapshot, &plan); err != nil {
 		return "", err
@@ -80,18 +77,17 @@ func TestingContext(snapshot []byte, preparedWriter bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(snapshot)
 	fileSum := sha256.Sum256(arrangement)
-	return render("testing-execute", struct{ Plan, Commit, FileSHA256, Snapshot, ProjectFiles string }{plan.PlanPath, plan.Commit, hex.EncodeToString(fileSum[:]), hex.EncodeToString(sum[:]), strings.Join(plan.Project.Paths(), "、")})
+	return render("testing-execute", struct{ FileSHA256 string }{hex.EncodeToString(fileSum[:])})
 }
-func TestingStep(body string, snapshot []byte, preparedWriter, writesTests bool) (string, error) {
+func TestingStep(body string, snapshot []byte, writesTests bool) (string, error) {
 	if body == "" {
 		return "", errors.New("original workflow prompt body is required")
 	}
 	var context string
 	var err error
 	if writesTests {
-		context, err = TestingContext(snapshot, preparedWriter)
+		context, err = TestingContext(snapshot)
 	} else {
 		context, err = TestingReadOnly()
 	}

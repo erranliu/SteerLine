@@ -36,7 +36,7 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	run := callerTestRun()
 	got, e := c.prepareTestPlan(context.Background(), work, &run)
 	require(t, e)
-	if string(got) != string(raw) || len(run.Documents.References) != 5 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, raw, true)) {
+	if string(got) != string(raw) || len(run.Documents.References) != 0 || !strings.HasSuffix(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, raw)) {
 		t.Fatal("system context was not frozen", run)
 	}
 	if run.ProgressFile == nil {
@@ -59,11 +59,6 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	require(t, err)
 	if string(initial) != `{"test.one":false}` {
 		t.Fatal(string(initial))
-	}
-	for _, ref := range run.Documents.References {
-		if ref.Kind != "" || ref.Commit != "" || ref.Content != nil || strings.Contains(ref.Path, "steerline-test") {
-			t.Fatal("pretend document path", ref)
-		}
 	}
 	if _, e = (Config{}).prepareTestPlan(context.Background(), work, &run); e == nil {
 		t.Fatal("missing published prompts accepted")
@@ -135,7 +130,7 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 			} else {
 				require(t, err)
 				body := run.Workflow.PromptOverrides["implement.execute"]
-				if string(full) != string(work.FrozenTestPlan) || !strings.Contains(body, testPromptContext(t, full, referenced)) {
+				if string(full) != string(work.FrozenTestPlan) || !strings.HasSuffix(body, testPromptContext(t, full)) {
 					t.Fatal("frozen arrangement or source changed")
 				}
 				if strings.Contains(body, progresstools.PowerShellWriter) == referenced {
@@ -144,8 +139,8 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 				if !strings.Contains(run.Workflow.PromptOverrides["publish"], testReadOnlyPrompt(t)) || strings.Contains(run.Workflow.PromptOverrides["publish"], "Set-RuntimeProgress") {
 					t.Fatal("publication got writer")
 				}
-				if len(run.Documents.References) != 5 {
-					t.Fatal("writer path not bound")
+				if len(run.Documents.References) != 0 || strings.Contains(body, testmodel.WriterPath) {
+					t.Fatal("writer path leaked into the prompt")
 				}
 			}
 			// Restore only our own fixture files before the next commit.
@@ -218,9 +213,9 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 	}
 }
 
-func testPromptContext(t *testing.T, snapshot []byte, referenced bool) string {
+func testPromptContext(t *testing.T, snapshot []byte) string {
 	t.Helper()
-	body, err := prompts.TestingContext(snapshot, referenced)
+	body, err := prompts.TestingContext(snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,8 +248,8 @@ func TestTMCommittedPlanUsesSameCustomProjectSources(t *testing.T) {
 	run := callerTestRun()
 	_, err := m.config.prepareTestPlan(context.Background(), work, &run)
 	require(t, err)
-	refs, _ := json.Marshal(run.Documents.References)
-	if !strings.Contains(string(refs), "quality/cases.json") || strings.Contains(string(refs), testmodel.CataloguePath) || strings.Contains(string(refs), testmodel.RulesPath) {
-		t.Fatal("candidate used another source", string(refs))
+	body := run.Workflow.PromptOverrides["implement.execute"]
+	if len(run.Documents.References) != 0 || strings.Contains(body, "quality/") || strings.Contains(body, testmodel.CataloguePath) || strings.Contains(body, testmodel.RulesPath) {
+		t.Fatal("static testing sources leaked into the prompt", body)
 	}
 }

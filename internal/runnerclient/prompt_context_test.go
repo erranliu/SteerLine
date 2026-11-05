@@ -25,7 +25,7 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 		}
 		t.Run(choice.ID, func(t *testing.T) {
 			snapshot := []byte(`{"project":{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"},"status":"ready","plan_path":"task.plan.md","commit":"fixed","definitions":[{"id":"one"}]}`)
-			context, err := prompts.TestingContext(snapshot, true)
+			context, err := prompts.TestingContext(snapshot)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -34,7 +34,7 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 				t.Fatal(err)
 			}
 			in := Workflow{ID: choice.ID, Version: choice.Version, PromptOverrides: map[string]string{"publish": "User publish", "implement.report": "User report"}}
-			got, e := cat.WithTestProgressContext(in, snapshot, true)
+			got, e := cat.WithTestProgressContext(in, snapshot)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -57,7 +57,7 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 				}
 			}
 			in.PromptOverrides["implement.execute"] = "User implementation"
-			custom, e := cat.WithTestProgressContext(in, snapshot, true)
+			custom, e := cat.WithTestProgressContext(in, snapshot)
 			if e != nil || custom.PromptOverrides["implement.execute"] != "User implementation\n\n"+context {
 				t.Fatal("configured prompt replaced", e)
 			}
@@ -68,13 +68,13 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 			broken := choice
 			broken.States = map[string]runnercontract.WorkflowPrompt{"implement.execute": choice.States["implement.execute"]}
 			cat := &Catalog{Capabilities: Capabilities{Workflows: []runnercontract.WorkflowChoice{broken}}}
-			if _, e := cat.WithTestProgressContext(Workflow{ID: choice.ID, Version: choice.Version}, []byte(`{"status":"ready"}`), false); e == nil {
+			if _, e := cat.WithTestProgressContext(Workflow{ID: choice.ID, Version: choice.Version}, []byte(`{"status":"ready"}`)); e == nil {
 				t.Fatal("missing audited prompt accepted")
 			}
 		}
 	}
 	incomplete := &Catalog{Capabilities: Capabilities{Workflows: []runnercontract.WorkflowChoice{{ID: "development", Version: 2, PromptSteps: []string{"implement.execute"}}}}}
-	if _, e = incomplete.WithTestProgressContext(Workflow{ID: "development", Version: 2}, []byte(`{"status":"ready"}`), false); e == nil {
+	if _, e = incomplete.WithTestProgressContext(Workflow{ID: "development", Version: 2}, []byte(`{"status":"ready"}`)); e == nil {
 		t.Fatal("missing published body accepted")
 	}
 }

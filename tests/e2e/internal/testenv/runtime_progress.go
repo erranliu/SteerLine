@@ -9,7 +9,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
-	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"os"
 	"path/filepath"
@@ -66,15 +65,13 @@ func RuntimeProgress(s *Scenario) {
 		if err = json.Unmarshal(c.TestPlan, &frozen); err != nil {
 			return false, err
 		}
-		referenced := false
 		for _, ref := range input.Documents.References {
 			if ref.Path == sidecar {
 				return false, fmt.Errorf("candidate referenced a Git sidecar")
 			}
-			referenced = referenced || ref.Path == testmodel.WriterPath
 		}
 		body := input.Workflow.PromptOverrides["implement.execute"]
-		context, err := prompts.TestingContext(c.TestPlan, referenced)
+		context, err := prompts.TestingContext(c.TestPlan)
 		if err != nil {
 			return false, err
 		}
