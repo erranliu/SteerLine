@@ -80,4 +80,10 @@ func TestUsageCollectionBudgetPreservesVerifiedRequirements(t *testing.T) {
 	if strings.Count(string(wire), "run-usage\n") != 1 {
 		t.Fatal("query budget not enforced")
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	reads = 0
+	if readUsageRequirements(ctx, cli, candidates, &reads, &out) || reads != 0 || len(out.Requirements) != 1 {
+		t.Fatal("canceled discovery continued querying or lost verified facts", out, reads)
+	}
 }

@@ -86,11 +86,15 @@ func readUsageRequirements(ctx context.Context, cli runnerclient.Client, candida
 		if c.RunID == "" || !strings.EqualFold(filepath.Clean(c.StateDir), filepath.Clean(cli.StateDir)) {
 			continue
 		}
+		if ctx.Err() != nil {
+			out.Diagnostic = "授权需求查询已中断；已核实条目保留，其余尚未查询"
+			return false
+		}
 		if *reads >= 64 {
 			out.Diagnostic = "仅查询前64个Run的授权需求；已核实条目可用，其余尚未查询"
 			return false
 		}
-		*reads++
+		*reads = *reads + 1
 		usage, queryErr := cli.RunUsage(ctx, c.RunID)
 		if queryErr != nil {
 			out.Diagnostic = "部分用量需求读取失败，不能据此扩大授权"
