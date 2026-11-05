@@ -53,6 +53,11 @@ type Actor struct {
 	cancelWork       context.CancelFunc
 	controlPending   bool
 	wakeup           chan struct{}
+	delivery         *automaticDeliveryCycle
+	deliveryQueries  sync.WaitGroup
+	deliveryWakeup   chan struct{}
+	readyDelivery    *automaticDeliveryResult // protected by workMu
+	yieldAuxiliary   context.CancelCauseFunc  // protected by workMu
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
@@ -79,7 +84,7 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	if viewerAvailable {
 		checkpoint.Service.Capabilities = append(checkpoint.Service.Capabilities, "open_native_session")
 	}
-	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall), wakeup: make(chan struct{}, 1)}, nil
+	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall), wakeup: make(chan struct{}, 1), deliveryWakeup: make(chan struct{}, 1)}, nil
 }
 
 func (a *Actor) ControlWakeup() <-chan struct{} { return a.wakeup }
@@ -148,7 +153,7 @@ func (a *Actor) Initialize(ctx context.Context, _ context.CancelFunc) error {
 }
 func (a *Actor) Signals() <-chan actorCall   { return a.calls }
 func (a *Actor) HistoryErrors() <-chan error { return nil }
-func (a *Actor) WaitSources()                {}
+func (a *Actor) WaitSources()                { a.deliveryQueries.Wait() }
 func (a *Actor) HandleSignal(call actorCall) error {
 	ctx := a.workContext
 	if ctx == nil {
@@ -186,14 +191,15 @@ func (a *Actor) Call(ctx context.Context, run func(context.Context) error) error
 func (a *Actor) TickDecision(ctx context.Context) error {
 	// Publish live candidates before spending time on auxiliary records. A failed
 	// auxiliary query must never suppress this tick's Runner observation.
-	reconcileErr := a.options.Tasks.Reconcile(ctx)
+	reconcileErr := a.options.Tasks.Reconcile(ctx, a.handoffReadyDelivery)
 	if err := a.observeError(ctx, reconcileErr); err != nil {
 		return err
 	}
 	if a.ObserveAuxiliary != nil {
-		auxiliary, cancel := context.WithTimeout(ctx, 5*time.Second)
-		err := a.ObserveAuxiliary(auxiliary)
-		cancel()
+		err := a.observeAuxiliaryForDecision(ctx)
+		if deliveryErr := a.handoffReadyDelivery(ctx); deliveryErr != nil {
+			return deliveryErr
+		}
 		return a.observeError(ctx, errors.Join(reconcileErr, err))
 	}
 	return nil
@@ -273,35 +279,14 @@ func (a *Actor) TickControl(ctx context.Context, _ context.CancelFunc) error {
 			failures = append(failures, err)
 		}
 	}
-	return a.observeError(ctx, errors.Join(failures...))
-}
-func (a *Actor) TickPR(ctx context.Context) error {
-	snapshot, err := a.options.Store.ReadRunnerSnapshot(ctx, a.options.Tasks.Project)
-	if err != nil {
+	if err := a.observeError(ctx, errors.Join(failures...)); err != nil {
 		return err
 	}
-	delivered := map[string]bool{}
-	var failures []error
-	for _, c := range snapshot.Candidates {
-		if ctx.Err() != nil {
-			break
-		}
-		task := snapshot.Graph.ByID[c.TaskID]
-		if delivered[c.TaskID] || task.Status != "in_progress" || c.StopRequested || c.Participation != "active" || c.Projection == nil || c.Projection.PR == nil {
-			continue
-		}
-		_, err := a.options.Tasks.Deliver(ctx, c.TaskID, c.ID, task.Version)
-		if err == nil {
-			delivered[c.TaskID] = true
-			continue
-		}
-		var domain *taskmodel.Error
-		if errors.As(err, &domain) && domain.Code == "merge_state_unknown" {
-			continue
-		}
-		failures = append(failures, err)
+	// A delivery result may have reached the actor just as a stop woke it.
+	if a.delivery != nil {
+		return a.RunWork(ctx, a.TickDelivery)
 	}
-	return a.observeError(ctx, errors.Join(failures...))
+	return nil
 }
 func (a *Actor) observeError(ctx context.Context, err error) error {
 	a.mu.Lock()
