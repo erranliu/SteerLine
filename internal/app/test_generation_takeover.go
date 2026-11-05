@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
@@ -41,12 +41,11 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 			return nil, err
 		}
 		run := view.Run
-		if run.Correlation["steerline_project"] != g.Project || run.Correlation["steerline_generation"] != g.ID {
-			return nil, errors.New("original generation correlation differs")
+		if err := runnerbinding.ValidateContentCorrelation(generationContent(g), run); err != nil {
+			return nil, err
 		}
 		if g.StopRequest == nil || g.StopState == "rejected" {
-			body, _ := json.Marshal(map[string]uint64{"expected_revision": run.Revision})
-			g.StopRequest = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: fmt.Sprintf("sl-generation-stop-%s-%d", g.ID, g.Revision), Input: body}
+			g.StopRequest = runnerbinding.ContentStop(fmt.Sprintf("sl-generation-stop-%s-%d", g.ID, g.Revision), run.Revision)
 			g.StopState = "unknown"
 			old := g.Revision
 			g.Revision++
@@ -57,4 +56,8 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 		pending = append(pending, runnercontract.PendingStop{RunID: run.RunID, Request: *g.StopRequest})
 	}
 	return pending, nil
+}
+
+func generationContent(g testmanagement.Generation) runnerbinding.Content {
+	return runnerbinding.Content{StateDir: g.Runner.StateDir, Request: g.Request, RunID: g.RunID, InputDigest: g.InputDigest, Project: g.Project, ObjectKey: "steerline_generation", ObjectID: g.ID, Unsubmitted: g.Unsubmitted(), Rejected: g.State == "rejected" && g.RunID == ""}
 }

@@ -256,10 +256,9 @@ func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, er
 	if !runnerbinding.SamePath(r.Runner.StateDir, s.Build.StateDir) {
 		return r, errors.New("original Runner namespace differs")
 	}
-	selector, id := "run-id", r.RunID
-	if id == "" || r.InputDigest == "" {
-		selector, id = "request-id", r.Request.RequestID
-	}
+	binding := contentBinding(r)
+	binding.Project = s.Project
+	selector, id := binding.Selector()
 	observation, e := s.Runner.Inspect(ctx, selector, id)
 	if e != nil {
 		return r, e
@@ -268,22 +267,15 @@ func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, er
 		return r, nil
 	}
 	run := observation.Run
-	if selector == "request-id" && (observation.Command == nil || observation.Command.Command != "submit" || observation.Command.RequestID != r.Request.RequestID || observation.Command.RunID == nil || *observation.Command.RunID != run.RunID) {
-		return r, errors.New("原解析请求与 Run 关联未核实")
-	}
-	if run.Correlation["steerline_project"] != s.Project || run.Correlation["steerline_roadmap_parse"] != r.ID || run.Workflow.ID != "generate" || run.Workflow.Version != 1 || r.RunID != "" && r.RunID != run.RunID || r.InputDigest != "" && r.InputDigest != run.InputDigest || run.InputDigest == "" {
-		return r, errors.New("解析 Run 身份或固定输入不匹配")
-	}
-	if r.Projection != nil && run.Revision < r.Projection.Revision {
-		return r, errors.New("解析观察版本倒退")
+	if err := runnerbinding.ValidateContent(binding, observation); err != nil {
+		return r, err
 	}
 	r.RunID, r.InputDigest, r.Projection = run.RunID, run.InputDigest, run
 	r.Diagnostic = run.Diagnostic
 	if r.Cancelled {
 		r.State = "cancelled"
-		if run.StopStatus != "stopped" && (r.StopRequest == nil || r.StopState == "rejected") {
-			raw, _ := json.Marshal(map[string]uint64{"expected_revision": run.Revision})
-			r.StopRequest = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: raw}
+		if runnerbinding.NeedsContentStop(r.StopRequest, r.StopState, run.StopStatus) {
+			r.StopRequest = runnerbinding.ContentStop(Token(), run.Revision)
 			r.StopState = "unknown"
 			r, e = s.save(ctx, r)
 			if e != nil {
@@ -530,4 +522,12 @@ func (s *Service) fixedFile(ctx context.Context, commit, path string, expected [
 	}
 	text := string(actual)
 	return runnercontract.Document{Kind: "inline", Path: path, Content: &text}, nil
+}
+
+func contentBinding(r model.Record) runnerbinding.Content {
+	revision := uint64(0)
+	if r.Projection != nil {
+		revision = r.Projection.Revision
+	}
+	return runnerbinding.Content{StateDir: r.Runner.StateDir, Request: r.Request, RunID: r.RunID, InputDigest: r.InputDigest, Revision: revision, Project: r.Project, ObjectKey: "steerline_roadmap_parse", ObjectID: r.ID, WorkflowID: "generate", WorkflowVersion: 1, RequireDigest: true}
 }

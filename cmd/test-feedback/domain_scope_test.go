@@ -41,9 +41,9 @@ func domainSourceFixture(t *testing.T) string {
 func TestAppDomainSelectionPreservesPlatformOwnersAndExplicitRoots(t *testing.T) {
 	for _, goos := range []string{"windows", "linux", "darwin"} {
 		dep := domainGroupsForGOOS("go.deployment", goos)
-		wantGroups, wantApp := 3, 8
+		wantGroups, wantApp := 3, 9
 		if goos == "windows" {
-			wantGroups, wantApp = 4, 9
+			wantGroups, wantApp = 4, 10
 		}
 		if len(dep) != wantGroups || len(domainRootsForGOOS("go.deployment", "internal/app", goos)) != wantApp {
 			t.Fatal(goos, dep)

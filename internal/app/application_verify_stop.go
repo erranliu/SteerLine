@@ -126,6 +126,19 @@ func verifyApplicationOfflineCoordinated(ctx context.Context, runnerExecutable s
 		byConfig[p.ConfigID] = p
 	}
 	result.OriginalHost = *b.Identity
+	if !original.Runner.Attempted {
+		if !original.Clean || len(original.Projects) != 0 || *original.Runner != (contract.RunnerShutdown{ResourcesSettled: true}) {
+			return result, errors.New("unstarted Runner shutdown scope is unverified")
+		}
+		for _, path := range []string{filepath.Join(backend.dir, "runner-build.json"), runnerstatepath.Directory(HomeDir())} {
+			if _, err := os.Lstat(path); !os.IsNotExist(err) {
+				return result, errors.New("unstarted Runner has an existing or unreadable binding/state")
+			}
+		}
+		result.Runner = runnerclient.StoppedVerification{ResourcesSettled: true, Runs: []runnerclient.StoppedRun{}}
+		result.VerifiedAt = time.Now().UTC()
+		return result, nil
+	}
 	if err := runnerstatepath.Validate(HomeDir()); err != nil {
 		return result, err
 	}
@@ -258,8 +271,12 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	if err != nil {
 		return proof, err
 	}
+	contents := make([]runnerbinding.Content, 0, len(generations)+len(roadmaps))
+	for _, g := range generations {
+		contents = append(contents, generationContent(g))
+	}
 	for _, r := range roadmaps {
-		generations = append(generations, roadmapBinding(r))
+		contents = append(contents, roadmapContent(r))
 	}
 	environments, err := reader.Environments(ctx, c.Identity())
 	if err != nil {
@@ -308,11 +325,11 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 				return proof, err
 			}
 		}
-		for _, g := range generations {
-			if g.Unsubmitted() || g.State == "rejected" && g.RunID == "" {
+		for _, g := range contents {
+			if g.Unsubmitted || g.Rejected {
 				continue
 			}
-			if _, _, err := inspectOriginalBeforeStart(ctx, cli, g.Runner.StateDir, g.RunID, g.InputDigest, g.Request); err != nil {
+			if _, _, err := inspectOriginalBeforeStart(ctx, cli, g.StateDir, g.RunID, g.InputDigest, g.Request); err != nil {
 				return proof, err
 			}
 		}
@@ -321,14 +338,14 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 		for _, run := range runnerProof.Runs {
 			byRun[run.RunID] = run
 		}
-		for _, g := range generations {
-			if g.Unsubmitted() {
+		for _, g := range contents {
+			if g.Unsubmitted {
 				continue
 			}
-			if canonicalPath(g.Runner.StateDir) != canonicalPath(runnerProof.StateDir) {
+			if canonicalPath(g.StateDir) != canonicalPath(runnerProof.StateDir) {
 				return proof, errors.New("generation Runner namespace differs")
 			}
-			if g.State == "rejected" && g.RunID == "" {
+			if g.Rejected {
 				continue
 			}
 			run := byRun[g.RunID]
