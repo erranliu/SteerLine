@@ -545,6 +545,11 @@ func ScanSource(root string) (Report, error) {
 			if err != nil {
 				return err
 			}
+			if pkg == module+"/web/server/discovery" && !strings.HasSuffix(entry.Name(), "_test.go") {
+				if value == "os" || value == "os/exec" || value == "syscall" || value == "net" || strings.HasPrefix(value, "net/") || value == "github.com/coder/websocket" || strings.HasPrefix(value, "golang.org/x/crypto/") {
+					report.Violations = append(report.Violations, "Web discovery native protocol dependency: "+filepath.ToSlash(path)+" -> "+value)
+				}
+			}
 			if taskFactsOnlyFile(pkg, entry.Name()) && strings.HasPrefix(value, execution+"/") {
 				report.Violations = append(report.Violations, "task facts execution dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}

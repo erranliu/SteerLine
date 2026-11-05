@@ -14,17 +14,17 @@
 
 [协作 Spec](../../SteerlineFlow/spec/runner-collaboration.spec.md) / [Plan](../../SteerlineFlow/plans/runner-collaboration.plan.md)定义预设、提交、受理数据及审计 workflow 接入。原 Run 参数、候选名称/参数摘要/完整提交保持冻结；参数摘要仅覆盖 execution + workflow 的有序对象 JSON。新 Runner 实例在显式重启 SteerLine、重建 ProjectRuntime 时核验接纳，运行中的旧实例围栏保持。更换构建按后续[兼容接管契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md)核验原候选、请求、检查及生成对象；只更新当前应用服务 pin，不改历史构建/输入/PR/Delivery 事实。应用构建 pin 位于 `application-api/runner-build.json`，项目 checkpoint 保留原操作绑定。缺兼容或原资源证明仍阻断，销毁/reset 仍要求结算。实际结果归[协作验收](../../SteerlineFlow/testing/acceptance/runner-collaboration.md)与[换代验收](../../SteerlineFlow/testing/acceptance/service-generation-recovery.md)。
 
-本功能只消费外部配置能力：provider的API key/OAuth、base URL、自定义模型由目标Orca中的Agent原生配置管理。Web统一通过Orca的status/agents/modelCatalog查询本机或远端目录，不读取Pi凭据文件或另接provider发现。目录Agent事实与Web/Runner执行组合分开；Pi按目录提供Provider筛选，保存既有完整provider/model。目录可见不代表凭据或调用已验证，当前默认账号/工作区上下文仍未核实；不提供多套账号配置选择。远端Pi/DSH目录可被发现，但本期执行范围保持Codex，不能因目录而自动开放。
+本功能只消费外部配置能力：provider的API key/OAuth、base URL、自定义模型由目标Orca中的Agent原生配置管理。Web 通过固定 Runner 的 native-catalog 查询本机或远端目录，Runner 负责 Orca status/agents/modelCatalog 协议，不读取Pi凭据文件或另接provider发现。目录Agent事实与Web/Runner执行组合分开；Pi按目录提供Provider筛选，保存既有完整provider/model。目录可见不代表凭据或调用已验证，当前默认账号/工作区上下文仍未核实；不提供多套账号配置选择。远端Pi/DSH目录可被发现，但本期执行范围保持Codex，不能因目录而自动开放。
 
 ## Web 配置管理
 
 运行环境是当前 home 下的运行机与链路配置目标，由原 `adapter/target` 表达；全局 Snapshot 按该目标派生分组，读取和能力探测不需要项目或项目接入材料。项目运行环境另按项目身份与非模型执行上下文检测并持有资格；目录成功不授予该资格，目录失败也不改写项目报告。保存配置和启动冻结配置仍沿原摘要/重启边界区分。具体边界见[解耦 Spec](../../SteerlineFlow/spec/runtime-project-environment-decoupling.spec.md)。
 
-元数据子进程使用应用 home 工作目录，程序解析不搜索项目 cwd 或相对 PATH 项；Orca 沿既有目录 RPC，不验证 profile 的启动参数、权限或 provider。目录缓存只反映已观察事实，未观察到的远端重启沿原 freshness/显式刷新表达。项目页面名称明确为“项目运行环境”，路由与检测操作保持。
+Web 的 Runner 元数据子进程使用应用 home 工作目录，原生程序解析不搜索项目 cwd 或相对 PATH 项；Runner 的 Orca 能力层执行目录 RPC，不验证 profile 的启动参数、权限或 provider。Web 仅复用在途查询，留存结果在失败时明确标记过期，原生缓存来源及时间照实展示。项目页面名称明确为“项目运行环境”，路由与检测操作保持。
 
-[Web 执行配置管理 Spec](../../SteerlineFlow/spec/web-execution-config.spec.md) / [Plan](../../SteerlineFlow/plans/web-execution-config.plan.md)规定执行方案管理入口 `/settings/execution-configs`（页面名称“执行方案配置”）：Web 前后端拥有能力目录查询、预设编辑/生成及 `execution.json` 条件保存；Codex/Orca 由 Web 后端直接查询。Go 执行服务只消费配置、独立校验并冻结参数，提供原加载文件摘要的只读投影；Runner 不新增探测接口。能力目录/缓存不是执行资格或第二配置来源。生成并发设置单独放在“配置”页（项目入口 `/projects/:id/settings`，无项目入口 `/settings`），仍保存于同一 execution.json、沿原条件写入与共享队列语义，不在执行方案编辑器重复展示。首版保存后沿既有正式重启流程生效，不热加载、不自动停服或改投；冻结调试包只读。边界与实际结果见[专属验收](../../SteerlineFlow/testing/acceptance/web-execution-config.md)。
+[Web 执行配置管理 Spec](../../SteerlineFlow/spec/web-execution-config.spec.md) / [Plan](../../SteerlineFlow/plans/web-execution-config.plan.md)规定执行方案管理入口 `/settings/execution-configs`（页面名称“执行方案配置”）：Web 前后端拥有能力目录查询、预设编辑/生成及 `execution.json` 条件保存；Codex/Orca 由 Runner 的无服务 native-catalog 查询，Web 核对固定构建和公开 schema。Go 执行服务只消费配置、独立校验并冻结参数，提供原加载文件摘要的只读投影；原生目录接口按[边界收口 Spec](../../SteerlineFlow/spec/runner-boundary-consolidation.spec.md)维护。能力目录/缓存不是执行资格或第二配置来源。生成并发设置单独放在“配置”页（项目入口 `/projects/:id/settings`，无项目入口 `/settings`），仍保存于同一 execution.json、沿原条件写入与共享队列语义，不在执行方案编辑器重复展示。首版保存后沿既有正式重启流程生效，不热加载、不自动停服或改投；冻结调试包只读。边界与实际结果见[专属验收](../../SteerlineFlow/testing/acceptance/web-execution-config.md)。
 
-本机 Orca 新增设计使用 Web 自有 named pipe 目录客户端，配置仍是 `orca-terminal + target.local`；Go 执行服务只消费配置，Runner 不新增探测接口。本机受管 helper 路径/SHA 是部署模板输入，缺少时不得用目录查询或任意程序路径代替；远端仍拒绝本机 helper 字段。新增验收为 WEC-A10–A14/M02，不能继承前版本机 Orca 被拒绝的测试结论。
+本机 Orca 新增设计使用 Web 自有 named pipe 目录客户端，配置仍是 `orca-terminal + target.local`；Go 执行服务只消费配置，原生目录接口按[边界收口 Spec](../../SteerlineFlow/spec/runner-boundary-consolidation.spec.md)维护。本机受管 helper 路径/SHA 是部署模板输入，缺少时不得用目录查询或任意程序路径代替；远端仍拒绝本机 helper 字段。新增验收为 WEC-A10–A14/M02，不能继承前版本机 Orca 被拒绝的测试结论。
 
 ## 两层默认链路
 

@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
@@ -9,7 +8,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	repository "github.com/erranliu/SteerLine/web/server/executionconfig"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -18,296 +16,204 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	if os.Getenv("SL_DISCOVERY_CHILD") == "1" && len(os.Args) > 1 && os.Args[1] == "app-server" {
-		nativeFixture()
-		os.Exit(0)
-	}
-	if len(os.Args) == 2 && os.Args[1] == "--discovery-query" {
-		manager := New(repository.New(os.Getenv("SL_DISCOVERY_HOME")))
-		result, err := manager.Query(context.Background(), Request{Kind: "models", Adapter: "codex-app-server", Host: "local", ProfileID: "local"})
-		manager.Close()
-		if err != nil {
-			os.Stderr.WriteString(err.Error())
-			os.Exit(2)
+	if file := os.Getenv("SL_CATALOG_FIXTURE"); file != "" && len(os.Args) > 1 {
+		raw, _ := os.ReadFile(file)
+		var caps map[string]any
+		_ = json.Unmarshal(raw, &caps)
+		response := map[string]any{"protocol": "steerrunner-cli/v1", "request_id": nil, "ok": true, "error": nil, "data": nil}
+		switch os.Args[1] {
+		case "version":
+			response["data"] = map[string]any{"version": "fixture", "resource_digest": caps["resource_digest"]}
+		case "capabilities":
+			response["data"] = caps
+		case "native-catalog":
+			if log := os.Getenv("SL_CATALOG_LOG"); log != "" {
+				f, _ := os.OpenFile(log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+				if f != nil {
+					f.WriteString("query\n")
+					f.Close()
+				}
+			}
+			var in runnercontract.NativeCatalogRequest
+			_ = json.NewDecoder(os.Stdin).Decode(&in)
+			switch os.Getenv("SL_CATALOG_MODE") {
+			case "slow":
+				time.Sleep(250 * time.Millisecond)
+			case "hang":
+				time.Sleep(time.Minute)
+			case "invalid":
+				os.Stdout.WriteString("not-json")
+				os.Exit(0)
+			case "disconnect":
+				os.Exit(0)
+			case "unsupported":
+				response["ok"] = false
+				response["error"] = map[string]string{"code": "unsupported_capability"}
+				json.NewEncoder(os.Stdout).Encode(response)
+				os.Exit(3)
+			}
+			exe, _ := os.Executable()
+			body, _ := os.ReadFile(exe)
+			result := runnercontract.NativeCatalogResult{Contract: runnercontract.NativeCatalogContract, Kind: in.Kind, Adapter: in.Adapter, Target: in.Target, Agent: in.Agent, State: "ready", Complete: true, ContextUnverified: true, ObservedAt: time.Now().UTC(), Origin: "probe", Source: runnercontract.NativeCatalogSource{Version: "fixture", ExecutableSHA256: cfg.Digest(body), ResourceDigest: caps["resource_digest"].(string), NativeVersion: "native-fixture"}}
+			switch in.Kind {
+			case "environments":
+				rows := []runnercontract.NativeEnvironment{{ID: "one", Name: "Machine"}}
+				result.Environments = &rows
+			case "agents":
+				rows := []runnercontract.NativeAgent{{ID: "pi", Directory: "registered"}, {ID: "dsh", Directory: "registered"}}
+				result.Agents = &rows
+			case "models":
+				rows := []runnercontract.NativeModel{{ID: "provider/model", Label: "Model", Provider: "provider", Efforts: []runnercontract.NativeEffort{{Value: "high", Label: "High"}}}}
+				result.Models = &rows
+			}
+			if os.Getenv("SL_CATALOG_MODE") == "foreign-source" {
+				result.Source.ExecutableSHA256 = strings.Repeat("f", 64)
+			}
+			response["data"] = result
+		default:
+			os.Exit(m.Run())
 		}
-		json.NewEncoder(os.Stdout).Encode(result)
+		json.NewEncoder(os.Stdout).Encode(response)
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
 }
-func nativeFixture() {
-	if log := os.Getenv("SL_DISCOVERY_CWD"); log != "" {
-		cwd, _ := os.Getwd()
-		_ = os.WriteFile(log, []byte(cwd), 0600)
-	}
-	scanner := bufio.NewScanner(os.Stdin)
-	encoder := json.NewEncoder(os.Stdout)
-	for scanner.Scan() {
-		var q struct {
-			ID     *int           `json:"id"`
-			Method string         `json:"method"`
-			Params map[string]any `json:"params"`
-		}
-		json.Unmarshal(scanner.Bytes(), &q)
-		if log := os.Getenv("SL_DISCOVERY_LOG"); log != "" {
-			f, e := os.OpenFile(log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-			if e == nil {
-				f.WriteString(q.Method + "\n")
-				f.Close()
-			}
-		}
-		if q.ID == nil {
-			continue
-		}
-		var result any
-		switch q.Method {
-		case "initialize":
-			result = map[string]string{"userAgent": "fixture/1"}
-		case "model/list":
-			if os.Getenv("SL_DISCOVERY_MODE") == "slow" {
-				time.Sleep(100 * time.Millisecond)
-			}
-			switch os.Getenv("SL_DISCOVERY_MODE") {
-			case "hang":
-				time.Sleep(time.Minute)
-			case "oversize":
-				os.Stdout.WriteString(strings.Repeat("x", (1<<20)+1) + "\n")
-				continue
-			case "disconnect":
-				os.Exit(0)
-			case "invalid":
-				os.Stdout.WriteString("not-json\n")
-				continue
-			}
-			cursor := ""
-			if os.Getenv("SL_DISCOVERY_MODE") == "cycle" || q.Params["cursor"] == nil {
-				cursor = "page2"
-			}
-			id := "first"
-			if q.Params["cursor"] != nil {
-				id = "second"
-			}
-			result = map[string]any{"data": []any{map[string]any{"id": id, "model": id, "displayName": id, "supportedReasoningEfforts": []any{map[string]string{"reasoningEffort": "high", "description": "High"}}, "defaultReasoningEffort": "high"}}, "nextCursor": cursor}
-		default:
-			os.Exit(3)
-		}
-		encoder.Encode(map[string]any{"id": *q.ID, "result": result})
-	}
-}
-
-func TestDiscoveryIndependentOfProjectCWD(t *testing.T) {
-	t.Setenv("SL_DISCOVERY_CHILD", "1")
-	t.Setenv("SL_DISCOVERY_MODE", "")
+func fixture(t *testing.T) (*Manager, Request) {
+	t.Helper()
 	home := t.TempDir()
-	exe, _ := os.Executable()
-	programDir := t.TempDir()
-	program := filepath.Join(programDir, "metadata.exe")
-	raw, err := os.ReadFile(exe)
+	raw, err := os.ReadFile("../../../internal/runnerclient/testdata/workflow-capabilities.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(program, raw, 0700); err != nil {
+	var caps map[string]any
+	_ = json.Unmarshal(raw, &caps)
+	caps["version"] = "fixture"
+	caps["resource_digest"] = strings.Repeat("a", 64)
+
+	raw, _ = json.Marshal(caps)
+	file := filepath.Join(home, "catalog.json")
+	if err = os.WriteFile(file, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	parents := []string{t.TempDir(), t.TempDir()}
-	for _, parent := range parents {
-		// A different program in each project must never take precedence.
-		if err = os.WriteFile(filepath.Join(parent, "metadata.exe"), []byte("not a metadata program"), 0700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Setenv("PATH", "."+string(os.PathListSeparator)+programDir)
-	t.Setenv("SL_DISCOVERY_HOME", home)
-	log := filepath.Join(home, "query-cwd")
-	t.Setenv("SL_DISCOVERY_CWD", log)
-	for _, configured := range []string{program, "metadata.exe", "./metadata.exe"} {
-		settings, _ := json.Marshal(map[string]string{"executable": configured})
-		config := cfg.File[cfg.Pin]{Version: 3, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "Local", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
-		if err = localservice.WritePrivateFile(home, "execution.json", config); err != nil {
-			t.Fatal(err)
-		}
-		key := ""
-		for _, parent := range parents {
-			cmd := exec.Command(exe, "--discovery-query")
-			cmd.Dir = parent
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				t.Fatalf("query: %s: %v", out, err)
-			}
-			var result Result
-			if err = json.Unmarshal(out, &result); err != nil {
-				t.Fatal(string(out), err)
-			}
-			if configured == "./metadata.exe" {
-				if result.State != "unavailable" || !strings.Contains(result.Diagnostic, "relative") {
-					t.Fatal(result)
-				}
-				continue
-			}
-			cwd, err := os.ReadFile(log)
-			if err != nil || !strings.EqualFold(string(cwd), home) || result.State != "ready" || len(result.Models) != 2 {
-				t.Fatal(string(cwd), result, err)
-			}
-			if key != "" && result.ContextKey != key {
-				t.Fatal("parent cwd changed catalog identity")
-			}
-			key = result.ContextKey
-		}
-	}
-}
-
-func TestDiscoveryRejectsForeignProfileTargetAndAgent(t *testing.T) {
-	home := t.TempDir()
-	config := cfg.File[cfg.Pin]{Version: 3, DefaultProfile: "remote", Profiles: []cfg.Profile{{ID: "remote", Name: "Remote", Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "one"}, Settings: json.RawMessage(`{"agent":"codex"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
-	if err := localservice.WritePrivateFile(home, "execution.json", config); err != nil {
+	t.Setenv("SL_CATALOG_FIXTURE", file)
+	t.Setenv("SL_CATALOG_MODE", "")
+	exe, _ := os.Executable()
+	body, _ := os.ReadFile(exe)
+	config := cfg.File[cfg.Pin]{Version: 3, Runner: cfg.Pin{Executable: exe, Version: "fixture", SHA256: cfg.Digest(body)}, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "Local", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"codex.exe"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
+	if err = localservice.WritePrivateFile(home, "execution.json", config); err != nil {
 		t.Fatal(err)
 	}
 	m := New(repository.New(home))
-	defer m.Close()
-	m.OrcaData = t.TempDir()
-	if err := os.WriteFile(filepath.Join(m.OrcaData, "orca-environments.json"), []byte(`{"version":1,"environments":[{"id":"unnamed","name":"","endpoints":[]}]}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for _, kind := range []string{"agents", "models"} {
-		q := Request{Kind: kind, Adapter: "orca-terminal", Host: "orca_environment"}
-		if _, err := m.Query(context.Background(), q); err == nil || !strings.Contains(err.Error(), "explicit environment") {
-			t.Fatal("empty selector reached an unnamed remote", q, err)
-		}
-	}
-	listing, err := m.Query(context.Background(), Request{Kind: "environments", Host: "orca_environment"})
-	if err != nil || len(listing.Environments) != 1 || listing.Environments[0].ID != "unnamed" {
-		t.Fatal("enumeration unexpectedly requires a selected remote", listing, err)
-	}
-	for _, q := range []Request{
-		{Kind: "models", Adapter: "orca-terminal", Host: "orca_environment", Environment: "one", Agent: "codex", ProfileID: "missing"},
-		{Kind: "models", Adapter: "orca-terminal", Host: "orca_environment", Environment: "two", Agent: "codex", ProfileID: "remote"},
-		{Kind: "models", Adapter: "orca-terminal", Host: "orca_environment", Environment: "one", Agent: "pi", ProfileID: "remote"},
-		{Kind: "models", Adapter: "codex-app-server", Host: "local", Agent: "codex", ProfileID: "remote"},
-	} {
-		if _, err := m.Query(context.Background(), q); err == nil {
-			t.Fatal("wrong binding accepted", q)
-		}
-	}
+	t.Cleanup(m.Close)
+	return m, Request{Kind: "models", Adapter: "codex-app-server", Host: "local", ProfileID: "local"}
 }
-
-func TestDiscoverySharingCancellationAndCache(t *testing.T) {
-	t.Setenv("SL_DISCOVERY_CHILD", "1")
-	t.Setenv("SL_DISCOVERY_MODE", "slow")
-	home := t.TempDir()
-	log := filepath.Join(home, "queries")
-	t.Setenv("SL_DISCOVERY_LOG", log)
-	exe, _ := os.Executable()
-	settings, _ := json.Marshal(map[string]string{"executable": exe})
-	c := cfg.File[cfg.Pin]{Version: 3, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "Local", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
-	if err := localservice.WritePrivateFile(home, "execution.json", c); err != nil {
-		t.Fatal(err)
-	}
-	manager := New(repository.New(home))
-	defer manager.Close()
-	q := Request{Kind: "models", Adapter: "codex-app-server", Host: "local", ProfileID: "local"}
+func TestDiscoverySharingCancellationAndFreshQueries(t *testing.T) {
+	m, q := fixture(t)
+	log := filepath.Join(m.Store.Home, "queries")
+	t.Setenv("SL_CATALOG_LOG", log)
+	t.Setenv("SL_CATALOG_MODE", "slow")
 	var wg sync.WaitGroup
-	results := make(chan Result, 2)
+	start := make(chan struct{})
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r, e := manager.Query(context.Background(), q)
-			if e != nil {
-				t.Error(e)
+			<-start
+			out, err := m.Query(context.Background(), q)
+			if err != nil || out.State != "ready" || len(out.Models) != 1 {
+				t.Errorf("query %v %v", out, err)
 			}
-			results <- r
 		}()
 	}
+	close(start)
 	wg.Wait()
-	close(results)
-	for r := range results {
-		if r.State != "ready" || len(r.Models) != 2 {
-			t.Fatal(r)
-		}
+	raw, _ := os.ReadFile(log)
+	if strings.Count(string(raw), "query\n") != 1 {
+		t.Fatal("in-flight query not shared", string(raw))
 	}
-	calls, _ := os.ReadFile(log)
-	if strings.Count(string(calls), "initialize\n") != 1 {
-		t.Fatal("duplicate native probe", string(calls))
+	out, err := m.Query(context.Background(), q)
+	raw, _ = os.ReadFile(log)
+	if err != nil || out.Freshness != "fresh" || strings.Count(string(raw), "query\n") != 2 {
+		t.Fatal("cross-request native cache reused", out, err)
 	}
-	cached, err := manager.Query(context.Background(), q)
-	if err != nil || cached.Freshness != "cached" {
-		t.Fatal(cached, err)
-	}
-	// Cache lifetime belongs to Web's monotonic insertion clock, not a remote
-	// host's possibly skewed source timestamp.
-	manager.mu.Lock()
-	entry := manager.cache[cached.ContextKey]
-	entry.storedAt = time.Now().Add(-6 * time.Minute)
-	entry.result.FetchedAt = time.Now().Add(time.Hour)
-	manager.cache[cached.ContextKey] = entry
-	manager.mu.Unlock()
-	fresh, e := manager.Query(context.Background(), q)
-	if e != nil || fresh.Freshness != "fresh" {
-		t.Fatal("source clock extended cache lifetime", fresh, e)
-	}
-	t.Setenv("SL_DISCOVERY_MODE", "hang")
+	t.Setenv("SL_CATALOG_MODE", "hang")
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-	q.Refresh = true
-	_, err = manager.Query(ctx, q)
-	if err == nil {
-		t.Fatal("canceled subscriber succeeded")
+	if _, err = m.Query(ctx, q); err == nil {
+		t.Fatal("subscriber cancellation ignored")
 	}
-	start := time.Now()
-	manager.Close()
-	if time.Since(start) > 6*time.Second {
-		t.Fatal("unsubscribed native process remained active")
+	began := time.Now()
+	m.Close()
+	if time.Since(began) > 6*time.Second {
+		t.Fatal("query did not drain")
 	}
 }
-func TestCodexCatalog(t *testing.T) {
-	t.Setenv("SL_DISCOVERY_CHILD", "1")
-	exe, _ := os.Executable()
-	log := filepath.Join(t.TempDir(), "methods")
-	t.Setenv("SL_DISCOVERY_LOG", log)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	models, version, err := codexModels(ctx, t.TempDir(), exe)
-	if err != nil || len(models) != 2 || version != "fixture/1" || models[1].ID != "second" || models[0].Efforts[0].Value != "high" {
-		t.Fatal(models, version, err)
+func TestDiscoveryRejectsForeignProfileTargetAndAgent(t *testing.T) {
+	m, _ := fixture(t)
+	for _, q := range []Request{{Kind: "models", Adapter: "orca-terminal", Host: "orca_environment"}, {Kind: "models", Adapter: "orca-terminal", Host: "local", Environment: "one"}, {Kind: "models", Host: "local"}, {Kind: "models", Adapter: "codex-app-server", Host: "local", ProfileID: "missing"}, {Kind: "models", Adapter: "orca-terminal", Host: "orca_environment", Environment: "one", ProfileID: "local"}} {
+		if _, err := m.Query(context.Background(), q); err == nil {
+			t.Fatal("foreign query accepted", q)
+		}
 	}
-	methods, _ := os.ReadFile(log)
-	if string(methods) != "initialize\ninitialized\nmodel/list\nmodel/list\n" {
-		t.Fatal("unexpected native methods", string(methods))
-	}
-	for _, mode := range []string{"cycle", "invalid", "hang", "oversize", "disconnect"} {
-		t.Run(mode, func(t *testing.T) {
-			t.Setenv("SL_DISCOVERY_MODE", mode)
-			ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
-			defer cancel()
-			started := time.Now()
-			_, _, err := codexModels(ctx, t.TempDir(), exe)
-			if err == nil || time.Since(started) > 6*time.Second {
-				t.Fatal("invalid query or cleanup succeeded", err)
-			}
-		})
+	out, err := m.Query(context.Background(), Request{Kind: "environments", Host: "orca_environment"})
+	if err != nil || out.State != "ready" || len(out.Environments) != 1 {
+		t.Fatal(out, err)
 	}
 }
-func TestEnvironmentDirectory(t *testing.T) {
-	m := New(nil)
-	defer m.Close()
-	m.OrcaData = t.TempDir()
-	content := `{"version":1,"environments":[{"id":"stable","name":"机器","pairedDeviceId":"device","preferredEndpointId":"ep","endpoints":[{"id":"ep","endpoint":"ws://127.0.0.1:1","deviceToken":"secret","publicKeyB64":"private-pair-key"}]}]}`
-	if err := os.WriteFile(filepath.Join(m.OrcaData, "orca-environments.json"), []byte(content), 0600); err != nil {
+func TestDiscoveryFailureKeepsOnlyExpiredPriorResult(t *testing.T) {
+	m, q := fixture(t)
+	if out, err := m.Query(context.Background(), q); err != nil || out.State != "ready" {
+		t.Fatal(out, err)
+	}
+	for _, mode := range []string{"invalid", "disconnect", "foreign-source", "unsupported"} {
+		t.Setenv("SL_CATALOG_MODE", mode)
+		out, err := m.Query(context.Background(), q)
+		if err != nil || out.Freshness != "expired" || out.Diagnostic == "" {
+			t.Fatal(mode, out, err)
+		}
+	}
+	q.ProfileID = ""
+	q.Adapter = "orca-terminal"
+	q.Host = "orca_environment"
+	q.Environment = "new-target"
+	q.Agent = "pi"
+	out, err := m.Query(context.Background(), q)
+	if err != nil || out.State != "unsupported" || len(out.Models) != 0 {
+		t.Fatal("prior result crossed target", out, err)
+	}
+}
+func TestDiscoveryPreservesRegisteredUnsupportedAgents(t *testing.T) {
+	m, _ := fixture(t)
+	out, err := m.Query(context.Background(), Request{Kind: "agents", Adapter: "orca-terminal", Host: "orca_environment", Environment: "one"})
+	if err != nil || len(out.Agents) != 2 || out.Agents[1].ID != "dsh" {
+		t.Fatal(out, err)
+	}
+}
+
+func TestDiscoveryDiscardsResponseAfterConfigurationChanges(t *testing.T) {
+	m, q := fixture(t)
+	log := filepath.Join(m.Store.Home, "queries")
+	t.Setenv("SL_CATALOG_LOG", log)
+	t.Setenv("SL_CATALOG_MODE", "slow")
+	done := make(chan Result, 1)
+	go func() { out, _ := m.Query(context.Background(), q); done <- out }()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if raw, _ := os.ReadFile(log); strings.Contains(string(raw), "query") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	config, err := m.Store.Current()
+	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := m.environments(context.Background())
-	if err != nil || len(rows) != 1 || rows[0].ID != "stable" {
-		t.Fatal(rows, err)
+	config.Profiles[0].Name = "Changed during query"
+	if err = localservice.WritePrivateFile(m.Store.Home, "execution.json", config); err != nil {
+		t.Fatal(err)
 	}
-	public, _ := json.Marshal(rows)
-	if strings.Contains(string(public), "secret") || strings.Contains(string(public), "127.0.0.1") {
-		t.Fatal("pairing material leaked")
-	}
-	if _, err = m.environment("machine-not-registered"); err == nil {
-		t.Fatal("foreign environment accepted")
-	}
-	byName, err := m.environment("机器")
-	if err != nil || byName.ID != "stable" {
-		t.Fatal(byName, err)
+	out := <-done
+	if out.State != "unavailable" || out.Freshness != "expired" || len(out.Models) != 0 || out.Diagnostic == "" {
+		t.Fatal("late native result became current", out)
 	}
 }

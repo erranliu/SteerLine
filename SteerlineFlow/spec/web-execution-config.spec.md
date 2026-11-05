@@ -19,9 +19,9 @@
 | 所有者 | 本次职责 | 不承担的职责 |
 | --- | --- | --- |
 | Web 前端 | 全局管理页、联动选择、草稿、能力/缓存/错误展示、保存及生效状态 | 本机进程、原生 RPC、凭据文件、配置文件直接写入 |
-| Web 后端 | 产品支持矩阵；直接探测 Codex/Orca；配置生成、验证、读取与原子保存 | Task/Candidate/Run 状态、执行授权、业务数据库、代理业务轮次 |
+| Web 后端 | 产品支持矩阵；调用固定 Runner 公开目录；配置生成、验证、读取与原子保存 | Task/Candidate/Run 状态、执行授权、业务数据库、代理业务轮次 |
 | Go 执行服务 | 加载并独立校验配置、冻结候选参数、消费配置、投影已加载文件摘要 | 能力探测、探测缓存、配置 CRUD、依赖 Web 在线或探测记录 |
-| SteerRunner | 按现有公开配置契约执行和管理原生生命周期 | 本任务不新增探测接口，不修改 Runner |
+| SteerRunner | 按现有公开配置契约执行和管理原生生命周期 | 原生目录接口归[边界收口 Spec](runner-boundary-consolidation.spec.md)，执行沿现有 Runner |
 
 ```mermaid
 flowchart TD
@@ -71,59 +71,17 @@ Web 后端通过所选 EXE 既有的离线 `version` 与 `capabilities --offline
 
 helper缺失不阻止纯目录查询：页面仍可选择本机Orca并查看其目录/部署诊断，只限制生成可保存的新增执行配置；不因此自动写模板或启动运行组件。
 
-查询缓存默认只存在 Web 后端内存，最多 128 个查询上下文，5 分钟内为新鲜；过期可继续展示但明确标记，不冒充新结果。上下文至少绑定 home、原生可执行文件身份/版本、目标 environment ID/配对身份、Agent 和可核实的账号/配置作用域。账号与配置上下文无法核实一致时标记 `context_unverified`，不把默认账号目录说成精确执行现场目录。不向浏览器返回认证正文；不扫描或复制认证文件。
+目录查询在 Web 后端按 home、固定 Runner pin、配置快照和显式目标合并在途请求，总并发最多二。每次新请求重新调用固定 Runner EXE，不将留存的旧目录作为五分钟内的新鲜事实复用。最多保留 128 个上下文的上次结果，失败时明确过期；配置变化丢弃旧响应及其数组。原生来源/时间与接收时间分别展示，账号/工作区未核实时保持 context_unverified。凭据及配对上下文只在 Runner 内部处理。
 
 缓存键和状态不进入 execution.json，不进入 Task/Candidate/Run。删除缓存、关闭 Web、离线使用手写合法配置均不改变执行资格。执行服务按实际配置及现场独立检查；不能要求提供 probe ID 或模型必须属于某次 Web 缓存。
 
-## 4. Web 后端能力探测
+## 4. Runner 公开目录与 Web 请求协调
 
-### 4.1 本机 Codex
+本节由[职责边界收口 Spec](runner-boundary-consolidation.spec.md)的 S1/S2 取代原 Web 原生协议实现。Web 从已有 profile 或明确目标构造有限查询，核对固定 Runner EXE 的离线 native_catalog/schema、版本、SHA256 和 resource_digest，再通过 native-catalog 读取目录。响应须属于原目标及同一构建，严格区分完整空目录、进行中目录、错误和未知。
 
-“本机”指 Web/SteerLine 宿主所在机器，不是打开浏览器的机器。复用所编辑配置的 executable；新配置使用当前支持的 Codex 默认程序解析。解析结果含实际可执行文件和版本，不能悄悄改用另一份安装。Web 与执行宿主上下文不同或配置含本次查询无法表达的 provider/cwd 覆盖时，明确标记范围未确认。
+Runner 复用本机 IPC/远端配对能力处理 Orca status、注册 Agent 和模型目录，本机 Codex 只启动所属元数据 app-server 的 initialize/model/list。Web 不再读取 Orca 元数据/配对文件或执行原生 RPC。查询无需项目、接入材料或 Runner 常驻服务，未映射 Agent 的注册事实可以显示，生成配置仍受产品支持组合和公开 schema 约束。
 
-Web 后端创建自身拥有的短命 app-server，完成 initialize/initialized，分页调用 `model/list`，读取模型原始标识、显示名称、supportedReasoningEfforts、defaultReasoningEffort、isDefault。默认不包含 hidden 模型。不调用 thread/start、turn/start、工具或模型输入，不产生业务会话，不写 Codex 用户配置。参考[官方接口](https://learn.chatgpt.com/docs/app-server#list-models-modellist)，实现以被探测版本的协议为准，不硬编码模型名称或 effort 全集。
-
-分页游标重复、响应不完整、非法数据和超时均不能表示完整目录。单次探测总期限 30 秒，响应总上限 1 MiB；到期/取消/断开/正常完成均关闭连接并结算精确 owned 进程，独立清理上限 5 秒。Windows 后台启动不闪控制台。不能按进程名称清理其他 Codex；清理失败必须显示诊断，不能报告成功并遗留进程。Web 关闭时排空这些查询，不影响业务代理。
-
-### 4.2 本机 Orca
-
-Web 后端从自身固定 Orca user-data 目录只读加载 `orca-runtime.json`；使用服务启动环境中的 `ORCA_USER_DATA_PATH` 或平台默认目录，不能接受浏览器传入目录、pipe、token、pairing code 或 RPC 方法。Windows 选择 metadata 声明的本机 named pipe，按原生换行 JSON envelope 发送 request ID、`authToken`、固定方法/参数及必要 `clientCapabilities`。仅复用已有 Orca 本机认证，不要求本机自配对，不读取远端登记凭据，不继承 `ORCA_ENVIRONMENT/ORCA_PAIRING_CODE/ORCA_REMOTE_PAIRING` 改投远端，也不执行 `orca open/serve` 自动启动共享运行时。
-
-沿用目录白名单 `status.get`、`agentSession.agents`、`agentSession.modelCatalog`，协商 `agent-session.structured.v1` 及 `agent-session.structured.registered-agents.v1` 等目标实际要求的能力；对请求/响应 ID、metadata runtimeId、响应 `_meta.runtimeId` 和协议版本做一致性核对。先分辨本机与远端认证/分帧，再复用 Web 自己的目录解析；不能把 named pipe 当加密 WebSocket，也不引入通用 RPC 代理。
-
-保留 origin/fetchedAt、listingInProgress、原始 model ID、每模型 effort/default。获取中只在原 30 秒预算内按已有协议跟踪，不把 keepalive 当延长总期限的授权。Agent 的“已有执行映射”与“Orca 目录可用”分开：Codex/Pi/DSH 某项缺目录或注册查询不支持时如实标记，可使用既有显式手动配置规则，不能伪造已安装/已注册/已探测，也不能借用另一 Agent 的模型目录；未映射 Agent 即使有目录也不能生成执行配置。
-
-缓存额外绑定 `adapter=orca-terminal`、本机 IPC 通道、Orca user-data 作用域及 runtimeId/认证身份摘要，与本机 Codex app-server、远端 Orca、其他 Agent 严格分隔。本次查询中 runtime 变化、文件损坏、认证拒绝、端点不可信、断开或超时均不能换目标补查；取消/关闭只释放 Web owned 连接，不能停止 Orca 或用户终端。沿用 1 MiB 总预算、30 秒查询、5 秒清理及最多两个并发。目录查询不运行 helper，不创建 terminal/worktree/agentSession，不发送业务输入，不修改用户配置。
-
-上述边界可由现有 IPC 和配置契约表达；本机目录接线、helper 部署材料与配置消费由新增验收独立记录，不继承之前远端或 Runner 仓库历史通过结论。
-
-### 4.3 远端 Orca
-
-从 Orca 已有的固定 `orca-environments.json` 登记目录只读获取机器及配对连接；不要求本机 Orca UI 在线，不运行或依赖其安装包内部 JS。仅在 Web 后端读取指定环境的连接凭据，不扫描账号认证文件，凭据不出浏览器边界。保存使用当前 Runner 契约接受的稳定 environment ID，名称仅用于展示。先核实 ID 选择与既有 Runner 配置语义一致，不保存短命 runtime ID、endpoint 或 pairing token。远端不可达时仍可显示已登记机器，不把本机目录代替远端结果。配对身份变化使原缓存失效。
-
-通过 Orca 原生 RPC 查询 `status.get`、`agentSession.agents` 与 `agentSession.modelCatalog`，连接/认证复用既有 Orca 配对协议。实现具备所需的客户端能力协商，按目标 runtime 声明决定是否发送严格参数；不能把未知参数拒绝当成空目录。`savedOnly` 仅在目标声明支持时使用；目录返回 `listingInProgress` 后，才按协议支持使用 `waitForListing`，所有等待仍计入同一 30 秒期限。目标缺所需协议能力时返回 unsupported，不静默换查询方式、链路或机器。
-
-保留 modelCatalog 的 origin、fetchedAt、listingInProgress、每模型 efforts/defaultEffort，区分探测目录、缓存/内置目录与未知来源。结构化 Agent 注册列表只证明其查询表面存在，不证明 Runner 的 terminal 链路支持；产品矩阵和配置契约仍须过滤。查询无法绑定用户选定 executable/配置作用域时，显示范围未确认。
-
-不创建 worktree、terminal 或 agentSession，不发送输入，不调用 orchestration，不改变配对、账号及 Agent 配置，不做模型权限试调用。Orca 自身目录获取机制启动的元数据查询归 Orca；Web 只管理自身连接，不停止用户的 Orca 或远端代理。
-
-正式实现封装必要协议和能力协商，禁止运行时导入 Orca 安装包里的私有 JS 或依赖其内部文件路径。本次会话的探索已验证上述接口可返回目录，但不代替本功能的可复现自动验收，见专属验收。
-
-### 4.4 Orca 本机与远端的一致性
-
-本机和远端共用一套 `status.get → agentSession.agents → agentSession.modelCatalog(agent=所选值)` 的协商、目录解析、来源与错误语义。差异只在目标选择、本机named pipe或远端配对加密传输及相应身份核对；Web不分别实现本机/远端的Pi、provider或模型发现，不自行调用Pi CLI、provider HTTP接口或读取auth/models文件补查。
-
-查询层如实返回目标Orca注册的Agent，不混入“本机支持Pi、远端只支持Codex”等执行规则，也不补造未注册Agent。models请求只对目标已注册的Agent调用modelCatalog；目录层按同一协议接受本机/远端Agent，远端入口不得写死Codex。API返回的Agent目录事实与GET的Web/Runner执行支持组合分开，页面再合并展示。注册但无执行映射的Agent显示已发现及不支持原因并禁用配置生成；有映射但缺目录的Agent仍可按既有未验证原始值规则编辑。远端Pi/DSH执行范围本次不扩展，不由目录查询成功授予资格。
-
-模型provider与API key留在目标Orca/Agent。Pi目录的原始`provider/model`标识可投影只读provider用于筛选，完整标识（含多级斜杠）原样保存到既有`agent_launch.model`，不新增执行配置中的provider凭据字段。其他Agent的模型ID不套用Pi格式。手动模型标识不会创建provider或写入凭据。
-
-当前查询没有绑定具体worktree/session/account，始终显示context_unverified。保持Orca/Pi原生默认配置是本期部署前提；目录可见、凭据配置、模型调用成功及项目可执行分开，不根据目录推断API key有效性、额度或权限。刷新绕过Web缓存，不冒充已强制刷新Orca原生缓存；来源/时间以Orca返回为准。多套账号/配置身份选择不在本期范围，缺Orca公开契约时不能自行读文件或声称查询与执行已绑定同一账号。
-
-### 4.5 查询与错误展示
-
-查询状态使用 `not_requested / in_progress / ready / unavailable / unsupported`，另带 `freshness`、`origin`、`fetched_at`、`context_unverified` 和最后一次错误。无数据、查询失败、完整空目录、过期结果必须区分；部分成功不能把整个目录标成 ready。
-
-初次选择按需探测，用户可显式重新探测。页面只在可见且当前上下文匹配时有界跟踪原查询进度，不无限后台轮询。切换机器/Agent、页面卸载或新查询替代旧查询时，取消原前端订阅；晚到结果不能覆盖新选择。相同上下文并发请求合并，最多两个原生探测并发，超额明确返回忙碌，不无限排队。不增加持久探测作业或常驻第三方守护进程。
+选择、配置、pin 改变时丢弃晚到结果；最后订阅取消、Web 关闭及超时排空所属 CLI 和元数据资源。版本/离线声明及目录读取共用三十秒预算，清理额外五秒，原生累计和最终 JSON 各不超过 1 MiB。原生失败不会改投另一机器、Agent 或直连链路。历史原生专项的通过只对应其原构建，迁移后验证见[专属记录](../testing/acceptance/runner-boundary-consolidation.md)。
 
 ## 5. 管理界面与编辑行为
 

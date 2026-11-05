@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bufio"
 	"encoding/json"
 	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/localservice"
@@ -11,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMain(m *testing.M) {
@@ -42,30 +42,19 @@ func TestMain(m *testing.M) {
 			caps["resource_digest"] = strings.Repeat("a", 64)
 			json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "protocol": "steerrunner-cli/v1", "data": caps})
 			os.Exit(0)
-		case "app-server":
-			sc := bufio.NewScanner(os.Stdin)
-			for sc.Scan() {
-				var q struct {
-					ID     *int   `json:"id"`
-					Method string `json:"method"`
-				}
-				json.Unmarshal(sc.Bytes(), &q)
-				if q.ID == nil {
-					continue
-				}
-				var result any
-				switch q.Method {
-				case "initialize":
-					result = map[string]string{"userAgent": "fixture"}
-				case "model/list":
-					result = map[string]any{"data": []any{map[string]any{"id": "fixture-model", "model": "fixture-model", "supportedReasoningEfforts": []any{map[string]string{"reasoningEffort": "high"}}}}, "nextCursor": nil}
-				default:
-					os.Exit(5)
-				}
-				json.NewEncoder(os.Stdout).Encode(map[string]any{"id": *q.ID, "result": result})
+		case "native-catalog":
+			var input runnercontract.NativeCatalogRequest
+			if json.NewDecoder(os.Stdin).Decode(&input) != nil {
+				os.Exit(2)
 			}
+			exe, _ := os.Executable()
+			body, _ := os.ReadFile(exe)
+			models := []runnercontract.NativeModel{{ID: "fixture-model", Label: "Fixture", Efforts: []runnercontract.NativeEffort{{Value: "high", Label: "High"}}}}
+			result := runnercontract.NativeCatalogResult{Contract: runnercontract.NativeCatalogContract, Kind: input.Kind, Adapter: input.Adapter, Target: input.Target, Agent: input.Agent, State: "ready", Complete: true, ContextUnverified: true, ObservedAt: time.Now().UTC(), Origin: "probe", Models: &models, Source: runnercontract.NativeCatalogSource{Version: "web-fixture", ExecutableSHA256: cfg.Digest(body), ResourceDigest: strings.Repeat("a", 64)}}
+			json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "protocol": "steerrunner-cli/v1", "request_id": nil, "error": nil, "data": result})
 			os.Exit(0)
 		}
+
 	}
 	os.Exit(m.Run())
 }

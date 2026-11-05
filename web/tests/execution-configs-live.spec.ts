@@ -3,12 +3,13 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative } from "node:path";
 
-test("native.discovery: Web-owned local and paired remote catalogs", async ({
+test("native.discovery: Runner-backed local and paired remote catalogs", async ({
   page,
 }, info) => {
   const binary = process.env.STEERLINE_CONFIG_WEB;
   const environment = process.env.STEERLINE_CONFIG_REMOTE;
   const localOrca = process.env.STEERLINE_CONFIG_LOCAL_ORCA === "1";
+  const zeroProjects = process.env.STEERLINE_CONFIG_ZERO_PROJECTS === "1";
   const scope = process.env.STEERLINE_CONFIG_SCOPE;
   const home = process.env.STEERLINE_HOME;
   const isolated = !!(
@@ -42,6 +43,7 @@ test("native.discovery: Web-owned local and paired remote catalogs", async ({
         ).json();
         if (catalog.projects?.some((p: any) => p.runtime_state === "failed"))
           throw new Error("debug project initialization failed");
+        if (zeroProjects) return catalog.projects?.length === 0;
         return (
           catalog.projects?.length > 0 &&
           catalog.projects.every((p: any) => p.online)
@@ -70,7 +72,7 @@ test("native.discovery: Web-owned local and paired remote catalogs", async ({
     expect(saved.execution).toEqual(frozen.profile.execution);
     effectiveExecution = saved.execution;
   }
-  expect(snapshot.writable).toBe(false);
+  if (!zeroProjects) expect(snapshot.writable).toBe(false);
   const session = await (
     await page.request.get(url.origin + "/auth/status")
   ).json();
@@ -144,7 +146,7 @@ test("native.discovery: Web-owned local and paired remote catalogs", async ({
       path: info.outputPath("native-local-orca.png"),
       fullPage: true,
     });
-    return;
+    if (!environment) return;
   }
   const environments = await query({
     kind: "environments",
