@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
+  act,
   fireEvent,
   render,
   screen,
@@ -85,6 +86,7 @@ function setup({
   firstStart = false,
   environmentReady = true,
   environmentRequired = true,
+  materialsStatus = "ready",
 } = {}) {
   const api = new Api(
     { project_id: "candidate-project", instance_id: "instance" } as Identity,
@@ -154,23 +156,29 @@ function setup({
       },
     ],
   };
+  let materials = { status: materialsStatus, commit: "base" };
+  let materialsError: Error | undefined;
   vi.spyOn(api, "get").mockImplementation(
     async (path) =>
-      (path === "/presentation"
-        ? { presentation: { default_profile_id: "default", profiles } }
-        : path === "/environment/options"
-          ? {
-              environment_readiness_required: environmentRequired,
-              profiles: profiles.map((p) => ({
-                id: p.id,
-                status: environmentReady ? "ready" : "not_ready",
-                reason: "环境尚未验收",
-              })),
-              environments: [],
-              generators: [],
-              default_profile_id: "default",
-            }
-          : taskPage) as never,
+      (path === "/maintenance/tasks/38?view=status"
+        ? materialsError
+          ? Promise.reject(materialsError)
+          : materials
+        : path === "/presentation"
+          ? { presentation: { default_profile_id: "default", profiles } }
+          : path === "/environment/options"
+            ? {
+                environment_readiness_required: environmentRequired,
+                profiles: profiles.map((p) => ({
+                  id: p.id,
+                  status: environmentReady ? "ready" : "not_ready",
+                  reason: "环境尚未验收",
+                })),
+                environments: [],
+                generators: [],
+                default_profile_id: "default",
+              }
+            : taskPage) as never,
   );
   const start = vi.fn().mockReturnValue("new-candidate");
   const workspace = {
@@ -199,6 +207,11 @@ function setup({
     defaultOptions: { queries: { retry: false } },
   });
   clients.push(client);
+  if (materialsStatus === "ready")
+    client.setQueryData(
+      projectQueries(api).taskReadiness("38").queryKey,
+      materials,
+    );
   render(
     <QueryClientProvider client={client}>
       <WorkspaceContext.Provider value={workspace}>
@@ -208,8 +221,96 @@ function setup({
       </WorkspaceContext.Provider>
     </QueryClientProvider>,
   );
-  return { start };
+  return {
+    start,
+    api,
+    client,
+    async updateMaterials(status: string, error?: Error, refresh = true) {
+      materials = { ...materials, status };
+      materialsError = error;
+      if (!refresh) return;
+      await act(async () => {
+        await client.refetchQueries({
+          queryKey: projectQueries(api).taskReadiness("38").queryKey,
+        });
+      });
+    },
+  };
 }
+
+it.each([true, false])(
+  "blocks startup until tests are ready and blocks an open confirmation again if preparation changes, firstStart=%s",
+  async (firstStart) => {
+    const { start, updateMaterials } = setup({
+      firstStart,
+      materialsStatus: "accepted",
+      environmentRequired: false,
+    });
+    const button = await screen.findByRole("button", {
+      name: firstStart ? "手动启动" : "新增并行候选",
+    });
+    await screen.findByText("测试安排生成中");
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+
+    await updateMaterials("ready", undefined, false);
+    await waitFor(() => expect(button).toBeEnabled(), { timeout: 4000 });
+    fireEvent.click(button);
+    const confirm = screen.getByRole("button", { name: "确认启动" });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await updateMaterials("queued");
+    await waitFor(() => expect(confirm).toBeDisabled());
+    fireEvent.click(confirm);
+    expect(start).not.toHaveBeenCalled();
+
+    await updateMaterials("ready");
+    await waitFor(() => expect(confirm).toBeEnabled());
+    fireEvent.click(confirm);
+    expect(start).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([
+  "pending",
+  "queued",
+  "failed",
+  "invalid",
+  "unknown",
+  "configuration_required",
+  "cancelled",
+  "rejected",
+  "unrecognized",
+])(
+  "never starts with a non-ready testing arrangement: %s",
+  async (materialsStatus) => {
+    const { start, client, api } = setup({ firstStart: true, materialsStatus });
+    const button = await screen.findByRole("button", { name: "手动启动" });
+    await waitFor(() =>
+      expect(
+        client.getQueryState(projectQueries(api).taskReadiness("38").queryKey)
+          ?.status,
+      ).toBe("success"),
+    );
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(start).not.toHaveBeenCalled();
+  },
+);
+
+it("disables startup after a failed refresh even with cached ready materials and recovers on the next successful observation", async () => {
+  const { start, updateMaterials } = setup({ firstStart: true });
+  const button = await screen.findByRole("button", { name: "手动启动" });
+  await waitFor(() => expect(button).toBeEnabled());
+  await updateMaterials("ready", new Error("材料查询失败"));
+  await screen.findByText("测试安排查询失败，等待重新核实");
+  expect(button).toBeDisabled();
+  fireEvent.click(button);
+  expect(start).not.toHaveBeenCalled();
+  await updateMaterials("ready");
+  await waitFor(() => expect(button).toBeEnabled());
+});
 
 it.each(["default", "other"])(
   "opens the candidate profile picker and submits %s independently of existing candidates",

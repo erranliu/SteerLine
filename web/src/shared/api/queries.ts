@@ -24,6 +24,16 @@ export function projectQueries(api: Api) {
   ] as const;
   const defaults = { staleTime: 1000, retry: false } as const;
   return {
+    taskReadiness: (id: string) =>
+      queryOptions({
+        retry: false,
+        queryKey: [...scope, "task-readiness", id],
+        queryFn: ({ signal }) =>
+          api.get<Pick<Materials, "commit" | "status" | "diagnostic">>(
+            "/maintenance/tasks/" + encodeURIComponent(id) + "?view=status",
+            signal,
+          ),
+      }),
     taskMaterials: (id: string) =>
       queryOptions({
         retry: false,
@@ -219,7 +229,13 @@ export function projectQueries(api: Api) {
   };
 }
 
-const taskResources = new Set(["snapshot", "tasks", "task", "graph"]);
+const taskResources = new Set([
+  "snapshot",
+  "tasks",
+  "task",
+  "graph",
+  "task-readiness",
+]);
 const dynamicResources = new Set([
   ...taskResources,
   "activity",

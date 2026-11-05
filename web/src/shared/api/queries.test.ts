@@ -161,7 +161,12 @@ it.each([
   client.clear();
 });
 
-it.each(["presentation", "taskMaterials", "candidateDocuments"] as const)(
+it.each([
+  "presentation",
+  "taskMaterials",
+  "taskReadiness",
+  "candidateDocuments",
+] as const)(
   "scopes %s refresh and cancellation to the current home/project/instance",
   async (resource) => {
     const client = testClient();
@@ -199,7 +204,22 @@ it.each(["presentation", "taskMaterials", "candidateDocuments"] as const)(
       const pending =
         resource === "taskMaterials"
           ? client.prefetchQuery(projectQueries(api).taskMaterials("id"))
-          : client.prefetchQuery(projectQueries(api).candidateDocuments("id"));
+          : resource === "taskReadiness"
+            ? client.prefetchQuery(projectQueries(api).taskReadiness("id"))
+            : client.prefetchQuery(
+                projectQueries(api).candidateDocuments("id"),
+              );
+      if (resource === "taskReadiness") {
+        expect(get).toHaveBeenCalledWith(
+          "/maintenance/tasks/id?view=status",
+          expect.any(AbortSignal),
+        );
+        expect(
+          client.getQueryData(
+            projectQueries(api).taskReadiness("other").queryKey,
+          ),
+        ).toBeUndefined();
+      }
       const signal = get.mock.calls[0][1];
       await client.cancelQueries({
         queryKey: [api.home, identity.project_id, identity.instance_id],

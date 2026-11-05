@@ -376,6 +376,33 @@ func (m *projectMaintenance) candidateDocuments(ctx context.Context, id string) 
 	}{m.freshness(ctx, c), c.BaseRevision, latest.Commit, files}, nil
 }
 
+type taskPreparation struct {
+	Commit     string `json:"commit"`
+	Status     string `json:"status"`
+	Diagnostic string `json:"diagnostic,omitempty"`
+}
+
+func (m *projectMaintenance) preparation(latest pmm.Material) taskPreparation {
+	status := latest.Status
+	if o := m.current(); o.Commit != latest.Commit || o.Diagnostic != "" {
+		status = "unknown"
+	}
+	return taskPreparation{Commit: latest.Commit, Status: status, Diagnostic: latest.Diagnostic}
+}
+
+// Polling startup readiness must not read complete documents or invoke Git.
+func (m *projectMaintenance) taskReadiness(ctx context.Context, id string) (taskPreparation, error) {
+	store, ok := m.store.(materialStore)
+	if !ok {
+		return taskPreparation{}, errors.New("material store unavailable")
+	}
+	latest, err := store.Material(ctx, m.config.Identity(), id)
+	if err != nil {
+		return taskPreparation{}, err
+	}
+	return m.preparation(latest), nil
+}
+
 func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any, error) {
 	store, ok := m.store.(materialStore)
 	if !ok {
@@ -420,14 +447,8 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 			files = append(files, document{Path: "系统测试安排", Body: string(body)})
 		}
 	}
-	status := latest.Status
-	if o := m.current(); o.Commit != latest.Commit || o.Diagnostic != "" {
-		status = "unknown"
-	}
 	return struct {
-		Commit     string     `json:"commit"`
-		Status     string     `json:"status"`
-		Diagnostic string     `json:"diagnostic,omitempty"`
-		Files      []document `json:"files"`
-	}{latest.Commit, status, latest.Diagnostic, files}, nil
+		taskPreparation
+		Files []document `json:"files"`
+	}{m.preparation(latest), files}, nil
 }
