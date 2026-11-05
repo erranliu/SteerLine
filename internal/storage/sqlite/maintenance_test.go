@@ -56,10 +56,7 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 		candidate.TestPlan, _ = json.Marshal(testmanagement.Snapshot{Project: testmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Status: "ready", PlanPath: c.PlanRef.Path, Commit: commit, GenerationID: material.GenerationID, Inputs: material.Inputs, Definitions: definitions})
 		material.TestPlan = candidate.TestPlan
 		require(t, s.SaveMaterial(ctx, project, material))
-		for _, path := range []string{testmodel.ProjectEntryPath, testmodel.CataloguePath, testmodel.RulesPath, testmodel.ProtocolPath, testmodel.WriterPath} {
-			input.Documents.References = append(input.Documents.References, runnerclient.Document{Path: path})
-		}
-		input.Workflow.PromptOverrides = map[string]string{"implement.execute": testPromptContext(t, candidate.TestPlan, true)}
+		input.Workflow.PromptOverrides = map[string]string{"implement.execute": testPromptContext(t, candidate.TestPlan)}
 		input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"tests":["one"]}`))}
 		candidate.Submit.Input, _ = json.Marshal(input)
 		if i == 0 {

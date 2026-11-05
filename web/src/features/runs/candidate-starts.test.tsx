@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -73,31 +74,46 @@ function setup(existing = false, requests: StoredRequest[] = []) {
   client.setQueryData(options.task("1").queryKey, taskPage);
   client.setQueryData(options.tasks().queryKey, taskPage);
   client.setQueryData(options.presentation().queryKey, presentation);
+  client.setQueryData(options.taskReadiness("1").queryKey, {
+    status: "ready",
+    commit: "base",
+  });
+  let materialStatus = "ready";
   vi.spyOn(api, "get").mockImplementation(
     async (path) =>
-      (path === "/environment/options" ? { profiles: [{ id: "one", status: "ready" },{id:"orca-remote-desktop64g-xhigh",status:"ready"}], environments: [] } : path === "/presentation"
-        ? presentation
-        : path.includes("/activity?")
-          ? {
-              page: {
-                activity: path.startsWith("/runs/run/")
-                  ? [
-                      {
-                        seq: 1,
-                        kind: "activity",
-                        title: "旧候选活动",
-                        ts: "2026-10-20T00:00:00Z",
-                      },
-                    ]
-                  : [],
-                diagnostics: [],
-              },
-            }
-          : path.includes("/last-message?")
-            ? { run_id: "execution", attempt_id: "attempt", message: null }
-            : path.endsWith("/tests")
-              ? { status: "missing" }
-              : taskPage) as never,
+      (path === "/environment/options"
+        ? {
+            profiles: [
+              { id: "one", status: "ready" },
+              { id: "orca-remote-desktop64g-xhigh", status: "ready" },
+            ],
+            environments: [],
+          }
+        : path === "/presentation"
+          ? presentation
+          : path === "/maintenance/tasks/1?view=status"
+            ? { status: materialStatus, commit: "base" }
+            : path.includes("/activity?")
+              ? {
+                  page: {
+                    activity: path.startsWith("/runs/run/")
+                      ? [
+                          {
+                            seq: 1,
+                            kind: "activity",
+                            title: "旧候选活动",
+                            ts: "2026-10-20T00:00:00Z",
+                          },
+                        ]
+                      : [],
+                    diagnostics: [],
+                  },
+                }
+              : path.includes("/last-message?")
+                ? { run_id: "execution", attempt_id: "attempt", message: null }
+                : path.endsWith("/tests")
+                  ? { status: "missing" }
+                  : taskPage) as never,
   );
   const calls: { envelope: Envelope; resolve: (value: Receipt) => void }[] = [];
   const submit = vi.fn(
@@ -155,7 +171,20 @@ function setup(existing = false, requests: StoredRequest[] = []) {
     );
     fireEvent.click(await screen.findByRole("button", { name: "确认启动" }));
   };
-  return { client, calls, submit, showRuns, confirm };
+  return {
+    client,
+    calls,
+    submit,
+    showRuns,
+    confirm,
+    setMaterials(status: string) {
+      materialStatus = status;
+      client.setQueryData(options.taskReadiness("1").queryKey, {
+        status,
+        commit: "base",
+      });
+    },
+  };
 }
 
 it("immediately selects each new card and lets an unclaimed task reserve five confirmations while its first response is delayed", async () => {
@@ -278,5 +307,51 @@ it("shows server candidates after restart without restoring obsolete journal car
   expect(screen.getByText("2 个候选")).toBeVisible();
   expect(screen.getByText("全部：1 个任务 / 2 个候选")).toBeVisible();
   expect(submit).toHaveBeenCalledTimes(1);
+  client.clear();
+});
+
+it("keeps a rejected start as history while observing current preparation and permits a fresh start after readiness", async () => {
+  const { client, confirm, calls, submit, setMaterials } = setup();
+  await confirm(true);
+  const original = structuredClone(calls[0].envelope);
+  const diagnostic = "测试安排尚未就绪：accepted";
+  await act(async () => {
+    calls[0].resolve({
+      ...original,
+      status: "rejected",
+      code: "materials_not_ready",
+      diagnostic,
+      sampled_at: "now",
+    });
+    setMaterials("accepted");
+  });
+  const history = await screen.findByText("上次启动结果 · 启动被拒绝");
+  expect(document.querySelector(".candidate-card.active")).toHaveTextContent(
+    "启动被拒绝（历史）",
+  );
+  expect(screen.getByRole("button", { name: "手动启动" })).toBeDisabled();
+  const current = within(history.closest(".detail-section")!).getByRole(
+    "status",
+    { name: "当前测试安排" },
+  );
+  expect(current).toHaveTextContent("测试安排生成中");
+  expect(current).not.toHaveTextContent(diagnostic);
+
+  await act(async () => {
+    setMaterials("ready");
+  });
+  await waitFor(() => expect(current).toHaveTextContent("测试安排已就绪"));
+  expect(current).toHaveTextContent("可在任务详情重新选择方案启动");
+  expect(current).not.toHaveTextContent(diagnostic);
+  fireEvent.click(history);
+  expect(
+    within(history.closest("details")!).getByText(diagnostic),
+  ).toBeVisible();
+  expect(submit).toHaveBeenCalledTimes(1);
+  await confirm(true);
+  expect(submit).toHaveBeenCalledTimes(2);
+  expect(calls[1].envelope.request_id).not.toBe(original.request_id);
+  expect(original).toEqual(calls[0].envelope);
+  expect(document.querySelectorAll(".candidate-card")).toHaveLength(2);
   client.clear();
 });

@@ -8,9 +8,9 @@ import (
 )
 
 // WithTestProgressContext preserves published/user prompts. Only implementation
-// and audit execution receive the frozen tests and writer; report/publication
+// and audit execution receive the runtime test-file binding; report/publication
 // turns receive a read-only boundary for the test-owned progress channel.
-func (c *Catalog) WithTestProgressContext(input Workflow, snapshot []byte, referencedWriter bool) (Workflow, error) {
+func (c *Catalog) WithTestProgressContext(input Workflow, snapshot []byte) (Workflow, error) {
 	if c == nil || len(snapshot) == 0 {
 		return input, errors.New("published workflow prompt context is unavailable")
 	}
@@ -50,7 +50,7 @@ func (c *Catalog) WithTestProgressContext(input Workflow, snapshot []byte, refer
 		if body == "" {
 			body = state.Prompt
 		}
-		assembled, err := prompts.TestingStep(body, snapshot, referencedWriter, writesTests)
+		assembled, err := prompts.TestingStep(body, snapshot, writesTests)
 		if err != nil {
 			return input, err
 		}

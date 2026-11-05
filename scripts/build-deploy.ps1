@@ -2,6 +2,7 @@ param(
     [string]$InstallHome = 'C:\SteerlineInstall',
     [string]$RunnerRepo = '',
     [switch]$UpdateRunner,
+    [switch]$DiscardRuns,
     [switch]$ForceWebInstall,
     [switch]$SerialBuild,
     [string]$TimingPath = '',
@@ -9,6 +10,7 @@ param(
     [switch]$NoPause
 )
 $ErrorActionPreference = 'Stop'
+if ($DiscardRuns -and -not $UpdateRunner) { throw 'DiscardRuns requires UpdateRunner; it resets all project tasks to open and pauses dispatch.' }
 if (-not [IO.Path]::IsPathRooted($InstallHome)) { throw 'InstallHome must be absolute.' }
 $sourceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $RunnerRepo) { $RunnerRepo = Join-Path (Split-Path -Parent $sourceRoot) 'SteerRunner' }
@@ -70,6 +72,7 @@ foreach ($protected in @($sourceRoot, $RunnerRepo, 'C:\SteerlineRuntime', 'C:\St
 }
 foreach ($path in @($InstallHome, $sourceRoot, $RunnerRepo)) { Assert-Plain $path }
 foreach ($path in @((Join-Path $RunnerRepo 'bin\steerrunner.exe'), (Join-Path $sourceRoot 'bin\steerline.exe'), (Join-Path $sourceRoot 'bin\steerline-web.exe'))) { Assert-Plain $path }
+if ($DiscardRuns -and -not (Test-Path -LiteralPath (Join-Path $InstallHome 'bin\steerline.exe') -PathType Leaf)) { throw 'DiscardRuns requires an existing installation.' }
 New-Item -ItemType Directory -Path $InstallHome -Force | Out-Null
 $lockPath = Join-Path $InstallHome '.deploy.lock'
 Assert-Plain $lockPath
@@ -150,8 +153,9 @@ try {
     $env:STEERLINE_HOME = $InstallHome
     $installed = Join-Path $bin 'steerline.exe'
     Next-DeploymentStage 'deploy.stop-and-verify'
+    if ($DiscardRuns) { Write-Output 'Discarding all old executions in this installation; tasks will reopen with manual dispatch paused. Original state will be archived.' }
     if (Test-Path -LiteralPath $installed) {
-        $verification = Stop-DeploymentApplication (Join-Path $package 'steerline.exe') $runnerStage -AllowRestart:$allowRestart
+        $verification = Stop-DeploymentApplication (Join-Path $package 'steerline.exe') $runnerStage -AllowRestart:$allowRestart -DiscardRuns:$DiscardRuns
         if ($null -ne $verification) {
             Write-JSON (Join-Path $package 'shutdown-verification.json') $verification
         }

@@ -135,10 +135,14 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	var maintenanceDone chan struct{}
+	var environmentDone chan struct{}
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
 	defer startupTimer.Stop()
 	defer func() {
 		cancel()
+		if environmentDone != nil {
+			<-environmentDone
+		}
 		if maintenanceDone != nil {
 			<-maintenanceDone
 		}
@@ -188,16 +192,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
 	r.tests.roadmaps = r.config.runtimeRoadmaps
-	// The actor's shared five-second budget must not let a slow test query
-	// starve environment cancellation/deadlines on every tick.
-	environmentFirst := false
-	service.ObserveAuxiliary = func(ctx context.Context) error {
-		environmentFirst = !environmentFirst
-		if environmentFirst {
-			return errors.Join(r.environment.service.Observe(ctx), r.tests.observe(ctx))
-		}
-		return errors.Join(r.tests.observe(ctx), r.environment.service.Observe(ctx))
-	}
+	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
 		if action == "stop_candidate" {
@@ -226,6 +221,13 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		}
 		if service.State.Service.Ready {
 			startupTimer.Stop()
+			if environmentDone == nil {
+				environmentDone = make(chan struct{})
+				go func() {
+					defer close(environmentDone)
+					r.environment.observe(ctx)
+				}()
+			}
 		}
 		publish(r.port)
 		return nil
@@ -428,6 +430,15 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.config.runtimeMaintenance.candidateDocuments(ctx, strings.TrimSuffix(strings.TrimPrefix(route, "/runs/"), "/documents"))
 	}
 	if strings.HasPrefix(route, "/maintenance") || strings.HasPrefix(route, "/tests/generations/") {
+		if strings.HasPrefix(route, "/maintenance/tasks/") && len(values) > 0 {
+			if len(values) != 1 || len(values["view"]) != 1 || values.Get("view") != "status" {
+				return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unsupported or repeated maintenance query"}
+			}
+			if p.config.runtimeMaintenance == nil {
+				return nil, errors.New("maintenance unavailable")
+			}
+			return p.config.runtimeMaintenance.taskReadiness(ctx, strings.TrimPrefix(route, "/maintenance/tasks/"))
+		}
 		for key, list := range values {
 			if (route != "/maintenance" && route != "/maintenance/log") || (key != "page" && key != "scope") || len(list) != 1 {
 				return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unsupported or repeated maintenance query"}

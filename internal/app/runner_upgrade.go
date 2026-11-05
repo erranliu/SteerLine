@@ -25,6 +25,9 @@ type RunnerUpgradeVerification struct {
 // nor migrates namespaces. An incompatible installation remains fully intact.
 func VerifyRunnerUpgrade(ctx context.Context, home, executable, sha string) (RunnerUpgradeVerification, error) {
 	result := RunnerUpgradeVerification{Contract: "steerline-runner-upgrade/v1", Home: home, StateDir: runnerstatepath.Directory(home), CandidateSHA256: sha, StateFormat: runnerclient.StateFormat}
+	if err := checkDeploymentDiscard(home); err != nil {
+		return result, err
+	}
 	if err := runnerstatepath.Validate(home); err != nil {
 		return result, err
 	}
@@ -37,17 +40,8 @@ func VerifyRunnerUpgrade(ctx context.Context, home, executable, sha string) (Run
 		return result, err
 	}
 	cli := runnerclient.Client{Executable: executable, SHA256: sha, StateDir: result.StateDir}
-	version, versionErr := cli.Version(ctx)
-	if versionErr != nil {
-		return result, versionErr
-	}
-	catalog, catalogErr := cli.OfflineCatalog(ctx, version)
-	if catalogErr != nil {
-		return result, catalogErr
-	}
-	recovery := catalog.Capabilities.Recovery
-	if recovery == nil || recovery.StateFormat != runnerclient.StateFormat || !recovery.SameBuildRestart || recovery.ResourceRebuild || recovery.Upgrade == "" {
-		return result, errors.New("selected Runner must publish the v8 restart and drain-before-upgrade contract")
+	if e := verifyRunnerUpgradeCapabilities(ctx, cli); e != nil {
+		return result, e
 	}
 	if err == nil && pin.SHA256 != sha {
 		original := runnerclient.Client{Executable: pin.Executable, SHA256: pin.SHA256, StateDir: pin.StateDir}
@@ -61,4 +55,20 @@ func VerifyRunnerUpgrade(ctx context.Context, home, executable, sha string) (Run
 		}
 	}
 	return result, nil
+}
+
+func verifyRunnerUpgradeCapabilities(ctx context.Context, cli runnerclient.Client) error {
+	version, versionErr := cli.Version(ctx)
+	if versionErr != nil {
+		return versionErr
+	}
+	catalog, catalogErr := cli.OfflineCatalog(ctx, version)
+	if catalogErr != nil {
+		return catalogErr
+	}
+	recovery := catalog.Capabilities.Recovery
+	if recovery == nil || recovery.StateFormat != runnerclient.StateFormat || !recovery.SameBuildRestart || recovery.ResourceRebuild || recovery.Upgrade == "" {
+		return errors.New("selected Runner must publish the v8 restart and drain-before-upgrade contract")
+	}
+	return nil
 }

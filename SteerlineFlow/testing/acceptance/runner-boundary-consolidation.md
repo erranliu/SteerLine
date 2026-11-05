@@ -77,3 +77,11 @@ Runner `formal-final` L1 已通过：853 根、21 扩展、原 16 个允许 opt-
 ## 6. 文档验证
 
 `python scripts/check_doc_links.py` 实际通过：685 份 Markdown、4251 条本地导航、0 错误。11 份新增文件 UTF-8、末尾换行及逐行空白通过；按仓库原有换行归一化执行 `git diff --check` 通过。运行证据与文档静态检查分开，不以静态检查代替产品通过。
+
+## 7. PR 提交与主干接入
+
+用户另行授权两仓分别提交、推送及创建 PR。SteerLine 按 Plan 分别保存 S3 `e0171468`、S4 `81405e59`、S1/S2 `45b6afec`，分支为 `codex/runner-boundary-consolidation`。配套 Runner 已提交 `742c9b3a` 并创建 [PR #117](https://github.com/erranliu/SteerRunner/pull/117)，GitHub 已返回 mergeable=true/clean；其基线资格继续按原指纹说明。
+
+创建本仓 PR 前刷新并接入 `origin/main=c94cc5aa047e3449703c1868e8d8a6628c350616`。上游新增部署丢弃根，本次新增零项目核验根，两边原先各自计为 10/9，组合必须为 Windows **11** / 其他平台 **10**。保留两个显式源条目，并同步正式定义、测试断言和指南；唯一文本冲突为测试清单的覆盖说明，保留双方行为范围。上游 discardMode/仓库锁规则与本次中性 Content 核验、严格未启动 Runner 分支全部保留。
+
+本 PR 相对该 main 的 `internal/prompts`/黄金样本差异为空。上游已精简首轮测试上下文，因此不能把历史 2706 字节样本视为接入后固定大小；新的正常 PrepareTestPlan 对照为完整 Run 输入 **1796→1796 字节、全文相等**，四段正文为 implement.execute **167→167**、implement.report **312→312**、publish **372→372**、publish.report **319→319**。`pr-integration/policy-bytes` 实际通过，历史正文/旧样本与报告不覆盖。计数/提示词接线合并另经独立只读复核；主干接入后的正式复验结果在完成后补录，不能继承旧构建资格。

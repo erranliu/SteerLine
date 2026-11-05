@@ -18,6 +18,7 @@ export interface CandidateStart {
   status: string;
   diagnostic?: string;
   participating: boolean;
+  rejected?: boolean;
 }
 interface LocalStart {
   id: string;
@@ -191,6 +192,7 @@ export function useCandidateStarts(
             : "正在提交",
     diagnostic: row.response?.diagnostic || row.error,
     participating: row.response?.status !== "rejected",
+    rejected: row.response?.status === "rejected",
   }));
   for (const entry of entries) {
     const receipt = receiptFor(entry);
@@ -215,6 +217,7 @@ export function useCandidateStarts(
           ? undefined
           : receipt?.diagnostic || entry.error,
       participating: !entry.unsent && receipt?.status !== "rejected",
+      rejected: receipt?.status === "rejected",
     };
     const index = items.findIndex((item) => item.id === entry.id);
     if (index < 0) items.push(view);

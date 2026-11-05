@@ -34,6 +34,7 @@ import { RunTask, taskDependencyReason } from "./run-task";
 import { CopyExecutionInfo } from "./copy-execution-info";
 import { StopCandidate } from "./stop-candidate";
 import { RunUsage } from "./run-usage";
+import { RejectedStart } from "./rejected-start";
 
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
@@ -670,7 +671,10 @@ export function Runs() {
               >
                 <span>新候选</span>
                 <strong>{entry.profile}</strong>
-                <span className="muted">{entry.status}</span>
+                <span className="muted">
+                  {entry.status}
+                  {entry.rejected ? "（历史）" : ""}
+                </span>
               </button>
             ))}
           </div>
@@ -688,15 +692,21 @@ export function Runs() {
                   )?.title ||
                   selectedTask}
               </h2>
-              <p>{selectedStart.status}</p>
-              {selectedStart.diagnostic && (
-                <p className="notice amber">{selectedStart.diagnostic}</p>
+              {selectedStart.rejected ? (
+                <RejectedStart start={selectedStart} />
+              ) : (
+                <>
+                  <p>{selectedStart.status}</p>
+                  {selectedStart.diagnostic && (
+                    <p className="notice amber">{selectedStart.diagnostic}</p>
+                  )}
+                  <p className="muted">
+                    {selectedStart.participating
+                      ? "执行信息将在服务器确认后显示。"
+                      : "请核对原因后重新选择方案。"}
+                  </p>
+                </>
               )}
-              <p className="muted">
-                {selectedStart.participating
-                  ? "执行信息将在服务器确认后显示。"
-                  : "请核对原因后重新选择方案。"}
-              </p>
             </div>
           ) : selected ? (
             <CandidateDetail

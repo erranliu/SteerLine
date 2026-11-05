@@ -31,7 +31,7 @@ go run ./cmd/test-feedback -- ./internal/runnerclient ./internal/runnerbridge -c
 
 Full 仅指全部普通 Go 测试，已登记为 L4 `go.full`，不包含 e2e/runneracceptance 标签或 Web；没有测试文件的包单独枚举为编译项。真实测试 skip 在原 summary/退出码/managed 中均不通过。正式复用集可用 `-level=L4 -suite=go -scenario go.http/go.storage/go.environment/go.deployment/go.roadmap`（每次选一个 ID），前端全集用 `-level=L4 -suite=web -scenario web.unit`。前端与 HTTP 检查用 `scripts/test-web.ps1`，其他浏览器及独立脚本入口见 [L4 列表](testing/l4.md)；未接入受管报告的入口不能凭 Agent 自述登记通过。
 
-go.http 全量执行七个 HTTP/快照/配置/探测/元数据进程 owner，每包必须实际非零；go.environment 串行执行环境/model/remotetest/中性executionconfig四包全量，以及明确的Windows29根/其他平台28根的 App 环境集成组。源清单/正式定义及 package/root 终态须一致，缺失、额外或重复、跳过、一组失败均使整体不通过；其他 App 回归仍在 go.full。新范围须以本次定义报告验证，不继承旧专项通过。部署变更选择go.deployment（host/Windows localservice全量、App10/9根、升级排空明确一根），Roadmap变更选择go.roadmap（owner全量、App11根、host一根）；各组串行、原断言/25m/p1/parallel1不变，live排除与源漂移检查见L4列表。详细选择与本轮证据见[早期反馈验收](testing/acceptance/test-early-feedback.md)。
+go.http 全量执行七个 HTTP/快照/配置/探测/元数据进程 owner，每包必须实际非零；go.environment 串行执行环境/model/remotetest/中性executionconfig四包全量，以及明确的Windows29根/其他平台28根的 App 环境集成组。源清单/正式定义及 package/root 终态须一致，缺失、额外或重复、跳过、一组失败均使整体不通过；其他 App 回归仍在 go.full。新范围须以本次定义报告验证，不继承旧专项通过。部署变更选择go.deployment（host/Windows localservice全量、App11/10根、升级排空明确一根），Roadmap变更选择go.roadmap（owner全量、App11根、host一根）；各组串行、原断言/25m/p1/parallel1不变，live排除与源漂移检查见L4列表。详细选择与本轮证据见[早期反馈验收](testing/acceptance/test-early-feedback.md)。
 
 go.http 的 Windows 跨进程快照压力保持原30秒窗口、1000次发布和8读者；本机安排与E2E、Full、其他压力串行，独立通过不代表并行组合已验证。此约束也保留在机器清单，不改变L3自身并行实现。
 

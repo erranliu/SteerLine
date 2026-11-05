@@ -20,10 +20,10 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		render func() (string, error)
 	}{
 		{"testing-generate", func() (string, error) { return TestingGenerate("task.plan.md", "fixed", testProject) }},
-		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot), true) }},
+		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot)) }},
 		{"testing-readonly", TestingReadOnly},
 		{"testing-step", func() (string, error) {
-			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true, true)
+			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true)
 		}},
 		{"environment-invoke", func() (string, error) {
 			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/scripts/verify-environment.ps1")
@@ -57,12 +57,9 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		})
 	}
 }
-func TestInlineProgressWriterForProjectWithoutHelper(t *testing.T) {
-	if body, err := TestingContext([]byte(testSnapshot), false); err == nil || body != "" {
-		t.Fatal("missing writer fell back to inline source")
-	}
-	body, err := TestingContext([]byte(testSnapshot), true)
-	if err != nil || !strings.Contains(body, "STEERLINE_RESULT_FILE") || strings.Contains(body, "Set-RuntimeProgress") {
+func TestTestingContextOnlyBindsRuntimeFiles(t *testing.T) {
+	body, err := TestingContext([]byte(testSnapshot))
+	if err != nil || !strings.HasPrefix(body, "STEERLINE_RESULT_FILE SHA-256: ") || strings.Contains(body, "\n") {
 		t.Fatal("missing real references or source expanded", err)
 	}
 	external := "用户原文 {{.Ignore}}\r\n"
@@ -70,7 +67,7 @@ func TestInlineProgressWriterForProjectWithoutHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := TestingStep(external, []byte(testSnapshot), true, false)
+	report, err := TestingStep(external, []byte(testSnapshot), false)
 	if err != nil || report != external+"\n\n"+readOnly {
 		t.Fatal("external body changed", err)
 	}
@@ -83,8 +80,8 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
 		{"missing-file", func() (string, error) { return render("absent", nil) }},
 		{"bad-template", func() (string, error) { return renderText("bad", "{{", nil) }},
 		{"missing-field", func() (string, error) { return renderText("bad", "{{.Missing}}", struct{}{}) }},
-		{"bad-snapshot", func() (string, error) { return TestingContext([]byte(`{"status":"missing"}`), true) }},
-		{"missing-body", func() (string, error) { return TestingStep("", []byte(testSnapshot), true, true) }},
+		{"bad-snapshot", func() (string, error) { return TestingContext([]byte(`{"status":"missing"}`)) }},
+		{"missing-body", func() (string, error) { return TestingStep("", []byte(testSnapshot), true) }},
 		{"missing-entry", func() (string, error) { return EnvironmentInvoke("powershell.exe", "") }},
 		{"unsupported-interpreter", func() (string, error) { return EnvironmentInvoke("other", "entry") }},
 		{"missing-plan", func() (string, error) { return TestingGenerate("", "fixed", testProject) }},

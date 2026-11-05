@@ -126,6 +126,17 @@ function Run-Deploy([string]$Name,[bool]$ShouldSucceed=$true,[string[]]$Extra=@(
 try {
     $env:SL_DEPLOY_EXE=$fixtureExe
     $env:SL_DEPLOY_RUNNER_CHANGE=''
+    $invalidEvents=Join-Path $OutDir 'discard-without-update'
+    New-Item -ItemType Directory -Path $invalidEvents | Out-Null
+    $env:SL_DEPLOY_EVENTS=$invalidEvents
+    $preference=$ErrorActionPreference
+    try {
+        $ErrorActionPreference='Continue'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'scripts\build-deploy.ps1') -InstallHome $fixtureHome -RunnerRepo $runner -DiscardRuns -NoPause *> (Join-Path $invalidEvents 'output.log')
+        $invalidCode=$LASTEXITCODE
+    } finally { $ErrorActionPreference=$preference }
+    Assert ($invalidCode -ne 0 -and -not (Test-Path (Join-Path $invalidEvents 'calls.log')) -and -not (Test-Path (Join-Path $invalidEvents 'build-arguments.json'))) 'DiscardRuns without UpdateRunner built or touched an installation.'
+    $checks.Add('discard-without-update')
     $env:SL_DEPLOY_FAIL='preflight'
     $null=Run-Deploy 'fresh-preflight-failure' $false @('-UpdateRunner')
     $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
@@ -153,6 +164,9 @@ try {
     Assert ($calls.Contains('--goal replace') -and $calls.IndexOf(' prepare-deployment ') -lt $calls.IndexOf(' verify-runner-upgrade ') -and $calls.IndexOf(' verify-runner-upgrade ') -lt $calls.IndexOf(' install')) 'Runner upgrade did not stop, verify drainage, then install.'
     Assert ((Get-FileHash (Join-Path $fixtureHome 'bin\steerrunner.exe')).Hash.ToLowerInvariant() -ne $sha) 'Runner upgrade fixture did not change the release.'
     $env:SL_DEPLOY_RUNNER_CHANGE=''
+    $null=Run-Deploy 'discard-runs' $true @('-UpdateRunner','-DiscardRuns','-NoStart')
+    $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
+    Assert ($calls.Contains('--goal discard-runs') -and $calls.IndexOf(' prepare-deployment ') -lt $calls.IndexOf(' verify-runner-upgrade ') -and -not $calls.Contains(' start')) 'Explicit discard did not prepare before upgrade or ignored NoStart.'
     $null=Run-Deploy 'no-start' $true @('-NoStart')
     $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
     Assert (-not $calls.Contains(' start') -and -not $calls.Contains(' status')) 'NoStart started or checked readiness.'
@@ -170,6 +184,10 @@ try {
             if ($mode -eq 'drain') { Assert ($calls.Contains(' prepare-deployment') -and -not $calls.Contains(' start')) 'Drain failure did not stop first or restarted business.' }
         }
     }
+    $env:SL_DEPLOY_FAIL='stop'
+    $null=Run-Deploy 'discard-stop-failure' $false @('-UpdateRunner','-DiscardRuns')
+    $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
+    Assert ($calls.Contains('--goal discard-runs') -and -not $calls.Contains(' install') -and -not $calls.Contains(' start')) 'Failed discard proceeded with file replacement or startup.'
     $env:SL_DEPLOY_FAIL='preflight'
     New-Item -ItemType Directory -Path (Join-Path $fixtureHome 'application-api') -Force | Out-Null
     @{sha256=('b'*64);state_dir=(Join-Path $fixtureHome 'original-state')} | ConvertTo-Json | Set-Content (Join-Path $fixtureHome 'application-api\runner-build.json')

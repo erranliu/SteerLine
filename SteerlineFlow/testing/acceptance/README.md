@@ -1,5 +1,13 @@
 # 验收流程与记录
 
+任务启动与测试安排就绪衔接（2026-11-05）：[修复与验证](task-start-test-readiness.md)。测试安排未就绪时阻断首次/并行启动并显示当前准备状态；历史拒绝与当前状态分开展示，原请求保留。L1/L2、Web/HTTP 全集、定向 owner 及生产构建通过，未部署安装版。
+
+环境提交预算与首次错误保留（2026-11-05）：[修复与隔离回归](environment-submission-budget.md)。环境观察脱离 actor 五秒预算，原提交错误独立持久化，后续查询保留两类原因。
+
+部署显式放弃旧运行选项（2026-11-05）：[实现与隔离验证](deployment-discard-runs-option.md)，自动结算、归档并恢复任务，派发暂停，默认部署门禁保留。
+
+放弃旧运行后的安装部署恢复（2026-11-05）：[用户授权归档、Runner 升级及任务恢复](deployment-discarded-runs-20261105.md)。
+
 历史本机 Orca PID 阻塞 Runner 升级（2026-11-05）：[修复与验证](deployment-historical-pid.md)。
 
 环境检测切换到 Orca 原生执行器（2026-11-04）：[修复与真实检测](environment-native-orca-executor.md)。保留原开发配置，SteerlineTest 已部署并完成远端检测。

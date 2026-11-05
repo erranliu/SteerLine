@@ -226,7 +226,13 @@ func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutd
 	return verifyProjectOfflineMode(ctx, c, p, id, runnerProof, restartPin, false)
 }
 
-func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, interrupted bool) (ProjectStopVerification, error) {
+// Discard preparation already holds the repository lock for the complete swap.
+func verifyDiscardProject(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, proof runnerclient.StoppedVerification) (ProjectStopVerification, error) {
+	return verifyProjectOfflineMode(ctx, c, p, id, proof, nil, false, true)
+}
+
+func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, interrupted bool, discardMode ...bool) (ProjectStopVerification, error) {
+	discard := len(discardMode) == 1 && discardMode[0]
 	proof := ProjectStopVerification{ConfigID: p.ConfigID, ProjectID: p.ProjectID, InstanceID: p.InstanceID}
 	reader, err := OpenNativeTaskReader(ctx, &c)
 	if err != nil {
@@ -236,11 +242,13 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	if httpcontract.ProjectID(c.Identity()) != p.ProjectID {
 		return proof, errors.New("original project configuration identity differs")
 	}
-	repoLock, err := host.LockRepository(c.Identity())
-	if err != nil {
-		return proof, err
+	if !discard {
+		repoLock, err := host.LockRepository(c.Identity())
+		if err != nil {
+			return proof, err
+		}
+		defer repoLock.Close()
 	}
-	defer repoLock.Close()
 	runLock, err := host.LockRepository(c.RunDir)
 	if err != nil {
 		return proof, err
@@ -309,7 +317,7 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 				if !found {
 					return proof, errors.New("original environment resource settlement unverified")
 				}
-				if r.Kind == "adaptation" && !r.Settled() {
+				if r.Kind == "adaptation" && !r.Settled() && !discard {
 					return proof, errors.New("environment report/PR settlement unverified; preserve original records")
 				}
 			}

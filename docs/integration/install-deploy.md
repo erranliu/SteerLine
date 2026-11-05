@@ -4,7 +4,7 @@
 
 ## 从源码更新
 
-需要同时构建 SteerLine、Web 和 Runner 时，双击根目录 `build-deploy-all.bat`。该入口复用 `build-deploy.bat` 并固定传入 `-UpdateRunner`，其余参数原样转交，默认完成构建、部署和启动。构建成功后脚本自动通过正式入口停止原安装，再核验原业务、原生资源和未完成控制已排空，通过后才替换文件；无需预先手动停服。服务退出不等于业务终态，未排空时保留原文件并报出具体原因，不自动恢复、取消 Run 或清库；v8 与旧目录不兼容。
+需要同时构建 SteerLine、Web 和 Runner 时，双击根目录 `build-deploy-all.bat`。该入口复用 `build-deploy.bat` 并固定传入 `-UpdateRunner`，其余参数原样转交，默认完成构建、部署和启动。构建成功后脚本自动通过正式入口停止原安装，再核验原业务、原生资源和未完成控制已排空，通过后才替换文件；无需预先手动停服。服务退出不等于业务终态，未排空时保留原文件并报出具体原因，默认不自动恢复、取消 Run 或清库；显式放弃旧运行见下方说明；v8 与旧目录不兼容。
 
 双击 SteerLine 仓库根目录 `build-deploy.bat`。已有安装默认复用 `execution.json` 固定的 Runner EXE，只构建 SteerLine 和 Web；首次安装或显式 `-UpdateRunner` 才从相邻 `..\SteerRunner` 源码构建 Runner。构建成功后停止应用，校验停止或同构建重启资格，安装 EXE 并重新启动。每次记录保存在 `<home>\deployments\<时间-随机ID>\deployment.json`，最新记录为 `<home>\deployment.json`，包含源码版本和三个 EXE 的实际摘要。
 
@@ -17,6 +17,8 @@
 .\build-deploy.bat -NoStart -NoPause
 # 显式构建 Runner；自动停服后校验排空，新候选须声明 v8 契约
 .\build-deploy-all.bat -NoPause
+# 显式放弃本安装全部旧运行，自动归档并重建任务后升级 Runner
+.\build-deploy-discard-runs.bat -NoPause
 # 覆盖源码位置或目标安装目录
 .\build-deploy.bat -RunnerRepo C:\Project\SteerRunner -InstallHome C:\SteerlineInstall -NoPause
 # 强制重新安装 Web 依赖；不改变 Runner 选择
@@ -35,7 +37,7 @@
 
 脚本只停止与更新显式目标安装目录，拒绝与源码、保留的旧安装目录 `C:\SteerlineRuntime` 或调试目录重叠。所需 EXE 全部准备成功后才停止服务；停止及同构建重启资格均无法核实，或仍有目标进程时不替换。Windows 短暂占用已停机的 EXE 时，仅对文件安装最多重试四次，每次前确认目标未重新运行；不重试任务操作。部署过程持有独占锁；失败保留构建包与错误，不宣称自动回滚。替换中途失败时先修复再重跑，不能仅凭某个 EXE 存在判断整包成功。默认启动后继续等候全部项目 ready，不能仅凭宿主启动成功报告完成。
 
-已有 `execution.json` 必须为 v3，保留默认方案与全部 profiles，只更新 Runner 固定信息；首次空安装只生成本机 Luna medium 默认方案，项目配置需另行提供。脚本不清空、搬运或升级数据库，不重复导入任务，不复制认证材料。可用以下命令查看状态：
+已有 `execution.json` 必须为 v3，保留默认方案与全部 profiles，只更新 Runner 固定信息；首次空安装只生成本机 Luna medium 默认方案，项目配置需另行提供。默认模式不清空、搬运或升级数据库，不重复导入任务，不复制认证材料；显式 -DiscardRuns 的归档及任务重建流程见下文。可用以下命令查看状态：
 
 ```powershell
 $env:STEERLINE_HOME='C:\SteerlineInstall'
@@ -45,6 +47,18 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 部署通过 Windows `Win32_Process.Create` 进程管理接口运行正式安装版 `start`，避免常驻服务继承部署宿主的 kill-on-close Job。启动代理显式保留调用者环境与目标 home、核对 Windows 用户，不将环境变量写入磁盘或命令行。部署包中的 `startup-<调用ID>.log/.json` 保存本次启动输出和退出码，启动返回成功后仍须全部项目 ready 才算部署完成；创建进程成功不等于部署成功。代理失败、超时或结果不匹配均失败，不自动重复启动。`-NoStart` 不创建启动代理。直接从其他自动化宿主调用 `start` 仍保留产品自身的生命周期检查。
 
 ## 同构建更新与重启
+
+### 显式放弃旧运行后升级 Runner
+
+只有确认不再继续本安装的旧执行时，双击根目录 `build-deploy-discard-runs.bat`，或用 `build-deploy-discard-runs.bat -NoPause` 自动调用。该入口固定传入 `-UpdateRunner -DiscardRuns`，其余参数原样转发，保留退出码；也可继续使用 `build-deploy-all.bat -DiscardRuns`。`-DiscardRuns` 必须与 `-UpdateRunner` 一起使用，作用范围是所选 InstallHome 的全部项目，不是某一个 Run；不传此开关时保持原停止、排空与升级规则。
+
+此模式仍先完成构建及候选离线能力校验，再停止原应用，核对宿主/Web 退出、项目集合、冻结配置及锁。任务定义和依赖先在独立位置通过正式任务校验与创建入口构造好；原固定 Runner 从公开冷查询取得全部 Run/input，对允许停止的原 Run 持久保存 stop 信封，在 worker 启动前受理，沿原请求查询结果，再停止原服务并核实全部原生资源结算。未知停止、已停止但有未完成恢复授权、创建/输入归属不明、项目或配置变化、缺失锁/证明仍会阻断，不强杀、不把“放弃”当作资源不存在。
+
+通过后自动把原项目 state、应用/Web 状态及原 Runner 目录移入 `<home>/maintenance/discard-runs-<调用ID>/`，将准备好的任务库切换到原位置，然后按原流程安装新程序。保留项目/Web 配置、执行方案及默认方案、任务编号/标题/类型/优先级/目标/完整固定契约和依赖，保留业务 Git 与远端 PR。**全部任务重新变为 open，所有项目设为 manual 且派发暂停**，旧领取、执行、交付、环境资格、测试生成、Roadmap 及控制历史只留在归档中，不恢复为新执行状态。已完成或已放弃的任务也会重新 open，恢复派发前应按实际业务选择任务。
+
+`-NoStart` 可以组合使用：任务库在安装前已准备好，不需要临时启动服务或手工导入任务。归档里的 `original-shutdown.json`、`discard.json` 保存原失败、原请求号、结算范围、任务数量和目录切换进度；部署包的 `shutdown-verification.json` 绑定本次调用及完整构建包。此流程只处理当前数据库格式和当前 Runner 命名空间，不迁移旧版状态。
+
+归档切换开始后若中断，`<home>/deployment-discard.json` 会保留，正常 start/serve、后续部署和升级预检均拒绝继续，避免把半完成的切换当作空安装。检查该记录及对应归档后完成现场恢复；不自动重发未知 stop、不自动回滚或循环重试。开始切换前失败则原执行目录不移动，服务可能已停止，原请求和诊断保留在本次维护目录。
 
 同构建重启可保留原后台执行，核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、冻结配置、checkpoint 和 Run/input；资源未结算诊断保持。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。原资源丢失时，Runner 返回 `blocked/manual_intervention_required`，由用户显式 resume 做有界原操作只读对账；不重建资源或自动重发输入。
 
