@@ -18,7 +18,7 @@ func WithConfigurationLock(home string, action func() error) error {
 	if err = verifyPrivateSnapshot(f); err != nil {
 		return err
 	}
-	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
 		return err
 	}
 	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)

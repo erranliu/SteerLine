@@ -138,3 +138,21 @@ steerrunner run-usage-events --run-id 0b2ac9b03e2d8fdf05ac1d4785bccf03 --snapsho
 L2最终复验：`test-results/L2/final-isolated-20261105/summary.json` passed=true、cleanup_complete=true，TestDeliverySmoke原断言通过（193.77秒）；原超时参数未放宽。最新UI的正式L1、L2、274项Web全量均通过。
 
 末次静态检查：Markdown: 686 files, 4246 local navigation links, 0 errors；`git diff --check` 通过。Runner受影响包go vet退出0；没有提示词正文、接线或黄金样本变更。精确改动文件摘要和最终报告索引另存外部 `handoff/steerline-manifest.json`。
+
+
+## 提交 PR 前质量审计（2026-11-05）
+
+本轮按用户指令审计和修复，再提两仓 PR，不合并、不部署。两仓工作分支均为 codex/billing-ownership；SteerLine 已同步 main 的 9b2e5d88，Runner 已同步 main 的 a66038c8。此前 f6a/df180 的报告保留原资格，本轮集成结果另登记，不继承为最新构建通过。
+
+| 确认问题 | 修复与回归 |
+| --- | --- |
+| Runner 的授权需求在重新观察失败后仍留在 checkpoint，可能在缓存发布时复活 | 每次实际重新观察先清空旧需求，仅本次核实的缺授权结果能重新建立；新测试修复前失败、修复后通过 |
+| 价表体积限制漏算末尾换行，临界更新可生成超过读取上限的文件 | 对最终落盘字节检查；用精确1MiB有效原文件和generation 9→10回归，拒绝更新并保留原文 |
+| 两个设置页的旧GET可在保存成功后晚到，覆盖新版本或误报已生效 | 保存成功后取消同键在途读取，再发布保存快照；延迟GET的价表/采集两组竞态测试通过 |
+| 授权需求查询超过64个Run即整体失败，丢掉已核实条目 | 保留当前服务/已核实条目，返回明确截断诊断，仍不查询第65项或授权未知根；真实子进程边界回归 |
+| 非Windows配置锁遇竞争立即失败，无法返回串行比较后的412 | 使用阻塞锁串行读取/比较/发布；现有Docker WSL执行静态Linux测试，无需安装工具 |
+| Unix home只大小写不同的链接路径被错误当作同一路径 | 仅Windows忽略大小写；Linux仅大小写链接home回归通过 |
+
+隔离审计证据根：C:/SteerlineDebug/wt-1148-billing/audit/20261105T102227Z。owners、app的原始诊断均通过；Linux六根全部通过，见 linux/result.json 与 test.txt；Runner修复前失败 diagnostics/audit-stale-requirement-before.jsonl、修复后 diagnostics/audit-runner-after.jsonl 位于共同scope根。目标旧GET竞态测试曾暴露busy禁用查询后的重读时序问题，已去掉不必要禁用，13项定向Web通过；原失败不改记通过。
+
+主干冲突保留原native-catalog及文档；自动冲突处理曾意外截尾，已从三个原Git对象重做合并并逐字校验尾部，最终差异保留完整主干。未改提示词或其黄金样本。最新固定Runner、正式回归和PR链接在后续结果中补齐。

@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -49,7 +50,11 @@ func (s Store) path() (string, error) {
 	p := filepath.Join(s.Home, "billing.json")
 	resolved, err := pathguard.ResolveProspective(p)
 	absolute, _ := filepath.Abs(p)
-	if err != nil || !httpfs.PrivatePath(s.Home, p) || !strings.EqualFold(filepath.Clean(resolved), filepath.Clean(absolute)) {
+	same := filepath.Clean(resolved) == filepath.Clean(absolute)
+	if runtime.GOOS == "windows" {
+		same = strings.EqualFold(filepath.Clean(resolved), filepath.Clean(absolute))
+	}
+	if err != nil || !httpfs.PrivatePath(s.Home, p) || !same {
 		return "", failure(400, "invalid_path", "billing configuration path is linked or invalid")
 	}
 	return p, nil
@@ -182,10 +187,10 @@ func (s Store) change(expected string, update func(*File) error) (Snapshot, erro
 			return err
 		}
 		raw, err := json.MarshalIndent(f, "", "  ")
+		raw = append(raw, '\n')
 		if err != nil || len(raw) > MaxBytes {
 			return failure(413, "configuration_too_large", "billing configuration exceeds limit")
 		}
-		raw = append(raw, '\n')
 		p, err := s.path()
 		if err != nil {
 			return err

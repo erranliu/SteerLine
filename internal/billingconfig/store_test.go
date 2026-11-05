@@ -1,6 +1,7 @@
 package billingconfig
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -64,6 +65,49 @@ func TestBillingConfigRejectsInvalidStoredFiles(t *testing.T) {
 		if err != nil || string(after) != raw {
 			t.Fatal("invalid original lost", err)
 		}
+	}
+}
+
+func TestPublicationLimitIncludesFinalNewline(t *testing.T) {
+	s := Store{Home: t.TempDir()}
+	base, err := s.Save("*", draft())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := base.File
+	f.Generation = 9
+	raw, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Policies[0].Source += strings.Repeat("x", MaxBytes-1-len(raw))
+	raw, err = json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = append(raw, '\n')
+	if len(raw) != MaxBytes {
+		t.Fatal(len(raw))
+	}
+	path := filepath.Join(s.Home, "billing.json")
+	if err = os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.Activate(before.Digest, before.Active)
+	var failure *Error
+	if !errors.As(err, &failure) || failure.Status != 413 {
+		t.Fatal("oversize publication accepted", err)
+	}
+	after, readErr := os.ReadFile(path)
+	if readErr != nil || string(after) != string(raw) {
+		t.Fatal("failed publication changed authority", readErr)
+	}
+	if _, err = s.Read(); err != nil {
+		t.Fatal("original file became unreadable", err)
 	}
 }
 func TestVersionsAndConditionalPublication(t *testing.T) {

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/executionconfig"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 )
 
 // UsageCollection reads only the currently owned daemon and known candidate Runs.
@@ -71,26 +73,35 @@ func (d *ApplicationDirectory) usageCollection(ctx context.Context, includeRequi
 		if readErr != nil {
 			return out, readErr
 		}
-		for _, c := range candidates {
-			if c.RunID == "" || !strings.EqualFold(filepath.Clean(c.StateDir), filepath.Clean(cli.StateDir)) {
-				continue
-			}
-			reads++
-			if reads > 64 {
-				return out, errors.New("usage requirement query budget exceeded")
-			}
-			usage, queryErr := cli.RunUsage(ctx, c.RunID)
-			if queryErr != nil {
-				out.Diagnostic = "部分用量需求读取失败，不能据此扩大授权"
-				continue
-			}
-			for _, r := range usage.AccessRequirements {
-				if r.SourceRef == "" || r.ObservedAt.IsZero() || !executionconfig.SafeUsageRoot(r.SessionRoot) {
-					continue
-				}
-				out.Requirements = append(out.Requirements, executionconfig.UsageRequirement{RunID: c.RunID, SourceRef: r.SourceRef, Environment: r.Environment, HostID: r.HostID, SessionRoot: r.SessionRoot, ObservedAt: r.ObservedAt})
-			}
+		if !readUsageRequirements(ctx, cli, candidates, &reads, &out) {
+			return out, nil
 		}
 	}
 	return out, nil
+}
+
+// Budget exhaustion limits discovery, not the already verified service or roots.
+func readUsageRequirements(ctx context.Context, cli runnerclient.Client, candidates []runnerstate.Candidate, reads *int, out *executionconfig.UsageCollection) bool {
+	for _, c := range candidates {
+		if c.RunID == "" || !strings.EqualFold(filepath.Clean(c.StateDir), filepath.Clean(cli.StateDir)) {
+			continue
+		}
+		if *reads >= 64 {
+			out.Diagnostic = "仅查询前64个Run的授权需求；已核实条目可用，其余尚未查询"
+			return false
+		}
+		*reads++
+		usage, queryErr := cli.RunUsage(ctx, c.RunID)
+		if queryErr != nil {
+			out.Diagnostic = "部分用量需求读取失败，不能据此扩大授权"
+			continue
+		}
+		for _, r := range usage.AccessRequirements {
+			if r.SourceRef == "" || r.ObservedAt.IsZero() || !executionconfig.SafeUsageRoot(r.SessionRoot) {
+				continue
+			}
+			out.Requirements = append(out.Requirements, executionconfig.UsageRequirement{RunID: c.RunID, SourceRef: r.SourceRef, Environment: r.Environment, HostID: r.HostID, SessionRoot: r.SessionRoot, ObservedAt: r.ObservedAt})
+		}
+	}
+	return true
 }

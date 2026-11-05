@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
+  act,
   fireEvent,
   render,
   screen,
@@ -107,4 +108,40 @@ it("retains a conflicting draft until the user reloads", async () => {
   await waitFor(() =>
     expect(screen.getByLabelText("价格来源")).toHaveValue(""),
   );
+});
+
+it("cancels an older background read before publishing a saved version", async () => {
+  const writes = mount();
+  await screen.findByLabelText("价格来源");
+  const client = clients[clients.length - 1];
+  let finish!: (value: Response) => void;
+  let signal: AbortSignal | undefined;
+  const old = structuredClone(
+    client.getQueryData<BillingSnapshot>(["isolated-home", "billing-config"])!,
+  );
+  vi.mocked(fetch).mockImplementationOnce(async (_url, init) => {
+    signal = init?.signal as AbortSignal;
+    return new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+  });
+  let read!: Promise<unknown>;
+  await act(async () => {
+    read = client.refetchQueries({
+      queryKey: ["isolated-home", "billing-config"],
+    });
+  });
+  fireEvent.change(screen.getByLabelText("价格来源"), {
+    target: { value: "new authority" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存为新价表版本" }));
+  await screen.findByText(/价表已保存并立即/);
+  expect(signal?.aborted).toBe(true);
+  await act(async () => {
+    finish(new Response(JSON.stringify(old)));
+    await read;
+  });
+  expect(writes).toHaveLength(1);
+  expect(screen.getByRole("combobox", { name: "价表版本" })).toHaveValue("new");
+  expect(screen.getByLabelText("价格来源")).toHaveValue("new authority");
 });

@@ -28,6 +28,7 @@ export function BillingSettings({
 }: GenerationSettingsProps & { onDirtyChange?: (dirty: boolean) => void }) {
   const api = useMemo(() => billingAPI(csrf), [csrf]);
   const client = useQueryClient();
+  const [busy, setBusy] = useState(false);
   const query = useQuery({
     queryKey: [home, "billing-config"],
     queryFn: ({ signal }) => api.read(signal),
@@ -37,7 +38,6 @@ export function BillingSettings({
     base: BillingSnapshot;
     policy: PricePolicy;
   }>();
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const base = draft?.base ?? query.data;
@@ -67,6 +67,7 @@ export function BillingSettings({
       const result = version
         ? await api.activate(version, base)
         : await api.save(policy, base);
+      await client.cancelQueries({ queryKey: [home, "billing-config"] });
       client.setQueryData([home, "billing-config"], result);
       setDraft(undefined);
       window.dispatchEvent(new Event("billing-settings-changed"));
@@ -83,7 +84,11 @@ export function BillingSettings({
     }
   }
   return (
-    <section id="billing" className="settings-panel billing-settings" aria-label="计费设置">
+    <section
+      id="billing"
+      className="settings-panel billing-settings"
+      aria-label="计费设置"
+    >
       <h2>计费</h2>
       <p>所有项目共享。按配置价表估算，非实际账单；历史用量按当前价表重算。</p>
       <p className="muted">

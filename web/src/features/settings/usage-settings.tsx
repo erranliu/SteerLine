@@ -22,6 +22,7 @@ export function UsageSettings({
 }: GenerationSettingsProps & { onDirtyChange?: (dirty: boolean) => void }) {
   const api = useMemo(() => executionConfigAPI(csrf), [csrf]);
   const client = useQueryClient();
+  const [busy, setBusy] = useState(false);
   const config = useQuery({
     queryKey: [home, "execution-config"],
     queryFn: ({ signal }) => api.read(signal),
@@ -37,7 +38,6 @@ export function UsageSettings({
     base: ConfigSnapshot;
     policy: UsagePolicy;
   }>();
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const base = draft?.base ?? config.data;
@@ -69,6 +69,7 @@ export function UsageSettings({
         { ...draft.base.config, usage_policy: draft.policy },
         draft.base.saved_digest,
       );
+      await client.cancelQueries({ queryKey: [home, "execution-config"] });
       client.setQueryData([home, "execution-config"], result);
       setDraft(undefined);
       void client.invalidateQueries({
