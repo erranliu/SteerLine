@@ -152,7 +152,27 @@ L2最终复验：`test-results/L2/final-isolated-20261105/summary.json` passed=t
 | 授权需求查询超过64个Run即整体失败，丢掉已核实条目 | 保留当前服务/已核实条目，返回明确截断诊断，仍不查询第65项或授权未知根；真实子进程边界回归 |
 | 非Windows配置锁遇竞争立即失败，无法返回串行比较后的412 | 使用阻塞锁串行读取/比较/发布；现有Docker WSL执行静态Linux测试，无需安装工具 |
 | Unix home只大小写不同的链接路径被错误当作同一路径 | 仅Windows忽略大小写；Linux仅大小写链接home回归通过 |
+| 授权需求查询取消后仍继续消耗后续查询额度 | 每次公开查询前检查上下文，立即停止并保留已核实需求；与第64/65项边界一同回归 |
+| 保存未变化或改回已生效策略时仍提示必须重启 | 保存通知引用实际生效状态，不把保存动作等同待重启；改回生效策略的组件断言通过 |
 
 隔离审计证据根：C:/SteerlineDebug/wt-1148-billing/audit/20261105T102227Z。owners、app的原始诊断均通过；Linux六根全部通过，见 linux/result.json 与 test.txt；Runner修复前失败 diagnostics/audit-stale-requirement-before.jsonl、修复后 diagnostics/audit-runner-after.jsonl 位于共同scope根。目标旧GET竞态测试曾暴露busy禁用查询后的重读时序问题，已去掉不必要禁用，13项定向Web通过；原失败不改记通过。
 
-主干冲突保留原native-catalog及文档；自动冲突处理曾意外截尾，已从三个原Git对象重做合并并逐字校验尾部，最终差异保留完整主干。未改提示词或其黄金样本。最新固定Runner、正式回归和PR链接在后续结果中补齐。
+主干冲突保留原native-catalog及文档；自动冲突处理曾意外截尾，已从三个原Git对象重做合并并逐字校验尾部，最终差异保留完整主干。未改提示词或其黄金样本。最新固定Runner与正式回归见后续结果，配套Runner PR为 [#120](https://github.com/erranliu/SteerRunner/pull/120)。
+
+### 审计最终版本验证
+
+本节路径相对上述 audit 根。受测 SteerLine 运行代码提交 `f75e67f41ab1eed89835f11c0f0796b4f77bacb4`；后续仅更新验收文档。Runner 受测提交 `3bac937bfb62c3a4a74889c3b7b46627f6a36dcf`，独立构建 `0.2.0-dev.billing-audit`，SHA256 `125124b9f8f835fc886c7bd1cab025da12b67d9a2242ea0d8bbf20e017a4c55b`，source digest `f378f808e8f8ff807c2f9445de661f58db95cbcaf354452134a3637b9a5f7252`，source_dirty=false。不是前文历史 billing2 构建。
+
+- `owners`、`app`、`app-boundary`：相关 owner 与应用事实组合通过；边界测试实际执行第64次子进程查询，第65次与取消后不再执行，保留已核实需求。
+- `runner-selection.json` 明确逐包选择96个根；`runner-test-summary.json` 为245项（含子项）通过、0skip/0fail，114.99秒；`runner-vet.txt` 退出0。未将有同名测试的其他包误选入，不宣称整仓通过。
+- `runner-contract` 正式公开契约三根通过；`published` 经固定CLI消费新的Runner自有已停止夹具，通过精确USD 0.00014及completion-only不可计价断言；`runner-fixture.jsonl`、`published-fixture` 保留创建和结算证据。
+- `final-L1`、`final-L2`、`final-web` 正式全部通过，Web 290项/零skip；L1执行31.27秒。`http` 七owner全量通过（96.6秒），与E2E串行。
+- `linux/result.json` 与 `test.txt`：已有Docker WSL中真实执行静态Linux配置测试，六根通过、零skip，含跨进程锁和大小写链接；不只做交叉编译。
+- 独立包 `packages/dev-20261105-190641-f75e67f4` 完整生产构建与真实浏览器 `web.smoke.billing` 通过，见包内 `evidence/billing-browser`；`browser-result.json` 确认清理完成，无本轮包服务进程遗留。
+- `remote/summary.json` 为正式live通过（45.51秒）。新Run `56da21db97db98a07d6485c0e4816343` 在同一原绑定内完成默认拒绝→核实叶目录授权→正式停启→读取→去重→撤权保历史→原Run停止/服务结算；revision7、source1/1、1响应、14,862 Token（输入14,851，其中uncached3,075/cache_read11,776；输出11）。原生时间仍为completion，费用保持PRICE_PERIOD_UNKNOWN。`live/cleanup.json` verified=true，`orca-workspace-cleanup.json` 确认仅本轮workspace关闭/移除。未重新发送原输入，未操作安装Task101。
+
+环境全量的第一次 `environment` 因 `TestEnvironmentDetectionNeedsNoProjectCatalogueOrPlatformCopies` 中夹具Git初始化超时失败；保留原报告。原断言单独在 `environment-isolated` 通过（29.10秒），没有放宽超时。最后 `environment-final/summary.json` 正式全量 passed=true/complete=true，App组739.77秒；原参数和全部登记根均保留，未跳过失败用例。
+
+最终静态检查：`registry-final` 三根正式清单/显式live选择回归通过；Markdown 694文件、4277本地导航链接、0错误；两仓 `git diff --check` 通过。进程核实仅筛选本轮独立scope，无遗留Runner/后端/Web服务；未停止或改动其他聊天的安装/测试进程。
+
+提交PR前刷新：SteerLine目标main仍为 `9b2e5d886b8f56eaf07bc697ca78c578c91eec00`。Runner main前进到 `a78d87da05120b7e6b99981b396d6cecd4d60d92`（#118能力传输复用）；与受测分支的 `git merge-tree --write-tree` 返回0、无内容冲突，不为Rebase提示重写受测历史。本节结果仅属于上述受测head，不冒充最新main合并后复验。
