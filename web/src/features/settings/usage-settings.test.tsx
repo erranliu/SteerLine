@@ -152,4 +152,8 @@ it("does not let a pre-save read claim that changed collection settings are alre
   });
   expect(screen.getByLabelText("启用 Token 采集")).not.toBeChecked();
   expect(screen.getByText("已保存，待正式重启")).toBeVisible();
+  fireEvent.click(screen.getByLabelText("启用 Token 采集"));
+  fireEvent.click(screen.getByRole("button", { name: "保存采集设置" }));
+  await screen.findByText("运行中策略已生效");
+  expect(screen.queryByText(/采集设置已保存，待正式重启/)).toBeNull();
 });

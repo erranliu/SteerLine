@@ -76,7 +76,7 @@ export function UsageSettings({
         queryKey: [home, "execution-config-status"],
       });
       setNotice(
-        "采集设置已保存，待正式重启 SteerLine 生效；尚未扩大运行中权限。",
+        "采集设置已保存，是否生效以上方运行中策略为准。",
       );
     } catch (e) {
       setError(String(e));
