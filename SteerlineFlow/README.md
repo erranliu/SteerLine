@@ -13,4 +13,4 @@
 | 验收与历史报告 | [testing/acceptance/](testing/acceptance/README.md) 保存任务专属计划、已验/待验和历史结果；[报告约定](testing/reports.md) 说明证据及登记。原始大体积产物另存，文档保留摘要和定位。 |
 | 过期流程文档 | [archive/](archive/README.md)：历史 Spec/Plan、旧规划与被替代设计，不作为当前执行入口。 |
 
-普通开发由当前聊天直接实现；明确要求 roadmap 调度时按 RoadmapGuide 执行。安装和隔离调试说明见 `docs/` 中的[独立调试指南](../docs/runtime-install-debug.md)。迁移目录不改变既有任务、依赖、执行授权或历史验证结论。固定 Git 版本的历史路径仍按原 commit 读取，当前文档导航和程序默认读取使用本目录。
+普通开发由当前聊天直接实现；明确要求 roadmap 调度时按 RoadmapGuide 执行。操作说明见[安装部署](../docs/integration/install-deploy.md)和[独立调试](../docs/runtime-install-debug.md)。迁移目录不改变既有任务、依赖、执行授权或历史验证结论。固定 Git 版本的历史路径仍按原 commit 读取，当前文档导航和程序默认读取使用本目录。

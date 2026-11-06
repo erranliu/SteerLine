@@ -1,6 +1,6 @@
 # 原生任务共同约束
 
-2026-10-14 用户修订：任一已绑定候选 PR 核验已合并即可提交唯一交付并将 Task 转为 closed；其他候选已合并/状态未知或阶段推进不阻塞该候选交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。下文“所有候选 PR 可核实且只有一个合并”以及 closed 后迟到合并监控的历史要求不再适用；当前规则见[数据模型](../../docs/product-design/data-model.md#人工候选实验)，验证见[专属验收](../testing/acceptance/candidate-first-merged-close.md)。
+2026-10-14 用户修订：任一已绑定候选 PR 核验已合并即可提交唯一交付并将 Task 转为 closed；其他候选已合并/状态未知或阶段推进不阻塞该候选交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。下文“所有候选 PR 可核实且只有一个合并”以及 closed 后迟到合并监控的历史要求不再适用；当前规则见[数据模型](../../docs/product-design/data-model.md#候选参与与原请求)，验证见[专属验收](../testing/acceptance/candidate-first-merged-close.md)。
 
 本文是可被独立任务 Spec 引用的共同约束，不是一份执行 Spec，不承担任务、实现计划或多个 PR 的验收清单。每个任务必须有自己的独立 Spec、独立 Plan 和一个独立实现 PR。
 

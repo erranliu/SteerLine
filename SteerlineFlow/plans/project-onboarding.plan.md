@@ -10,7 +10,7 @@
 
 必须已有 Go 应用 host、应用认证/协议、现有项目目录和独立 Web 入口。前置只提供“已配置项目”访问，没有结构核验或建库准入；本任务将其扩展为显式登记，不追溯改写前置验收。
 
-结构规则归[project-structure.md](../../docs/product-design/project-structure.md)，模板归[project-onboarding-prompt.md](../../docs/product-design/project-onboarding-prompt.md)。项目逻辑进入 Go 应用层，不进入 Web/TUI。复用 `task_documents.go` 的精确 commit 普通 blob 读取、Task 模型的规范路径/摘要能力、`service_preflight.go`/`native_state_preflight.go` 的具体参数/状态检查、`native_project_open.go`/SQLite 的原生权威初始化；不构造假 TaskContract，不复制 Task/DAG 或 worker 流程。
+结构规则归[project-structure.md](../../docs/product-design/project-onboarding.md#拟议结构与核验)，模板归[project-onboarding-prompt.md](../../docs/product-design/project-onboarding-prompt.md)。项目逻辑进入 Go 应用层，不进入 Web/TUI。复用 `task_documents.go` 的精确 commit 普通 blob 读取、Task 模型的规范路径/摘要能力、`service_preflight.go`/`native_state_preflight.go` 的具体参数/状态检查、`native_project_open.go`/SQLite 的原生权威初始化；不构造假 TaskContract，不复制 Task/DAG 或 worker 流程。
 
 现有 `OpenNativeTaskProject` 和宿主启动可以直接初始化，本任务必须统一关住未纳管新初始化旁路；只加检查页面不足以交付。当前格式库复用只读校验，实际项目写者继续由原服务拥有；新建库和应用登记分别提交、分别留事实。
 

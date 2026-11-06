@@ -14,7 +14,7 @@
 
 4. **接入统一决策。** 扩展现有 Decision 请求/答案 DTO 以保留原生多题和请求身份；查询与运行投影不得覆盖同时待答的请求。两类反馈共用 `answer_decision`，分别回复原请求或启动原 thread 的新 turn。更新控制台提示、送达进度和失效反馈处理；等待回答时保留 active turn。恢复采用有界逐执行核验，核验结束后允许其他合格任务继续。执行验收 A 的一条双任务真机闭环，其余输入和故障分支按 B 自动验证。
 
-5. **回归与交付。** A–C 三组验收按 Spec 记录证据；C 复用现有 PR/TaskDelivery 回归，未修改交付逻辑时不另设人工合并验收。实现审计已完成完整 Go 测试，主线同步及补验按当前 AGENTS.md 使用最小入口与定向测试，并运行 `go vet` 和 Windows/Linux 构建；仅在新改动或失败影响结论时补验。原始证据保存在本次新临时目录，最小结果登记于任务专属验收文档，标明真实、模拟和未测范围。更新 [数据契约](../../docs/product-design/data-model.md)、[决策说明](../../docs/product-design/decisions.md)、[会话事件说明](../../docs/product-design/conversation-events.md)和受影响运行说明；执行 `git diff --check`。本次实现可合并并使用新本地路径；仅 race detector 的环境补验留在第一阶段残留。
+5. **回归与交付。** A–C 三组验收按 Spec 记录证据；C 复用现有 PR/TaskDelivery 回归，未修改交付逻辑时不另设人工合并验收。实现审计已完成完整 Go 测试，主线同步及补验按当前 AGENTS.md 使用最小入口与定向测试，并运行 `go vet` 和 Windows/Linux 构建；仅在新改动或失败影响结论时补验。原始证据保存在本次新临时目录，最小结果登记于任务专属验收文档，标明真实、模拟和未测范围。更新 [数据契约](../../docs/product-design/data-model.md)、[决策说明](../../docs/product-design/decisions.md)、[会话事件说明](../../docs/product-design/execution-observability.md#公开结果来源)和受影响运行说明；执行 `git diff --check`。本次实现可合并并使用新本地路径；仅 race detector 的环境补验留在第一阶段残留。
 
 
 ## 测试计划（历史文档整理，非产品验收）

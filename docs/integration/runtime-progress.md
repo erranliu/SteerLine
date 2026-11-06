@@ -1,39 +1,35 @@
 # 单文件运行时测试进度
 
-SteerLine 从冻结安排生成 `test.<test_id>: false` 对象，base64 编码后随候选公开 submit 的 `progress_file.initial_content_base64` 提交。Runner 在真实工作区绑定单文件，通过 `STEERLINE_PROGRESS_FILE` 提供路径；不理解 JSON 或测试含义。
+SteerLine 定义固定测试字段与通过含义，Runner 只绑定、采集和公开文件字节，不解释测试结果。通道用于展示本候选进度，不决定执行终态、任务交付或详细测试历史；实现入口为[进度服务](../../internal/testmanagement/progress.go)。
 
-入口开始/重跑置 false；完整通过后置 true。失败、跳过、前置失败、零匹配和不完整选择均未完成。SteerLine 查询 `progress-file --run-id R`，核验身份、版本和原始字节，再展示已通过/未完成。断连和格式错误保留最后有效快照并显示诊断，进度不改变执行终态。
+## 字段与固定来源
+
+候选从已就绪的冻结安排生成 `test.<test_id>: false`，经 `progress_file.initial_content_base64` 随原 submit 保存。Runner 绑定真实工作区内唯一文件，通过 `STEERLINE_PROGRESS_FILE` 提供路径；不接受模型自选位置。
 
 ```json
 {"test.l1.minimum":false,"test.smoke.delivery":true}
 ```
 
-候选完整安排仍随原请求持久保存，进度字段、API 展示和存储核验以它为权威。实施/审计提示使用保持顺序的完整 ID 列表、Plan/commit、原安排及原快照摘要；准备阶段从固定 Git 提交读取 Plan、测试规范和清单，逐项核对完整定义（含 note），再要求执行步骤读取这些真实工作区文件。缺少必需材料或定义不一致时在提交前拒绝，不重新选择测试。
-
-正式写入器与固定提交中的 `tools/testing/RuntimeProgress.ps1` 仅在 CRLF/LF 等价时才引用真实项目路径；缺失或不同源时，提示仍提供完整正式源码和接线要求。每个实施/审计步骤独立取得所需材料，逐 ID 核对真实入口，不以 helper 存在证明入口已接线。发布和只读报告只接收不得写进度的边界，不接收写入器。新模板仅作用于新操作，原请求观察/恢复不重渲染或重发。详见[调用方收敛 Spec](../../SteerlineFlow/spec/caller-prompt-convergence.spec.md)。
+完整安排保存在原候选；实际执行从同版本文件读取安排、定义和 note，按固定顺序核对真实入口，缺文件、版本或定义不符时阻断，不重新选测试。运行期协议唯一正文为[项目进度协议](../../SteerlineFlow/testing/runtime-progress.md)，正式 writer 为同版本 [RuntimeProgress.ps1](../../tools/testing/RuntimeProgress.ps1)，来源定位见[固定文件模型](../../internal/testmanagement/model/documents.go)。新请求通过固定文件供给，不在提示词内附写入器源码或 inline 兜底；原请求恢复不重渲染或补发。
 
 ## 写入入口
 
 ```powershell
 ./tools/report-progress.ps1 -Name test.l1.minimum -Reset
-# 正式测试入口在真实完整通过后调用
+# 由真实测试入口在完整通过后调用
 ./tools/report-progress.ps1 -Name test.l1.minimum -Completed
 ```
 
-脚本操作整个环境绑定文件中的既有字段，不接受自选路径，不新增字段。底层 `tools/testing/RuntimeProgress.ps1` 供项目入口复用，未注入变量时无操作；自动入口只处理本次文件声明的 ID。读改写由同目录 `.lock` 文件字节 0 的 1 字节排他锁串行，临时文件完整刷新后原子替换；锁文件不删除，进程退出释放锁。
+正式 PowerShell writer 支持 Windows PowerShell 5.1，供登记入口复用；未注入变量时无操作。入口开始或重跑先清零，只有实际选择非零、无失败/意外跳过且输入、原报告与清理核验全部通过时才置 true。失败、未完成或接线失败保持 false，不用 Agent 自述、单个 exit 0 或旧报告事后填通过。
 
-SteerLine `cmd/test-feedback` 的 L1、L2、L3 和 L4 使用原真实 summary/场景清理校验决定 true。通用 Go 与 PowerShell 写者使用相同文件和锁协议。业务项目采用相同脚本，由实际入口的选择、用例、输入和清理核验结果驱动，不由模型填报测试通过。
+逐 ID 核对入口实际接线，文件存在或一个 dot-source 不证明全部入口已覆盖。只写本次声明的既有布尔字段，不新增 publication、PR 或报告元数据；发布及只读报告步骤不写进度。需要补接线时保持原测试选择、定义与通过要求，之后实际运行原入口。
 
-系统在实施/审计执行提示中附带与本仓入口同源的 PowerShell 7 写入器源码。固定项目版本尚未接入时，由实施步骤先把它接入原登记入口，再运行测试；不假定目标项目已有 `tools/report-progress.ps1`。真实报告和通过条件仍由原入口判定，接入失败不能事后手填完成。发布及只读报告步骤收到独立的文件只读约束，原发布指令和 PR 回复契约保留，禁止向测试对象追加 `publication` 等元数据。
+并行写入用同目录 `.lock` 文件的字节锁串行读改写，完整刷新临时文件后原子替换；不覆盖其他字段，不删除锁文件，进程退出释放锁。其他语言写者遵守同一协议，原日志和标准报告仍由各入口保存。
 
-## 记录及部署边界
+## 观察与历史
 
-候选不再调用 R2 artifacts 或 workspace-git，不要求 managed 报告及其 summary 字节预算。原项目日志仍保存，独立 `test-feedback record` 沿主干机制将标准报告导出为 Git JSON，历史页只读已核实主分支；布尔进度不会自动生成详细历史。
+SteerLine 从公开 `progress-file` 核验原 Run/input 关联、版本、字节及摘要，解析结果必须与冻结安排字段集合一致且全为 true/false。版本倒退、同版本内容变化或身份错误拒绝；断连、坏格式和采集不可用保留最后有效结果并显示诊断。进度文件版本不代替候选或 Runner revision。
 
-新库 schema 为 31（主干 Git 历史已使用 30），原开发 schema 明确拒绝，不做迁移、双写或回退。本次源代码改造不更新安装版，不接管或补写旧在途候选。新候选须使用发布 progress-file 能力的 Runner。
+布尔进度不自动生成详细报告或 Git 测试历史；独立标准报告按[报告约定](../../SteerlineFlow/testing/reports.md)保存和登记。旧 R2 artifacts/workspace-git 候选收集已移除，不重新引入其读取或门禁。持久格式归[数据模型](../product-design/data-model.md#当前格式来源)，Plan 自定义进度目标仍未实现，不因本文产生新字段。
 
-Plan 自定义目标声明/解析/注入暂未实现，首期固定测试字段。后续扩展仍由 SteerLine 定义语义，Runner 通道保持不变。
-
-[Spec](../../SteerlineFlow/spec/runtime-test-progress.spec.md)、[Plan](../../SteerlineFlow/plans/runtime-test-progress.plan.md)、[验收](../../SteerlineFlow/testing/acceptance/runtime-test-progress.md)。
-
-2026-10-26 原 Task18 第二轮显示 0/6 的修复与新两轮复验单独登记在[后续验收](../../SteerlineFlow/testing/acceptance/test-progress-0of6-20261026.md)，原轮次结果保持不变。
+初次实现、旧 schema 与 0/6 修复的原版本证据保留在[历史入口](../../SteerlineFlow/archive/design/runner-reliability-history.md#第四批整理来源)。本文整理只修正说明，不改协议正文、writer、提示词、黄金样本或生产接线。

@@ -82,7 +82,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 | 重构：统一启动与多项目共进程宿主 | 一个 bat、双常驻进程、后端加载配置项目；已实施并完成约定自动验收，桌面体验待人工验收 | [Spec](unified-startup.spec.md) · [Plan](../plans/unified-startup.plan.md) | [记录](../testing/acceptance/unified-startup.md) |
 | 后续：项目准备、核验与纳管 | 消费先行应用能力及后继宿主；外部 Codex 提示词、结构检查、确认后登记/建库；用户明确后置 | [Spec](project-onboarding.spec.md) · [Plan](../plans/project-onboarding.plan.md) | [记录](../testing/acceptance/project-onboarding.md) |
 
-[SpecGuide.md](SpecGuide.md) 维护 SteerLine 产品草稿转正时必读的 Spec / Plan 生成规范：避免过度设计，先查现有代码再整合，先做相关任务整体规划，明确执行链路和桥接必要性，并落实最小测试及验收覆盖。[早期交互设计归档](../archive/design/planning-ui.md)与[原型](../../docs/product-design/prototypes/planning-ui/index.html)记录规范入口和受控生成设想，不表示对应产品流程已实现，也不改变用户直接授权的普通仓库开发入口。
+[SpecGuide.md](SpecGuide.md) 维护 SteerLine 产品草稿转正时必读的 Spec / Plan 生成规范：避免过度设计，先查现有代码再整合，先做相关任务整体规划，明确执行链路和桥接必要性，并落实最小测试及验收覆盖。[早期交互设计归档](../archive/design/planning-ui.md)与[原型](../archive/design/prototypes/planning-ui/index.html)记录规范入口和受控生成设想，不表示对应产品流程已实现，也不改变用户直接授权的普通仓库开发入口。
 
 ## HTTP 接入后的解耦规格
 

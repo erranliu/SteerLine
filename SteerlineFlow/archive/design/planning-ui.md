@@ -1,6 +1,6 @@
 # 规划界面原型参考（历史方案）
 
-状态：本文与[交互原型](../../../docs/product-design/prototypes/planning-ui/index.html)保留早期 Web 构想及设计流程。Web 前端已实现，但规划工作台、规划 Agent、验收/测试产品管理、版本/Bug 管理等仍未交付；原型不构成当前实现契约。当前工程交付边界见[Spec 索引](../../spec/README.md)和[执行清单](../../Roadmap/execution-map.md)。
+状态：本文与[交互原型](prototypes/planning-ui/index.html)保留早期 Web 构想，以下能力状态、任务和门槛按成文时解释。Roadmap、测试管理等部分能力后来已交付，原文“尚未交付”不作为当前结论；当前工程及验证范围见[Web README](../../../web/README.md)、[Roadmap 设计](../../../docs/product-design/roadmap-promotion.md)和[Spec 索引](../../spec/README.md)。完整旧原型操作说明及来源见[归档入口](prototypes/planning-ui/README.md)。
 
 ## 2.1 DAG与执行UI
 
@@ -38,7 +38,7 @@ DAG 节点与任务列表按 Task 汇总候选数量、运行/待回答/待合�
 
 一级“长期文档”为 AI 维护的技术资料提供只读入口，分为固定文档与设计目录。固定默认路径为 `docs/architecture.md`、`docs/architecture/parallel-development.md`、`docs/testing.md`、`docs/spec/SpecGuide.md`，分别维护架构、并行边界、长期测试方法及正式文档生成规则；SteerLine 识别命名、用途与必要内容。目录 `docs/design/` 可按主题包含多篇设计文档，文件名自由，不要求每篇注册固定角色。
 
-2026-10-15 的[项目结构方案](../../../docs/product-design/project-structure.md)将这四类角色与设计目录作为项目准备要求，通过显式清单采用现有文件，避免复制正文。配套[准备提示词](../../../docs/product-design/project-onboarding-prompt.md)交给用户在 Codex 执行，服务核验通过并经用户确认后才纳管/建库；主界面的项目切换与职责归[项目管理方案](../../../docs/product-design/project-management.md)。这些仍是设计，原型和当前产品尚未实现该准入流程。
+2026-10-15 的[项目结构方案](../../../docs/product-design/project-onboarding.md#拟议结构与核验)将这四类角色与设计目录作为项目准备要求，通过显式清单采用现有文件，避免复制正文。配套[准备提示词](../../../docs/product-design/project-onboarding-prompt.md)交给用户在 Codex 执行，服务核验通过并经用户确认后才纳管/建库；主界面的项目切换与职责归[项目管理方案](../../../docs/product-design/project-onboarding.md)。这些仍是设计，原型和当前产品尚未实现该准入流程。
 
 页面展示正文快照、待合入更新预览、更新状态、已记录代码覆盖、更新时间、触发依据和维护记录，不提供手动新建 / 编辑 / 更新工作流。“查看结构约定”说明固定路径、目录范围与更新时机。状态分已同步、待更新、更新中、变更待合入、更新失败；草稿生成 / PR 创建不算已同步，失败保留原正文。规范正文与明确维护产生的新规则分别预览，生成仍固定原输入版本。
 

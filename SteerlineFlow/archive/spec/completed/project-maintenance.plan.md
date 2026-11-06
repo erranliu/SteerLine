@@ -17,7 +17,7 @@
 | [runner_candidates.go](../../../../internal/storage/sqlite/runner_candidates.go)、[runnerstate](../../../../internal/runnerstate) | 扩展原项目库预留事务，固定同一 Task 执行快照/候选/outbox，保留不可变字段规则 |
 | [testmanagement](../../../../internal/testmanagement)、[test_generations.go](../../../../internal/storage/sqlite/test_generations.go) | 保留严格解析、原 generation/profile/信封/停止，分离生成结果与单文件应用；不叠加通用 outbox |
 | [application_service.go](../../../../internal/app/application_service.go)、[product/api](../../../../internal/product/api)、[web/src](../../../../web/src) | 原宿主安排观察，原项目 actor 写依据/操作，沿原认证/路由和 typed API；不在 Web 建状态权威 |
-| [项目添加 Spec](../../../spec/project-onboarding.spec.md)、[结构方案](../../../../docs/product-design/project-structure.md) | 仍未实现；本批提供窄公共检查与初始化模式适配，全套 PS/登记/候选入口继续后置，无强依赖环 |
+| [项目添加 Spec](../../../spec/project-onboarding.spec.md)、[结构方案](../../../../docs/product-design/project-onboarding.md#拟议结构与核验) | 仍未实现；本批提供窄公共检查与初始化模式适配，全套 PS/登记/候选入口继续后置，无强依赖环 |
 
 不新增 Runner 能力；只需现有共享 generate/1、查询/停止及结算。W01/W02、E01/E03–E07、V01/V03/V06–V08 差异同步[生命周期](../../../../docs/product-design/worker-lifecycle.md)，执行/原生恢复矩阵不在本仓重建。
 

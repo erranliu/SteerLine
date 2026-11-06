@@ -10,7 +10,7 @@
 
 在当前项目切换器中增加“添加项目”流程：输入本机已有 Git 仓库与目标 → 复制准备提示词 → 用户自行在 Codex 准备文档 → Go 服务只读核验 → 用户确认 → 服务正式登记，必要时初始化原生项目数据库。核验通过前不纳管、不为该候选建库。
 
-规范唯一正文：[项目管理](../../docs/product-design/project-management.md)、[结构核验 PS-01–PS-07](../../docs/product-design/project-structure.md)、[准备提示词](../../docs/product-design/project-onboarding-prompt.md)。本 Spec 固定交付边界，不复制第二套路径/内容规则。清单采用 `steerline-project/v1`、提示词采用 `project-prepare/v1`；实施遇到规则变化需显式更新这些文档及本规格，不能静默放宽。
+规范唯一正文：[项目管理](../../docs/product-design/project-onboarding.md)、[结构核验 PS-01–PS-07](../../docs/product-design/project-onboarding.md#拟议结构与核验)、[准备提示词](../../docs/product-design/project-onboarding-prompt.md)。本 Spec 固定交付边界，不复制第二套路径/内容规则。清单采用 `steerline-project/v1`、提示词采用 `project-prepare/v1`；实施遇到规则变化需显式更新这些文档及本规格，不能静默放宽。
 
 本任务不实现仓库克隆/远端创建、Web 调度 Codex、自动修仓库、自动安装工具/执行环境、推送/合并、项目删除/迁移或旧格式数据兼容。TUI 不增加该功能。添加项目不创建 Task/DAG，不自动启动项目服务或派发，worker 流程与原执行权限不变。
 

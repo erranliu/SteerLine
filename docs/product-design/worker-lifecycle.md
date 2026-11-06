@@ -1,473 +1,109 @@
-# Worker 流程异常处理与重试
+# Worker 生命周期、异常与恢复边界
 
-2026-11-06 原 Run 后续消息（W08–W14 / V03–V04、V06–V08）：开发流程到 pr_ready 后可由显式 message 在原 worktree/session 上执行调用方正文，保留开发游标与原 PR/审计；正常续作不新增准备/恢复或现场预检。Orca 沿原结果保存的 fence 直接 Send，保留原生受理与发送后来源核验。Runner 仅管理原 Run 输入、对账和停止；SteerLine 管候选参与与任务终态，已调用的未知 message 固定只读对账。W17 交付及 W18 停止沿原规则。实现与未验边界见[Spec](../../SteerlineFlow/spec/pr-conflict-resolution.spec.md)和[验收](../../SteerlineFlow/testing/acceptance/pr-conflict-resolution.md)。
+本文维护 SteerLine 调用 Runner 时的资格、原请求、反馈、交付及停止规则。Runner 拥有执行内部工作流、原生会话、重试和资源管理；W/E/V 编号用于跨文档定位职责，不是 SteerLine 的执行状态机，也不表示所有后端均已实现相同恢复能力。
 
-2026-10-25 候选人工停止可靠性（W12/W17/W18，E04/E05，V03/V06–V08）：停止永久退出固定候选参与，显示时的候选/派发版本仅记录原意图，无关观察增长不使其失效；事务仍校验当前参与、最后一个和内部 CAS。原 actor 在收到持久 inbox 通知后取消当前调用方等待并优先处理停止，不取消 Runner/原生 worker；当前候选被打断的未知输入复用 ObserveOnly，只核实原请求。withdrawal/Command 作为原业务证据，外层回执丢失可只读恢复，身份损坏不得绕过。Web 有界独立核实，明确拒绝解除 pending，已应用与快照刷新分开表达，超时不伪造终态。没有新增参与版本、命令事务接口、GET 写业务或恢复授权。规则见 [Spec](../../SteerlineFlow/spec/candidate-stop-reliability.spec.md)，实际范围及未验项见 [专属验收](../../SteerlineFlow/testing/acceptance/candidate-stop-reliability.md)。
-
-2026-10-25 准备读取等待（W02/W04/W08–W11/W18，E01/E03–E05/E07，V01/V03/V06–V08）：SteerLine 只消费 Runner 的 `execution_wait` 与原事件；排队/调用/退避不创建恢复答案，耗尽后仍按原 controls/Decision。时间到达仅显示等待 Runner 更新，未知写操作、人工问题和停止保持原优先级。候选退出不等于 Runner stop，原 Task 取消资格不因等待放宽。新增 Orca profile 准入校验与调用方/受控验证见[Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)及[验收](../../SteerlineFlow/testing/acceptance/runner-wait-retry.md)；Runner 的实际重试与原生资格仍由其独立实现，真实联验后置。
-
-2026-10-22 generate 调用方排队（W01/W08–W14/W18，E04/E07，V03/V06–V08）：同 home 应用宿主持有一份全局生成准入队列，自动生成、单项重试和一键生成共用 Generation 记录。`submission=pending` 明确证明尚未调用 Runner；取得名额后先持久化 started/unknown，再发送原冻结请求。started 之后即使查无请求也不重发；占位覆盖活动和未知，只有明确拒绝、排队取消或已核实 stopped 才释放。启动 census 在任一项目派发前重建全部占位和等待顺序；退出/失败项目仅撤销内存中的未提交准入，原活动占位保留。排队取消零 Runner 调用，无 Run 的条目不要求 takeover/资源停止证明；排队期间换构建在提交前明确拒绝，显式重试才创建当前构建的新意图。当前构建的原未提交 outbox 可按原授权首次提交，不扩大已发送请求的恢复授权。批次只冻结成员引用与完成时间，不复制执行状态机；远端检查失败不阻碍原生成结果的完成计时。默认并发五，配置沿启动冻结。最小验证及实际结果见 [Plan](../../SteerlineFlow/plans/generate-queue.plan.md) 和 [专属验收](../../SteerlineFlow/testing/acceptance/generate-queue.md)。
-
-2026-10-21 当前操作与展示收敛：开发 workflow 使用 development/2 或 development-audited/2，实施/发布已有按需补报，审计在一次正式回合内修复，不增加自动返修/再审循环。兼容 Runner 换代按下述 2026-10-19 接管增量保留原授权；关服务不等于停止 Run，更新不以所有资源先退出为固定前提。原创建/输入未知、旧写者/原会话资格及 PR/停止核验均保留。交付摘要只投影原 Run 与独立命令事实，不新增业务状态、等待循环或恢复入口；本次不改变 W01–W18、E01–E07、V01–V08 的职责与副作用门槛。实施与最小验证见[Plan](../../SteerlineFlow/plans/reliable-delivery-simplification.plan.md)及[验收](../../SteerlineFlow/testing/acceptance/reliable-delivery-simplification.md)。历史版本的规则和验收按各原构建理解。
-
-2026-10-21 工作区命名输入（W01/W02，V01/V06–V08）：SteerLine 在预留事务内分配候选 Number 并冻结公开 `name_prefix`（C1 为 `sl-<task_id>`，C2 起为 `sl-<task_id>-c<Number>`）与最终 submit；重放使用原编号/请求，不在事务外预估。Runner 独立冻结通用前缀（缺省 `sr`），Orca 创建与回执校验共用 `<prefix>-<Run ID>`，不解析 correlation 的业务含义。名称不是资源身份权威；原绑定、只读对账、未知零重发与恢复授权保持，不改既有现场名称或新增节点/异常/重试。最小验证及未验范围见[专属验收](../../SteerlineFlow/testing/acceptance/runner-name-prefix.md)。
-
-2026-10-21 部署中断恢复（W18，E04/E05，V06–V08）：系统重启留下缺失或陈旧宿主停机回执时，部署可在启动协调锁内核实原宿主精确退出、原安装文件及 Runner pin、配置/checkpoint/项目集合、实际锁及原记录接管后，运行原安装一次，等待所有项目 ready 并正常停服，再执行完整 verify-restart。匹配当前实例的失败回执、未知创建、活动服务、身份/配置/文件冲突或候选不兼容继续阻断；不伪造回执、不循环恢复、不创建业务 submit/reply/resume。原 Run/input/PR 与资源未核实诊断保留，旧回执随新证明保存。该动作只补齐调用方正式停服证据，不改变 Runner 的节点、恢复授权或原生结算规则；安排和自动验证见[Plan](../../SteerlineFlow/plans/deployment-interrupted-recovery.plan.md)与[验收](../../SteerlineFlow/testing/acceptance/deployment-interrupted-recovery.md)。当前真实 OS 重启后的自动部署尚未实测，受控通过不替代原生资格或部署验收。
-
-2026-10-21 最新Runner文档路径语义适配（W01/W08–W16、E03/E07、V01/V03/V06/V08）：开发Spec/Plan/参考材料仅指向固定base的worktree相对路径，不再要求Runner复制/核验文档快照。SteerLine仍保存各候选原契约和测试快照，系统测试安排随公开原执行提示正文冻结到原submit，实施/代码审计使用同一安排；不新增虚构文件、不改原工作区、不修改Runner节点/默认提示或原状态机。缺公开模板直接阻断新候选，原请求不重组/重发；generate继续自身inline材料语义。安排与实际验证归[同一Plan增量](../../SteerlineFlow/plans/project-maintenance-simplification.plan.md#最新runner路径语义适配2026-10-21继续实施)及[专属验收](../../SteerlineFlow/testing/acceptance/project-maintenance-simplification.md)。
-
-2026-10-21 项目更新方案已实施：[收敛Spec](../../SteerlineFlow/spec/project-maintenance-simplification.spec.md)、[Plan](../../SteerlineFlow/plans/project-maintenance-simplification.plan.md)将W01改为每个新候选固定最新代码/材料，Plan变化自动生成系统测试安排，旧候选过期保留且禁用当前测试关联；W17允许旧候选PR合入完成任务。节点/异常/验证映射见下方[项目维护增量](#项目基线与材料维护2026-10-21)，实际结果见专属验收，不改变Runner执行/资源owner或原未知处理规则。
-
-2026-10-20 内容生成接管补验（W02–W18，E04–E07，V06–V08）：generate/conversation 不使用开发流程 parser 配置，Runner 接管按适用工作流校验，保留原材料/执行语义/codec/原生身份；开发配置仍严格检查。调用方原 Generation/Run/input/final 不改写，未知零重发、取消先于 worker、停止与资源结算分别证明的规则不变。本轮只修不适用配置误拒绝，不增加恢复授权、旧数据迁移或另一套状态机；实际换构建与结算结果见[测试管理验收](../../SteerlineFlow/testing/acceptance/test-management.md)。
-
-2026-10-20 调用方边界收口（W02–W18，E04–E07，V03/V06–V08）：候选停止信封的构造和保存统一归 runnerbridge，正常对账和启动前收集复用；启动层继续先取项目锁/store，再持久化既有停止义务，经 pending_stops 在 worker 前受理。保留原正常/启动 ID 生成方式、未知信封原字节与 CAS，明确拒绝后才按原流程准备后续信封。公开 takeover 类型/验证归 runnercontract，原 Run/input/request/Check 与构建比较归纯 runnerbinding；启动准入、离线重启、检查查询及部署预检复用对应规则，保留各入口原有前置。只读接管不取得停止/输入授权，历史事实不改写，不新增 submit/reply/resume、重试或原生恢复能力；停服与资源结算继续分开证明。当前实现缺口和原生资格仍按既有专属验收判断。本轮安排及结果见[Plan](../../SteerlineFlow/plans/architecture-boundary-consolidation.plan.md)和[验收](../../SteerlineFlow/testing/acceptance/architecture-boundary-consolidation.md)，不改 W/E/V 矩阵语义。
-
-2026-10-19 兼容 Runner 构建接管补充（W02–W18，E04–E07，V06–V08）：后续实现由[本次 Spec](../../SteerlineFlow/spec/service-generation-recovery.spec.md)、[Plan](../../SteerlineFlow/plans/service-generation-recovery.plan.md)和[验收](../../SteerlineFlow/testing/acceptance/service-generation-recovery.md)约束，取代下述历史同构建限制。Runner 保存原执行/结果并按持久 Allowed/ResumeRequired/PendingStop 自动接续已证明尚未发送的后继；SteerLine 不自动 submit/reply/resume。paused、人工等待、业务阻断和 stop 保留；unknown 只对账。SteerLine 启动前沿原项目锁/Store 收集并保存撤销信封，经 pending_stops 在 Runner worker 前受理；无信封不得先开 worker 再追发停止。安装 pin 仍校验当前 EXE；兼容预检后只更新当前服务 pin，候选/检查/PR/Delivery 原事实不改。原服务退出与新候选兼容分别证明，resources_settled=false 不晋升 true。Orca 原创建查询与原生/跨仓现场资格仍是明确缺口，受控通过不代表已部署。
-
-2026-10-19 同构建重启/显示更新修复（W18，E04/E05，V06–V08）：应用宿主及 Runner 服务退出与原生资源销毁分别核验。原 Orca 执行可按既有 continue_execution 策略保留；同一 Runner EXE SHA/resource/state-dir、原停服 instance/request、项目本地关闭/锁/checkpoint/冻结配置均匹配时，显式 restart 或 SteerLine/Web 普通部署可重建调用方运行时，不要求原终端先退出。该证明称为 restartable，不将历史 resources_settled=false 或诊断改成成功。未知提交/控制和原 Run/PR 均按原 ID 保留，启动后仍零自动业务输入；更换 Runner 构建按下述兼容接管契约逐项核验；原生资源结算与服务退出分别证明。普通部署默认复用安装 pin，显式 -UpdateRunner 才构建 Runner；不变更 Runner 节点、重试/恢复或原生停止行为。差异及最小验证见[实施 Plan](../../SteerlineFlow/plans/application-redeploy.plan.md)和[专属验收](../../SteerlineFlow/testing/acceptance/application-redeploy.md)。
-
-Worker 执行域统一管理工作区准备、代理初始化、输入投递、轮次观察、结果结算和资源恢复。每个节点都必须说明正常出口、异常事实、允许的动作和停止条件；平台适配器提供证据，不能自行决定重跑任务或推进业务步骤。
-
-本文是这些规则的长期维护入口。下文“统一设计”定义各节点职责；[当前实现与缺口](#当前实现与缺口)及文首增量区分已有能力与待补能力，不表示完整流程已经实现或验收。当前开发流程由所选 Runner 构建发布的普通或审计开发 workflow 执行，调用边界见[协作契约](../../SteerlineFlow/spec/runner-collaboration.spec.md)；[PR 流程契约](../../SteerlineFlow/spec/worker-pr-flow.spec.md)保留迁出前来源。本文不修改已冻结执行，也不改变安装现场。
-
-迁出前的三层职责重构已按 [Spec](../../SteerlineFlow/archive/spec/completed/worker-three-layer.spec.md)与[Plan](../../SteerlineFlow/archive/spec/completed/worker-three-layer.plan.md)完成 Workflow、ReliableExecution 和 ExecutionAdapter 拆分，保持现有行为；初始化失败重试等新增能力另行实施。当时规则归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；当前执行实现归独立 SteerRunner，历史实施证据以[专属验收](../../SteerlineFlow/testing/acceptance/archive/completed/worker-three-layer.md)为准。
-
-SteerRunner 跨仓代码切换已落地，切换安排见[接入 Plan](../../SteerlineFlow/plans/steerrunner-cutover.plan.md)，结果见[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)。迁出后 W01–W18 的执行/资源事实、E01–E07 异常处理及恢复授权由 Runner 的单写服务管理；SteerLine 只持久化 Task/DAG、候选到 Run 的绑定、原 CLI 请求与事件投影，并在自己的事务内决定 W17 的 TaskDelivery。下文节点和异常分类继续作为共同语义入口，不新增另一套 worker 状态机。当前分支的 app service 已切换到 taskrunner/runnerbridge/runnerclient，旧根执行 actor/worker 及旧执行写表已删除；原生 owner、旧写表、闲置执行端口和旧原生重建函数已删除；跨进程受控基础闭环和用户保留的三项本机交付/恢复回归已通过；首次切换时的真机失败、取消和未验保持[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)原记录；后续本机兼容更新/原结果补收/继续交付的组合资格已单独验证，见[换代验收](../../SteerlineFlow/testing/acceptance/service-generation-recovery.md#最终本机结果slc-a05-通过)。不同构建、平台及窗口分别判断，不以后续通过覆盖原失败。
-
-跨进程边界的具体规则：未知提交只查原 request_id；任务结束时在同一事务保存全部候选的停止义务，迟到接受的 Run 仍须撤销输入；Runner 的停止回执与原生进程停止分别投影。服务重启不重新发送已保存的答案、反馈或 resume。交付只接受本次刷新、身份一致的已合并 PR，不能要求候选先到 pr_ready，也不能由其他候选的未知状态阻塞正确候选交付。发布报告未完成时已经核实的 PR 可以绑定，但不因此推进 Runner 的流程里程碑。
-
-本次最小验证映射：V 的来源/身份/权限边界复用三层规则定向测试；Runner 实际 EXE 场景验证未知零重发、恢复零自动输入、缺 final 零推进、权限资源不合格零会话创建；SteerLine 的 SLC-A01–A04 验证原请求、事务回滚、迟到绑定与停止义务。真机能力按本机和 Orca 目标分别登记，沙箱拒绝或缺原生事实保持未验/失败，不以 helper 或模型报告代替。
-
-本地 MXC 权限差异：工具 TEMP/TMP 由原生 AppContainer 管理，可与 app-server 的宿主临时目录不同。Runner 保持固定工作区/Git 写入根，不强迫工具临时目录穿透到宿主 Git admin，不修改原生权限。验收须在真实工具 token 内核验 AppContainer、原生临时文件读写及本包兄弟目录拒写；旧的 TEMP=Git admin 路径断言不能用于 MXC。app-server 自身临时目录仍由 Runner 固定在所属工作区管理目录。具体真机结果仍按两个仓库专属 acceptance 登记。
-
-本次本机资格探测预算与 Runner 外部命令统一为 30 秒，覆盖冷启动的原生版本查询。每 Attempt 仍只在资格缺失时探测，失败阻断且零新会话/输入，不自动重试，不缓存跳过版本或权限资源校验。运行失败与重验明细见专属 acceptance。
-
-本轮审计补充 W12/V 输入边界：原生多题回答必须完整匹配原题集，重复 JSON 键、额外题目、固定题的附加答案、空回答及未提供选项在原生意图前拒绝。调用方保留已绑定 PR，不接受后续投影丢失/替换；失败不改原候选。两仓定向测试通过，最新产品真机与最终固定版本 R1 仍未通过，详见[接入验收最新段](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md#pr-审计修复与主干同步)，不以历史通过抵消新失败。
-
-统一启动接入的 W18 差异：多个 SteerLine 项目共用应用宿主 PID 和 home 内同一个 Runner 服务/state-dir，各自保留 Task actor/store/实例。Task 创建/加前置经该 actor 串行提交并发布快照；原输入/恢复规则不变。项目停机分别记录本地关闭、锁与资源结算；仅 Runner service not_running 不证明原生已停止，未知提交、缺投影或最后已知活动的 Run 保留资源未核实诊断。初始化中可能已启动独立 Runner 而无 actor 回执时也不能把资源结算写成 true。本次仅验证统一启动的空闲双项目、受控输入/停止反例及消费者；完整组合真机/恢复验收未因此通过。
-
-W18 停服取证修复：停机前的候选投影不能证明停机后的资源状态。Runner 在全部 worker 退出并读取已提交原生停止事实后、释放写锁前发布最终结算；公开 service status 只在写锁空闲时返回 last_shutdown，新写者先使旧记录失效。SteerLine 核对原实例、停止 request_id、state-dir 和固定 EXE 摘要，再接受 resources_settled；不按旧 running 投影误拒绝，也不按 not_running 或旧 stopped 投影放行。缺记录、错配、超时、Orca 脱离观察或任一 Run 停止未核实仍阻断。变更范围与验证见[停服结算验收](../../SteerlineFlow/testing/acceptance/runner-shutdown-settlement.md)，既有安装环境的失败回执不被改写。
-
-部署 W18 补充：更新前由暂存的新 CLI 请求停机，避免重复调用安装版旧校验。原回执未通过时，显式 verify-stop 只能在原宿主/Web 已退出、各项目 LocalClosed/LocksReleased 且实例、配置摘要、checkpoint 和实际锁一致后，经新 Runner 的 service verify-stopped 取得逐 Run 资源证明，并核对候选的原 Run/input_digest/目录。Runner 在既有写锁下只读当前格式，复用 managed 恢复的原 Job owner+root 消失证明；不启动服务、恢复代理、重发输入或改写历史失败。证明不全继续阻断替换，新证明另存部署包。当前安装现场未用于验证，具体自动项见同一[验收](../../SteerlineFlow/testing/acceptance/runner-shutdown-settlement.md)。
-
-2026-10-19 Orca W18/V06–V07 补充：Runner 停服与部署离线重验共用原 runtime 完整清单，绑定原 worktree/terminal/incarnation；PTY 已退出或在原 host 清单中缺席仅是必要条件。Codex inline-v3 helper 固定原 helper/native 身份和退出公钥；显式停止先实际核实原 app-server/tools 与 TUI 的两棵 Job 清空、关闭认证，再签发绑定完整 readiness 的退出凭据，最后关闭原 PTY。helper 已返回原 shell 时仍按原身份和原生证明清理，不依赖 agent 展示标签。工作区只保存可验签的公共凭据，私钥仅在原 helper 内存中；离线重验只经既有 Orca 文件通道读取原 host 的有界公共文件并验签，全部原 readonly reader 的 native tree 结算和 PTY 停止也须核实，快照与既有 journal 均纳入。查询失败与资源结算分别取证，不晋升业务完成。通用 helper 沿用既有 owner/exit/authentication 证明；缺 key/原退出/认证/reader 证明、未知创建或旧 helper 缺不可追溯的事实仍阻断，不迁移、补写历史或以调用方 PID 代替执行主机。服务退出继续沿 ContinueExecutionOnServiceStop，不自动停止业务或重发输入。SteerLine 仍只消费公开逐 Run 证明和既有聚合围栏，不引入另一套原生状态机。实现与真实 Codex/Orca 停止证据归 Runner 的 `SteerlineFlow/plans/orca-shutdown-verification.plan.md` 和专属验收；本仓消费者验证见[本次验收](../../SteerlineFlow/testing/acceptance/orca-shutdown-verification.md)。本次没有使用安装环境作测试现场，也没有合并或部署。
-
-2026-10-19 原生初始化停止补充（W03/W05–W07/W18，E04/E05，V01/V06/V07）：Runner #31 / SteerLine #355 已将 Orca 远端切换为 profile v4 的直接原生执行，远端不再部署 helper 或固定控制终端。初始化已绑定原 runtime/worktree/terminal/incarnation 而尚未确认 agent ready 时，显式停止仍按该原身份核验完整终端清单；无业务 turn 的初始化允许 branch 元数据暂空，明确错分支/工作区/path 或身份冲突继续阻断。服务换代零自动输入/替换会话。离线只读 `stop_evidence_scope=orca_terminal` 仅描述原终端，不证明全 OS 树或执行主机登录撤销；旧 helper Run 不降级为新原生证明，未核实仍阻断。Runner 的 `SteerlineFlow/plans/initialization-stop.plan.md` 和 `SteerlineFlow/testing/acceptance/initialization-stop.md` 维护两个原生 L3 case 的新验证及历史 helper 结果，不把旧构建通过继承给当前方案。
-
-测试所有者按 [测试精简 Spec](../../SteerlineFlow/spec/runner-test-convergence.spec.md)收敛：W02–W16/W18 执行专项由 Runner 验证；W01、W12 调用方授权、W17 及迟到接受/停止义务由 SteerLine 验证。当前 L2 为不调用真实模型或 GitHub 的受控交付冒烟；真实 Codex 实现、发布与 PR 合并按需选择 [L4 live](../../SteerlineFlow/testing/l4.md)。原生恢复/沙箱/Orca 不再在 SteerLine 重复建设矩阵。节点、异常和恢复规则不变，具体状态见[专属验收](../../SteerlineFlow/testing/acceptance/runner-test-convergence.md)。
+当前接入按 [Runner 接入](../integration/steerrunner.md)及所选构建的公开能力判断，实际验证见[验收入口](../../SteerlineFlow/testing/acceptance/README.md)。整理前的节点细节、历史接管及历次验证见[历史证据入口](../../SteerlineFlow/archive/design/runner-reliability-history.md)。
 
 ## 职责与规则归属
 
-Orca 远端认证接线（2026-10-17）：Runner 主干 `d4969d0` 已提供可信执行主机 helper，W03/W05–W07 的认证、同权限无模型预检与准备回执由它维护；缺 `agent_launch.runtime_executable` 仍在零业务输入时拒绝。SteerLine 调试生成器补齐 helper 路径/SHA 的显式配置与早期缺参拒绝，不更改节点、异常、重试或恢复授权。V01/V02/V05/V07 的具体接线验证见[专属验收](../../SteerlineFlow/testing/acceptance/orca-runtime-wiring.md)；既有安装候选不改绑、不自动恢复。下表历史缺口不代替该固定 Runner 的实际能力与验收范围。
-
-本次 W16/V05 实测另发现 broker 拒绝发布查询中的 `mergeCommit { oid }`。只读字段白名单由 Runner 修复，SteerLine 不绕过认证或替 worker 执行查询；旧失败保持 blocked，补丁 helper 以新 SHA/新包实测。任务节点与输入/重试规则不变，结果仍登记上述专属验收。
-
-W02/W18 的调用方目录布局：SteerLine 用本地卷根 `slr/<128-bit base32 key>` 绑定完整应用 run-dir，避免深 home 超出 Runner 的认证 socket 长度限制。所有启动/检查/查询/停服证明共用此路径；查询不创建，启动才准备私有目录，别名拒绝。重置先核实原资源停止，再只删所属摘要目录。节点、异常分类、重试和恢复授权均不变，旧 Run 不迁移或改绑。V01/V06/V07 的本次增量为真实 socket、跨 home/项目隔离及原目录停止/清理；[专属验收](../../SteerlineFlow/testing/acceptance/runner-short-state-path.md)记录边界和结果。
-
-原会话查看不参与 W01–W18 的执行推进：拆分 Runner 后补回公开 CLI，由原执行 owner 在既有 worker gate 内校验原身份和只读 thread/workspace，再开独立窗口；零新服务/会话/业务输入，原节点与 E01–E07 不变。验证映射及当前已验/待验范围见[专属验收](../../SteerlineFlow/testing/acceptance/native-session-viewer.md)。
-
-安装迁移发现 W18 的 Windows broker 差异：WMI 可将调用者原有但禁用的特权启用。Runner 在原返回句柄所指的挂起子进程上，仅禁用这些被额外启用的原有特权，再完整比对授权组和特权；不新增或启用特权，不放宽用户、完整性级别、restricted/elevated 或 EXE 身份检查。`USED_FOR_ACCESS` 是访问历史位，不参与授权属性比较。无法保持原权限仍拒绝启动。本次验证仅覆盖真实空闲服务启动/退出及权限反例，不替代任务执行/恢复验收；见[安装迁移验收](../../SteerlineFlow/testing/acceptance/install-cutover-20261015.md)。
-
-“Worker 层”指独立 SteerRunner 内持久化的 worker 执行规则（迁出前位于本仓 `internal/execution`），而非仅内存中的 Worker 或 observer 句柄。本仓现存 `execution/model`、`backend` 仅承载调用方仍消费的展示/配置值及进程执行端口；Task 交付规则已归 `task/model`，service checkpoint、宿主服务/控制状态和进程观察契约已归 `hostcontract`，见[第四轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round4.md)与[第五轮解耦验收](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round5.md)。W18 的资源最终所有者、排空/关闭顺序、失败保锁与原实例停服/结算证明不变；本轮验证其定向回归，不改变节点、异常、重试或恢复矩阵。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。
-
 | 所有者 | 负责内容 |
 | --- | --- |
-| Worker 执行域 | 节点推进、异常分类、重试预算、恢复资格、输入授权、结果来源与迟到事件处理；由现有 Service actor 单写提交 |
-| ReliableExecution | 通用准备推进、显式适用性门槛、部分回执合并、原输入/结果核验、恢复分类、准备/核验期限；不解释业务步骤 |
-| 生命周期与主机端口 | 表达工作区、代理、会话、输入、轮次、停止、清理和恢复的通用事实及可用能力 |
-| 具体适配器和资源 owner | 读取真实原生身份、查询原请求、识别启动退出、执行受控动作；不持有中心业务库写权 |
-| 开发流程定义 | 选择 implement、report、publish 等业务步骤，解释结构化业务结果；不在适配器中解析业务 JSON |
-| 任务应用与交付逻辑 | 领取资格、Task/DAG 和唯一交付；worker 节点成功不能自行关闭 Task |
-| Query 与 UI | 投影已提交事实和允许的操作；不能通过重开页面、打开终端或直接写数据库恢复执行 |
+| SteerLine | Task、依赖、候选参与、执行依据、原请求与公开结果的绑定；转交授权输入；核验唯一交付并保存停止义务 |
+| Runner | 工作区与执行资源、原生启动和会话、逐轮输入与结果、所选工作流、允许操作及资源结算 |
+| 执行 Agent | 按任务要求实现、测试、修复和提交成果 |
+| 查询与界面 | 展示已保存的事实及允许动作；保留最后观察和未知原因 |
 
-身份、事务与持久格式归[数据模型](data-model.md)，仓库及锁归[工作区准备](worktree-preparation.md)，问题和授权归[决策与反馈](decisions.md)，原 final 来源归[会话事件](conversation-events.md)。本文维护节点间的异常处理和重试决策，其他文档链接这些规则，不复制另一套流程。
+SteerLine 通过公开契约使用 Runner，不读取其私有数据库或原生日志，不解析模型正文来推进执行步骤。原生准备、审计顺序、修复与补报预算由 Runner 定义；调用方不另设重试器。项目流程见[流程与职责总览](project-workflow.md)，身份与事务见[数据模型](data-model.md)，问题投递见[决策与反馈](decisions.md)。
 
-### 三层目标与节点归属
+## 生命周期与节点
 
-Workflow 选择业务步骤、构造输入、解释结果和决定后继；ReliableExecution 管理业务无关的准备、可靠投递、观察、异常分类及恢复；ExecutionAdapter 提供原生动作、证据和能力。技术重试不进入 Workflow，业务失败后的新实施/格式补报仍由 Workflow 决定；中层不能为了恢复自行生成业务 prompt。
-
-执行生命周期的技术可靠性契约由第二层统一对外负责。原生取证机制属于 adapter，原子保存/CAS/意图提交确认属于 actor 与存储基础设施；它们不能另外决定技术重试或恢复。Workflow 不补做执行资格核验，也不能绕过第二层调用 adapter。未来初始化增强仍归第二层，当前三层重构只迁移已有规则。
-
-| 节点 | 目标职责归属 |
-| --- | --- |
-| W01 | 现有任务应用核验资格，actor 固定身份和执行意图 |
-| W02–W13 | 中层管理执行规则；adapter 取证/执行。W12 的业务问题展示与用户答案授权仍由应用负责，中层只处理匹配的原请求投递 |
-| W14 | 中层接受原执行事实，Workflow 结算业务结果/后继，actor 合成一次原子提交 |
-| W15 | Workflow 管理报告来源及格式补报；每次新输入继续使用中层 |
-| W16 | Workflow 管理发布意图和业务结果；中层可靠执行；已有 provider owner 核验/绑定 PR |
-| W17 | 现有 Workflow/交付与任务应用核验 PR、提交唯一 Delivery；不归执行中层 |
-| W18 | 中层依据已授权动作管理资源结算，adapter/资源 owner 提供停止与清理事实 |
-
-actor、持久化记录及存储仍是唯一提交边界，不新增各层独立保存。中层只接窄执行快照/意图/授权，不接完整 WorkflowRun、RunView、Service 或 Task/PR 状态；当前混合记录由 actor 映射。规则实现和记录保存采用该所有权；不要求新增平台调用或改变现有阶段行为。
-
-## 统一设计
-
-### 流程与状态
-
-正常准备和执行顺序如下。代理初始化不构成 implement 的业务轮次；app-server 的协议握手和 thread 准备与终端代理的启动提示词可以不同，由适配器提供等价的就绪事实。
-
-```mermaid
-flowchart TD
-    A[资格检查与冻结执行] --> B[准备并核验工作区]
-    B --> C[准备权限与执行资源]
-    C --> D[启动代理]
-    D --> E[初始化完成并确认会话就绪]
-    E --> F[核验执行环境]
-    F --> G[持久化当前输入意图]
-    G --> H[发送输入并保存回执]
-    H --> I[确认原轮次开始]
-    I --> J[观察执行及处理问答]
-    J --> K[取得原轮次终态与结果]
-    K --> L[原子结算结果与下一步骤]
-    L --> M{开发流程后继}
-    M -->|报告或发布| G
-    M -->|等待合并| N[查询固定 PR]
-    N --> O[核验合并并提交唯一交付]
-    O --> P[结算资源与清理]
-    J -->|需要回答| Q[保存问题与答案投递意图]
-    Q --> J
-```
-
-不用一个 `failed` 同时表达业务失败、断网、代理退出和结果未知。沿用现有状态的不同职责：
-
-| 信息 | 含义与边界 |
-| --- | --- |
-| WorkflowRun 的流程和步骤 | 当前应完成的业务动作；Runner development/2 为实施 → 发布 → pr_ready，报告按需且每源最多一次；带审计版本在发布前增加一次代码审计及修复。合并与 TaskDelivery 归调用方，不是 Runner 自动后继 |
-| Execution 与原生轮次事实 | 代理和轮次是否活动、结束、等待或停止；不替代 WorkflowRun，也不代表 Task 交付 |
-| Operation 结果 | 原外部动作的 pending、in_flight、accepted、confirmed、rejected 或 unknown 事实；仅 accepted 不等于节点完成 |
-| 准备记录和环境 blocker | 当前准备进度、期限、实际环境阻断及核验结果；与业务问题分开 |
-| RecoveryFacts 和恢复资格 | running、question、completed、interrupted、unverified 等已核实事实及允许动作 |
-
-后文 W01–W18 是稳定的文档节点编号，不要求新增同名数据库枚举或第二套状态机。节点实现复用现有记录；只有当前记录确实无法表达必要事实时才增补字段。
-
-### 路径能力与核实状态
-
-中层统一可靠性目标，按 adapter 能力声明和原生事实选择适用流程。机制显式区分 not_applicable（可跳过该机制）、unsupported（必需能力缺失，阻断）与 unverified（继续原目标取证或待处理，不能成功推进）；零值等同 unverified。声明适用能力的原生事实再区分 required 与 ready，不用布尔 false 把未核实当作无需执行。本地 Codex 不跑 Orca 专属 TUI 启动、READY 模型轮次或 terminal/pane/provider 连接步骤；其 app-server 握手/thread 准备仍是必要门槛。
-
-### 本地 Codex 与 Orca 路径差异
-
-全部路径都遵循同一节点职责、异常分类和副作用门槛，但不要求每个 W 节点对应独立 RPC 或 Operation。本地 Codex 使用受管 app-server，不是 Orca 中的 Codex TUI；目前将进程启动、连接/握手和 thread 准备合在 `prepare_session` 操作内。一个组合操作失败仍须返回已经取得的部分绑定及失败位置，不能将进程、连接和会话都统一当作“未启动”。
-
-| 节点或事实 | 本地 Codex app-server | Orca 单终端本机与远端 |
-| --- | --- | --- |
-| W02 工作区准备 | 中心通过 Git 准备固定本地 worktree，保存路径/分支/base | 经 Orca 准备执行主机上的工作区；远端还须配对和匹配仓库登记 |
-| W03 权限与运行环境 | 冻结受管沙箱、linked-worktree 写入根、worker runtime 和工具/认证环境；准备失败保留已生成资源 | 沿执行主机原生权限、账户、目录信任和启动配置；远端不自动继承中心认证 |
-| W04/W05 资源与启动 | 启动精确 owned app-server，保存 OS 进程、endpoint 和 generation；可核验受管进程树 | 绑定原 runtime/terminal/incarnation/worktree，再执行原生 agent 启动或冻结命令；shell 存活不代表 agent 存活 |
-| W06 初始化与 ready | 连接固定 endpoint，完成 initialize/initialized，创建或恢复有效 thread 并核对 cwd；当前不发送模型 READY 提示词 | 观察当前代理和 provider session；显式命令路径还有初始化模型轮次，须排除旧 session/初始化结果对业务基线的污染 |
-| W06 就绪能力边界 | 协议与 thread 就绪不证明首次模型请求、账户路由和全部工具权限一定可用；真实请求失败仍按相应节点分类 | 初始化轮次成功提供真实模型调用的有限证据，也不证明全部业务工具能力；必要环境条件仍须另核验 |
-| W07 环境核验 | 使用当前参数、路径、沙箱/能力检查；当前未实现本文所列的统一 HostEnvironmentPort 探针流程，不能宣称已经完成实际读写探针 | 同样不能仅凭终端可输入宣布环境通过；已有共享 preparation/probe 模型不等于所有 Orca 执行已接入，按当前实现能力列明核验范围 |
-| W08/W09 输入准备与发送 | 保存当前输入，调用固定 thread 的 turn/start；成功回执含原生 turn ID。thread/start、turn/start 的 RPC 超时仍可能产生副作用 | 原输入经 terminal send，输入接受与原生业务轮次开始分别取证；当前准备/完成不读取屏幕或 draft，未知原输入不补 Enter |
-| W10 开执行 | 成功的 turn/start 回执被当前适配器归一化为 InputAccepted 与 TurnStarted；后续 turn/started 和原 thread/turn 事件继续校验。回执丢失不能换 ID 再调 turn/start | 通过原请求开始回执及绑定 pane/provider 的可信 working 事实确认；accepted 未 started 继续对账 |
-| W11–W13 观察问答与结果 | JSON-RPC 请求/回复、原生 turn 事件和精确 thread/turn 历史；原请求身份必须保留 | 原终端/原生状态查询与主 agent 证据；不能凭屏幕 idle、标题或人工新回复结算原输入 |
-| 服务停止与恢复 | 兼容独立 owner 保留原连接、Job/工具树和认证；停服只脱离观察，显式 Run stop 才停止原树。资源丢失后的原 thread 人工恢复仍需旧写者缺席等资格；旧服务独占 Job 的活动执行不冒充可无损移交 | 沿 continue_execution 脱离原观察，保留原 terminal/runtime/provider；丢失后的原业务会话重建仍不支持。新远端原生停止保证限原 terminal scope |
-| W14–W18 业务结算与收尾 | 共用步骤、报告、PR 核验与唯一交付；具体进程/工作区 owner 负责资源结算 | 共用同一业务规则；原生终端/工作区 owner 提供其停止和清理事实 |
-
-本地路径仍有需要处理的准备异常：可执行文件或沙箱配置非法、app-server 已启动但 process 回执保存失败、连接/握手超时、thread 已创建但回执丢失、空 thread 在首个 turn 前连接丢失、turn/start 成功但原生回执未保存。已有 thread ID 时优先核验或恢复原 thread；不知道 thread/start 是否成功时先对账原准备，不再调用 thread/start 猜测性创建会话。
-
-因此统一的是 worker 决策与恢复规则，而不是代理启动命令或原生事件序列。本地路径无需为匹配 Orca 人为增加一轮 READY 模型调用，也无需模拟 terminal/draft/provider 状态。新增初始化失败分类、期限和重试资格应覆盖两条路径，由端口表达实际失败位置和证据；不能仅在 Orca 启动函数里增加重试循环。
-
-### 输入与身份边界
-
-输入必须区分代理初始化、执行环境探针、任务业务、业务报告、发布和用户答案。已有 preparation 与 Turn purpose 按实际需要补齐即可；初始化结果不能占用业务的 SourceCommand/SourceTurn 或被当作 implement final。
-
-终端、代理进程、provider session 和业务 turn 是不同身份。原终端仍存活不能证明代理仍活着，同一个 terminal 内重新启动代理也可能产生新 session。准备就绪必须绑定当前启动记录及原生会话，而不能只看 `agentIdentity=codex`、终端标题、空闲屏幕或字面 `READY`。
-
-输入副作用的保护边界从持久化“准备进入外部调用”开始，不等到出现 started 回执才生效。业务输入进入外部调用后，即使未收到 accepted 或 started，也必须按“可能已经执行”处理。`accepted=true, started=false` 表示开始尚未证明，不证明没有执行。
-
-每次创建新的启动或发送操作前，先保存完整意图、冻结输入摘要、目标身份、操作 ID、代次和授权。中层在实际调用前再次检查原 workspace/pending input 及其正文/写入授权，准备机制仍须 required；资格核验前后期限已经耗尽时零调用。对账先校验原意图身份；调用后缺失、无终态或身份冲突的回执属于未核实结果，保留原请求对账资格，不能按正常成功推进。同一原请求的对账保留原 ID；确认允许重新执行后创建新操作 ID，关联前次操作，旧记录不可覆盖。原生 JSON-RPC ID 或 CLI 请求参数本身不证明幂等，只有平台明确提供的持久去重能力才可以依赖。
-
-### 异常分类与动作
-
-分类依据是原动作的事实和副作用范围，不仅是错误字符串。适配器可以返回原生错误用于诊断，worker 消费通用事实和能力，不按 Codex/Orca 名称分支，也不扫描终端文字来决定重发。
-
-| 类别 | 典型情况 | 统一处理 |
-| --- | --- | --- |
-| E01 暂时读取失败 | 查询超时、观察断连、provider 限流 | 有界重试读取或重接原观察；保留业务步骤，不重发输入 |
-| E02 明确操作失败 | 已核实代理初始化失败并退出；平台明确拒绝且无待核实副作用 | 根据节点的重试资格和预算决定重新执行；失败事实不抹掉 |
-| E03 需要环境或人工处理 | 登录失效、目录信任、审批、非法配置、缺少能力、真实业务问题 | 保存具体 blocker 或 Decision；条件变化并核验后继续，不循环尝试相同失败 |
-| E04 操作结果未知 | 调用后超时、回执丢失、发送接受但开始未证明、发布副作用未知、项目/资源停止未核实 | 对账原请求；禁止换 ID 重发、补 Enter 或新建替代执行。初始化缺 readiness 不否定已固定的原资源身份；显式停止按冻结适配器契约取证，原生远端仅按原完整 Orca 终端清单和只读 scope 结算 |
-| E05 身份或事实冲突 | terminal/runtime/session 变化、不同结果正文、目标 PR 不符、共享宿主下项目实例失配 | 保留冲突和原绑定，阻断推进；按初始化或业务边界决定是否有恢复资格 |
-| E06 已结束但结果不可用 | 原成功轮次缺 final、正文不完整、报告格式错误 | 缺原生证据先补读；明确格式问题按流程允许补报；不能用模型声明填补来源缺口 |
-| E07 本地提交失败或并发变化 | 意图保存失败、回执提交失败、CAS 冲突、旧实例结果到达，包含已关闭项目运行时的迟到事件 | 未保存意图不调用外部；已调用则核验并补提交原事实，不重做外部动作；过期事实不推进当前执行 |
-
-一条故障可以同时有多个事实。例如代理退出属于明确进程事实，但此前的业务发送仍可能是 E04。确认进程退出不能把未知发送、push、PR 创建或答案投递一起改成失败。
-
-统一动作只有以下几类，作为 worker 决策复用，不另建恢复服务或策略注册框架：
-
-- **等待和读取**：同一节点内核验原事实，包括接回原观察、补读原结果和限流退避。
-- **对账原操作**：只处理既有请求；平台支持精确去重重放时必须确认它仍是同一个请求，不能转成新的输入。
-- **重新执行明确失败的准备动作**：满足本节点资格、原操作已结算、旧相关写者停止、预算和授权有效时，记录新的操作后执行。
-- **继续原会话**：人工授权新的业务输入，重新核验原会话、工作区、未知操作和版本；沿现有恢复入口。
-- **等待条件处理或保持未核实**：明确说明缺什么证据、需要什么动作，不无限保持“正在启动”。
-
-### 重试预算与授权
-
-读取重试、启动重试、业务新轮次和格式补报分别计数。一次轮询不算一次代理启动；一次报告补报也不能重置启动预算。
-
-| 动作 | 预算与停止条件 |
-| --- | --- |
-| 只读查询和原观察重接 | 每次调用有期限，失败后退避；活跃任务可以周期核验，但单次核验必须返回，不能阻塞其他任务。限流采用 provider 的有效 Retry-After 并设置上限 |
-| 工作区或资源准备 | 沿用原持久化准备总期限；暂时故障且明确无未知副作用时有限重试。原路径、branch、base 和配置不随重试变化 |
-| 代理启动与初始化 | 设计初始上限为总计三次启动，第二、三次前分别等待 5 秒和 15 秒；同时受准备总期限约束。具体预算由 worker 能力/配置冻结，待实施验证后调整，不能覆盖已经冻结的现场 |
-| 等待 ready 或开始执行 | 使用持久化期限并核验原状态；期限到达表示等待预算耗尽，不能直接推断代理退出或输入未执行 |
-| 业务失败恢复 | 不自动重跑实现、测试、提交或发布；沿现有人工继续授权生成新业务输入 |
-| 报告格式修正 | 保留已有 implement.report 的一次格式重试及 publish.report 的一次补报；只整理原结果，不重做源动作。次数持久化，仍受会话和授权门槛约束 |
-
-首次启动授权可在同一服务实例、同一冻结执行范围内覆盖上述有限准备重试；它不授权任意更换配置、后端、工作区或重复业务执行。现有“停服后不自动继续”规则保留：服务换代可以自动核验和结算事实，但不会仅因还有重试预算就启动代理、发送探针、答案或业务输入；新副作用先经过当前正式继续授权。
-
-准备期限、启动次数、下一次重试时间、原失败与授权归属都必须可从持久记录恢复。中心重开、手工再核验、重复查询和连接恢复不自动清零。等待用户回答与长时间模型执行不能按普通 RPC 超时判失败；需要明确的原生终态或正式停止事实。
-
-## 节点异常与恢复矩阵
-
-表中的“重新执行”均受上文副作用、身份、预算和授权门槛约束。准备阶段必须保持领取与资源意图的关联，失败不自动释放任务让另一 worker 与旧执行同时工作。
+正常流程为：核验任务资格并固定请求 → Runner 准备和执行 → 观察结果与转交反馈 → 核验实际合并并提交唯一交付 → 结算停止义务。执行结束、PR 就绪、任务交付和资源停止分别记录。
 
 ### 准备阶段
 
-| 节点 | 正常出口 | 异常情况 | 处理与重试边界 |
-| --- | --- | --- | --- |
-| W01 资格检查与冻结执行 | Task 可领取，契约、依赖/base、profile 和执行身份已保存 | 依赖未交付、base 不含前置合并、配置非法、领取竞争、保存失败 | 任务应用拒绝不合格领取；CAS 冲突重读资格，不沿过期意图启动。确定不合格不自动重试。失败领取不产生外部副作用；最新基线/材料同版本的检查及差异见[项目维护缺口](#项目基线与材料维护2026-10-21) |
-| W02 工作区准备 | 固定独立路径、分支、base 和 Git 身份核实并保存 | fetch 失败、锁占用、路径冲突、部分 worktree 创建、创建成功但回执丢失、远端仓库未登记 | 暂时读取失败可退避；已调用创建则先按原操作核对 Git/平台登记和精确路径。缺远端配置或冲突阻断；不另造同名目录、reset、删库或换 base |
-| W03 权限与资源准备 | 冻结的写入根、沙箱、工具能力和执行主机符合要求 | 登录/信任缺失、执行目录不可用、能力不足、资源启动/策略记录只完成一半 | 保存环境 blocker；修复条件后核验原资源。不得把运行权限升级或后端切换作为重试；部分成功按原记录对账；资源归属与业务 readiness 分离，先固定原资源停止身份；原生远端直接绑定 Orca 终端，初始化未完成仍可在原契约范围结算 |
-| W04 终端或服务资源绑定 | 唯一目标 terminal 或精确 owned app-server 已绑定 | 默认终端晚出现、多终端、连接断开、runtime/incarnation 不符、进程创建回执未知 | 晚出现可在期限内读取等待；多目标拒绝猜选；未知创建只核验原意图。不补建第二终端或启动第二写者 |
-| W05 Agent 启动 | 启动命令/原生启动请求接受，当前启动记录及代理身份可核实 | 命令拒绝、可执行文件缺失、启动接受后卡住、代理立即退出、回执未知 | 接受只推进到初始化中；暂时初始化失败且旧代理明确退出、无业务派发才允许有限新启动。未知接受/退出状态只对账；配置错误或缺能力等待处理 |
-| W06 Agent 初始化与 ready | 当前初始化完成，原生会话有效且能接受下一输入，必要初始化条件已满足 | 账户路由超时、初始化提示词仍运行、hook/握手失败、旧 session 状态缓存、provider 尚未建立或发生变化 | 读取原启动对应事实，不用代理名称或旧 idle 提前宣布 ready。明确失败按 W05 资格重试；必要 hook/能力失败阻断，不因 READY 文本忽略。初始化结果不写业务 final |
-| W07 执行环境核验 | 当前准备探针/能力核验通过，证据绑定当前资源及准备记录 | probe 未开始、读写/删除失败、探针身份错误、工具证据缺失、回执晚到、环境在核验后变化 | 探针属于准备输入，发送未知按 W09/W10 对账。明确失败可重新核验已处理条件；新准备使用新 nonce/记录，旧回执不能验证新资源。不以文字“检查通过”代替规定证据 |
-
-原生默认启动与显式 agent_launch 都必须最终满足 W06 的通用就绪要求。某后端没有独立探针时，W07 由它支持的能力核验完成，不能伪造工具回执。
+| 节点 | 职责 | 异常边界 |
+| --- | --- | --- |
+| W01 资格与冻结 | SteerLine 核验任务、依赖、项目就绪、最新材料及执行方案；在预留事务保存候选和完整请求 | 资格或版本冲突重读；保存失败零外部提交。原请求保持原材料，不升级为当前默认值 |
+| W02 工作区准备 | Runner 按固定 commit 创建专属工作区并绑定资源 | 成功创建即满足新工作区路径的启动条件，不重复增加 HEAD、diff 或洁净度门禁。创建未知只核实原请求，不换目录或 base |
+| W03 权限与资源 | Runner 按固定方案准备权限、认证及执行资源 | 缺权限、登录或能力时阻断；不靠扩权、换后端或循环启动处理 |
+| W04 资源绑定 | Runner 绑定精确的进程或终端等原资源 | 多目标、未知创建或身份冲突时不猜选、不补建替代资源 |
+| W05 Agent 启动 | Runner 记录原启动及接受事实 | 接受不证明初始化完成；重试仅限其能力允许的已结算失败 |
+| W06 初始化与就绪 | Runner 核实当前会话及初始化结果 | 代理名称、旧空闲状态或字面 READY 不证明当前就绪；初始化结果不充当业务结果 |
+| W07 执行条件 | Runner 核验该后端实际要求的准备条件 | 不要求所有后端运行相同探针，不补造证据；项目环境检测另按独立流程处理 |
 
 ### 业务输入与执行阶段
 
-| 节点 | 正常出口 | 异常情况 | 处理与重试边界 |
-| --- | --- | --- | --- |
-| W08 当前输入准备 | 完整 Command、来源、步骤、输入版本、目标会话及 Operation 意图已提交 | 原主 agent 未就绪、原生输入资格未知、源结果不符、权限失效、保存失败、提交前会话变化 | 不发输入，重读原生资格；不增加屏幕/draft 门槛。业务发送前重新核验准备状态与身份，不能只信旧 ready。已确认无调用的输入可在有效授权下继续派发 |
-| W09 输入发送与接受 | 保存原请求的真实接受/拒绝回执 | 明确拒绝、调用超时、丢回执、仅 bytesWritten、原生输入结果不明、重复请求 | 明确无副作用的拒绝可重新建立有效意图；其他情况只对账原请求。相同请求 ID 和 payload 返回原事实，不能再补 Enter；接受不等于开执行 |
-| W10 原轮次开始确认 | 原 Command 对应的原生 turn/可信 working 事实已匹配并保存 | accepted 但 started 未证明、启动延迟、别的输入抢占、pane/provider 改变、原生状态缺口 | 期限内读取原请求和轮次；到期转为待核验，不能把 started=false 当未执行。身份冲突冻结该输入，不改绑到新 session，也不重发 |
-| W11 执行观察与交互 | 持续核实原轮次，直到问题或真实终态 | 断连、长时间无输出、模型/工具明确失败、目录/权限阻断、用户直接操作终端、进程退出 | 断连接回原观察；静默不证明结束。明确失败保存失败并进入恢复资格核验；人工输入作为额外事实，不能覆盖原 Command。进程退出和业务副作用未知分别处理 |
-| W12 问题与答案投递 | 问题、答案和原请求回执分别保存；原轮次恢复或新反馈轮次开始 | 答案已保存未发送、原 call 已失效、答案发送未知、轮次已结束、重复答复、答案版本过期 | 不自动回答；相同请求对账，过期答案保留原因，不能改投新 call/turn。PR 轮询保留尚未确认投递的 answer_saved，不以新可选问题替换原答案。运行中回复原请求与结束后新轮次反馈分别处理；服务换代不自动投递旧答案；人工停止参与后也不得新投递反馈或恢复输入 |
-| W13 原终态与结果采集 | 原生终态、成功/失败、中断和完整原 final/必要缺口分别落盘 | succeeded 无正文、正文截断/冲突、来源不符、旧 final、failed/interrupted 无 final | 原成功缺结果只补读；不能用最后一条消息或人工新回复补造原 final。明确失败/中断即使无 final 也应进入可判定的恢复状态，不无限等待成功正文 |
-| W14 结果结算与步骤推进 | 原结果、步骤转移和下一输入意图原子提交 | 重复/矛盾结果、事务失败、旧实例晚到、结果成功但下一轮未派发、Task 已终态 | 相同结果幂等，矛盾结果保留冲突；事务失败核对已提交范围，不重跑原轮次。下一输入仍经过 W08–W10 和当前授权；旧事实不能重开终态 |
+| 节点 | 职责 | 异常边界 |
+| --- | --- | --- |
+| W08 输入准备 | 按原目标、当前资格和授权保存完整输入意图 | 未保存不发送；已固定输入不因配置刷新而重新拼装 |
+| W09 输入接受 | 保存原请求接受、拒绝或未知事实 | 调用超时、回执丢失或仅写入字节均可能已经执行；未知不换 ID 重发、不补 Enter |
+| W10 开始确认 | Runner 关联原输入与原生轮次 | accepted 且未证明 started 不等于未执行；继续核实原目标 |
+| W11 执行观察 | 读取原执行进展、问题及终态 | 断连和静默不证明结束；原进程退出与业务副作用未知分别处理 |
+| W12 问题与反馈 | SteerLine 保存用户决定并转交 Runner；Runner 管理原问题和输入资格 | 答案保存、实际投递和执行结果分别表达；待确认投递的答案不被新问题覆盖，过期答案不改投；多题答案完整匹配原题集。退出参与后不再投递反馈或恢复输入 |
+| W13 结果采集 | Runner 核实原轮次、终态和完整结果，SteerLine 消费公开事实 | 成功缺 final 不能用最后一条消息补造；失败、取消、unknown 和 unreported 按原义保留，缺失不推定成功 |
+| W14 结果与后继 | Runner 结算工作流；SteerLine 原子保存校验后的投影、事件和游标 | 保存失败补收原事实，不重跑外部动作；旧结果不推进兄弟候选或重开终态任务 |
+
+开发 Run 到 PR 就绪后，可在当前参与和任务资格允许时，显式向原会话发送后续消息。Runner 管理输入串行和结果，SteerLine 管候选及任务资格；正常续作不增加准备、恢复或现场预检。未知消息只查原请求，见[原 Run 续作验收](../../SteerlineFlow/testing/acceptance/pr-conflict-resolution.md)。
 
 ### 报告发布与收尾阶段
 
-| 节点 | 正常出口 | 异常情况 | 处理与重试边界 |
-| --- | --- | --- | --- |
-| W15 实现报告与格式补报 | report 绑定原 implement 的 Command/turn 和结果，结构化状态合法 | 源失败或缺失、原 final 缺口、报告格式非法、报告轮次失败、误把 report done 当实现成功 | 来源缺口先核验；单纯格式错误按一次补报规则。已发送 report 的失败恢复复用现有实施核验流程，不能用新报告掩盖源失败；报告约束不冒充原生强只读权限 |
-| W16 发布与 PR 绑定 | 原发布轮次完成，PR 身份经 provider 核验并绑定 | push/PR 创建未知、无 URL、查询失败、返回另一个 PR、publish 结果格式错、已有 PR | 对账原分支/固定 PR；已有 PR 复用，另一 URL 不能替换绑定。读取可重试；未知发布不重新执行。publish.report 只补格式，不能重做 push/创建或抹去失败 |
-| W17 等待合并与唯一交付 | 正确 PR 的真实 merged、MergeCommit/MergedAt 经核实，Delivery/Task closed/依赖释放原子提交 | provider 超时/限流、open、closed_unmerged、合并证据缺失、错仓库/base/head 分支、交付提交失败、多个候选竞态 | open 等待；closed_unmerged 保留原 PR 并待正式处理；读取故障保留核验状态。真实合并证据完整且现有交付门槛通过才提交；提交失败补提交同一交付，不重新发布。任一合格候选可交付，其他候选查询未知不阻塞它；Task closed 后全部候选停止 PR 查询；人工退出候选不参加交付，停止与交付在候选版本/参与资格事务上仲裁 |
-| W18 停止资源与清理 | 本执行拥有或明确绑定的每个资源，其停止/释放/清理结论已保存 | 停止回执丢失、写者未核实退出、资源已经不存在、部分清理、无关路径、Task 先完成 | 对账原停止/清理操作；已不存在须按精确身份核实。一个失败不跳过其他资源；无法确认时保留诊断。共进程宿主下，项目运行时停止与宿主进程退出分别核验，不能杀共享 PID 停单项目。清理失败不撤销已提交 Delivery；不得为方便恢复删除工作区、认证、历史或 Git/PR 事实。人工候选退出只取消 caller 参与，不授权 Runner stop 或清理；Task 终态及停服继续沿各自授权结算 |
+| 节点 | 职责 | 异常边界 |
+| --- | --- | --- |
+| W15 报告 | Runner 按所选流程绑定源结果并处理格式问题 | 补报只整理原结果，不能掩盖源失败或重做实现；具体次数取固定流程契约 |
+| W16 发布 | Runner 执行发布并核验、绑定 PR | 未知 push 或 PR 创建先对账；不能换 PR 覆盖原绑定，也不能为补结果格式而重复发布 |
+| W17 唯一交付 | SteerLine 直接查询平台原 PR，在事务内重核任务、图及参与资格，原子提交唯一交付、关闭任务、释放后继并保存停止义务 | 真实合并且匹配固定目标才交付；任一合格候选可交付，不要求先到 pr_ready，不被兄弟查询未知阻塞。提交失败核实原交付，不重新发布 |
+| W18 停止与清理 | SteerLine 跟踪原停止义务，Runner 提供原资源停止与结算事实 | stop 接受不证明资源退出；迟到接受仍须绑定并处理停止。部分清理失败不撤销交付，不删除未知请求、历史或工作区来消除诊断 |
 
-发布与交付沿现有 [PR 流程](../../SteerlineFlow/spec/worker-pr-flow.spec.md)和[数据模型](data-model.md)门槛：不恢复候选 SHA/阶段成果快照锁，不凭 worker done 或 PR 创建关闭任务。终态 Task 禁止新业务输入，迟到结果只结算其原资源与历史。
+任务关闭后停止其全部候选的 PR 查询，拒绝新业务输入；迟到事实仅结算原记录和责任。人工“停止候选”表示退出参与，保护最后一个参与候选，不直接授权 Runner stop 或清理；任务终态仍可为已退出候选建立停止义务。该区别及原请求恢复见[候选停止验收](../../SteerlineFlow/testing/acceptance/candidate-stop-reliability.md)。
+
+## 异常分类与动作
+
+| 类别 | 判断与处理 |
+| --- | --- |
+| E01 暂时读取失败 | 查询断连或限流：有界读取、退避并保留最后观察，不重发业务输入 |
+| E02 明确操作失败 | 已确认失败且无未知副作用：仅按原操作所属方的能力、预算和授权继续；失败事实保留 |
+| E03 环境或人工事项 | 登录、权限、配置、能力或产品问题：说明阻断条件，处理并核验后继续，不循环同一失败 |
+| E04 操作未知 | 超时、丢回执、未证明开始或资源未核实：只对账原请求，不换 ID、会话、工作区或后端重做 |
+| E05 身份或事实冲突 | 服务、Run、输入、会话或 PR 不匹配：保留原绑定和冲突，停止推进 |
+| E06 结果不可用 | 缺来源、正文不全或格式无效：由 Runner 补读原结果或按固定流程补报，不伪造成功 |
+| E07 保存失败或并发变化 | 意图未提交则零发送；已调用则补收原事实，事务冲突不重做外部动作 |
+
+异常可以并存：进程已退出不能证明此前的输入、push 或答案未发生。读取重试、准备重试、业务新轮次和格式补报分别受原预算约束；查询、重启和手动刷新不清零预算。SteerLine 展示 Runner 的等待与允许动作，不根据倒计时自行发送恢复输入。
 
 ## 跨节点恢复规则
 
-### 代理初始化期间的状态变化
+- **原请求与授权。** 外部调用前保存原意图，实际请求校验服务和执行绑定；未知沿原请求对账。同 ID 改正文拒绝。仅原处理流程证明未调用或明确无副作用拒绝、且授权有效时，才允许其规定的发送。SteerLine 重启撤回旧 pending 输入，unknown 转只读观察，不因查不到原请求就补发。
+- **同构建重启。** 先恢复原事实、停止义务和观察。Runner 可按已持久授权补收原结果，并接续已证明未发送的后继；SteerLine 不因此生成新的 submit、reply、message 或 resume。人工等待、暂停、业务阻断和显式 stop 保持原含义。
+- **实例与构建。** 存活的 ProjectRuntime 不自动接纳替代 Runner 实例，需显式重启 SteerLine 后核验。当前 v8 换构建前须由原版本排空业务、原生资源及未完成控制；不支持活动 Run 跨构建接管，旧 verify-takeover 及兼容矩阵仅为历史。具体准入见[安装部署](../integration/install-deploy.md#同构建更新与重启)。
+- **原会话恢复。** 仅按当前公开 controls 和原执行事实判断；原会话或旧写者资格无法核实时保留阻断，不新建替代会话冒充恢复。本机同 thread 的历史恢复证据不能推定 Orca 替代终端或 provider 可恢复。
+- **多项目宿主。** 各项目实例和本地关闭独立，共享宿主 PID 和 Runner 服务。关闭 Web 只结束观察，单项目退出不停止共享服务。整体停止逐项保存本地关闭、锁及资源结算；本地关闭失败保留锁，某项目失败不跳过其他收尾，不用共享 PID 停单项目。
+- **停止与证据范围。** 对账绑定原实例、请求、Run、输入和资源的停止证明；not_running、旧投影或窗口消失都不足。Orca 的 terminal scope 不扩大为全执行主机进程或凭据清理证明。reset 须覆盖全部项目、辅助执行及未绑定未知请求，不能用可重启证明代替删除资格。
 
-W05/W06 必须能观察“代理出现 → 初始化进行 → 会话建立 → 初始化结束”，而不是在第一次识别代理名称时绑定业务结果基线。由当前启动的关联证据建立就绪状态，初始化轮次结束后再准备业务输入基线。
+## 项目材料与辅助执行
 
-就绪提交同时固定当前代理/session 和初始化结束的原生证据边界，业务观察从其后的基线开始。旧初始化的 working/done、旧 final 和迟到 session 元数据不能启动或结束业务轮次。任意 provider 变化都不能仅凭“还在初始化”被接受，必须能够关联到本次启动；缺关联证据时保持未核实。
+项目维护负责远端基线、材料准备和测试安排；新候选固定自己的 base、材料与生成结果，原请求保持原版本。旧候选过期不自动退出或停止，其 PR 仍可按原冻结契约交付；新材料准备失败不增加旧候选交付门禁。就绪与新鲜度规则唯一维护在[项目维护设计](project-maintenance.md)。
 
-在业务输入尚未进入外部调用前，确认旧代理已退出、初始化操作及准备输入均已结算、目标工作区和冻结配置仍一致时，允许在有效启动授权内重新初始化。首次业务派发前的准备失败可接受下一次初始化生成的 session，但这是待补的准备恢复能力，不是放开所有会话替换。
+生成、Roadmap 分析及项目环境准备各自保存业务请求、结果和停止义务，不伪造开发候选或借成功结果关闭 Task。生成排队且未提交与已发送未知分开处理；取消、迟到受理和共享额度按各业务记录结算。测试进度见[progress-file](../integration/runtime-progress.md)，历史 R2 候选产物收集已移除。
 
-如果已经保存不可变 worker binding，重建代理进程/会话按现有 Attempt/generation 规则保留旧 binding，并原子登记新 Attempt；同一准备下仅重读原启动不新增 Attempt。准备的多次启动记录与 worker Attempt 分开，不能把旧记录的 launch_confirmed 或 provider ID 清空后复用。旧进程退出和迟到回执均关联原代次。
+项目环境准备使用普通 Run 执行项目检测入口，由 Runner 执行并封存最终结果，SteerLine 核验信封和结算后消费项目结论。旧专用 Check 已退役；当前规则见[项目环境工作流](../../SteerlineFlow/spec/project-environment-workflow.spec.md)。原生目录和配置语义归 Runner；Web 负责逻辑编辑、产品支持投影和保存，不直接维护原生协议。
 
-人工在原 terminal 重启成功也走相同核验规则：先查是否存在业务派发或未知准备副作用，再确认当前代理、工作区、冻结方案与就绪事实。具备必要公开证据和采纳能力才允许继续；不能因为 terminal handle 未变而直接解除 blocker。业务派发后仍沿原会话恢复，不把新 provider 当原轮次。
+## 当前能力与未实现设计
 
-### 断连与服务换代
-
-断线首先影响观察，不自动改变原轮次结局。服务可以核验身份、补读结果、重接观察、对账已保存请求和核验既有 PR；不得因观察器消失重建 worker。
-
-停服行为由 worker 的冻结能力声明：`stop_execution` 核实受管执行资源停止，`continue_execution` 只脱离中心观察。声明不证明现场实际停止或存活；以原资源事实为准。重开后允许只读核验与原结果结算，新启动、探针、业务轮次和答案投递继续受正式授权门槛约束，见[停机恢复契约](../../SteerlineFlow/spec/worker-stop-recovery.spec.md)。
-
-重新执行任何副作用前再核验原绑定、当前 Attempt、操作结果、未知动作、旧写者、恢复/Decision 版本和授权。相同核验事实不重复生成 Decision 或递增版本；过期授权不能消费到新的失败或另一候选。
-
-### 共进程宿主与项目运行时
-
-2026-10-15 的[统一启动与多项目宿主](../../SteerlineFlow/spec/unified-startup.spec.md)已实施，实际覆盖范围见[专属验收](../../SteerlineFlow/testing/acceptance/unified-startup.md)。该拓扑下，各项目 actor、存储、执行和资源 owner 独立，共享一个后端 OS 进程；项目实例不能由 PID 替代。服务换代规则仍用于每项目运行时，不能因宿主 PID 存活就判定原项目实例仍在运行。
-
-Web 重启只影响观察入口。后端正常停止先阻止全部项目新业务输入及后继阶段派发，再分别办理原冻结 stop_execution / continue_execution 动作及 W18 资源结算；某项目失败不跳过兄弟收尾，不结束共享 PID 来停止单项目。本地 actor/库/锁尚未关闭时不得开替代项目运行时；本地已关闭而 worker/外部操作未知时，允许重开原库取证和结算，仍禁止替代 worker 或新输入。宿主停机结果必须分别记录本地关闭和策略资源结算，宿主整体退出另按精确进程及租约核实；只有 PID 退出不能证明干净停止。超时或证据不全沿 E04/E05/E07 处理，不能用一份新宿主结果覆盖原未知事实。
-
-后端崩溃会同时影响全部项目。重开只允许按原记录取证、结算及判断正式继续资格，不自动重新启动代理、投递答案/输入或清除原未知操作。此变化只调整服务宿主覆盖范围和身份/停止核验，不新增 worker 恢复或重试状态机；实现与验证安排归[统一启动 Plan](../../SteerlineFlow/plans/unified-startup.plan.md)，实际结果归其专属验收。
-
-### 业务失败与会话丢失
-
-正常业务轮次共用原会话/Attempt。原会话活动时接回观察；原轮次明确失败或中断、无未知动作且工作区可核实时，由现有继续入口授权新的业务轮次。新轮次可以检查并复用已有修改，不 reset 或伪造旧结果。
-
-本地 Codex 在旧写者确认停止、原 thread 可读取时，可用新进程/Attempt 恢复同 thread。Orca 原 terminal/runtime/provider 丢失或被替换时，现行能力不支持自动重建原业务会话，保留具体原因。不得清空原 session 来启动新会话冒充恢复，详见[原会话恢复](../../SteerlineFlow/archive/spec/completed/product-simplification-04-conversation-recovery.spec.md)与[核心断连恢复](../../SteerlineFlow/spec/worker-disconnect-recovery.spec.md)。
-
-当前核验已移除屏幕、draft、tui-idle、可见完成标记和正文展示比对；就绪、输入开始和结果完成使用原始主 agent/请求/状态/完整回复证据。旧测试指南或历史契约中的屏幕保护不恢复为当前门槛，见[核验收敛记录](../../SteerlineFlow/testing/acceptance/workflow-verification.md)。
-
-输入未派发、明确拒绝、已接受、已开始和未知必须分别处理。只有证明原业务调用未发生或被明确拒绝且无副作用，才可在有效授权下形成新的发送；started 缺失、读不到旧历史、代理退出或等得太久都不是这个证明。
-
-### 事务并发与迟到事实
-
-一个节点始终遵循“保存意图 → 外部动作 → 校验回执身份 → 提交事实 → 判断后继”。外部 I/O 不放入 SQLite 事务；节点进展与派发资格由同一个 worker 写者提交。
-
-进程创建成功但回执未提交、发送成功但中心崩溃、结果已读取但事务失败，都恢复到原操作核验，不能从节点入口重新做一遍。新 actor 接管、Task 丢弃或交付、Attempt 换代后，异步回执只能登记自己的原操作或资源，不能推进当前执行、重复生成下一输入或污染兄弟候选。
-
-停止/取消先禁止新输入和重试，再结算原操作及 owned 资源。没有原资源停止证据时，不把“取消按钮已受理”当旧写者退出；未知发布事实也不能被停止覆盖。UI 查询失败、控制请求重复或缓存旧状态均不改变这些边界。
-
-## 持久证据与展示
-
-在现有 Execution、Attempt、Command、Operation、准备记录和恢复事实中维护下列必要信息，不另存一份平行 checkpoint 作为权威：
-
-- 固定项目/任务/执行/Attempt、配置摘要、工作区/branch/base、资源与会话身份。
-- 当前节点对应的原操作 ID、输入 purpose、输入摘要、原请求 ID、接受/开始/完成事实及来源。
-- 准备期限、启动记录/次数、退避时间、失败分类、旧写者结论和可重试资格；新增字段仅覆盖现有模型无法表达的部分。
-- 已保存答案与实际投递事实、初始化/探针和业务结果的区分、结果缺口、PR 核验与交付事实。
-- 当前允许动作及其前置条件、恢复/授权版本、原操作与后续尝试的关联。
-
-UI 至少能区分“准备工作区”“启动代理”“初始化中”“核验环境”“输入已接受，等待开执行”“执行中”“等待回答”“已失败可继续”“状态未核实”“等待合并”和“已交付”。这些是现有事实的展示，不应全部成为新的持久状态枚举。显示失败节点、已知与未知、重试次数/下次时间和需要处理的条件；不要把 reconciling 一律显示为“启动中”，也不把接受回执显示为已执行。
-
-## 当前实现与缺口
-
-### 可靠性交付简化前置方案
-
-[可靠性交付链路](../architecture/reliable-delivery-chain.md#可以简化的流程)已按可行性审计明确受理前完整绑定、原宿主 census、实际安装租约与 writer 交接、原命令补查及不变目标续装。本批已实现判定/表达、完整绑定和同快照观察，其他前置仍待实施，结果见[专属验收](../../SteerlineFlow/testing/acceptance/reliability-simplification.md)。这些调用方/公开协议改造不新增 Worker 状态机，也不放宽下列原授权和未知处理规则；旧数据、缺清单或缺能力的现场不能由设计文字取得新资格。
-
-| 节点 / 异常 / 验证 | 拟议差异与当前缺口 |
-| --- | --- |
-| W02–W18 / E04、E05 / V03、V06 | 完整构建/resource/ready 围栏与停止受理门闩已接两仓；只对已声明且通过反例验证的命令减少预查询，其他入口保持原检查，实际 EXE 散列保留 |
-| W18 / E04、E05、E07 / V06–V08 | complete census、公开共享/独占安装租约、pending 安装阻断、owned namespace 启动上下文及写锁内停止优先尚待实现；现有中断恢复仍是受控运行原版一次，JSON 不代表持续持锁 |
-| W08–W18 / E04、E07 / V03、V07、V08 | 同快照观察及原 CAS 保存已接线并通过隔离分页/并发验证；命令文件与 DB 收口、prepared/pending 续装仍待实施。原结果可补查、重启旧输入零补发、唯一交付与原停止义务保持 |
-
-### 项目基线与材料维护（2026-10-21）
-
-统一规则归[项目维护设计](project-maintenance.md)，本轮[Spec](../../SteerlineFlow/spec/project-maintenance-simplification.spec.md)、[Plan](../../SteerlineFlow/plans/project-maintenance-simplification.plan.md)和[专属验收](../../SteerlineFlow/testing/acceptance/project-maintenance-simplification.md)记录实施与验证。上一批人工核对/文件应用及Task级冻结已替换，历史证据仍保留。完整PS纳管和Runner原生恢复不纳入本批。
-
-| 节点 / 异常 / 验证 | 已确认差异、现有缺口与验证安排 |
-| --- | --- |
-| W01 / E01、E03、E05、E07 / V01、V08 | 由Task共用快照改为每个候选fresh fetch最新base/同commit全refs，绑定对应系统生成结果；原预留重放仍用原输入。已删除base/SQL跨候选限制及Task唯一快照，须保留Task/图/目标/材料CAS和前置Delivery检查。PMS-A03/A04验证多版本新候选、竞态零派发和原号不升级 |
-| W01之前的项目更新 / E03、E05、E07 / V03、V06、V08 | 增加远端/本地提交与PR/分页日志，以及显式固定目标的安全快进；只改主仓库且不丢本地修改/不动候选。已补原命令/锁/实际HEAD核验，未知只核实不追赶新目标。PMS-A01/A02/A08覆盖正常与人工处理原因 |
-| W08–W14的内容生成 / E04–E07 / V03、V06、V08 | 用户已确认自动策略：新Plan/规范/清单输入登记唯一初始生成，结果保存在项目库、无需文件应用。Generation已移除工作区/文件应用权威，直接保存系统结果；原意图先保存、未知原号、失败显式重试、旧迟到不能套新版本、重启不重复、profile/资源资格保持。PMS-A04/A05及PMS-A09真实接线覆盖；GET仍只读 |
-| W08–W16的候选观察/反馈 / E03–E07 / V03、V06、V08 | 过期为调用方材料新鲜度，不改变Runner执行/原反馈/继续/发布资格，不自动停止。仅最新材料可关联测试；旧collect未知仅对账，晚到只存历史。证据收集/DTO已共用该判断。PMS-A06验证内容差异、同版本多候选与来源隔离 |
-| W17 / E03、E05、E07 / V03、V08 | 用户明确过期候选PR合入仍可完成任务，最新测试生成中/失败不阻断；交付必须改读所选候选自己的冻结契约。SQLite result已改读候选快照；唯一Delivery/后继释放/全部候选停止义务保持。PMS-A07验证跨版本合并竞争与显式退出反例 |
-| W18 / E04、E05 / V07 | 自动生成仍归原Generation和共享停止/reset清单，候选材料版本不产生新资源owner。任务关闭撤销未提交需求，受理/未知按原请求结算，共享引用不误停；旧候选过期不等于资源停止。PMS-A05/A07/A09验证原Run/停止/清理，不能漏掉无Candidate的生成Run |
-
-上述新规则已实施，实际验证与未验项仅登记专属验收；最小L1、既有controlled/live L3扩展与PMS-A01–PMS-A09映射见[测试计划](../../SteerlineFlow/plans/project-maintenance-simplification.plan.md#测试计划)。新鲜度、参与、资源和交付保持正交；历史已核实通过不改写，已完成Task不因材料更新自动重开，不增加测试通过/最新版本交付门禁。
-
-2026-10-20 W02–W18 / E04–E07 / V06、V08 的本机组合资格已补验：SteerLine 管理服务停止后，原 Codex 工具及轮次离线完成；兼容 Runner B 补收原正式 final，沿原 Run/session 继续发布，真实测试 PR 合并后唯一交付并释放未启动的后继，正式清理确认。修复消费端对无固定 prompt steps 工作流的目录假设，以及调试模板覆盖原生作用域认证的问题；节点、异常、授权、恢复和停止语义不变。准确构建、失败/重验及证据见[专属验收末节](../../SteerlineFlow/testing/acceptance/service-generation-recovery.md#最终本机结果slc-a05-通过)。Orca 创建成功丢回执、其他原生路径与旧 service-owned Job 首次升级窗口仍保留各自边界，不能按本机结果推定已通过。
-
-初始化停止的当前增量：当前远端不再使用 helper 的 ownership、Job/认证签名退出或固定控制 checkpoint；主干 local 受管路径保持。原生初始化无业务 turn 时，停止可在 branch 元数据尚空的窗口沿原 runtime/worktree/path/terminal/incarnation 关闭并核实原完整清单；已开始业务或明确身份/分支冲突不适用该窗口。两个 L3 case 已重定向为仅隐藏 caller 的原生 agentIdentity、保留真实响应，分别验证初始化停止和服务换代零自动输入；2026-10-19 的独立包 `dev-20261019-154407-be8f3b54` 中两个 case 已通过，公开离线终端 scope 与收尾均通过；本轮为相关组件 126 项、framework 17 项、Controlled 3 项及两个 L3 的增量验证，具体源/构建与原始证据归 [Runner 专属验收](https://github.com/erranliu/SteerRunner/blob/codex/initialization-stop/docs/acceptance/initialization-stop.md)。历史 helper 证据不迁移、不作为 native scope 或全树清理证明。
-
-### Runner 内容流程与测试管理接入（按 2026-10-21 记录校准）
-
-[测试管理 Spec](../../SteerlineFlow/spec/test-management.spec.md) / [Plan](../../SteerlineFlow/plans/test-management.plan.md)的原版本验收见[专属记录](../../SteerlineFlow/testing/acceptance/test-management.md)，TM-M01 人工后置。后续[项目维护](project-maintenance.md)改为自动生成并保存系统测试安排；候选测试进度改用 [progress-file](../integration/runtime-progress.md)，旧 R2 候选产物收集已移除。conversation 操作仍留待规划台；原生执行归 Runner，不新增 Agent 运行时或第二套状态机。
-
-| 节点 / 异常 / 验证 | 本次调用方差异与缺口 |
-| --- | --- |
-| W01–W07 / E03、E05 / V01–V02 | 生成复用 Codex 程序/模型，按内容流程构造 read_only 设置并核验能力/材料，不原样继承开发权限或发布认证，不领取 Task/伪造开发输入；测试 JSON 从固定 PlanRef 同提交推导；项目维护已要求必要材料缺失/无效或实际输入变化未复核阻断相关首次启动，测试结果不成为发布/交付门禁 |
-| W08–W14 / E04、E07 / V03、V06、V08 | 项目生成请求先持久化；未知原请求只查证，取消/重启零重发、零 resume；输出格式与测试 ID/文件保存校验分别归 Runner/SteerLine，坏结果保留原文件 |
-| W15–W17 / V04、V06 | generate 不进入开发补报/发布/交付；测试计划/结果不变成 PR 门禁，不推进 TaskDelivery；项目程序报告和日志经公开产物读取，由 SteerLine 校验计划/定义及干净同 commit，脏/未知来源不计当前通过，不新增指纹或防篡改证明体系 |
-| W18 / E04–E05 / V07 | 无 Candidate 的生成及未绑定/迟到 Run 已接普通停止与 reset 围栏；生成兼容接管与启动前 stop 清单已接入，按原 Run/请求、构建和公开证明核验，不依赖启动后 tick 补停；生成成功与资源已停止分别取证 |
-
-调用方最小验证为 TM-A01–A08，R2 消费、生成换代及完整 live 验证保留在验收明细；原生会话、权限、恢复和停止机制专项仍归 Runner，不在本仓复制矩阵。上述增量不更改既有节点、异常分类或重试/恢复授权。
-
-### 应用级共享 Runner（2026-10-19）
-
-[共享服务 Spec](../../SteerlineFlow/spec/shared-runner-service.spec.md) / [Plan](../../SteerlineFlow/plans/shared-runner-service.plan.md)已按用户授权实施，仅改 SteerLine：由应用宿主持有每 home 一个 Runner，项目借用共同固定实例。节点/异常编号、Runner 原生重试、输入/恢复和冻结停止策略不变。
-
-| 节点 / 异常 / 验证 | 当前调用方边界 |
-| --- | --- |
-| W01–W04 / E04、E05、E07 / V01、V06、V08 | state-dir 按 home 派生；应用在 census 后、项目运行前初始化一次。不可变 home 构建 pin 在 service start 前核验，失败/reset 保留；候选/检查原绑定不迁移，不增加懒初始化或引用计数 |
-| W08–W14 / E04、E05、E07 / V03、V06、V08 | 产品请求与随机 Runner 请求分别持久化；Action 保存产品 ID/摘要，已存动作但外层回执丢失时仍复用原信封。检查在项目开放前核对原 Check 与未知原外部请求，过程只读；Check state-dir 与 Action 原身份/信封受存储冻结校验，运行中旧实例围栏保持 |
-| W18 / E04、E05、E07 / V06、V07 | 项目只关闭本地资源，已有 Run/检查可能继续；保留原停止义务，actor 已关时不承诺继续对账。应用在验证共享实例后立即固定停止义务，后续目录失败也不丢失；整体停止统一处理原实例与冻结策略，项目只记本地关闭/锁，应用持有一份最终资源证明 |
-| W18 / E04、E05 / V07、V08 | 离线公开 Runs/Checks 证明覆盖所有项目；未绑定未知请求继续阻断。整包 reset 全体预检，以全局最终资源证明核对原 Check/input_digest，停服前缓存不作第二结算依据；未知操作仍阻断，仅重置 caller 状态，保留共享 Runner 历史/认证/Git/PR 与构建 pin；新操作使用新外部请求，正常重启零自动业务输入 |
-
-本增量替代历史“项目退出即所属 Runner 停服”的关系；没有逐项目暂停/热重启 API或后台结算器。局部 caller 已退出后的义务由整体停服结算，或显式重启后按原流程核验。V03/V06/V07/V08 的结果及人工待验在[本任务验收](../../SteerlineFlow/testing/acceptance/shared-runner-service.md)登记；真实空闲服务与 controlled 双 Run 分别取证，不据此宣称真实模型双 Run或闪窗体验通过。
-
-### 协作边界与多 Workflow 接入（2026-10-17）
-
-[协作 Spec](../../SteerlineFlow/spec/runner-collaboration.spec.md) / [Plan](../../SteerlineFlow/plans/runner-collaboration.plan.md)已按用户授权实施，实跑与待验范围登记在任务验收。SteerLine 保存执行预设与原提交；Runner 受理时固定参数/材料/模板，逐轮发送前保存最终输入，原生身份按生命周期绑定并推进 workflow。调用方消费多流程目录、组合 schema、audit_model 和公开审计/材料/请求模型投影。本文中 development/v3 等迁出前流程名不构成 SteerLine 当前执行引擎；当前消费固定 Runner 公开目录声明的 workflow ID/version，不改写历史契约或验收。
-
-| 节点 / 异常 / 验证 | 本次实现差异及验证边界 |
-| --- | --- |
-| W01 / E03 / V01、V08 | 区分部署配置、预设、原提交与受理参数/模板；预留同事务固定名称/摘要/请求。固定公开契约后 caller 可先用 fixture 开发，Runner 实际组合 schema/构建才是跨仓联验前置；样例留测试资产，不增生产样例协议 |
-| W08–W14 / E04、E07 / V03、V04、V06、V08 | 逐轮结果/授权确定后再保存完整 prompt/model/来源，已存输入恢复不重渲染；Session/Turn 不在受理时预填。原 request_id/revision/授权保持，旧/兄弟报告或缺 final 不放行；真实新增字段由同一 N1 经正式产品查询核对，空闲配置查询不能代替 |
-| W15–W16 / E07 / V05 | 审计路由、findings 裁决、修复预算和模型回切由 Runner 原 workflow owner 管理；SteerLine 只选择/显示，不建立本地审计状态机，不新增发布资格或技术重试 |
-| W17–W18 / E04、E05 / V06–V08 | 同构建换预设仅影响重启后新候选；新 Runner 实例只在显式重启 SteerLine、重建 ProjectRuntime 初始化时接纳。旧运行时发现替代实例拒绝新业务输入、保留原绑定，不自动/局部重绑；新运行时准入/客户端/停服结算同源绑定，原 Run/input_digest 保持、旧停止不影响新实例。更换构建按[后续兼容接管契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md)核验原事实与原停止清单；未结算不直接阻断已证明兼容的接管，销毁/reset 仍要求结算。U1 仅证明其原版本的旧拒绝与显式重启后新接纳 |
-
-W/E/V 编号及既有异常、重试和输入恢复语义不变；上表明确配置/构建准入和实例归属，不新增重放授权或运行中实例切换入口。不扩展 Orca 支持或复测原生矩阵。V03/V06 补齐实际 CLI expected-instance 围栏（不是只查 status）；W01/W08 在重建准入前只读对账原 Run/请求，冲突不上线，pending 意图撤销、unknown submit/控制仅观察原 ID 且零自动重发。预设/实例边界见协作 Spec 4.2，跨构建接管与启动前停止清单见后续服务换代恢复契约；实施与实际已验/待验结果归[本任务验收](../../SteerlineFlow/testing/acceptance/runner-collaboration.md)，上表不代替真实链和资源结算证据。
-
-本文既有“服务换代后自动核验/结算事实”不授权存活的 SteerLine ProjectRuntime 接纳替代 Runner 实例；本次 caller 实例边界仍须显式重启 SteerLine、重建 ProjectRuntime。读取服务状态用于诊断或保留原事实，与接受新实例作为业务/停服目标分别判断。
-
-2026-10-17 [Web 候选停止参与修复](../../SteerlineFlow/plans/web-candidate-stop.plan.md)区分 caller `participation=abandoned` 与资源停止义务 `stop_requested`。人工退出事务保护最后一个参与候选，固定原请求、操作者、时间并与同候选 Bridge 派发串行；准备中/未知执行仍可退出。人工退出后不主动轮询、重连、发输入或 Runner stop，保留最后执行事实；Task 终态仍可为包括已退出候选在内的原 Run 增加停止义务并处理迟到接受。W12/W17/W18、E04/E05、V03/V06–V08 沿原语义：未知退出只查原请求，其他请求或 Task 结项不能冒充本请求成功；退出不证明原生已停。Web 以权威停止快照及原回执切换候选，不抢后续用户选择。最小自动验证及人工未验边界见[专属验收](../../SteerlineFlow/testing/acceptance/web-candidate-stop.md)，不扩大为 Runner 原生停止或完整产品真机验收。
-
-2026-10-16 [应用与项目生命周期收拢](../../SteerlineFlow/spec/application-project-lifecycle.spec.md)已按审计后的范围实施：`ProjectRuntime` 唯一持有最终 store、锁、日志、product/handler 和原 Runner 绑定；actor EndActor 仅提交 stopped/ready=false checkpoint，不拥有 Runner 或 store.Close。进程内 Read/Command/Task 封闭并排空后再关闭资源；本地关闭与原 Runner 结算分别记录，后者未知仍关闭本地资源。本地失败继续保留锁/宿主，不新增恢复入口。只读 catalog 不创建活动目录，Close-before-Start 零启动，pending 结果不冒充成功。旧逐项目 start/run/listener、停止采样及专属回执接线已删除。关联 W01、W08–W14、W17–W18 / E04、E05、E07 / V01、V03、V06–V08；既有原请求、停机重试/最终证明、节点/异常/授权/恢复语义保持；本次差异与自动验证归[专属验收](../../SteerlineFlow/testing/acceptance/application-project-lifecycle.md)，不增加 worker 状态机。
-
-2026-10-16 [产品读取、命令入口与 Web 容器重构](../../SteerlineFlow/spec/product-read-command-web-refactor.spec.md)已按审计范围实施：caller participation、提交和停止请求显式传到详情/历史，Runner 观察状态由同一纯规则产生，交付标签仍来自 TaskDelivery。命令解析/映射/派发/权威匹配分责，仍沿唯一 registry/记录 owner；Web 连接与原请求对账由对应 hook 持有。关联 W12/W17、V06/V08 的只读呈现与原请求边界，不修改节点/异常矩阵、重试、恢复、停止及交付资格；详情/历史状态混合解释、Web 猜参与和正常派发重复构造映射的缺口已收拢。原生与其他既有未验项不在本轮补验；实际结果归[专属验收](../../SteerlineFlow/testing/acceptance/product-read-command-web-refactor.md)。
-
-2026-10-16 执行域遗留清理删除本仓无生产消费者的旧生命周期端口、原生事件处理、候选辅助规则和状态转移函数，以及对应专属测试。产品读取仍使用的值类型和编解码保留；W01–W18、E01–E07、V01–V08 的语义、调用方输入/恢复围栏和交付事务均不变。验证及保留边界见[专属验收](../../SteerlineFlow/testing/acceptance/execution-legacy-cleanup.md)。
-
-### 项目环境准备与普通执行的边界
-
-全局运行环境由运行机与链路配置目标构成，配置和只读能力目录由原 Web owner 获取，不依赖项目 Git、库或接入材料；元数据查询工作目录和程序解析也不继承项目 cwd。项目运行环境在其上按原非模型上下文检测并授予项目资格。全局不新增 ready/Current，任务继续沿后端平台能力校验与项目 Qualify 准入；目录故障不改原报告或阻止原活动停止。见[最小解耦规格](../../SteerlineFlow/spec/runtime-project-environment-decoupling.spec.md)。
-
-项目提供各目标共用的 manifest5 文档和检测入口（不检查执行链路，资格仍按目标链路独立），自行完成检测闭环并写 version3 最终结果。SteerLine 以固定短提示通过通用 execute/1 工作流调用一次；Runner 沿既有原生执行、停止和 result_file 封存，SteerLine 只校验信封/结算并消费项目 ready、原因和可选明细，不复核项目内部检查。Runner 不提供环境检测专用行为。原 Run/input/request、未知不重派、停止与资源结算沿本文件规则，新资格与持久撤销规则见[当前规格](../../SteerlineFlow/spec/project-environment-workflow.spec.md)。旧专用 Check 请求/报告/资源模型已[退役](../../SteerlineFlow/spec/legacy-environment-check-retirement.spec.md)；原版本验收只作历史证据。
-
-W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow stage/status/diagnostic 的真实变化，SteerLine 只投影公开事件。当前可见执行可额外只读查询一条最佳努力消息摘要及通知观察时间；消息缺失、读取错误或页面刷新均不改变执行事实、允许动作、输入授权或恢复资格。V04/V06 增量覆盖白名单/身份隔离、查询零输入、切换与后台取消；自动/人工结果见[专属验收](../../SteerlineFlow/testing/acceptance/execution-observability.md)。
-
-
-截至本次源码梳理，下面只列实现边界，不维护逐次验收结果。测试执行和已验/待验事实仍归 `SteerlineFlow/testing/acceptance/` 的任务专属文档。
-
-| 范围 | 已有基础 | 待补或现有限制 |
-| --- | --- | --- |
-| 持久化副作用和并发 | ReliableExecution 的事实/身份/对账规则、actor 生命周期 Operation、异步回执提交、原身份/版本守卫、first-wins | 按本矩阵检查各入口是否共享同一异常分类，不新增平行规则 |
-| 工作区和环境准备 | 固定工作区意图、准备总期限、blocker、nonce 与探针核验 | 部分现场或后端没有准备记录；不能默认所有执行已具备统一准备路径 |
-| Runner 状态目录 | SteerLine 以规范绝对 home 派生应用共享的本地卷根短目录；查询、准备、停服及重置共用；路径/别名/隔离已做定向验证 | 旧目录不迁移；安装现场原候选保持旧绑定。当前部署与验证状态见[短目录验收](../../SteerlineFlow/testing/acceptance/runner-short-state-path.md) |
-| Orca 显式启动 | 原唯一终端、启动操作、未知发送不重发；Runner `d4969d0` 的可信 helper 路径会提交绑定原 app-server/session、权限、配置、helper SHA 和期限的准备回执后才输入 | SteerLine 调试接线见[专属验收](../../SteerlineFlow/testing/acceptance/orca-runtime-wiring.md)；缺 helper 仍拒绝。有限启动重试及替代 provider/terminal 的原会话恢复不由本次接线新增 |
-| Runner 跨仓交接 | 新 application 对 accepted+ResourcePending 继续核验原 Operation；准备超时撤销输入，迟到就绪不自动续跑；caller 重启撤回未消费授权，未知旧控制只查原 ID | SteerLine app/查询已切换到 taskrunner/runnerbridge/runnerclient，旧执行 owner 和无消费者端口已删除；实际原生交付/恢复范围按专属验收判断，远端未验/失败不因源码清理转为通过 |
-| Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |
-| 原业务会话恢复 | RecoveryFacts、原请求核验、同 thread 恢复、Orca 原终端重接 | Orca 替代 provider/terminal 的原业务会话恢复仍不可用；业务未知发送禁止重发 |
-| 多项目共进程宿主 | 应用宿主内各项目持独立 actor/锁/实例；应用 v2 直接调用原项目用例；原 worker 停止策略保持 | 聚合停止先关闭全部输入资格，逐项目结算并发布绑定原宿主的私有 shutdown.json；本地关闭未知保留锁，worker 未知但本地已关闭允许原库取证。验证边界及结果见[专属验收](../../SteerlineFlow/testing/acceptance/unified-startup.md) |
-| 报告发布与交付 | Runner 普通或审计开发 workflow、源结果绑定、有限补报、固定 PR 查询、唯一 Delivery；PR 观察保留 pending/answer_saved，原反馈仍走 actor 投递入口（[本机 Web 验收](../../SteerlineFlow/testing/acceptance/web-frontend.md)） | 未知发布仍需原事实核验；不以这份设计声明所有故障窗口已有自动恢复 |
-
-实现初始化重试前必须补齐适配器证据：原启动是否真正失败、代理是否退出、是否还存在相关写者、当前就绪状态是否属于这次启动。现有 Orca terminal connected/status 表达的可能只是 PowerShell 宿主状态，不能单凭它证明 Codex 退出或重试安全。缺少公开能力时应明确阻断并列入具体实施步骤，不能仅解析屏幕错误文字后发送命令。
-
-### 源码定位
-
-| 归属 | 当前源码 |
-| --- | --- |
-| SteerLine Task/候选协调及唯一交付 | [taskrunner](../../internal/taskrunner/service.go)、[runner_result](../../internal/storage/sqlite/runner_result.go) |
-| SteerLine 原 CLI outbox、迟到接受及停止义务 | [runnerbridge](../../internal/runnerbridge/bridge.go) |
-| SteerLine 固定 EXE/公开 CLI 与 schema | [runnerclient](../../internal/runnerclient/client.go)、[runnercontract](../../internal/runnercontract/views.go) |
-| SteerLine 实际服务与公开事实投影 | [service wiring](../../internal/app/runner_service_wiring.go)、[projection](../../internal/taskrunner/projection.go) |
-| Runner 原生生命周期与持久提交 | [application（固定迁出版本）](https://github.com/erranliu/SteerRunner/tree/5f664a9/internal/application) |
-| Runner Workflow / ReliableExecution / 原生适配器 | [execution（固定迁出版本）](https://github.com/erranliu/SteerRunner/tree/5f664a9/internal/execution) |
-
-历史已冻结 Spec/Plan 中的 SteerLine 旧 worker 路径只作为来源证据，不再代表当前服务入口。Runner 的外部 workflow ID/version 由所选构建的公开目录定义，内部阶段规则由 Runner 维护；配置中保留的 Task 契约协议字段不构成旧执行入口。
-
-### 初始化失败场景的恢复边界
-
-账户路由超时后，同一终端再次启动成功，证明启动命令可用，不证明旧业务输入未执行。若原记录只有初始化失败，满足准备重试资格后可以采用新初始化记录；若已经有业务输入接受回执而 started 尚未证明，则属于 W09/W10 的未知执行结果。
-
-后者先按原请求、原 provider session 和原生轮次核验；不能直接清除诊断、改绑当前 provider 或重复 implement 提示词。能证明原业务未派发或明确拒绝后，才重新建立有效发送意图；不能证明时保留未核实。新业务会话不冒充原会话恢复，后续动作沿正式产品能力和授权处理。
+任务候选、公开观察、显式反馈、平台合并核验及共享停止责任已有实现，构建与平台的实际范围按专属验收判断。三次初始化启动及 5/15 秒退避属于早期准备恢复设计，不是所有后端现有能力；完整离线启动清单、安装排他租约、安装续装及产品命令承载合并等方案也不因本文整理获得实施状态，见[历史方案及实施结果](../../SteerlineFlow/archive/design/reliability-simplification-analysis.md)。
 
 ## 最小验证与维护
 
-修改节点规则时按受影响范围选择验证，不穷举所有节点与所有故障组合。以下 V01–V08 是稳定的设计核验分组，不是新注册的 E2E 场景 ID，也不表示已执行验收。
+W01–W18、E01–E07 和以下 V01–V08 保持编号与原义。V 是设计核验分组，不是可执行测试 ID 或通过声明；选测、命令与证据归任务 Plan 和[测试指南](../../SteerlineFlow/testing.md)。
 
-| 分组 | 必须核验的边界 |
+| 分组 | 核验重点 |
 | --- | --- |
-| V01 准备与启动 | worktree/资源创建成功丢回执只对账；代理明确退出后才有限重试；配置/权限缺失不循环启动；原生已启动但 readiness 未确认时仍可按原身份显式停止并验证冻结契约范围的结算 |
-| V02 初始化与会话 | 初始化状态变化不提前开业务；旧 READY/旧 provider 不能验证当前准备；无业务派发时安全重试与人工重启采纳；必要证据缺失保持阻断 |
-| V03 输入投递 | 未保存意图零发送；明确拒绝、accepted 未 started、丢回执分别处理；未知发送零重发、零补 Enter |
-| V04 观察问答与终态 | 断连只接原观察；重复答案只投原请求；明确失败无 final 可恢复；成功缺 final 不补造；人工输入不替代受管结果 |
-| V05 结果与发布 | 原来源绑定、有限格式补报、不重做发布、PR 读取重试与未知发布对账、源失败不被 report done 覆盖 |
-| V06 服务换代与身份 | 初始化未完成时换代也保留原资源停止资格，零自动输入/替换会话；准备预算不重置；重开零 caller 自动新启动/业务输入，Runner 只按原持久授权继续已证明未发送的后继；只读核验与结算允许；旧回执不推进新 Attempt 或兄弟候选；共进程核对共享 PID 下各项目独立实例/换代。本机兼容更新组合资格见[2026-10-20 验收](../../SteerlineFlow/testing/acceptance/service-generation-recovery.md#最终本机结果slc-a05-通过) |
-| V07 交付停止与清理 | Delivery 重复提交唯一；任一合格候选交付；closed 后零 PR 查询/新业务；部分清理不撤销交付，未知旧写者不重建；共进程核对单项目停止不杀宿主、聚合停止不跳过兄弟；停服最终结算绑定原实例/请求/目录/EXE，旧投影不能代替最终证据 |
-| V08 持久化窗口 | 保存意图失败、外部成功提交失败、结果提交后下一输入未发送、Task 终态与回执并发均不重复副作用。本机离线原 final 补收与后继交付的组合证据见同一[验收](../../SteerlineFlow/testing/acceptance/service-generation-recovery.md#最终本机结果slc-a05-通过) |
+| V01 准备与启动 | 部分创建、丢回执、配置阻断及原身份停止；未知不补建 |
+| V02 初始化与会话 | 初始化与业务分离；准备恢复仅按实际能力，新会话不冒充旧结果 |
+| V03 输入投递 | 保存失败零发送；明确拒绝、接受未开始和未知分开，未知零重发 |
+| V04 观察与问答 | 原轮次及原问题绑定；缺 final 不补造，失败不无限等待成功正文 |
+| V05 结果与发布 | 来源、有限补报、原 PR 及未知发布，不用报告覆盖源失败 |
+| V06 重启与身份 | 原实例、原授权及预算；caller 零自动新输入，换构建遵守 v8 排空 |
+| V07 交付与停止 | 唯一交付、参与资格、closed 后零 PR 查询、独立停止义务及精确证据范围 |
+| V08 保存窗口 | 外部成功而本地失败、迟到受理、终态竞态均不重复副作用 |
 
-复用[分级测试入口](../../tests/e2e/README.md)及现有 lifecycle、recovery、environment、stage 和 commit boundary 测试；新增能力在其实施 Plan 中按验收项 ID 明确场景、环境、命令、时点、通过条件与证据位置。设计文档的 V 编号只用于维护映射，不能代替任务专属验收项或注册场景。缺少驱动/原生证据时一并规划补齐，不能以“后续补验”代替必要能力。
-
-维护本文时遵循以下约定：
-
-1. 新增 worker 节点、输入类型、异常原因或重试/恢复行为，先检查并同步对应 W/E/V 条目；编号不重新编排，新增条目追加或细分并保留引用。
-2. 统一规则在本文维护；任务 Spec/Plan 链接本文并记录本次差异、实现范围和测试计划，不复制完整矩阵。固定 Git commit 中的旧任务契约和原始验收事实不改写。
-3. 实现某项能力后同步“当前实现与缺口”，结果登记在该任务 `SteerlineFlow/testing/acceptance/` 文档；纯设计整理不创建 Task ID、roadmap 执行项或未执行的验收成功记录。
-4. 文档与代码不一致时明确修正文档或实现，不增加旧数据迁移、双写或回退路径。异常恢复不能修改安装数据库、清空诊断或用新资源冒充原身份。
-
-### 测试管理增量（2026-10-20）
-
-生成对象沿 W/V03、V06–V08 的原请求规则：持久生成取消在 Runner workers 启动前转为原 stop outbox；兼容换代以公开 takeover 核对原 namespace/Run/input 或 submit request/digest，保留历史 pin。离线停止/重启核验枚举生成记录。候选测试产物收集复用同一项目观察 tick，先保存 collect 意图再调用；未知只读原请求，不发送替代输入。每份报告归原候选/Run 并不可变保存，源码未知只显示历史/待复验，不改变 Task/交付门槛。对应 V03/V06/V07/V08 的定向测试及真实场景证据见[专属验收](../../SteerlineFlow/testing/acceptance/test-management.md)。
-
-历史 bf3ec58 的 generate 接管误校验已由 Runner #37 修复：不依赖开发结果解析的内容 workflow 允许合法缺省配置，实际 parser 操作仍严格校验。原生成真实 A/B 接管和干净主干 13ef123 同 EXE/原 k 包只读复验已通过，分别按专属验收的固定版本取证；不绕过证明、修改原记录或将契约 compatible 当作活动回合恢复/资源结算证明。服务 stop 只关闭观察 writer，资源结算前须显式 stop 原 Run；真实测试驱动已落实该清理顺序，产品服务关闭/重启语义不在本任务扩大。
+Runner 验证原生执行专项；SteerLine 验证 W01、W12 的调用方资格、W17、绑定、未知零重放及停止义务。修改有效规则时同步相关编号和任务验证；历史固定契约、原始证据与已冻结执行不改写。只更新现有章节，不按日期追加重复增量。源码入口为 [taskrunner](../../internal/taskrunner/service.go)、[runnerbridge](../../internal/runnerbridge/bridge.go)、[交付事务](../../internal/storage/sqlite/runner_result.go)及 [Runner 升级核验](../../internal/runnerclient/upgrade.go)。
