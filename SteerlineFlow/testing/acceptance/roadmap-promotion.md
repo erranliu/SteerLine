@@ -23,6 +23,17 @@
 
 本轮未重跑真实模型、文档 PR 合并与入图整链；既有 live 场景只同步“已入图后显示 DAG 入口”的界面断言，不改变原事务与清理检查。浏览器模拟数据验证不代表真实后端链已复验；安装部署和用户人工体验仍未验。
 
+### 提 PR 前固定提交验证
+
+基于 `origin/main=27172ac3` 创建 `codex/roadmap-promotion-progress`，实际固定提交 `57da9c495ac668ddcd67d17b3ebdd49a3af612f8`。以下报告均核实执行前后为同一 clean 提交，证据仍在上方根目录，L1/L2/web 输出子目录分别为 `pr-57da9c49-L1`、`pr-57da9c49-L2`、`pr-57da9c49-web`；调用参数与上表相同，仅替换 `-out`。
+
+- L1：passed/complete=true，准备 5.955s、执行 51.716s。
+- L2：passed=true，准备 30.752s、执行 122.871s；受控交付与停止清理通过。
+- web.unit：39 文件 / 343 项通过，0 失败、0 skip，34.681s。
+- 同提交 TypeScript/Vite 构建通过；711 份 Markdown 的 4400 个本地链接检查 0 错误，`git diff --check` 通过。
+
+三份登记测试报告已用 `test-feedback record` 导出到[固定提交测试记录](../records/57da9c495ac668ddcd67d17b3ebdd49a3af612f8.json)。随后只补充本段证据说明和测试记录，不将这些文档提交冒充另一次实现或浏览器复验。
+
 ## 2026-11-02：草稿换行比较修复
 
 用户授权仅放宽草稿 LF/CRLF 内容比较；原始正文/摘要、固定文件 manifest、JSON 和原请求身份保持严格核验。原因为 Windows `core.autocrlf=true` 可让 Git 干净工作树出现 CRLF，而 blob 为 LF；不要求项目固定 LF。依据与命令见 [Spec](../../spec/roadmap-promotion.spec.md#41-来源) 和 [Plan](../../plans/roadmap-promotion.plan.md#2026-11-02草稿-lfcrlf-比较修复)。
