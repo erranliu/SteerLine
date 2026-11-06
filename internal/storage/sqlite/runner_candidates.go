@@ -240,6 +240,11 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if graph.Authority.DispatchPaused {
 			return nativeErr("dispatch_paused", "dispatch is paused")
 		}
+		if c.MaterialDigest != "" {
+			if err := tx.verifyProjectMaterials(c.Project, c.BaseRevision, graph.Tasks); err != nil {
+				return err
+			}
+		}
 		if !candidate && (c.Explicit && graph.Authority.DispatchMode != "manual" || !c.Explicit && graph.Authority.DispatchMode != "auto") {
 			return nativeErr("wrong_mode", "dispatch mode differs from the original start")
 		}

@@ -6,9 +6,11 @@ import {
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { Pause, Play } from "lucide-react";
+import { useProjectReadiness } from "../project-maintenance/use-readiness";
 export function Dispatch() {
   const { online, snapshot, send, busy, identity } = useWorkspace();
   const preparation = useEnvironmentReadiness();
+  const project = useProjectReadiness();
   const selected = preparation.data?.profiles?.find(
     (p) => p.id === preparation.data?.default_profile_id,
   );
@@ -36,7 +38,13 @@ export function Dispatch() {
           aria-checked={control.dispatch_mode === "auto"}
           aria-label="自动派发"
           size="sm"
-          disabled={!online || busy || !caps.includes("set_dispatch_mode")}
+          disabled={
+            !online ||
+            busy ||
+            !caps.includes("set_dispatch_mode") ||
+            (control.dispatch_mode !== "auto" && !project.ready)
+          }
+          title={control.dispatch_mode !== "auto" ? project.reason : undefined}
           onClick={() =>
             void send(
               "set_dispatch_mode",
@@ -73,6 +81,17 @@ export function Dispatch() {
         </Button>
       </div>
       <p className="muted">默认执行方案：{selected?.name || "尚未核实"}</p>
+      {!project.ready && (
+        <p className="muted">
+          {project.text}
+          {project.diagnostic && `：${project.diagnostic}`} ·{" "}
+          <NavLink
+            to={`/projects/${identity.project_id}/dag?maintenance=preparation`}
+          >
+            前往项目维护
+          </NavLink>
+        </p>
+      )}
       {!preparation.required && (
         <p className="notice amber">环境就绪阻塞已关闭（开发者配置）</p>
       )}

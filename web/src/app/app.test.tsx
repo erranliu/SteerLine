@@ -35,8 +35,26 @@ function workspaceRead(api: Api, path: string): unknown {
   if (path === "/snapshot") return makeSnapshot(api);
   if (path === "/presentation")
     return { presentation: { profiles: [], default_profile_id: "" } };
+  if (path === "/maintenance/readiness")
+    return {
+      status: "not_ready",
+      commit: "",
+      total: 0,
+      ready: 0,
+      blockers: ["远端尚未检查"],
+    };
   if (path === "/maintenance")
-    return { observation: { commit: "" }, tasks: [] };
+    return {
+      readiness: {
+        status: "not_ready",
+        commit: "",
+        total: 0,
+        ready: 0,
+        blockers: ["远端尚未检查"],
+      },
+      observation: { commit: "" },
+      tasks: [],
+    };
   if (path.startsWith("/tasks?")) return tasks;
   throw new Error("Unexpected Workspace read: " + path);
 }
@@ -189,6 +207,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
         path === "/presentation" ||
         path === "/tasks?limit=100&cursor=" ||
         path === "/maintenance" ||
+        path === "/maintenance/readiness" ||
         path === "/environment/options" ||
         path === "/environment/options?configuration=true",
     ),

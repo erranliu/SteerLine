@@ -81,7 +81,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			return m.prepare(ctx, w, candidate, base.Resolve)
 		}
 		service.ReserveExecution = func(ctx context.Context, w taskmodel.FixedWork, c runnerbridge.Candidate, candidate bool) error {
-			return m.reserveBaseline(c.BaseRevision, func() error {
+			return m.reserveReadyExecution(ctx, c.BaseRevision, func() error {
 				return connection.ReserveRunnerCandidate(ctx, w, c, candidate)
 			})
 		}

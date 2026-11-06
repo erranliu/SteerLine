@@ -8,6 +8,7 @@ import {
   type GenerationProgressValue,
 } from "./generation-progress";
 import { testPreparationNames as names } from "../tasks/use-test-readiness";
+import type { ProjectReadiness } from "../../shared/api/types";
 
 export type Commit = {
   sha: string;
@@ -19,6 +20,7 @@ export type Commit = {
   pr_diagnostic?: string;
 };
 export type MaintenanceView = {
+  readiness: ProjectReadiness;
   observation: { commit: string; last_success?: string; diagnostic?: string };
   remote_name: string;
   remote: Commit;
@@ -217,6 +219,7 @@ export function ProjectMaintenance() {
     }
   }
   const v = view.data;
+  const ready = online && view.isSuccess && v?.readiness.status === "ready";
   const l = v?.local;
   const localLabel = !l
     ? "正在读取本地版本"
@@ -247,15 +250,13 @@ export function ProjectMaintenance() {
       className="settings-panel maintenance-panel"
     >
       <button onClick={() => setOpen(!open)} aria-expanded={open}>
-        项目维护 ·{" "}
-        {v?.observation.diagnostic
-          ? "检查失败"
-          : !v?.observation.commit
-            ? "远端待检查"
-            : problems.length
-              ? problems.length + " 项材料待处理"
-              : localLabel}
+        项目维护 · {ready ? "已就绪" : "未就绪"}
       </button>
+      {v?.readiness && (
+        <p className="muted">
+          {localLabel} · 测试安排 {v.readiness.ready}/{v.readiness.total} 就绪
+        </p>
+      )}
       <GenerationProgress
         value={v?.generation_progress}
         online={online}
@@ -274,6 +275,11 @@ export function ProjectMaintenance() {
           {(error || view.error) && (
             <p role="alert">{error || String(view.error)}</p>
           )}
+          {v?.readiness.blockers.map((reason) => (
+            <p className="notice amber" key={reason}>
+              {reason}
+            </p>
+          ))}
           {v?.observation.diagnostic && (
             <p role="alert">
               检查远端失败：{v.observation.diagnostic}
@@ -360,7 +366,7 @@ export function ProjectMaintenance() {
             {preparing ? "准备进行中" : "准备材料与测试安排"}
           </button>
           <p className="muted">
-            先检查远端并校验任务文档，再生成测试安排。准备在后台执行，完成后可启动任务；已有候选保留其执行版本。
+            本地同步且所有未完成任务的材料与测试安排就绪后，才允许新执行。准备在后台执行；已有候选保留其执行版本。
           </p>
           {v?.generation_progress?.diagnostic && (
             <p role="alert">{v.generation_progress.diagnostic}</p>
