@@ -36,14 +36,14 @@ func TestUsagePolicyRequiresObservedExactHostAndLeaf(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.UsagePolicy = raw
-	if _, err = s.Save(context.Background(), base.SavedDigest, encode(t, c)); err == nil {
+	if _, err = s.Save(context.Background(), base.SavedDigest, encode(t, s, c)); err == nil {
 		t.Fatal("unverified remote grants saved")
 	}
 	s.VerifyUsagePolicy = func(_ context.Context, p cfg.UsagePolicy) error {
 		view.Requirements[0].HostID = host
 		return VerifyUsageRequirements(p, view)
 	}
-	if _, err = s.Save(context.Background(), base.SavedDigest, encode(t, c)); err != nil {
+	if _, err = s.Save(context.Background(), base.SavedDigest, encode(t, s, c)); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -45,7 +45,13 @@ it("saves only the observed exact leaf and keeps actual remote authorization dis
           }),
         );
       if (init?.method === "PUT") {
-        const config = JSON.parse(String(init.body));
+        const edit = JSON.parse(String(init.body));
+        expect(edit.saved_digest).toBe(saved.saved_digest);
+        expect(edit.profile_edits).toEqual([]);
+        expect(new Headers(init.headers).get("If-Match")).toBe(
+          '"' + saved.saved_digest + '"',
+        );
+        const config = edit.config;
         writes.push(config);
         saved = { ...saved, config, saved_digest: "new" };
       }
@@ -109,9 +115,15 @@ it("does not let a pre-save read claim that changed collection settings are alre
           }),
         );
       if (init?.method === "PUT") {
+        const edit = JSON.parse(String(init.body));
+        expect(edit.saved_digest).toBe(saved.saved_digest);
+        expect(edit.profile_edits).toEqual([]);
+        expect(new Headers(init.headers).get("If-Match")).toBe(
+          '"' + saved.saved_digest + '"',
+        );
         saved = {
           ...saved,
-          config: JSON.parse(String(init.body)),
+          config: edit.config,
           saved_digest: "new",
         };
         return new Response(JSON.stringify(saved));
