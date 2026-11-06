@@ -6,7 +6,7 @@ SteerLine 尚未发布。项目显式使用 task_authority=native 与 workflow_p
 
 ## 权威与身份
 
-SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、Roadmap 来源/解析/文档及编号映射、测试生成原请求与结果、候选测试进度投影及自身服务 checkpoint；候选侧旧 R2 产物收集已移除，独立测试报告按[报告约定](../../SteerlineFlow/testing/reports.md)登记。当前 schema 33 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
+SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、Roadmap 来源/解析/文档及编号映射、测试生成原请求与结果、候选测试进度投影及自身服务 checkpoint；候选侧旧 R2 产物收集已移除，独立测试报告按[报告约定](../../SteerlineFlow/testing/reports.md)登记。当前 schema 41 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
 
 Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、原生资源、问题、输入、恢复与停止事实。SteerLine 不读该库、原生 codec、IPC 或私有日志；只消费固定 EXE 公布的 CLI/Run/事件。
 
@@ -50,7 +50,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 | 格式/权威 | 当前值或归属 | 源码 |
 | --- | --- | --- |
-| Task SQLite | schema 39 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| Task SQLite | schema 41 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
 | Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
 | TaskContract / DAG | 契约结构为 taskcontract 纯值；校验/DAG 归 task/model | [task/model](../../internal/task/model) |
@@ -63,7 +63,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 节点和异常规则见[生命周期](worker-lifecycle.md)，配置见[执行方案](execution-profiles.md)，实际通过/未验见[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)。历史 Spec 的迁出前源码链接固定在原 Git 提交，只作追溯。
 
 
-项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；只保留一次检测，manifest5 描述调用，version3 结果包含不可改绑身份、ready/message 和不复核的可选 details。资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 39 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-workflow.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
+项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；只保留一次检测，manifest5 描述调用，version3 结果包含不可改绑身份、ready/message 和不复核的可选 details。资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 41 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-workflow.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
 
 ## Roadmap 规划与入图
 
@@ -76,3 +76,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 环境结果 version3 保存项目/环境/活动/轮次/来源提交/依据摘要及稳定调用上下文，项目完成后写 completed/ready/message 与可选 details。平台只验证信封与原执行结算，不解释业务明细；已确认依据变化持久撤销 Current，递增 revision，回退字节也不恢复资格。
 
 项目入口 version1 只声明公共材料和正式测试清单；测试生成及候选快照冻结解析后的入口，持久化拒绝改绑。环境 manifest5 只声明固定入口、解释器和有限依赖，不依赖该任务入口或测试目录。项目要求和检测由项目自己维护；平台不设置 required_checks/gaps 或生成活动。
+
+## 异步活动只读投影
+
+`preparation_batches` 按项目与批次 ID 保存原准备事实和业务结果快照；`maintenance_settings.generation_batch` 只保存当前批次 ID。`preparation_associations` 保存原 TaskID/Inputs/GenerationID，随生成初次登记事务在外部提交前绑定，历史批次不被新引用覆盖。`source_observations` 独立保存最近成功观察及错误，不递增业务版本或赋予执行权限。查询返回来源事实，由产品 query 只读聚合；不存在统一活动业务写表或调度器。完整职责与接入约定见[异步活动中心](async-activities.md)。

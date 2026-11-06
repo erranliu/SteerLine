@@ -47,6 +47,8 @@ func (m *projectMaintenance) processPreparation(ctx context.Context) error {
 		return m.refreshMaterials(ctx, nil, false, "", "")
 	}
 	selected := map[string]bool{}
+	observedAt := time.Now().UTC()
+	batch.ObservedAt = &observedAt
 	for _, item := range batch.Items {
 		selected[item.TaskID] = true
 	}
@@ -127,6 +129,7 @@ func (m *projectMaintenance) processPreparation(ctx context.Context) error {
 			now := time.Now().UTC()
 			batch.CompletedAt = &now
 		}
+		batch.ResultSnapshot = &progress
 	}
 	return store.SaveGenerationBatch(ctx, m.config.Identity(), batch)
 }
@@ -136,5 +139,7 @@ func (m *projectMaintenance) failPreparation(ctx context.Context, batch pm.Gener
 		return cause
 	} // leave the registered intent resumable
 	batch.Status, batch.Diagnostic = "failed", cause.Error()
+	progress := m.batchProgress(ctx, batch)
+	batch.ResultSnapshot = &progress
 	return errors.Join(cause, m.store.(generationBatchStore).SaveGenerationBatch(ctx, m.config.Identity(), batch))
 }

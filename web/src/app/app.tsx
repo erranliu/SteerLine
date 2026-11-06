@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   NavLink,
@@ -8,6 +8,11 @@ import {
   useLocation,
 } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
+import {
+  Activities,
+  initialActivityUI,
+  type ActivityControl,
+} from "../features/activities/activities";
 import { AppShell } from "./app-shell";
 import { json } from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
@@ -53,8 +58,12 @@ export function Workspace({
   loadedDigest,
   connectionError,
   onRefreshConnection,
+  activityControl,
+  projectName,
 }: {
   initial: { csrf_token: string; identity: Identity };
+  activityControl?: ActivityControl;
+  projectName?: string;
   connected?: boolean;
   home?: string;
   switcher?: React.ReactNode;
@@ -112,6 +121,9 @@ export function Workspace({
     >
       <AppShell
         projectId={identity.project_id}
+        activities={
+          <Activities control={activityControl} projectName={projectName} />
+        }
         switcher={
           switcher ?? (
             <div className="project-card">{identity.repository_identity}</div>
@@ -255,6 +267,7 @@ export function Workspace({
 }
 
 export function App({ initial }: { initial: BrowserSession }) {
+  const [activityUI, setActivityUI] = useState(initialActivityUI);
   const {
     session,
     home,
@@ -269,6 +282,15 @@ export function App({ initial }: { initial: BrowserSession }) {
   } = useApplicationProjects(initial);
   const [search, setSearch] = useState("");
   const route = useLocation();
+  const previousActivityHome = useRef(home);
+  useEffect(() => {
+    const homeChanged = previousActivityHome.current !== home;
+    previousActivityHome.current = home;
+    if (homeChanged || !/^\/projects\/[^/]+\//.test(route.pathname))
+      setActivityUI((current) =>
+        current.open ? { ...current, open: false } : current,
+      );
+  }, [route.pathname, home]);
   const savedStatus = useQuery({
     queryKey: [home, "execution-config-status"],
     queryFn: ({ signal }) =>
@@ -414,6 +436,8 @@ export function App({ initial }: { initial: BrowserSession }) {
       <Workspace
         key={home + "/" + id + "/" + identity.instance_id}
         home={home}
+        projectName={selected.name}
+        activityControl={{ value: activityUI, change: setActivityUI }}
         configurationPending={configurationPending}
         loadedDigest={catalog.data?.loaded_execution_digest}
         onRefreshConnection={() => {

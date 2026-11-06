@@ -122,6 +122,74 @@ function mock() {
     ),
   );
 }
+
+it("keeps drawer UI outside keyed Workspace while isolating project and instance observations", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let changedInstance = false;
+  vi.mocked(fetch).mockImplementation((...args) => {
+    const url = String(args[0]);
+    if (url.includes("/activities?")) {
+      const project = url.includes(a) ? a : b;
+      return Promise.resolve(
+        Response.json({
+          project_id: project,
+          instance_id:
+            changedInstance && project === a
+              ? "replacement"
+              : identity(project).instance_id,
+          sampled_at: "2026-11-06T01:00:00Z",
+          items: [],
+          request_links: {},
+          sources: [],
+          counts: { ongoing: 0, attention: 0, recent: 0 },
+          counts_known: true,
+          has_more: false,
+        }),
+      );
+    }
+    return original(...args);
+  });
+  const { client } = mount(`/projects/${a}/settings`);
+  fireEvent.click(
+    await screen.findByRole("button", { name: /^活动 · 0 项进行中/ }),
+  );
+  let panel = await screen.findByRole("region", { name: /活动中心/ });
+  fireEvent.click(within(panel).getByRole("button", { name: /^最近结束/ }));
+  fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), {
+    target: { value: b },
+  });
+  await waitFor(() =>
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      `/projects/${b}/settings`,
+    ),
+  );
+  panel = await screen.findByRole("region", { name: /活动中心/ });
+  expect(
+    within(panel).getByRole("button", { name: /^进行中/ }),
+  ).toHaveAttribute("aria-pressed", "true");
+  fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), {
+    target: { value: a },
+  });
+  panel = await screen.findByRole("region", { name: /活动中心/ });
+  await waitFor(() =>
+    expect(
+      within(panel).getByRole("button", { name: /^最近结束/ }),
+    ).toHaveAttribute("aria-pressed", "true"),
+  );
+  changedInstance = true;
+  await act(async () => {
+    client.setQueryData([session.identity.home_id, a, "identity"], {
+      ...identity(a),
+      instance_id: "replacement",
+    });
+  });
+  panel = await screen.findByRole("region", { name: /活动中心/ });
+  expect(
+    within(panel).getByRole("button", { name: /^最近结束/ }),
+  ).toHaveAttribute("aria-pressed", "true");
+  client.clear();
+});
 function Location() {
   return (
     <output data-testid="location">

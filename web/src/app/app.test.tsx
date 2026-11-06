@@ -209,7 +209,8 @@ it("preloads only after connection verification, shares presentation in StrictMo
         path === "/maintenance" ||
         path === "/maintenance/readiness" ||
         path === "/environment/options" ||
-        path === "/environment/options?configuration=true",
+        path === "/environment/options?configuration=true" ||
+        path.startsWith("/activities?"),
     ),
   ).toBe(true);
   client.clear();

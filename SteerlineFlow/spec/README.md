@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+异步活动中心（2026-11-06，已实施并完成独立代码审核，未部署）：[Spec](async-activity-center.spec.md) · [Plan](../plans/async-activity-center.plan.md) · [专属验收及审核记录](../testing/acceptance/async-activity-center.md)。首期统一观察检测、测试准备和任务候选执行，保留原页面与业务流程；普通开发已实施，不启动 roadmap 调度。
+
 待合并 PR 冲突解决与原 Run 续作（2026-11-06，已实现）：[Spec](pr-conflict-resolution.spec.md) · [Plan](../plans/pr-conflict-resolution.plan.md) · [验收记录](../testing/acceptance/pr-conflict-resolution.md)。手动按钮、SteerLine 短提示词与 Runner 原会话 message；直接沿用原现场，不增加冲突检测、现场预检或业务编排框架。
 
 用量事实与计费职责划分（2026-11-05，已实施/隔离验证，未部署）：[Spec](billing-ownership.spec.md) · [Plan](../plans/billing-ownership.plan.md) · [验收](../testing/acceptance/billing-ownership.md)。Runner提供Token事实，SteerLine维护价表和本地估价；远端Codex授权闭环实测成功，原Task 101安装现场未修改。

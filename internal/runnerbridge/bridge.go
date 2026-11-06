@@ -52,7 +52,29 @@ func observationOnly(c Candidate) bool {
 	return true
 }
 
-func (b *Bridge) observe(ctx context.Context, cli CLI, c *Candidate) error {
+func (b *Bridge) observe(ctx context.Context, cli CLI, c *Candidate) (err error) {
+	committedRevision := c.Revision
+	defer func() {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return
+		}
+		if recorder, ok := b.Store.(interface {
+			RecordSourceObservation(context.Context, string, string, string, uint64, time.Time, string) error
+		}); ok {
+			at, diagnostic := time.Now().UTC(), ""
+			revision := c.Revision
+			if err != nil {
+				at = time.Time{}
+				diagnostic = err.Error()
+				revision = committedRevision
+			}
+			// Preserve timeout diagnostics after the inspection budget expires.
+			// This best-effort metadata write cannot extend or retry inspection.
+			metadataCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 100*time.Millisecond)
+			defer cancel()
+			_ = recorder.RecordSourceObservation(metadataCtx, c.Project, "task_candidate", c.ID, revision, at, diagnostic)
+		}
+	}()
 	result, err := cli.Observe(ctx, c.RunID, c.Cursor)
 	if err != nil {
 		return err

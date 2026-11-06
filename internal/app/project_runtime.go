@@ -423,6 +423,9 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if route == "/activities" {
+		return p.readAsyncActivities(ctx, values)
+	}
 	if strings.HasPrefix(route, "/roadmaps") {
 		if p.config.runtimeRoadmaps == nil {
 			return nil, errors.New("roadmap unavailable")

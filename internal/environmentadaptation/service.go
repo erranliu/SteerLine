@@ -211,6 +211,7 @@ func (s *Service) Observe(ctx context.Context) error {
 			continue
 		}
 		if e := s.observe(ctx, &r); e != nil {
+			r.ObservationDiagnostic = e.Error()
 			r.Diagnostic = e.Error()
 			all = append(all, e)
 			// Persist the actual cause even if the external call exhausted its
@@ -287,6 +288,7 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 	}
 	v, e := s.Runner.Inspect(ctx, selector, id)
 	if e != nil {
+		r.ObservationDiagnostic = e.Error()
 		if a.Run == nil || !(r.Cancelled || !s.now().Before(a.Deadline) || a.Stop != nil) {
 			return e
 		}
@@ -314,6 +316,16 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 		return errors.New("environment Run correlation differs")
 	}
 	a.RunID, a.InputDigest, a.Run = run.RunID, run.InputDigest, run
+	if e == nil {
+		// Clear only the diagnostic written by the previous observation. Other
+		// business/submission diagnostics remain owned by their original facts.
+		if r.ObservationDiagnostic != "" && r.Diagnostic == r.ObservationDiagnostic {
+			r.Diagnostic = ""
+		}
+		r.ObservationDiagnostic = ""
+		at := s.now()
+		r.ObservedAt = &at
+	}
 	a.Submission = "accepted"
 	due := !s.now().Before(a.Deadline)
 	if due {

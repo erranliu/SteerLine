@@ -150,6 +150,7 @@ func (m *projectMaintenance) completeGenerationBatch(ctx context.Context) error 
 		}
 		now := time.Now().UTC()
 		batch.CompletedAt = &now
+		batch.ResultSnapshot = &progress
 		if err := store.SaveGenerationBatch(ctx, m.config.Identity(), batch); err != nil {
 			return err
 		}

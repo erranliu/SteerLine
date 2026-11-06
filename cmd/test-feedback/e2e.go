@@ -385,9 +385,19 @@ func runE2E(opts options) (code int) {
 		return fail(err)
 	}
 	web := ""
-	if remoteInput != nil && selected[0].ID != remotetest.Environment {
+	activityWeb := false
+	for _, entry := range selected {
+		if entry.ID == "runtime.async-activities" {
+			activityWeb = true
+		}
+	}
+	if remoteInput != nil && selected[0].ID != remotetest.Environment || activityWeb {
 		web = filepath.Join(buildDir, "steerline-web.exe")
-		for i, args := range [][]string{{"npm.cmd", "--prefix", "web", "run", "build"}, {"go", "build", "-tags=webui", "-o", web, "./cmd/steerline-web"}} {
+		commands := [][]string{{"go", "build", "-tags=webui", "-o", web, "./cmd/steerline-web"}}
+		if remoteInput != nil {
+			commands = append([][]string{{"npm.cmd", "--prefix", "web", "run", "build"}}, commands...)
+		}
+		for i, args := range commands {
 			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 			cmd.Dir = root
 			output, err := cmd.CombinedOutput()
@@ -594,7 +604,7 @@ func e2ePackageParallelism(entries []e2eScenario) int {
 			return 1
 		}
 		switch entry.ID {
-		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects":
+		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.async-activities":
 			if entry.Level != "L3" {
 				return 1
 			}

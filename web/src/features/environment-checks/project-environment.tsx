@@ -74,6 +74,21 @@ function EnvironmentWorkspace() {
   ];
   const options = useEnvironmentReadiness();
   const [params] = useSearchParams();
+  const requestedActivity = params.get("activity") || "";
+  const requestedRecord = useQuery({
+    queryKey: [...scope, "requested-record", requestedActivity],
+    queryFn: ({ signal }) =>
+      api.get<Record>(
+        "/environment/" + encodeURIComponent(requestedActivity),
+        signal,
+      ),
+    enabled: online && !!requestedActivity,
+    retry: false,
+  });
+  useEffect(() => {
+    if (requestedRecord.data?.id === requestedActivity)
+      document.getElementById("requested-environment-activity")?.focus();
+  }, [requestedActivity, requestedRecord.data?.id]);
   const profile = params.get("profile") || "";
   const task = params.get("task");
   const preferenceKey =
@@ -240,6 +255,31 @@ function EnvironmentWorkspace() {
     <div className="settings-page environment-page">
       <div className="environment-header">
         <h1>项目运行环境</h1>
+        {requestedActivity && (
+          <section
+            id="requested-environment-activity"
+            tabIndex={-1}
+            aria-label="指定检测详情"
+          >
+            <h2>指定检测结果</h2>
+            {requestedRecord.data?.id === requestedActivity ? (
+              <>
+                <DetectionID id={requestedActivity} />
+                <p>
+                  {recordState[requestedRecord.data.state] || "结果待核实"} ·{" "}
+                  {requestedRecord.data.profile_id}
+                </p>
+                <p>{requestedRecord.data.diagnostic}</p>
+              </>
+            ) : (
+              <p>
+                {requestedRecord.isError
+                  ? "无法读取指定检测，请核对原检测 ID"
+                  : "正在读取指定检测…"}
+              </p>
+            )}
+          </section>
+        )}
         <Button variant="ghost" onClick={() => void refresh()}>
           刷新环境
         </Button>
