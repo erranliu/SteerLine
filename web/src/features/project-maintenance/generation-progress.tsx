@@ -9,6 +9,7 @@ export type GenerationProgressValue = {
   succeeded: number;
   queued: number;
   running: number;
+  attention?: number;
   failed: number;
   blocked: number;
   completed_at?: string;
@@ -79,7 +80,9 @@ export function GenerationProgress({
   }, [deadline, value?.id]);
   if (!value || (!value.total && !preparing && !value.diagnostic)) return null;
   if (complete && deadline !== undefined && Date.now() >= deadline) return null;
-  const active = online && (value.running > 0 || preparing);
+  const attention = value.attention || 0;
+  const running = value.running - attention;
+  const active = online && (running > 0 || preparing);
   const text = !online
     ? "状态待核实"
     : value.status === "queued"
@@ -90,11 +93,13 @@ export function GenerationProgress({
           ? "准备失败"
           : complete
             ? "生成完毕"
-            : value.running
+            : running > 0
               ? "生成中"
-              : value.queued
-                ? "排队中"
-                : "已生成";
+              : attention > 0
+                ? "生成受阻"
+                : value.queued
+                  ? "排队中"
+                  : "已生成";
   return (
     <span role="status" aria-live="polite" className="maintenance-progress">
       {active && (
@@ -107,6 +112,7 @@ export function GenerationProgress({
       <span>
         {value.succeeded}/{value.total} {text}
         {value.failed > 0 && `，${value.failed} 项失败`}
+        {attention > 0 && `，${attention} 项需处理`}
         {value.blocked > 0 && `，${value.blocked} 项待处理`}
       </span>
     </span>

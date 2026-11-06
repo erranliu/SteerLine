@@ -40,6 +40,8 @@ export type MaintenanceView = {
     status: string;
     diagnostic?: string;
     generation_id: string;
+    needs_attention?: boolean;
+    can_retry?: boolean;
   }[];
   profiles: { id: string; name: string }[];
   profile: string;
@@ -72,6 +74,8 @@ function GenerationDetails({
         run_id?: string;
         diagnostic?: string;
         stop_status?: string;
+        settled: boolean;
+        needs_attention: boolean;
         result?: unknown;
       }>("/tests/generations/" + id),
     enabled: online && open,
@@ -89,7 +93,13 @@ function GenerationDetails({
           {detail.error && <p role="alert">{String(detail.error)}</p>}
           {detail.data && (
             <>
-              <p>{names[detail.data.state] || detail.data.state}</p>
+              <p>
+                {detail.data.state === "cancelled" && !detail.data.settled
+                  ? "等待停止确认"
+                  : detail.data.needs_attention
+                    ? "生成受阻，需人工处理"
+                    : names[detail.data.state] || detail.data.state}
+              </p>
               {detail.data.diagnostic && (
                 <p role="alert">{detail.data.diagnostic}</p>
               )}
@@ -374,7 +384,10 @@ export function ProjectMaintenance() {
           {v?.tasks.map((t) => (
             <article key={t.task_id}>
               <strong>
-                #{t.task_id} · {names[t.status] || t.status}
+                #{t.task_id} ·{" "}
+                {t.needs_attention
+                  ? "生成受阻，需人工处理"
+                  : names[t.status] || t.status}
               </strong>
               <p>{t.contract?.plan_ref?.path}</p>
               {t.diagnostic && <p>{t.diagnostic}</p>}
@@ -395,7 +408,7 @@ export function ProjectMaintenance() {
                 t.status,
               ) && (
                 <button
-                  disabled={!online || busy}
+                  disabled={!online || busy || !t.can_retry}
                   onClick={() =>
                     void action("maintenance_retry", t.task_id, {
                       task_id: t.task_id,
@@ -405,6 +418,10 @@ export function ProjectMaintenance() {
                   重试生成
                 </button>
               )}
+              {["failed", "invalid", "cancelled"].includes(t.status) &&
+                !t.can_retry && (
+                  <p className="muted">等待原生成停止并核实资源后重试</p>
+                )}
             </article>
           ))}
           {(problems.some(

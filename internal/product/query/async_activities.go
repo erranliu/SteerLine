@@ -215,7 +215,9 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		Winner           string         `json:"winner"`
 		Progress         *activityTests `json:"progress"`
 		Generations      []struct {
-			Settled                       bool `json:"settled"`
+			Settled                       bool   `json:"settled"`
+			NeedsAttention                bool   `json:"needs_attention"`
+			Diagnostic                    string `json:"diagnostic"`
 			ID, Inputs, State, Submission string
 			Present, Cancelled, Relevant  int
 			RunID                         string     `json:"run_id"`
@@ -381,11 +383,23 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		allTimes := true
 		finish := b.BusinessFinishedAt
 		relevantFailure := false
+		attention, running := 0, 0
 		var oldestObservation *time.Time
 		missingObservation := false
 		for _, g := range related.Generations {
 			ok := g.Settled
 			if !ok {
+				if g.NeedsAttention && g.Relevant == 1 {
+					attention++
+					if g.Diagnostic != "" {
+						if a.Diagnostic != "" {
+							a.Diagnostic += " · "
+						}
+						a.Diagnostic += "生成 " + g.ID + "：" + g.Diagnostic
+					}
+				} else if g.Relevant == 1 && g.State == "accepted" && g.Cancelled != 1 && !g.NeedsAttention {
+					running++
+				}
 				settled = false
 				if g.ObservedAt == nil {
 					missingObservation = true
@@ -422,6 +436,13 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		} else if businessEnded && allTimes {
 			a.FinishedAt = finish
 		}
+		if b.Status == "generating" && attention > 0 {
+			if running == 0 {
+				a.State, a.Phase = "waiting", "测试生成受阻，需人工处理"
+			} else {
+				a.Phase = fmt.Sprintf("生成测试安排，%d 项需处理", attention)
+			}
+		}
 		requiresAction := false
 		if b.Status == "generating" {
 			for _, item := range b.Items {
@@ -430,7 +451,7 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 				}
 			}
 		}
-		a.NeedsAttention = (b.Status == "failed" && (related.Current == 1 || relevantFailure)) || requiresAction && related.Current == 1
+		a.NeedsAttention = (b.Status == "failed" && (related.Current == 1 || relevantFailure)) || (requiresAction || attention > 0) && related.Current == 1
 	case "task_candidate":
 		var c runnerstate.Candidate
 		if e := json.Unmarshal(f.Payload, &c); e != nil {

@@ -191,6 +191,40 @@ func TestTMGenerationTerminalObservation(t *testing.T) {
 	}
 }
 
+func TestTMGenerationBlockedRunIsObservedWithoutResubmission(t *testing.T) {
+	ctx := context.Background()
+	s, store, cli, input := generationFixture(t)
+	_, err := s.Generate(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli.run.Status, cli.run.Phase = "blocked", "manual_intervention_required"
+	for range 2 {
+		if err := s.ObserveNext(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g, _ := store.Generation(ctx, s.Project, input.RequestID)
+	if !g.NeedsAttention() || g.State != "accepted" || g.Settled() || cli.inspects != 2 || cli.submits != 1 || cli.stops != 0 {
+		t.Fatalf("blocked original stopped being observed: %+v", g)
+	}
+	_, err = s.Stop(ctx, g.ID, strings.Repeat("d", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.RequestID = strings.Repeat("e", 32)
+	if _, err = s.Generate(ctx, input); err == nil || cli.submits != 1 {
+		t.Fatal("unsettled cancellation allowed a new Run", err)
+	}
+	cli.run.StopStatus = "stopped"
+	if err = s.ObserveNext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Generate(ctx, input); err != nil || cli.submits != 2 {
+		t.Fatal("settled cancellation did not allow one explicit retry", err)
+	}
+}
+
 type slowGenerationCLI struct {
 	GenerationRunner
 	seen []string

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,65 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
+
+func TestAsyncActivityBlockedPreparationUsesOriginalGenerationFacts(t *testing.T) {
+	ctx := context.Background()
+	s, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "domain.db"))
+	require(t, err)
+	defer s.Close()
+	b := pm.GenerationBatch{ID: "batch", Status: "preparing"}
+	for i := range 5 {
+		b.Items = append(b.Items, pm.GenerationBatchItem{TaskID: fmt.Sprint(101 + i)})
+	}
+	require(t, s.RegisterPreparation(ctx, "p", "request", b))
+	var blocked tm.Generation
+	for i := range b.Items {
+		id := b.Items[i].TaskID
+		state, materialState := "generated", "ready"
+		run := &runnercontract.Run{Status: "completed", StopStatus: "stopped", UpdatedAt: time.Now().UTC()}
+		if i == 1 {
+			state, materialState = "accepted", "accepted"
+			run.Status, run.Phase, run.StopStatus = "blocked", "manual_intervention_required", ""
+		}
+		g := tm.Generation{Project: "p", ID: "gen-" + id, Revision: 1, Inputs: "input-" + id, State: state, Submission: "started", Projection: run, Request: runnercontract.Request{RequestID: "original-" + id}}
+		if i == 1 {
+			g.Diagnostic = "app-server did not become ready; original reconciliation exhausted"
+			blocked = g
+		}
+		require(t, s.SaveMaterial(ctx, "p", pm.Material{TaskID: id, Inputs: g.Inputs, GenerationID: g.ID, Status: materialState}))
+		require(t, s.SaveGeneration(ctx, g, 0))
+		b.Items[i].Status, b.Items[i].Inputs, b.Items[i].GenerationID = materialState, g.Inputs, g.ID
+	}
+	b.Status = "generating"
+	require(t, s.SaveGenerationBatch(ctx, "p", b))
+	options := query.AsyncActivityOptions{Filter: "attention", Sources: []string{"test_preparation"}}
+	page, err := query.ReadAsyncActivities(ctx, s, "p", "i", options)
+	require(t, err)
+	if len(page.Items) != 1 || page.Counts["attention"] != 1 || page.Counts["ongoing"] != 1 {
+		t.Fatalf("blocked original missing from attention/counts: %+v", page)
+	}
+	a := page.Items[0]
+	if a.State != "waiting" || a.Phase != "测试生成受阻，需人工处理" || !strings.Contains(a.Diagnostic, blocked.Diagnostic) || a.Progress.Succeeded != 4 || a.Progress.Total != 5 || a.FinishedAt != nil {
+		t.Fatalf("blocked original rendered as active/completed: %+v", a)
+	}
+	stored, err := s.Generation(ctx, "p", blocked.ID)
+	require(t, err)
+	batch, err := s.GenerationBatch(ctx, "p")
+	require(t, err)
+	if stored.Revision != 1 || stored.State != "accepted" || batch.Status != "generating" {
+		t.Fatal("GET changed original business state")
+	}
+	blocked = stored
+	blocked.Projection.Status, blocked.Projection.Phase = "running", "execute"
+	blocked.Diagnostic = ""
+	blocked.Revision++
+	require(t, s.SaveGeneration(ctx, blocked, 1))
+	page, err = query.ReadAsyncActivities(ctx, s, "p", "i", options)
+	require(t, err)
+	if len(page.Items) != 0 || page.Counts["attention"] != 0 || page.Counts["ongoing"] != 1 {
+		t.Fatalf("old blocker survived the original Run's recovery: %+v", page)
+	}
+}
 
 func TestAsyncActivityPreparationSurvivesReplacementAndReopen(t *testing.T) {
 	ctx := context.Background()

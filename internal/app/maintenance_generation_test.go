@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -10,6 +11,64 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
+
+func TestGQBlockedGenerationRemainsObservedAndCannotRetryBeforeSettlement(t *testing.T) {
+	ctx := context.Background()
+	m, store, cli := pmsFixture(t)
+	_, err := m.generateAll(ctx, strings.Repeat("a", 32))
+	require(t, err)
+	require(t, m.processPreparation(ctx))
+	cli.run.Status, cli.run.Phase = "blocked", "manual_intervention_required"
+	cli.run.Diagnostic = "Original operation reconciliation deadline exhausted"
+	cli.run.Revision++
+	for range 2 {
+		require(t, m.processPreparation(ctx))
+		p := m.batchProgress(ctx, store.batch)
+		if p.Running != 1 || p.Attention != 1 || p.Status != "generating" || store.batch.CompletedAt != nil || cli.submits != 1 {
+			t.Fatalf("display classification changed batch lifecycle: %+v submits=%d", p, cli.submits)
+		}
+	}
+	assertView := func(attention, retry bool) {
+		t.Helper()
+		view, err := m.baselineView(ctx)
+		require(t, err)
+		raw, err := json.Marshal(view)
+		require(t, err)
+		var v struct {
+			Tasks []struct {
+				NeedsAttention bool `json:"needs_attention"`
+				CanRetry       bool `json:"can_retry"`
+				Diagnostic     string
+			}
+		}
+		require(t, json.Unmarshal(raw, &v))
+		if len(v.Tasks) != 1 || v.Tasks[0].NeedsAttention != attention || v.Tasks[0].CanRetry != retry || attention && v.Tasks[0].Diagnostic != cli.run.Diagnostic {
+			t.Fatalf("incorrect task display/qualification: %s", raw)
+		}
+	}
+	assertView(true, false)
+	mat := store.materials["101"]
+	if m.retryable(ctx, mat) {
+		t.Fatal("blocked original allowed a retry")
+	}
+	// A late verified result is still received from the original Run.
+	cli.finish()
+	require(t, m.processPreparation(ctx))
+	if p := m.batchProgress(ctx, store.batch); p.Succeeded != 1 || p.Attention != 0 || p.Status != "completed" || cli.submits != 1 {
+		t.Fatalf("original late result was lost: %+v", p)
+	}
+	assertView(false, false)
+	// Cancellation intent alone must not enable the retry button.
+	g := store.generations[mat.GenerationID]
+	g.State, g.Cancelled, g.Projection.StopStatus = "cancelled", true, ""
+	store.generations[g.ID] = g
+	mat.Status = "cancelled"
+	store.materials[mat.TaskID] = mat
+	assertView(false, false)
+	g.Projection.StopStatus = "stopped"
+	store.generations[g.ID] = g
+	assertView(false, true)
+}
 
 func TestGQBatchReusesActiveAndPersistsCompletion(t *testing.T) {
 	ctx := context.Background()

@@ -10,6 +10,8 @@
 
 展示状态为 queued/running/waiting/succeeded/failed/cancelled。`needs_attention` 是按来源当前引用、精确 Material/Generation 关联和有效候选参与关系计算的提示，和进行中/最近结束可以重叠。历史问题不重新成为当前待答，其他输入或候选的成功不清掉无关失败。
 
+测试生成已受理但原 Runner 为 blocked 或 manual_intervention_required 时，生成模型提供只读的需处理判断。项目维护与活动中心使用同一判断；仅有受阻生成时显示等待处理，其他生成仍在运行时同时显示运行与需处理提示。原 accepted、批次生命周期及资源结算保持原义；维护页 attention 是 running 的子集，只影响展示。原停止未结算时禁用重试，资格沿用原 owner 检查。
+
 响应的 `sampled_at` 仅代表此次数据库采样。`source_observed_at` 来自原 owner 成功取证；缺失为 unverified、超过一分钟为 stale、已知观察错误为 unavailable，均不改变业务结果。环境 owner 将独立 observation_diagnostic 与成功时间分别保存在原 Record；恢复只清除观察错误及其遗留诊断，保留无关业务事实。测试准备使用所有未结算子生成的最旧成功观察，任一缺失则无法确认整体新鲜度；本地 worker tick 不能替代外部观察。终态记录作为最终快照不要求持续心跳。测试计量只展示现有分母与已确认通过数量，不生成百分比，false 保持未完成含义。
 
 ## API 与持久事实
