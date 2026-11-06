@@ -39,7 +39,7 @@ func TestMaterialGeneration(t *testing.T) {
 	provider, err := controlled.Read(p.Provider)
 	s.Must(err)
 	git("push", "--quiet", provider.GitURL, "main")
-	p.CreateTasks() // Public task creation observes the automatic generator.
+	p.CreateTasks() // Preparation is registered explicitly through project maintenance.
 	project, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
 	s.Must(err)
 	defer project.Close()
@@ -83,8 +83,8 @@ func TestMaterialGeneration(t *testing.T) {
 		s.Must(controlled.Write(filepath.Join(s.Output, "empty-batch-"+string(rune('a'+i))+".json"), response))
 		var progress pm.GenerationProgress
 		s.Must(json.Unmarshal(response.Maintenance, &progress))
-		if response.Status != "applied" || progress.Total != 0 {
-			t.Fatal("ready materials regenerated", response)
+		if response.Status != "applied" || progress.Status != "queued" && progress.Status != "completed" {
+			t.Fatal("ready material preparation was not registered", response)
 		}
 	}
 	again, err := driver.WaitFixtureMaterials(s.Context, p.Home, identity, material.Contract.PlanRef.Path, filepath.Join(s.Output, "rechecked"))

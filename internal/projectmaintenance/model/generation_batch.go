@@ -2,9 +2,15 @@ package model
 
 import "time"
 
-// A batch freezes only membership. Generation records remain the result owner.
+// A preparation freezes membership, source and profile. Generation records
+// remain the result owner.
 type GenerationBatch struct {
-	ID string `json:"id"`
+	ID            string `json:"id"`
+	Commit        string `json:"commit,omitempty"`
+	Profile       string `json:"profile,omitempty"`
+	ProfileDigest string `json:"profile_digest,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Diagnostic    string `json:"diagnostic,omitempty"`
 	// Processed is the explicit maintenance command receipt, not a Run state.
 	Processed   bool                  `json:"processed"`
 	Items       []GenerationBatchItem `json:"items"`
@@ -21,6 +27,8 @@ type GenerationBatchItem struct {
 
 type GenerationProgress struct {
 	ID          string     `json:"id"`
+	Status      string     `json:"status,omitempty"`
+	Diagnostic  string     `json:"diagnostic,omitempty"`
 	Total       int        `json:"total"`
 	Succeeded   int        `json:"succeeded"`
 	Queued      int        `json:"queued"`

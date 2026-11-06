@@ -82,3 +82,19 @@ func (s *SQLiteStore) SaveGenerationBatch(ctx context.Context, project string, b
 	_, err = s.db.ExecContext(ctx, `INSERT INTO maintenance_settings(project_identity,profile,generation_batch) VALUES(?,'',?) ON CONFLICT(project_identity) DO UPDATE SET generation_batch=excluded.generation_batch`, project, raw)
 	return err
 }
+
+// The original request and its runnable batch become durable together, so a
+// crash cannot acknowledge an intent that the preparation worker cannot find.
+func (s *SQLiteStore) RegisterPreparation(ctx context.Context, project, id string, batch pm.GenerationBatch) error {
+	raw, err := json.Marshal(batch)
+	if err != nil {
+		return err
+	}
+	return s.transactSQLite(ctx, func(tx *sqliteTx) error {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO maintenance_requests(project_identity,request_id,digest,result) VALUES(?,?,?,?)`, project, id, id, raw); err != nil {
+			return err
+		}
+		_, err := tx.tx.ExecContext(ctx, `INSERT INTO maintenance_settings(project_identity,profile,generation_batch) VALUES(?,'',?) ON CONFLICT(project_identity) DO UPDATE SET generation_batch=excluded.generation_batch`, project, raw)
+		return err
+	})
+}

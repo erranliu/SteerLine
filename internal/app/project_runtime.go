@@ -135,6 +135,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	var maintenanceDone chan struct{}
+	var preparationDone chan struct{}
 	var environmentDone chan struct{}
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
 	defer startupTimer.Stop()
@@ -145,6 +146,9 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		}
 		if maintenanceDone != nil {
 			<-maintenanceDone
+		}
+		if preparationDone != nil {
+			<-preparationDone
 		}
 		r.close()
 		result = contract.ProjectShutdown{ConfigID: r.configID, ProjectID: e.view.ProjectID, LocalClosed: r.localErr == nil, LocksReleased: r.localErr == nil}
@@ -221,6 +225,10 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		}
 		if service.State.Service.Ready {
 			startupTimer.Stop()
+			if preparationDone == nil {
+				preparationDone = make(chan struct{})
+				go func() { defer close(preparationDone); r.config.runtimeMaintenance.runPreparation(ctx) }()
+			}
 			if environmentDone == nil {
 				environmentDone = make(chan struct{})
 				go func() {

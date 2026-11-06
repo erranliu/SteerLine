@@ -712,6 +712,15 @@ func (s *pmsStore) SaveGenerationBatch(_ context.Context, _ string, b pm.Generat
 	return nil
 }
 
+func (s *pmsStore) RegisterPreparation(ctx context.Context, project, id string, batch pm.GenerationBatch) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	raw, _ := json.Marshal(batch)
+	s.receipts[id], s.batch = raw, batch
+	return nil
+}
+
 func TestPMSGenerationSharesPinnedReadCacheWithoutCrossRequestReuse(t *testing.T) {
 	m, _, _ := pmsFixture(t)
 	ctx := materialReads(context.Background())

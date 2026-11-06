@@ -16,6 +16,7 @@ type generationBatchStore interface {
 	GenerationBatch(context.Context, string) (pm.GenerationBatch, error)
 	SaveGenerationBatch(context.Context, string, pm.GenerationBatch) error
 	SaveMaintenanceOperation(context.Context, string, string, []byte) error
+	RegisterPreparation(context.Context, string, string, pm.GenerationBatch) error
 }
 
 func (m *projectMaintenance) retryable(ctx context.Context, material pm.Material) bool {
@@ -30,7 +31,7 @@ func (m *projectMaintenance) retryable(ctx context.Context, material pm.Material
 	return false
 }
 
-func (m *projectMaintenance) retryGeneration(ctx context.Context, taskID, id string) (testmanagement.Generation, error) {
+func (m *projectMaintenance) retryGenerationProfile(ctx context.Context, taskID, id, profile string) (testmanagement.Generation, error) {
 	store := m.store.(materialStore)
 	material, err := store.Material(ctx, m.config.Identity(), taskID)
 	if err != nil {
@@ -43,7 +44,9 @@ func (m *projectMaintenance) retryGeneration(ctx context.Context, taskID, id str
 	if err = store.SaveMaterial(ctx, m.config.Identity(), material); err != nil {
 		return testmanagement.Generation{}, err
 	}
-	profile := store.MaterialProfile(ctx, m.config.Identity())
+	if profile == "" {
+		profile = store.MaterialProfile(ctx, m.config.Identity())
+	}
 	if profile == "" {
 		profile = m.config.RunnerExecution.DefaultProfile
 	}
@@ -95,19 +98,22 @@ func (m *projectMaintenance) batchItems(ctx context.Context) ([]pm.GenerationBat
 }
 
 func (m *projectMaintenance) batchProgress(ctx context.Context, batch pm.GenerationBatch) pm.GenerationProgress {
-	p := pm.GenerationProgress{ID: batch.ID, Total: len(batch.Items), CompletedAt: batch.CompletedAt}
+	p := pm.GenerationProgress{ID: batch.ID, Status: batch.Status, Diagnostic: batch.Diagnostic, Total: len(batch.Items), CompletedAt: batch.CompletedAt}
 	for _, item := range batch.Items {
 		state := item.Status
-		g, err := m.store.Generation(ctx, m.config.Identity(), item.GenerationID)
-		if err == nil && g.Inputs == item.Inputs {
-			state = g.State
-		} else if mat, e := m.store.(materialStore).Material(ctx, m.config.Identity(), item.TaskID); e == nil && mat.Inputs == item.Inputs && mat.GenerationID == item.GenerationID {
+		if batch.Status == "queued" || batch.Status == "preparing" {
+			p.Queued++
+			continue
+		}
+		if mat, e := m.store.(materialStore).Material(ctx, m.config.Identity(), item.TaskID); e == nil && mat.Inputs == item.Inputs && mat.GenerationID == item.GenerationID {
 			state = mat.Status
+		} else if g, err := m.store.Generation(ctx, m.config.Identity(), item.GenerationID); err == nil && g.Inputs == item.Inputs && g.State != "generated" {
+			state = g.State
 		} else {
 			state = "blocked"
 		}
 		switch state {
-		case "ready", "generated":
+		case "ready":
 			p.Succeeded++
 		case "queued":
 			p.Queued++
@@ -122,7 +128,7 @@ func (m *projectMaintenance) batchProgress(ctx context.Context, batch pm.Generat
 	return p
 }
 
-// syncGenerationBatch runs only in the project actor. Queries never create
+// syncGenerationBatch runs only during maintenance work. Queries never create
 // batches or reset completion times. Membership stays fixed while work runs.
 func (m *projectMaintenance) completeGenerationBatch(ctx context.Context) error {
 	store, ok := m.store.(generationBatchStore)
@@ -135,6 +141,13 @@ func (m *projectMaintenance) completeGenerationBatch(ctx context.Context) error 
 	}
 	progress := m.batchProgress(ctx, batch)
 	if progress.Total > 0 && progress.Total == progress.Succeeded && batch.CompletedAt == nil {
+		if batch.Status != "" {
+			observed := m.current()
+			if batch.Commit == "" || observed.Commit != batch.Commit || observed.Diagnostic != "" {
+				return nil
+			}
+			batch.Status, batch.Diagnostic = "completed", ""
+		}
 		now := time.Now().UTC()
 		batch.CompletedAt = &now
 		if err := store.SaveGenerationBatch(ctx, m.config.Identity(), batch); err != nil {
@@ -154,7 +167,7 @@ func (m *projectMaintenance) syncGenerationBatch(ctx context.Context) error {
 		return err
 	}
 	progress := m.batchProgress(ctx, batch)
-	if progress.Queued+progress.Running > 0 {
+	if batch.Status != "" || progress.Queued+progress.Running > 0 {
 		return nil
 	}
 	items, err := m.batchItems(ctx)
@@ -171,101 +184,74 @@ func (m *projectMaintenance) syncGenerationBatch(ctx context.Context) error {
 	return store.SaveGenerationBatch(ctx, m.config.Identity(), pm.GenerationBatch{ID: id, Items: items})
 }
 
+// A click records fixed task membership before any Git or Runner work. The
+// maintenance worker owns preparation and can resume this intent after restart.
 func (m *projectMaintenance) generateAll(ctx context.Context, id string) (pm.GenerationProgress, error) {
+	return m.requestPreparation(ctx, id, "")
+}
+
+func (m *projectMaintenance) requestPreparation(ctx context.Context, id, taskID string) (pm.GenerationProgress, error) {
 	store := m.store.(generationBatchStore)
-	var batch pm.GenerationBatch
-	// Retain the fixed intent independently of the current progress projection,
-	// so a lost outer receipt cannot broaden or replay a batch against new input.
-	raw, err := m.store.MaintenanceReceipt(ctx, m.config.Identity(), id)
-	if err == nil {
-		if err = json.Unmarshal(raw, &batch); err != nil {
+	if raw, err := m.store.MaintenanceReceipt(ctx, m.config.Identity(), id); err == nil {
+		var original pm.GenerationBatch
+		if err = json.Unmarshal(raw, &original); err != nil {
 			return pm.GenerationProgress{}, err
 		}
-		if batch.Processed {
-			return m.batchProgress(ctx, batch), nil
+		current, readErr := store.GenerationBatch(ctx, m.config.Identity())
+		if readErr != nil && !errors.Is(readErr, storageports.ErrNotFound) {
+			return pm.GenerationProgress{}, readErr
 		}
-	} else {
-		if !errors.Is(err, storageports.ErrNotFound) {
-			return pm.GenerationProgress{}, err
+		if readErr == nil && current.ID == original.ID {
+			original = current
 		}
-		if _, err = m.check(ctx); err != nil {
-			return pm.GenerationProgress{}, err
-		}
-		if err = m.refresh(ctx); err != nil {
-			return pm.GenerationProgress{}, err
-		}
-		items, err := m.batchItems(ctx)
-		if err != nil {
-			return pm.GenerationProgress{}, err
-		}
-		for i := range items {
-			mat, err := m.store.(materialStore).Material(ctx, m.config.Identity(), items[i].TaskID)
-			if err != nil {
-				return pm.GenerationProgress{}, err
-			}
-			if m.retryable(ctx, mat) {
-				items[i].GenerationID = pm.Hash([]string{id, mat.Contract.PlanRef.Path, mat.Inputs})[:32]
-				items[i].Status = "pending"
-			}
-		}
-		current, err := store.GenerationBatch(ctx, m.config.Identity())
-		if err != nil && !errors.Is(err, storageports.ErrNotFound) {
-			return pm.GenerationProgress{}, err
-		}
-		progress := m.batchProgress(ctx, current)
-		if progress.Queued+progress.Running > 0 {
-			// Repeated clicks join the running batch and retain its successes.
-			// Explicit retries replace only their original item references.
-			merged := append([]pm.GenerationBatchItem(nil), current.Items...)
-			for _, item := range items {
-				found := false
-				for i, old := range merged {
-					if old.TaskID == item.TaskID || old.Inputs != "" && old.Inputs == item.Inputs {
-						merged[i] = item
-						found = true
-						break
-					}
-				}
-				if !found {
-					merged = append(merged, item)
-				}
-			}
-			items = merged
-		}
-		batch = pm.GenerationBatch{ID: id, Items: items}
-		raw, _ = json.Marshal(batch)
-		if err = store.SaveMaintenanceOperation(ctx, m.config.Identity(), id, raw); err != nil {
-			return pm.GenerationProgress{}, err
-		}
-	}
-	if len(batch.Items) == 0 {
-		batch.Processed = true
-		raw, _ = json.Marshal(batch)
-		return pm.GenerationProgress{}, store.SaveMaintenanceOperation(ctx, m.config.Identity(), id, raw)
-	}
-	if err = store.SaveGenerationBatch(ctx, m.config.Identity(), batch); err != nil {
+		return m.batchProgress(ctx, original), nil
+	} else if !errors.Is(err, storageports.ErrNotFound) {
 		return pm.GenerationProgress{}, err
 	}
-	for _, item := range batch.Items {
-		if item.Status != "pending" || item.GenerationID == "" {
-			continue
-		}
-		if _, err := m.store.Generation(ctx, m.config.Identity(), item.GenerationID); err == nil {
-			continue
-		}
-		mat, err := m.store.(materialStore).Material(ctx, m.config.Identity(), item.TaskID)
-		if err != nil {
-			return pm.GenerationProgress{}, err
-		}
-		if mat.Inputs != item.Inputs {
-			continue
-		}
-		// Preparation errors remain on the material and do not stop other items.
-		_, _ = m.retryGeneration(ctx, item.TaskID, item.GenerationID)
+	current, err := store.GenerationBatch(ctx, m.config.Identity())
+	if err != nil && !errors.Is(err, storageports.ErrNotFound) {
+		return pm.GenerationProgress{}, err
 	}
-	batch.Processed = true
-	raw, _ = json.Marshal(batch)
-	if err := store.SaveMaintenanceOperation(ctx, m.config.Identity(), id, raw); err != nil {
+	if current.Status == "queued" || current.Status == "preparing" || current.Status == "generating" {
+		current.Processed = true
+		raw, _ := json.Marshal(current)
+		return m.batchProgress(ctx, current), store.SaveMaintenanceOperation(ctx, m.config.Identity(), id, raw)
+	}
+	graph, err := m.store.TaskGraphSnapshot(ctx, m.config.Identity())
+	if err != nil {
+		return pm.GenerationProgress{}, err
+	}
+	profile := m.store.(materialStore).MaterialProfile(ctx, m.config.Identity())
+	if profile == "" {
+		profile = m.config.RunnerExecution.DefaultProfile
+	}
+	batch := pm.GenerationBatch{ID: id, Profile: profile, Status: "queued", Processed: true, Items: []pm.GenerationBatchItem{}}
+	if selected, err := m.config.RunnerExecution.Profile(profile, ""); err == nil {
+		batch.ProfileDigest = selected.Digest()
+	}
+	for _, task := range graph.Tasks {
+		if task.Status != "open" && task.Status != "in_progress" || taskID != "" && task.TaskID != taskID {
+			continue
+		}
+		// Include ready tasks too: the worker first checks the remote and reuses
+		// their existing result if its inputs are unchanged.
+		item := pm.GenerationBatchItem{TaskID: task.TaskID, Status: "pending"}
+		mat, readErr := m.store.(materialStore).Material(ctx, m.config.Identity(), task.TaskID)
+		if readErr != nil && !errors.Is(readErr, storageports.ErrNotFound) {
+			return pm.GenerationProgress{}, readErr
+		}
+		if readErr == nil {
+			item.Inputs, item.GenerationID, item.Status = mat.Inputs, mat.GenerationID, mat.Status
+		}
+		batch.Items = append(batch.Items, item)
+	}
+	if len(batch.Items) == 0 {
+		if taskID != "" {
+			return pm.GenerationProgress{}, storageports.ErrNotFound
+		}
+		batch.Status = "completed"
+	}
+	if err = store.RegisterPreparation(ctx, m.config.Identity(), id, batch); err != nil {
 		return pm.GenerationProgress{}, err
 	}
 	return m.batchProgress(ctx, batch), nil

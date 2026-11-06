@@ -11,8 +11,41 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
+
+func TestMaintenancePreparationRegistrationIsAtomic(t *testing.T) {
+	s, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	batch := pm.GenerationBatch{ID: "prepare", Status: "queued", Processed: true, Profile: "local", Items: []pm.GenerationBatchItem{{TaskID: "101"}}}
+	_, err = s.db.ExecContext(ctx, `CREATE TRIGGER reject_preparation BEFORE INSERT ON maintenance_settings BEGIN SELECT RAISE(ABORT,'injected batch persistence failure'); END`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.RegisterPreparation(ctx, "project", batch.ID, batch); err == nil {
+		t.Fatal("batch failure was hidden")
+	}
+	if _, err = s.MaintenanceReceipt(ctx, "project", batch.ID); !errors.Is(err, storageports.ErrNotFound) {
+		t.Fatal("receipt survived rolled-back registration", err)
+	}
+	if _, err = s.db.ExecContext(ctx, `DROP TRIGGER reject_preparation`); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.RegisterPreparation(ctx, "project", batch.ID, batch); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.GenerationBatch(ctx, "project"); err != nil || got.ID != batch.ID || got.Status != "queued" {
+		t.Fatal(got, err)
+	}
+	if raw, err := s.MaintenanceReceipt(ctx, "project", batch.ID); err != nil || len(raw) == 0 {
+		t.Fatal(err)
+	}
+}
 
 func TestGQDurableBatchAndSubmissionBoundary(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")

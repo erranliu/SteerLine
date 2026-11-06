@@ -4,8 +4,10 @@ import { projectQueries } from "../../shared/api/queries";
 import { usePageVisible } from "../../shared/query-visibility";
 
 export const testPreparationNames: Record<string, string> = {
+  unprepared: "材料与测试安排待准备",
+  preparing: "正在读取和校验材料",
   ready: "测试安排已就绪",
-  pending: "等待生成测试安排",
+  pending: "材料与测试安排待准备",
   queued: "测试安排排队中",
   accepted: "测试安排生成中",
   generated: "正在校验测试安排",

@@ -273,6 +273,7 @@ it.each([true, false])(
 );
 
 it.each([
+  "unprepared",
   "pending",
   "queued",
   "failed",
@@ -294,6 +295,10 @@ it.each([
       ).toBe("success"),
     );
     expect(button).toBeDisabled();
+    expect(screen.getByRole("link", { name: "前往项目维护" })).toHaveAttribute(
+      "href",
+      "/projects/candidate-project/dag?maintenance=preparation&task=38",
+    );
     fireEvent.click(button);
     expect(start).not.toHaveBeenCalled();
   },

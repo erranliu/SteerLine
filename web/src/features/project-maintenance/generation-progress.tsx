@@ -3,6 +3,8 @@ import { LoaderCircle } from "lucide-react";
 
 export type GenerationProgressValue = {
   id: string;
+  status?: string;
+  diagnostic?: string;
   total: number;
   succeeded: number;
   queued: number;
@@ -23,8 +25,16 @@ export function GenerationProgress({
 }) {
   const [, tick] = useState(0);
   const observedActive = useRef("");
-  const [displayWindow, setDisplayWindow] = useState<{ id: string; deadline: number }>();
-  const complete = !!value?.total && value.succeeded === value.total;
+  const [displayWindow, setDisplayWindow] = useState<{
+    id: string;
+    deadline: number;
+  }>();
+  const preparing = value?.status === "queued" || value?.status === "preparing";
+  const complete =
+    !preparing &&
+    value?.status !== "failed" &&
+    !!value?.total &&
+    value.succeeded === value.total;
   useEffect(() => {
     if (!value?.total) return;
     if (!complete) {
@@ -67,18 +77,24 @@ export function GenerationProgress({
     );
     return () => clearTimeout(timer);
   }, [deadline, value?.id]);
-  if (!value?.total) return null;
+  if (!value || (!value.total && !preparing && !value.diagnostic)) return null;
   if (complete && deadline !== undefined && Date.now() >= deadline) return null;
-  const active = online && value.running > 0;
+  const active = online && (value.running > 0 || preparing);
   const text = !online
     ? "状态待核实"
-    : complete
-      ? "生成完毕"
-      : value.running
-        ? "生成中"
-        : value.queued
-          ? "排队中"
-          : "已生成";
+    : value.status === "queued"
+      ? "等待准备"
+      : value.status === "preparing"
+        ? "正在读取和校验材料"
+        : value.status === "failed" && value.diagnostic
+          ? "准备失败"
+          : complete
+            ? "生成完毕"
+            : value.running
+              ? "生成中"
+              : value.queued
+                ? "排队中"
+                : "已生成";
   return (
     <span role="status" aria-live="polite" className="maintenance-progress">
       {active && (

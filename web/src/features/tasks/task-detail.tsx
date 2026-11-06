@@ -192,6 +192,13 @@ export function TaskDetail({
           <div role="status" aria-label="当前测试安排">
             <p className="muted">{tests.text}</p>
             {tests.diagnostic && <p className="muted">{tests.diagnostic}</p>}
+            {!tests.ready && (
+              <Link
+                to={`/projects/${api.identity.project_id}/dag?maintenance=preparation&task=${encodeURIComponent(id)}`}
+              >
+                前往项目维护 <ArrowUpRight size={13} />
+              </Link>
+            )}
           </div>
         )}
         {task.delivery ? (

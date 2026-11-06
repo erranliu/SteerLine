@@ -3,7 +3,7 @@ import {execFileSync} from "node:child_process";
 import {readFileSync,writeFileSync,appendFileSync} from "node:fs";
 import {dirname,resolve,join} from "node:path";
 
-test("runtime.project-maintenance: automatic materials, independent candidates and old PR delivery",async({page},info)=>{
+test("runtime.project-maintenance: explicit material preparation, independent candidates and old PR delivery",async({page},info)=>{
  test.setTimeout(300000);page.setDefaultTimeout(30000);
  const config=process.env.STEERLINE_WEB_CONFIG;
  if(!config)throw new Error("fresh debug configuration required");
@@ -37,11 +37,12 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
   await expect.poll(async()=>{const v=await get("/maintenance");return v.tasks.find((t:any)=>t.task_id==="1")?.status},{timeout:90000}).toBe("ready");
   return get("/maintenance");
  };
+ await section.getByRole("button",{name:"准备材料与测试安排",exact:true}).click();
  const initial=await ready();
  expect(initial.remote.sha).toBeTruthy();
  expect(initial.remote.time).toBeTruthy();
  expect(initial.tasks.find((t:any)=>t.task_id==="1").generation_id).toBeTruthy();
- expect((await call("maintenance_check",other.project_id,{},"/api/v2/application/projects/"+other.project_id)).status).toBe("applied");
+ expect((await call("maintenance_generate_all",other.project_id,{},"/api/v2/application/projects/"+other.project_id)).status).toBe("applied");
  // Establish the other project's completed initial state before changing this
  // project. Task/material observations are asynchronous after task creation.
  await expect.poll(async()=>{
@@ -66,6 +67,8 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
  await expect.poll(()=>git("rev-parse","HEAD")).toBe(latest);
  await section.getByRole("button",{name:"查看提交日志",exact:true}).click();
  await expect(page.getByRole("region",{name:"提交日志"})).toContainText("Source-only remote update");
+ expect((await call("maintenance_generate_all",project)).status).toBe("applied");
+ await ready();
  helper("control","--simulate","-config",config,"-action","resume_dispatch");
  const start=(action:string)=>helper("control","--simulate","-config",config,"-action",action,"-task-id","1","-profile","simulate");
  const runs=async()=>{const v=await get("/snapshot");return v.connection.snapshot.page.runs.filter((c:any)=>(c.domain_task_id||c.task_id)==="1")};
@@ -82,7 +85,7 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
   git("checkout",manifest.base_branch);
   appendFileSync(join(repo,"SteerlineFlow", "plans", "task.plan.md"),"\n"+label+"\n");
   git("add","SteerlineFlow/plans/task.plan.md");git("commit","-qm",label);git("push",remote,"HEAD:refs/heads/"+manifest.base_branch);
-  expect((await call("maintenance_check",project)).status).toBe("applied");
+  expect((await call("maintenance_generate_all",project)).status).toBe("applied");
   return ready();
  };
  const secondMaterial=await changePlan("Plan version two");
