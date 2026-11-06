@@ -1,5 +1,28 @@
 # Roadmap 读取、解析与转正验收计划
 
+## 2026-11-06：转正进度与当前流程展示
+
+用户授权首轮界面调整：固定进度区、当前流程与历史分离、集中主操作及左侧草稿状态；不接活动中心。实现仅调整 Web 展示与原命令入口，不修改 Runner 请求、提示词、材料生成、文档发布或 Task/DAG 事务。
+
+- 顶部吸顶区显示六阶段、当前状态、下一步说明和对应主操作；保留原发布/合并与自动派发的效果说明，提供任务/文档内容定位链接。
+- 当前流程按最新解析及其 `parent_id` 关联的文档生成记录组织；未核实的内容请求和在途发布优先展示，不能被新记录遮盖。文档失败保留任务/依赖已确认的阶段，重试仍指向原解析记录。
+- 历史以独立 URL `record` 参数查看，刷新可恢复；历史只读，顶部仍显示当前流程，返回后恢复当前操作。切换草稿重新限定流程与历史，清除正文编辑状态。
+- 左侧按同一规则展示每份草稿状态。来源正文变化保留旧流程并要求显式重新解析；LF/CRLF 的原有等价规则继续适用，不归一化或写入来源。
+
+实现期受测源码为 `01356834e4c791aba9c94064d5dfcb75f0d6b487` 加本轮工作树修改（dirty），当时尚未提交或推送；未部署。本轮原始证据根：`C:/Users/lmas1/AppData/Local/Temp/steerline-roadmap-ui-8306-e75c/`。提 PR 前固定提交的验证另行登记，不将这些 dirty 报告冒充 clean 版本证据。
+
+| 验证 | 实际结果 / 证据 |
+| --- | --- |
+| 固定 L1 | `go run ./cmd/test-feedback -level=L1 -out <证据根>/L1`；passed/complete=true，准备 0.353s、执行 36.798s；`L1/summary.json` |
+| 固定 L2 | `go run ./cmd/test-feedback -level=L2 -out <证据根>/L2`；passed=true，准备 11.692s、执行 130.454s；`L2/summary.json`，受控现场及资源清理按原报告核实 |
+| 登记前端全集 | `go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit -out <证据根>/web-unit-final`；39 文件 / 343 项通过，0 失败、0 skip，20.100s；`web-unit-final/summary.json` 及 `web-unit-final/web-unit/vitest.json` |
+| 构建 | `npm --prefix web run build`；TypeScript 与 Vite 通过 |
+| 浏览器界面定向 | 独立 Vite/Edge、模拟 API 数据，直接渲染实际 Roadmaps/AppShell；桌面、吸顶（滚动后 y=12）、历史/当前隔离、刷新恢复历史、返回当前、390×844 窄屏无整页横向溢出、未知结果保持原查询入口、只读导航零提交均通过；`browser/result.json` 与 `desktop.png`、`sticky.png`、`mobile-history.png` |
+
+首次前端全集有一项新增测试在草稿列表返回前查找按钮而失败，修正异步等待后重新完整执行通过；失败保留于 `web-unit/summary.json`。浏览器临时夹具的 TSX 转换/开发连接准备失败未计通过；修正后执行上述界面检查，无页面异常。Roadmap 定向用例共 19 项，已包含在最终前端全集。
+
+本轮未重跑真实模型、文档 PR 合并与入图整链；既有 live 场景只同步“已入图后显示 DAG 入口”的界面断言，不改变原事务与清理检查。浏览器模拟数据验证不代表真实后端链已复验；安装部署和用户人工体验仍未验。
+
 ## 2026-11-02：草稿换行比较修复
 
 用户授权仅放宽草稿 LF/CRLF 内容比较；原始正文/摘要、固定文件 manifest、JSON 和原请求身份保持严格核验。原因为 Windows `core.autocrlf=true` 可让 Git 干净工作树出现 CRLF，而 blob 为 LF；不要求项目固定 LF。依据与命令见 [Spec](../../spec/roadmap-promotion.spec.md#41-来源) 和 [Plan](../../plans/roadmap-promotion.plan.md#2026-11-02草稿-lfcrlf-比较修复)。

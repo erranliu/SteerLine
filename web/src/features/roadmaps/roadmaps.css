@@ -25,6 +25,87 @@
   grid-template-columns: 210px minmax(0, 1fr) 260px;
   gap: 20px;
 }
+.roadmaps-progress {
+  position: sticky;
+  top: 12px;
+  z-index: 10;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-panel, #142019);
+  box-shadow: 0 8px 24px #0004;
+  overflow-wrap: anywhere;
+}
+.roadmaps-progress-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.roadmaps-progress h2,
+.roadmaps-progress p {
+  margin: 0 0 8px;
+}
+.roadmaps-steps {
+  display: flex;
+  gap: 8px 16px;
+  padding: 0;
+  margin: 8px 0 12px;
+  list-style: none;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.roadmaps-steps li {
+  color: var(--color-muted);
+}
+.roadmaps-steps li span {
+  margin-right: 6px;
+}
+.roadmaps-steps .complete {
+  color: #a1cfb2;
+}
+.roadmaps-steps .current {
+  color: #fff;
+  font-weight: 700;
+}
+.roadmaps-page .roadmaps-primary {
+  background: #335f43;
+  color: #fff;
+  border: 1px solid #719b7d;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+.roadmaps-progress .roadmaps-actions {
+  align-items: center;
+  margin-bottom: 0;
+}
+.roadmaps-history-notice {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: #f0d79d;
+}
+.roadmaps-controls details + details {
+  margin-top: 20px;
+}
+.roadmaps-page summary {
+  cursor: pointer;
+}
+.roadmaps-page .roadmaps-source-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 5px;
+  color: #c7e3d0;
+  background: #263d2f;
+  font-size: 12px;
+}
+.roadmaps-section {
+  scroll-margin-top: 260px;
+}
 .roadmaps-library,
 .roadmaps-controls,
 .roadmaps-document {
@@ -132,6 +213,19 @@
   }
 }
 @media (max-width: 700px) {
+  .roadmaps-progress {
+    top: 0;
+    padding: 12px;
+  }
+  .roadmaps-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px 8px;
+    font-size: 12px;
+  }
+  .roadmaps-section {
+    scroll-margin-top: 360px;
+  }
   .roadmaps-page {
     padding: 12px;
   }
