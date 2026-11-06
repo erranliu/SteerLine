@@ -136,7 +136,7 @@ func TestDeveloperReadinessService(t *testing.T) {
 	// In-flight adaptation still owns its execution target.
 	prepared, err := p.prepare(ctx, "remote")
 	require(t, err)
-	record := env.Record{ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared,
+	record := env.Record{FormatVersion: 1, ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared,
 		State: "running", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1}}}
 	require(t, store.StartEnvironment(ctx, record, 0))
 	if err := service.ReserveExecution(ctx, taskmodel.FixedWork{}, candidate, false); err == nil || !strings.Contains(err.Error(), "未核实的环境适配") {

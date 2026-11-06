@@ -15,43 +15,43 @@ func readinessExecution() runnercontract.ExecutionInput {
 func TestProjectEnvironmentReadinessContextKeepsOriginalAndGroupsModels(t *testing.T) {
 	original := readinessExecution()
 	before := string(original.Settings)
-	key, err := Key(original)
+	key, err := Key(original, fixtureExecutionIdentity(original))
 	if err != nil {
 		t.Fatal(err)
 	}
 	changed := original
 	changed.Settings = json.RawMessage(`{"model":"two","access_mode":"full_access","reasoning_effort":"high","executable":"codex"}`)
-	same, err := Key(changed)
+	same, err := Key(changed, fixtureExecutionIdentity(changed))
 	if err != nil || same != key || string(original.Settings) != before {
 		t.Fatal("model grouping altered frozen execution", err)
 	}
 	for _, settings := range []string{`{"executable":"other","access_mode":"full_access"}`, `{"executable":"codex","access_mode":"sandbox"}`, `{"executable":"codex","access_mode":"full_access","unknown":true}`} {
 		changed.Settings = json.RawMessage(settings)
-		next, err := Key(changed)
+		next, err := Key(changed, fixtureExecutionIdentity(changed))
 		if err != nil || next == key {
 			t.Fatal("other context field ignored", settings, err)
 		}
 	}
 	for _, settings := range []string{`null`, `[]`, `{}`, `{"model":"a","model":"b"}`} {
 		changed.Settings = json.RawMessage(settings)
-		if _, err := Key(changed); err == nil {
+		if _, err := Key(changed, fixtureExecutionIdentity(changed)); err == nil {
 			t.Fatal("invalid settings accepted", settings)
 		}
 	}
 	changed = original
 	changed.Target.Environment = "unexpected-local-alias"
-	if _, err := Key(changed); err == nil {
+	if _, err := Key(changed, fixtureExecutionIdentity(changed)); err == nil {
 		t.Fatal("local target accepted remote environment alias")
 	}
 	original.Adapter = "unknown"
-	if _, err := Key(original); err == nil {
+	if _, err := Key(original, fixtureExecutionIdentity(original)); err == nil {
 		t.Fatal("unsupported adapter allowed")
 	}
 }
 func TestProjectEnvironmentReadinessRevocationAndProjection(t *testing.T) {
 	execution := readinessExecution()
-	key, _ := Key(execution)
-	record := Record{ID: strings.Repeat("a", 32), Project: "project", Kind: "adaptation", Execution: execution, State: "ready", Prepared: Prepared{Inputs: "basis"}, Rounds: []Round{{Number: 1, Settled: true}}}
+	key, _ := Key(execution, fixtureExecutionIdentity(execution))
+	record := Record{ID: strings.Repeat("a", 32), Project: "project", Kind: "adaptation", Execution: execution, State: "ready", Prepared: Prepared{Identity: fixtureExecutionIdentity(execution), DerivedExecution: execution, Inputs: "basis"}, Rounds: []Round{{Number: 1, Settled: true}}}
 	current := Current{Project: "project", Key: key, Revision: 1, ActivityID: record.ID}
 	if _, err := Qualify(current, record, "basis"); err != nil {
 		t.Fatal(err)
@@ -77,31 +77,33 @@ func TestProjectEnvironmentReadinessRevocationAndProjection(t *testing.T) {
 	}
 }
 
-func TestProjectEnvironmentReadinessOrcaProjectionPreservesTransportAndArguments(t *testing.T) {
-	execution := runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"transport":{"executable":"orca","args":["--model","unchanged"]},"agent_launch":{"executable":"agent","model":"one","reasoning_effort":"low","args":["--model","literal"]},"model":"other-field"}`)}
-	before := string(execution.Settings)
-	key, err := Key(execution)
-	if err != nil {
-		t.Fatal(err)
+func TestProjectEnvironmentReadinessConsumesOpaqueRunnerIdentity(t *testing.T) {
+	source := runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"opaque_native_setting":"saved"}`)}
+	identity := runnercontract.ExecutionIdentity{Contract: runnercontract.ExecutionIdentityContract, SourceExecutionDigest: runnercontract.ConfigurationValueDigest(source), Context: runnercontract.ExecutionInput{Adapter: source.Adapter, Target: source.Target, Settings: json.RawMessage(`{"opaque_native_setting":"projected"}`)}}
+	key, err := Key(source, identity)
+	if err != nil || key != runnercontract.ConfigurationValueDigest(identity.Context) {
+		t.Fatal("caller reinterpreted Runner's opaque projection", err)
 	}
-	other := execution
-	other.Settings = json.RawMessage(strings.ReplaceAll(strings.ReplaceAll(before, `"model":"one"`, `"model":"two"`), `"reasoning_effort":"low"`, `"reasoning_effort":"high"`))
-	same, err := Key(other)
-	if err != nil || same != key || string(execution.Settings) != before {
-		t.Fatal("structured model projection differs", err)
+	changed := source
+	changed.Settings = json.RawMessage(`{"opaque_native_setting":"other"}`)
+	if _, err = Key(changed, identity); err == nil {
+		t.Fatal("identity accepted a different source")
 	}
-	for _, change := range []string{strings.Replace(before, "unchanged", "changed", 1), strings.Replace(before, "literal", "changed", 1), strings.Replace(before, "other-field", "changed", 1)} {
-		other.Settings = json.RawMessage(change)
-		next, err := Key(other)
-		if err != nil || next == key {
-			t.Fatal("unrelated model or argument removed", err)
-		}
+	identity.Contract = "other"
+	if _, err = Key(source, identity); err == nil {
+		t.Fatal("foreign identity accepted")
+	}
+	identity.Contract = runnercontract.ExecutionIdentityContract
+	identity.Context.Settings = json.RawMessage(`{"opaque_native_setting":"one","opaque_native_setting":"two"}`)
+	if _, err = Key(source, identity); err == nil {
+		t.Fatal("ambiguous context returned an empty successful key")
 	}
 }
+
 func TestProjectEnvironmentReadinessStagesDoNotGrantUnsettledOrHistoricalSuccess(t *testing.T) {
 	execution := readinessExecution()
-	key, _ := Key(execution)
-	ready := Record{ID: strings.Repeat("a", 32), Project: "project", Kind: "adaptation", Execution: execution, State: "ready", Prepared: Prepared{Inputs: "basis"}, Rounds: []Round{{Number: 1, Settled: true}}}
+	key, _ := Key(execution, fixtureExecutionIdentity(execution))
+	ready := Record{ID: strings.Repeat("a", 32), Project: "project", Kind: "adaptation", Execution: execution, State: "ready", Prepared: Prepared{Identity: fixtureExecutionIdentity(execution), DerivedExecution: execution, Inputs: "basis"}, Rounds: []Round{{Number: 1, Settled: true}}}
 	current := Current{Project: "project", Key: key, Revision: 1, ActivityID: ready.ID}
 	running := ready
 	running.Rounds = []Round{{Number: 1}}
@@ -149,15 +151,15 @@ func TestProjectEnvironmentReadinessStagesDoNotGrantUnsettledOrHistoricalSuccess
 func TestProjectEnvironmentReadinessLocalAdaptersHaveSeparateQualification(t *testing.T) {
 	codex := readinessExecution()
 	orca := runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"transport":{"executable":"orca"},"agent_launch":{"executable":"codex"},"access_mode":"full_access"}`)}
-	key, err := Key(codex)
+	key, err := Key(codex, fixtureExecutionIdentity(codex))
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := Key(orca)
+	other, err := Key(orca, fixtureExecutionIdentity(orca))
 	if err != nil || key == other {
 		t.Fatal("local adapters shared environment or occupancy", err)
 	}
-	record := Record{ID: strings.Repeat("a", 32), Project: "project", Kind: "adaptation", Execution: codex, State: "ready", Prepared: Prepared{Inputs: "basis"}, Rounds: []Round{{Number: 1, Settled: true}}}
+	record := Record{ID: strings.Repeat("a", 32), Project: "project", Kind: "adaptation", Execution: codex, State: "ready", Prepared: Prepared{Identity: fixtureExecutionIdentity(codex), DerivedExecution: codex, Inputs: "basis"}, Rounds: []Round{{Number: 1, Settled: true}}}
 	current := Current{Project: "project", Key: key, Revision: 1, ActivityID: record.ID}
 	if _, err = Qualify(current, record, "basis"); err != nil {
 		t.Fatal(err)
@@ -166,4 +168,27 @@ func TestProjectEnvironmentReadinessLocalAdaptersHaveSeparateQualification(t *te
 	if _, err = Qualify(current, record, "basis"); err == nil {
 		t.Fatal("Orca reused local Codex preparation")
 	}
+}
+
+// Synthetic facts; this pure model never implements native configuration rules.
+func fixtureExecutionIdentity(execution runnercontract.ExecutionInput) runnercontract.ExecutionIdentity {
+	context := execution
+	var settings map[string]json.RawMessage
+	_ = json.Unmarshal(execution.Settings, &settings)
+	if execution.Adapter == "codex-app-server" {
+		delete(settings, "model")
+		delete(settings, "reasoning_effort")
+	} else if raw, ok := settings["agent_launch"]; ok {
+		var launch map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &launch)
+		delete(launch, "model")
+		delete(launch, "reasoning_effort")
+		if len(launch) == 0 {
+			delete(settings, "agent_launch")
+		} else {
+			settings["agent_launch"], _ = json.Marshal(launch)
+		}
+	}
+	context.Settings, _ = json.Marshal(settings)
+	return runnercontract.ExecutionIdentity{Contract: runnercontract.ExecutionIdentityContract, SourceExecutionDigest: runnercontract.ConfigurationValueDigest(execution), Context: context}
 }

@@ -20,7 +20,7 @@ test("configuration.execution-profiles: global editor, saved and loaded snapshot
   await page.goto(url.href);
   await expect(page.getByLabel("配置名称")).toBeVisible();
   if (process.env.STEERLINE_CONFIG_PHASE === "edit") {
-    for (const agent of ["codex", "pi", "dsh"]) {
+    for (const agent of ["codex", "pi"]) {
       await page.getByRole("button", { name: "复制", exact: true }).click();
       await page.getByLabel("配置名称").fill("浏览器保存的新配置 " + agent);
       await page.getByLabel("执行链路").selectOption("orca-terminal");
@@ -32,7 +32,16 @@ test("configuration.execution-profiles: global editor, saved and loaded snapshot
         .selectOption("high");
       if (agent === "codex")
         await page.getByText("用作新任务的默认配置").click();
+      const saved = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === "/api/web/execution-config" &&
+          response.request().method() === "PUT",
+      );
       await page.getByRole("button", { name: "保存配置", exact: true }).click();
+      expect((await saved).status()).toBe(200);
+      await expect(
+        page.getByRole("button", { name: new RegExp("浏览器保存的新配置 " + agent) }),
+      ).toBeVisible();
       await expect(page.getByText("配置已保存，待重启生效")).toBeVisible();
       await expect(page.getByText("服务仍使用已加载配置")).toBeVisible();
     }
@@ -47,7 +56,7 @@ test("configuration.execution-profiles: global editor, saved and loaded snapshot
     await expect(page.getByText("配置已保存，待重启生效")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /浏览器保存的新配置/ }),
-    ).toHaveCount(3);
+    ).toHaveCount(2);
     await page.screenshot({
       path: info.outputPath("loaded.png"),
       fullPage: true,

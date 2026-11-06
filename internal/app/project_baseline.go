@@ -187,7 +187,7 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 	}
 	profiles := []profile{}
 	for _, p := range m.config.RunnerExecution.Profiles {
-		if _, e := generationProfile(p); e == nil {
+		if _, e := m.config.deriveProfile(ctx, p, "generate", "read_only"); e == nil {
 			profiles = append(profiles, profile{p.ID, p.Name})
 		}
 	}
@@ -226,12 +226,6 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 		Profile     string                `json:"profile"`
 		Progress    pm.GenerationProgress `json:"generation_progress"`
 	}{o, localInfo, m.config.Remote + "/" + m.config.Branch, remote, local, materials, profiles, store.MaterialProfile(ctx, m.config.Identity()), progress}, nil
-}
-func generationProfile(p RunnerProfile) (bool, error) {
-	if p.Execution.Adapter != "codex-app-server" || p.Execution.Target.Kind != "local" {
-		return false, errors.New("需要本机Codex方案")
-	}
-	return true, nil
 }
 func (m *projectMaintenance) commitLog(ctx context.Context, page, scope string) (any, error) {
 	n, e := strconv.Atoi(page)

@@ -34,22 +34,18 @@ type testManagementPort struct {
 }
 
 func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error) *testManagementPort {
+	c = bindNativeConfiguration(c, cli)
 	s := &testmanagement.GenerationService{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Admit: admit, Queue: c.runtimeGenerations}
 	s.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		p, err := c.RunnerExecution.Profile(id, "")
 		if err != nil {
 			return runnercontract.ExecutionInput{}, nil, err
 		}
-		e, err := runnerclient.GenerationExecution(p.Execution)
-		if err != nil {
-			return e, nil, err
+		resolved, err := c.deriveProfile(ctx, p, "generate", "read_only")
+		if err != nil || resolved.Execution == nil {
+			return runnercontract.ExecutionInput{}, nil, err
 		}
-		v, err := cli.Version(ctx)
-		if err != nil {
-			return e, nil, err
-		}
-		catalog, err := cli.Catalog(ctx, v)
-		return e, catalog, err
+		return *resolved.Execution, c.runtimeNative.Catalog, nil
 	}
 	s.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
 		if c.runtimeMaintenance != nil {

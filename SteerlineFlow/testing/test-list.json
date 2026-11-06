@@ -248,7 +248,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.environment",
-      "check": "两组串行：environmentadaptation、environmentadaptation/model、testkit/remotetest、internal/executionconfig四owner全部普通Go测试；App固定八个environment*_test.go全部24声明根及TestPMReservationRejectsPendingEnvironmentObservation、TestDeveloperConfigurationOptions、TestDeveloperConfigurationLoad、TestDeveloperReadinessService、TestSharedEnvironmentMaterialsAndIndependentQualifications，共29声明根/全部子项；Windows执行29根，其他平台执行28根，仅TestProjectEnvironmentScriptReportsToolsWithoutChainChecks按明确windows属性排除，所有平台仍解析八个源文件检查漂移，不以skip通过。按(package,root)核对唯一开始/终态，包/根缺失、额外根、重复、skip、零匹配或一组失败均不通过。",
+      "check": "两组串行：environmentadaptation、environmentadaptation/model、testkit/remotetest、internal/executionconfig四owner全部普通Go测试；App固定八个environment*_test.go全部24声明根及TestPMReservationRejectsPendingEnvironmentObservation、TestDeveloperConfigurationOptions、TestDeveloperConfigurationLoad、TestDeveloperReadinessService、TestSharedEnvironmentMaterialsAndIndependentQualifications、TestPMSGenerationFreshnessAndCandidateVersions、TestPMSNativeConfigurationPrecheckSnapshot，共31声明根/全部子项；Windows执行31根，其他平台执行30根，仅TestProjectEnvironmentScriptReportsToolsWithoutChainChecks按明确windows属性排除，所有平台仍解析八个源文件检查漂移，不以skip通过。按(package,root)核对唯一开始/终态，包/根缺失、额外根、重复、skip、零匹配或一组失败均不通过。",
       "note": "isolated；原环境准入/依据/分组/撤销/占用/材料/公开调用/重启结算与中性目标边界保留。App源文件/明确根名由固定Go定义和源清单守卫核对，新增/改名漂移阻断；其他App根继续在go.full，无真实环境成功承诺。"
     },
     {
@@ -257,7 +257,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.runner-contract",
-      "check": "runneracceptance 标签下执行 TestPublishedRunnerApplicationLifecycle、TestLegacyCheckRetirementPublishedContract、TestRunnerFullBindingPublicCLI；精确命中、原公开契约及停止结算通过。",
+      "check": "runneracceptance 标签下执行 TestPublishedRunnerApplicationLifecycle、TestLegacyCheckRetirementPublishedContract、TestRunnerFullBindingPublicCLI、TestExecutionConfigurationPublishedRunner、Web TestExecutionConfigurationPublishedStore；精确命中、原公开契约及停止结算通过。",
       "note": "显式 STEERRUNNER_EXE、STEERRUNNER_VERSION、STEERRUNNER_SHA256；只用独立临时 home，无业务模型、Git 发布或安装变更；缺输入阻断。"
     },
     {

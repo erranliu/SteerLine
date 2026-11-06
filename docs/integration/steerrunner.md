@@ -2,6 +2,13 @@
 
 计费职责调整见[Spec](../../SteerlineFlow/spec/billing-ownership.spec.md)、[实施 Plan](../../SteerlineFlow/plans/billing-ownership.plan.md)和[隔离验收](../../SteerlineFlow/testing/acceptance/billing-ownership.md)。Runner 只提供用量事实；SteerLine 管理价表、计算和展示估算。安装版尚未部署此次变更。
 
+## 原生执行配置边界
+
+2026-11-05 本轮实现以固定 EXE 的无服务 `execution-config --input - --json` 消费 describe/derive/compose。Runner 唯一解释原生 settings、有限组合/effort、用途转换及源绑定 identity；SteerLine 保留配置库、逻辑编辑来源、项目材料、ready/current、DAG 与交付。home 启动取得不可变配置快照；普通轮询和 SQLite 事务只读快照，明确用户准备/重试可重查失败项。环境记录格式与 SQLite schema 同步升级，不迁移旧活动。
+
+Web validate/save 请求为 `{saved_digest,config,profile_edits}`；服务端从同一保存版本取 base，重新 compose 并规范比较完整 execution，仍要求 If-Match 和发布前复读。目录 profile 查询给 Runner 传服务器保存的 execution，保留自定义 Codex 程序上下文。浏览器只编辑逻辑选择，不再解释 Agent 原生字段或部署 helper。固定正文没有变化，实施/真实范围与失败记录见[专属验收](../../SteerlineFlow/testing/acceptance/native-execution-configuration-boundary.md)。
+
+
 ## 无服务原生目录查询
 
 2026-11-05 Web 已接入固定 EXE 的 `native-catalog --input - --json`，按离线 capabilities.native_catalog 的 `steerrunner-native-catalog/v1`、schema、构建 SHA256/resource_digest 判断资格。stdin 是查询对象，目录调用不带 state-dir/实例/Run 绑定，也不启动服务。支持登记环境、本机/远端 Orca Agent/模型、本机 Codex 模型目录；原生连接及精确元数据进程归 Runner，Web 保留产品支持判断、配置保存和在途合并。30 秒取数、1 MiB、五秒清理，失败旧结果明确过期。策略预检消费已有 model_input_contract.workflow.project_policies.slots。具体实现、固定构建、原生资格与独立审核见[验收](../../SteerlineFlow/testing/acceptance/runner-boundary-consolidation.md)。

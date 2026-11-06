@@ -44,6 +44,7 @@ type Config struct {
 	runtimeGenerations          *testmanagement.GenerationQueue
 	runtimeRunner               *runnerclient.Client
 	runtimeCatalog              *runnerclient.Catalog
+	runtimeNative               *runnerclient.ConfigurationSnapshot
 	runtimeMaintenance          *projectMaintenance
 	runtimeTests                api.TestManagementPort
 	runtimeEnvironmentAdmission *environmentAdmission

@@ -67,11 +67,13 @@ func TestRemoteL4KeepsOnlyConfiguredProviderCredentialReference(t *testing.T) {
 }
 
 func TestRemoteL4OnlyConsumesBoundSealedProjectResult(t *testing.T) {
-	for _, change := range []string{"valid", "opaque-failed-detail", "wrong-source", "second-round", "unsealed", "wrong-machine", "wrong-inputs", "unverified-native", "wrong-input-digest", "wrong-run-projection"} {
+	for _, change := range []string{"valid", "opaque-failed-detail", "wrong-source", "second-round", "unsealed", "wrong-machine", "wrong-inputs", "unverified-native", "wrong-input-digest", "wrong-run-projection", "missing-identity", "wrong-identity-source", "wrong-identity-context"} {
 		t.Run(change, func(t *testing.T) {
 			execution := runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}
 			commit := strings.Repeat("a", 40)
 			r := env.Record{ID: env.ID(), Project: "project", Execution: execution, Prepared: env.Prepared{Commit: commit, Inputs: strings.Repeat("b", 64)}}
+			// Synthetic fixture only; actual live evidence freezes Runner's identity.
+			r.Prepared.Identity = runnercontract.ExecutionIdentity{Contract: runnercontract.ExecutionIdentityContract, SourceExecutionDigest: runnercontract.ConfigurationValueDigest(execution), Context: execution}
 			seed := env.InitialReport(r, 1)
 			initial, _ := json.Marshal(seed)
 			p := seed
@@ -91,8 +93,18 @@ func TestRemoteL4OnlyConsumesBoundSealedProjectResult(t *testing.T) {
 			raw, _ := json.Marshal(input)
 			run := runnercontract.Run{RunID: "run", Status: "completed", InputDigest: env.Digest(raw), StopStatus: "stopped", Correlation: map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": "1"}, Final: &runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", SessionID: "session", TurnID: "turn"}}
 			round := env.Round{Number: 1, Request: runnercontract.Request{Input: raw}, RunID: "run", InputDigest: run.InputDigest, Run: &run, Result: &result, Report: &p, Settled: true}
-			proof := map[string]any{"execution_digest": remotetest.Digest(execution), "source_commit": commit, "activity_id": r.ID, "rounds": 1, "round_details": []env.Round{round}, "run_id": "run", "run": run, "result": result, "report": p}
+			proof := map[string]any{"execution_digest": remotetest.Digest(execution), "execution_identity": r.Prepared.Identity, "source_commit": commit, "activity_id": r.ID, "rounds": 1, "round_details": []env.Round{round}, "run_id": "run", "run": run, "result": result, "report": p}
 			switch change {
+			case "missing-identity":
+				delete(proof, "execution_identity")
+			case "wrong-identity-source":
+				identity := r.Prepared.Identity
+				identity.SourceExecutionDigest = strings.Repeat("c", 64)
+				proof["execution_identity"] = identity
+			case "wrong-identity-context":
+				identity := r.Prepared.Identity
+				identity.Context.Settings = json.RawMessage(`{"fixture":"different"}`)
+				proof["execution_identity"] = identity
 			case "wrong-source":
 				proof["source_commit"] = "other"
 			case "second-round":

@@ -38,6 +38,9 @@ type RunnerFixture struct {
 }
 
 func RunnerCLI(args []string) (bool, error) {
+	if protocol.RunExecutionConfigurationFixture("caller-fixture-v1") {
+		return true, nil
+	}
 	if len(args) == 0 {
 		return false, nil
 	}
@@ -484,8 +487,14 @@ func prepareFixturePR(path string, s *State, repo, branch string) (model.PRInfo,
 func controlledCapabilities() map[string]any {
 	caps := protocol.RunnerServiceCapabilities("caller-fixture-v1")
 	caps["configuration_schemas"].(map[string]any)["adapters"].(map[string]any)["orca-terminal"] = map[string]string{"type": "object"}
+	fixtureWorkflow := caps["workflows"].([]any)[0].(map[string]any)
 	for _, workflow := range caps["workflows"].([]any) {
-		workflow.(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}
+		choice := workflow.(map[string]any)
+		choice["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}
+		if choice["id"] == "development" && choice["version"] == 2 {
+			choice["prompt_steps"] = fixtureWorkflow["prompt_steps"]
+			choice["states"] = fixtureWorkflow["states"]
+		}
 	}
 	caps["workflows"] = append(caps["workflows"].([]any), map[string]any{"id": "generate", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{}})
 	caps["configuration_schemas"].(map[string]any)["generate_input"] = map[string]any{"type": "object", "required": []string{"workflow", "execution", "generate"}}

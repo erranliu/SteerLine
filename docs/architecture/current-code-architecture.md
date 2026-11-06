@@ -1,5 +1,8 @@
 # 当前代码架构
 
+2026-11-05 原生执行配置增量：Runner 的无服务 execution-config 负责描述、派生、构造和 identity；Web 负责逻辑草稿与可信 base 的保存重验，app 负责 home 配置快照及项目资格接线。环境纯模型和 SQLite 不解析原生字段、不调用 CLI；writer 通过注入的只读可信快照核对候选 identity。历史 RunnerProfileDisplay 仍只读冻结请求，可信部署资产接受同版公开 gate。实现与验收见[专项](../../SteerlineFlow/testing/acceptance/native-execution-configuration-boundary.md)。
+
+
 2026-11-05 边界收口增量：Web 的原生目录统一通过固定 Runner EXE 的无服务 `native-catalog` 查询，Orca 连接/认证及 Codex model/list 归 Runner。Web 只协调在途查询、产品支持投影与配置保存；策略预检消费既有公开 slots，Roadmap/测试生成共用 runnerbinding 中性绑定事实。实现及验证见[专属记录](../../SteerlineFlow/testing/acceptance/runner-boundary-consolidation.md)。
 
 2026-10-26 Roadmap 增量：`internal/roadmap` 通过公开 generate/1 解析只读 Markdown 与既有图，`internal/roadmap/model` 承载纯值与校验；SQLite 仅依赖后者。解析和测试生成共用 home 额度，停止/接管复用原内容请求证明。`app/roadmap_publication.go` 负责文档专属 Git/provider 编排，`internal/task` 在既有批次事务分配正式编号及写图。2026-10-27 已按 Runner generate/1 固定仓库扩展接通文档生成，两类内容记录复用同一生命周期，见 [设计](../product-design/roadmap-promotion.md)及[验收](../../SteerlineFlow/testing/acceptance/roadmap-promotion.md)。

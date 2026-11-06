@@ -16,7 +16,7 @@ import (
 func (s *Server) executionConfig(w http.ResponseWriter, r *http.Request, session session) {
 	const base = "/api/web/execution-config"
 	route := strings.TrimPrefix(r.URL.Path, base)
-	if r.URL.RawQuery != "" || route != "" && route != "/discover" && route != "/validate" && route != "/status" {
+	if r.URL.RawQuery != "" || route != "" && route != "/discover" && route != "/validate" && route != "/status" && route != "/compose" {
 		fail(w, 404, "route_not_found", "unknown execution configuration route")
 		return
 	}
@@ -47,6 +47,16 @@ func (s *Server) executionConfig(w http.ResponseWriter, r *http.Request, session
 		}
 		if err == nil {
 			result, err = s.discovery.Query(ctx, q)
+		}
+	} else if r.Method == "POST" && route == "/compose" {
+		var body []byte
+		body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		var input configrepo.ComposeRequest
+		if err == nil {
+			err = cfg.Decode(body, &input)
+		}
+		if err == nil {
+			result, err = s.configuration.Compose(ctx, input)
 		}
 	} else if r.Method == "POST" && route == "/validate" || r.Method == "PUT" && route == "" {
 		var raw []byte

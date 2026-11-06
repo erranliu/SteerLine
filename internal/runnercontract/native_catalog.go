@@ -8,6 +8,7 @@ import (
 const NativeCatalogContract = "steerrunner-native-catalog/v1"
 
 type NativeCatalogRequest struct {
+	Execution  *ExecutionInput  `json:"execution,omitempty"`
 	Kind       string           `json:"kind"`
 	Adapter    string           `json:"adapter,omitempty"`
 	Target     *ExecutionTarget `json:"target,omitempty"`

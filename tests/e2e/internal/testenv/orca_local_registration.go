@@ -18,16 +18,18 @@ import (
 
 // The caller invokes this only after original Runner and owned-ref settlement.
 // setup-delete removes this test's registration and saved details, not its files.
-func (r *orcaTarget) cleanupLocalRegistration(s *Scenario, p *Project, owned map[string]string) error {
+func (r *orcaTarget) cleanupLocalRegistration(s *Scenario, p *Project, owned, reports map[string]string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if err := r.removeLocalRegistration(ctx, p.Repo, owned, func(args ...string) (json.RawMessage, error) { return r.Call(ctx, s, p, args...) }, func() (bool, error) { return localWorktreeFilesSettled(ctx, p.Repo, owned) }); err != nil {
+	if err := r.removeLocalRegistration(ctx, p.Repo, owned, func(args ...string) (json.RawMessage, error) { return r.Call(ctx, s, p, args...) }, func() (bool, error) { return localWorktreeFilesSettled(ctx, p.Repo, owned) }, func(path string) error {
+		return archiveOwnedRunnerReports(ctx, path, reports[path], filepath.Join(s.Output, "owned-runner-reports"))
+	}); err != nil {
 		return err
 	}
 	return controlled.Write(filepath.Join(s.Output, "orca-local-registration-cleanup.json"), map[string]any{"confirmed": true, "setup": r.Repository, "path": r.Root, "host": "local", "source_files_preserved": true})
 }
 
-func (r *orcaTarget) removeLocalRegistration(ctx context.Context, root string, owned map[string]string, call func(...string) (json.RawMessage, error), filesSettled func() (bool, error)) error {
+func (r *orcaTarget) removeLocalRegistration(ctx context.Context, root string, owned map[string]string, call func(...string) (json.RawMessage, error), filesSettled func() (bool, error), beforeRemove func(string) error) error {
 	if !r.ownedLocalSetup || r.Environment != "" || r.Repository == "" || !sameOrcaPath(r.Root, root) {
 		return errors.New("local registration ownership differs")
 	}
@@ -106,6 +108,13 @@ func (r *orcaTarget) removeLocalRegistration(ctx context.Context, root string, o
 		}
 	}
 	for _, id := range remove {
+		for _, tree := range trees.Worktrees {
+			if tree.ID == id {
+				if err = beforeRemove(tree.Path); err != nil {
+					return err
+				}
+			}
+		}
 		if _, err = call("worktree", "rm", "--worktree", "id:"+id); err != nil {
 			return err
 		}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -21,6 +22,9 @@ func openDomainTestStore(t *testing.T) *SQLiteStore {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.BindExecutionIdentityLookup(func(e runnercontract.ExecutionInput) (runnercontract.ExecutionIdentity, error) {
+		return fixtureExecutionIdentity(e), nil
+	})
 	t.Cleanup(func() { _ = s.Close() })
 	return s
 }

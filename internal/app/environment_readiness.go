@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
@@ -50,6 +49,7 @@ type environmentOptions struct {
 }
 
 func (p *environmentPort) configurationOptions() environmentOptions {
+	ctx := context.Background()
 	// Configuration facts exist independently of project storage and materials.
 	environments := []environmentView{}
 	groups := map[string]int{}
@@ -57,12 +57,19 @@ func (p *environmentPort) configurationOptions() environmentOptions {
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}
-		key, keyErr := env.Key(profile.Execution)
+		key, keyErr := p.config.profileEnvironmentKey(ctx, profile)
 		group := key
 		if keyErr != nil {
 			group = "unsupported:" + profile.ID
 		}
-		model, effort := environmentProfileModel(profile.Execution)
+		description, _ := p.config.runtimeNative.Lookup(runnercontract.ExecutionConfigurationRequest{Operation: "describe", Execution: &profile.Execution, Workflow: runnercontract.Workflow{ID: profile.Workflow.ID, Version: profile.Workflow.Version}})
+		model, effort := "", ""
+		if description.View.Model != nil {
+			model = *description.View.Model
+		}
+		if description.View.ReasoningEffort != nil {
+			effort = *description.View.ReasoningEffort
+		}
 		view := environmentProfileView{ID: profile.ID, Name: profile.Name, Model: model, ReasoningEffort: effort, Key: key, Status: "not_ready", Stage: "unverified", Reason: "项目运行环境状态待核实"}
 		if index, ok := groups[group]; ok {
 			environments[index].Profiles = append(environments[index].Profiles, view)
@@ -72,14 +79,9 @@ func (p *environmentPort) configurationOptions() environmentOptions {
 		if name == "" {
 			name = "本机 · " + profile.Execution.Adapter
 		}
-		var display struct {
-			Agent string `json:"agent"`
-		}
-		if profile.Execution.Adapter == "orca-terminal" {
-			_ = json.Unmarshal(profile.Execution.Settings, &display)
-		}
+
 		groups[group] = len(environments)
-		environments = append(environments, environmentView{Key: key, Name: name, Target: profile.Execution.Target, Adapter: profile.Execution.Adapter, Agent: display.Agent, Profiles: []environmentProfileView{view}, DocumentPath: env.DocumentPath(), Status: view.Status, Stage: view.Stage, Reason: view.Reason})
+		environments = append(environments, environmentView{Key: key, Name: name, Target: profile.Execution.Target, Adapter: profile.Execution.Adapter, Agent: description.View.Agent, Profiles: []environmentProfileView{view}, DocumentPath: env.DocumentPath(), Status: view.Status, Stage: view.Stage, Reason: view.Reason})
 	}
 	return p.optionsFor(environments)
 }
@@ -120,7 +122,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 		item.SourceCommit = commit
 		item.ActivitySettled = record.ID == "" || record.Settled()
 		for _, old := range rows {
-			oldKey, err := env.Key(old.Execution)
+			oldKey, err := env.Key(old.Execution, old.Prepared.Identity)
 			if old.Status() == "ready" && err == nil && oldKey == item.Key {
 				item.LastPassedActivity = old.ID
 				break
@@ -151,28 +153,13 @@ func (p *environmentPort) optionsFor(environments []environmentView) environment
 	return environmentOptions{Profiles: profiles, Environments: environments, DefaultProfile: p.config.RunnerExecution.DefaultProfile, ReadinessRequired: p.config.environmentPolicy.RequireReadiness()}
 }
 
-func environmentProfileModel(execution runnercontract.ExecutionInput) (string, string) {
-	var settings struct {
-		Model       string `json:"model"`
-		Effort      string `json:"reasoning_effort"`
-		AgentLaunch struct {
-			Model  string `json:"model"`
-			Effort string `json:"reasoning_effort"`
-		} `json:"agent_launch"`
-	}
-	_ = json.Unmarshal(execution.Settings, &settings)
-	if execution.Adapter == "orca-terminal" {
-		return settings.AgentLaunch.Model, settings.AgentLaunch.Effort
-	}
-	return settings.Model, settings.Effort
-}
-
 func (p *environmentPort) supportsEnvironment(key string) bool {
+	ctx := context.Background()
 	for _, profile := range p.config.RunnerExecution.Profiles {
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}
-		actual, err := env.Key(profile.Execution)
+		actual, err := p.config.profileEnvironmentKey(ctx, profile)
 		if err == nil && actual == key {
 			return true
 		}

@@ -24,7 +24,7 @@ func seedDetectedEnvironment(t *testing.T, p *environmentPort, profile string) e
 	t.Helper()
 	prepared, e := p.prepare(context.Background(), profile)
 	require(t, e)
-	r := envmodel.Record{ID: envmodel.ID(), Project: p.config.Identity(), Revision: 1, Kind: "adaptation", Profile: profile, Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Settled: true}}}
+	r := envmodel.Record{FormatVersion: 1, ID: envmodel.ID(), Project: p.config.Identity(), Revision: 1, Kind: "adaptation", Profile: profile, Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Settled: true}}}
 	require(t, p.store.StartEnvironment(context.Background(), r, 0))
 	return r
 }

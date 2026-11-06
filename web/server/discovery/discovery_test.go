@@ -6,6 +6,7 @@ import (
 	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	repository "github.com/erranliu/SteerLine/web/server/executionconfig"
 	"os"
 	"path/filepath"
@@ -17,6 +18,9 @@ import (
 
 func TestMain(m *testing.M) {
 	if file := os.Getenv("SL_CATALOG_FIXTURE"); file != "" && len(os.Args) > 1 {
+		if protocol.RunExecutionConfigurationFixture("fixture") {
+			os.Exit(0)
+		}
 		raw, _ := os.ReadFile(file)
 		var caps map[string]any
 		_ = json.Unmarshal(raw, &caps)
@@ -81,7 +85,7 @@ func TestMain(m *testing.M) {
 func fixture(t *testing.T) (*Manager, Request) {
 	t.Helper()
 	home := t.TempDir()
-	raw, err := os.ReadFile("../../../internal/runnerclient/testdata/workflow-capabilities.json")
+	raw, err := os.ReadFile("../../../internal/testkit/protocol/configuration_catalog.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +103,7 @@ func fixture(t *testing.T) (*Manager, Request) {
 	t.Setenv("SL_CATALOG_MODE", "")
 	exe, _ := os.Executable()
 	body, _ := os.ReadFile(exe)
-	config := cfg.File[cfg.Pin]{Version: 3, Runner: cfg.Pin{Executable: exe, Version: "fixture", SHA256: cfg.Digest(body)}, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "Local", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"codex.exe"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
+	config := cfg.File[cfg.Pin]{Version: 3, Runner: cfg.Pin{Executable: exe, Version: "fixture", SHA256: cfg.Digest(body)}, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "Local", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"codex.exe","access_mode":"full_access"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
 	if err = localservice.WritePrivateFile(home, "execution.json", config); err != nil {
 		t.Fatal(err)
 	}

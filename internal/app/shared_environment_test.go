@@ -27,7 +27,7 @@ func TestSharedEnvironmentMaterialsAndIndependentQualifications(t *testing.T) {
 		require(t, err)
 		current, _, err := p.current(ctx, profile)
 		require(t, err)
-		r := env.Record{ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: profile, Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Settled: true}}}
+		r := env.Record{FormatVersion: 1, ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: profile, Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Settled: true}}}
 		require(t, store.StartEnvironment(ctx, r, current.Revision))
 		current, err = store.CurrentEnvironment(ctx, r.Project, mustEnvironmentKey(t, r.Execution))
 		require(t, err)

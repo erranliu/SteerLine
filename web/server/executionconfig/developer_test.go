@@ -16,8 +16,8 @@ func TestDeveloperConfiguration(t *testing.T) {
 		t.Fatal(base, err)
 	}
 	c.Developer.SkipEnvironmentReadiness = true
-	_, validateErr := s.Validate(ctx, encode(t, c))
-	saved, saveErr := s.Save(ctx, base.SavedDigest, encode(t, c))
+	_, validateErr := s.Validate(ctx, encode(t, s, c))
+	saved, saveErr := s.Save(ctx, base.SavedDigest, encode(t, s, c))
 	if !developerconfig.Available {
 		for _, err := range []error{validateErr, saveErr} {
 			var rejected *Error
@@ -39,11 +39,11 @@ func TestDeveloperConfiguration(t *testing.T) {
 	if err != nil || !current.Developer.SkipEnvironmentReadiness || !sameValue(current.Profiles, c.Profiles) {
 		t.Fatal(current, err)
 	}
-	if _, err := s.Save(ctx, base.SavedDigest, encode(t, c)); err == nil {
+	if _, err := s.Save(ctx, base.SavedDigest, encode(t, s, c)); err == nil {
 		t.Fatal("stale editor overwrote developer switches")
 	}
 	c.Developer.SkipEnvironmentReadiness = false
-	reset, err := s.Save(ctx, saved.SavedDigest, encode(t, c))
+	reset, err := s.Save(ctx, saved.SavedDigest, encode(t, s, c))
 	if err != nil || reset.Config.Developer.SkipEnvironmentReadiness {
 		t.Fatal(reset, err)
 	}

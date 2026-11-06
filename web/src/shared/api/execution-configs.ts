@@ -1,19 +1,19 @@
 import type { UsagePolicy } from "./usage-collection";
 import { ApiError, json } from "./client";
-export interface Settings {
-  executable?: string;
+export type Settings = Record<string, unknown>;
+export interface Selection {
+  adapter: string;
+  target: { kind: string; environment?: string };
+  agent: string;
   model?: string;
   reasoning_effort?: string;
-  access_mode?: string;
-  agent?: string;
-  transport?: { executable?: string; [key: string]: unknown };
-  agent_launch?: {
-    executable?: string;
-    model?: string;
-    reasoning_effort?: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
+  access_mode: string;
+}
+export interface ProfileEdit {
+  profile_id: string;
+  base_profile_id?: string;
+  selection: Selection;
+  unset: string[];
 }
 export interface Profile {
   id: string;
@@ -68,7 +68,10 @@ export interface ConfigSnapshot {
   }[];
   efforts: string[];
   combinations: Combination[];
-  local_helper: { available: boolean; reason?: string };
+  profile_views: Record<
+    string,
+    { view?: Selection; editable: boolean; reason?: string }
+  >;
 }
 export interface Catalog {
   state:
@@ -118,17 +121,43 @@ export function executionConfigAPI(csrf: string) {
         body: JSON.stringify(query),
         signal,
       }),
-    validate: (config: ExecutionConfig) =>
+    compose: (
+      input: {
+        saved_digest: string;
+        base_profile_id?: string;
+        workflow: Profile["workflow"];
+        selection: Selection;
+        unset: string[];
+      },
+      signal?: AbortSignal,
+    ) =>
+      json<{ execution: Profile["execution"]; view: Selection }>(
+        path + "/compose",
+        { method: "POST", headers, body: JSON.stringify(input), signal },
+      ),
+    validate: (config: ExecutionConfig, digest: string, edits: ProfileEdit[]) =>
       json<{ config: ExecutionConfig }>(path + "/validate", {
         method: "POST",
         headers,
-        body: JSON.stringify(config),
+        body: JSON.stringify({
+          saved_digest: digest,
+          config,
+          profile_edits: edits,
+        }),
       }),
-    save: (config: ExecutionConfig, digest: string) =>
+    save: (
+      config: ExecutionConfig,
+      digest: string,
+      edits: ProfileEdit[] = [],
+    ) =>
       json<ConfigSnapshot>(path, {
         method: "PUT",
         headers: { ...headers, "If-Match": '"' + digest + '"' },
-        body: JSON.stringify(config),
+        body: JSON.stringify({
+          saved_digest: digest,
+          config,
+          profile_edits: edits,
+        }),
       }),
   };
 }
@@ -155,9 +184,10 @@ export async function saveExecutionConfig(
   api: ReturnType<typeof executionConfigAPI>,
   config: ExecutionConfig,
   digest: string,
+  edits: ProfileEdit[] = [],
 ) {
   try {
-    return await api.save(config, digest);
+    return await api.save(config, digest, edits);
   } catch (error) {
     if (error instanceof ApiError && error.status >= 400 && error.status < 500)
       throw error;

@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
+	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 func TestProjectEnvironmentSameBuildStartupStops(t *testing.T) {
@@ -23,7 +24,7 @@ func TestProjectEnvironmentSameBuildStartupStops(t *testing.T) {
 			require(t, err)
 			defer store.Close()
 			build := runnercontract.BuildPin{StateDir: filepath.Join(t.TempDir(), "runner"), SHA256: strings.Repeat("c", 64), Version: "current", ResourceDigest: strings.Repeat("d", 64)}
-			r := env.Record{ID: env.ID(), Project: "project", Revision: 1, Kind: "adaptation", Build: build, Cancelled: true, State: "stopping", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "accepted", RunID: "original-run", InputDigest: "original-input", Run: &runnercontract.Run{RunID: "original-run", Revision: 3, InputDigest: "original-input"}, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-submit", Input: json.RawMessage(`{"title":"original"}`)}}}}
+			r := env.Record{FormatVersion: 1, ID: env.ID(), Project: "project", Revision: 1, Kind: "adaptation", Build: build, Cancelled: true, State: "stopping", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "accepted", RunID: "original-run", InputDigest: "original-input", Run: &runnercontract.Run{RunID: "original-run", Revision: 3, InputDigest: "original-input"}, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-submit", Input: json.RawMessage(`{"title":"original"}`)}}}}
 			if scenario == "foreign-build" {
 				r.Build.StateDir += "-foreign"
 			}
@@ -45,6 +46,10 @@ func TestProjectEnvironmentSameBuildStartupStops(t *testing.T) {
 			if scenario == "closed-rejected-stop" {
 				r.Rounds[0].StopState = "rejected"
 			}
+			r.Execution = runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}
+			r.Prepared.Identity = protocol.ExecutionIdentity(r.Execution)
+			r.Prepared.DerivedExecution = r.Execution
+			r.Prepared.Input.Execution = r.Execution
 			require(t, store.SaveEnvironment(ctx, r, 0))
 			run := runnercontract.Run{RunID: "original-run", Revision: 9, InputDigest: "original-input", Status: "running", Correlation: map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": "1"}}
 			if scenario == "foreign-input" {
@@ -148,7 +153,11 @@ func TestProjectEnvironmentRejectsForeignNamespace(t *testing.T) {
 	cli := runnerclient.Client{StateDir: t.TempDir()}
 	old := cli.BuildPin()
 	old.StateDir = t.TempDir()
-	r := env.Record{ID: env.ID(), Project: "project", Revision: 1, Kind: "adaptation", Build: old, Cancelled: true, State: "stopping", Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "accepted", RunID: "original-run", InputDigest: "original-input"}}}
+	r := env.Record{FormatVersion: 1, ID: env.ID(), Project: "project", Revision: 1, Kind: "adaptation", Build: old, Cancelled: true, State: "stopping", Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "accepted", RunID: "original-run", InputDigest: "original-input"}}}
+	r.Execution = runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}
+	r.Prepared.Identity = protocol.ExecutionIdentity(r.Execution)
+	r.Prepared.DerivedExecution = r.Execution
+	r.Prepared.Input.Execution = r.Execution
 	require(t, store.SaveEnvironment(ctx, r, 0))
 	before, e := store.Environment(ctx, r.Project, r.ID)
 	require(t, e)

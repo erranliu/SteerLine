@@ -29,8 +29,9 @@ func fixture(t *testing.T) (*Store, Config) {
 	if err = localservice.WritePrivateFile(s.Home, "execution.json", c); err != nil {
 		t.Fatal(err)
 	}
+	s.Configure = configurationFixture
 	s.ReadCatalog = func(context.Context, cfg.Pin) (*catalog, error) {
-		raw, err := os.ReadFile("../../../internal/runnerclient/testdata/workflow-capabilities.json")
+		raw, err := os.ReadFile("../../../internal/testkit/protocol/configuration_catalog.json")
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +45,14 @@ func fixture(t *testing.T) (*Store, Config) {
 		if err = json.Unmarshal(raw, &caps); err != nil {
 			return nil, err
 		}
-		return compileCatalog(caps.Schemas.Config, caps.Workflows, caps.Schemas.Adapters["codex-app-server"])
+		cat, err := compileCatalog(caps.Schemas.Config, caps.Workflows, caps.Schemas.Adapters["codex-app-server"])
+		if err == nil {
+			var metadata map[string]json.RawMessage
+			_ = json.Unmarshal(raw, &metadata)
+			cat.Configuration = metadata["execution_configuration"]
+			cat.project(metadata["capability_catalog"])
+		}
+		return cat, err
 	}
 	return s, c
 }
@@ -70,7 +78,7 @@ func TestDevelopmentCombinationProjectionUsesValidPermissionMode(t *testing.T) {
 	}
 	delete(settings, "access_mode")
 	c.Profiles[0].Execution.Settings, _ = json.Marshal(settings)
-	if _, err := s.Validate(context.Background(), encode(t, c)); err == nil {
+	if _, err := s.Validate(context.Background(), encode(t, s, c)); err == nil {
 		t.Fatal("saved execution without explicit permission mode was accepted")
 	}
 }
@@ -96,13 +104,13 @@ func TestGQConcurrencySaveAndValidation(t *testing.T) {
 	}
 	for _, limit := range []int{0, -1} {
 		c.MaxGenerateConcurrency = &limit
-		if _, err = s.Validate(ctx, encode(t, c)); err == nil {
+		if _, err = s.Validate(ctx, encode(t, s, c)); err == nil {
 			t.Fatal("invalid concurrency accepted", limit)
 		}
 	}
 	limit := 3
 	c.MaxGenerateConcurrency = &limit
-	saved, err := s.Save(ctx, base.SavedDigest, encode(t, c))
+	saved, err := s.Save(ctx, base.SavedDigest, encode(t, s, c))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,9 +122,9 @@ func TestGQConcurrencySaveAndValidation(t *testing.T) {
 		t.Fatal("saved value rewrote loaded snapshot")
 	}
 }
-func encode(t *testing.T, c Config) []byte {
+func encode(t *testing.T, s *Store, c Config) []byte {
 	t.Helper()
-	r, err := json.Marshal(c)
+	r, err := json.Marshal(editFixture(t, s, c))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +149,7 @@ func TestExecutionConfigSave(t *testing.T) {
 		c.Profiles[0].Name = "canceled"
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		if _, err = s.Save(ctx, snap.SavedDigest, encode(t, c)); !errors.Is(err, context.Canceled) {
+		if _, err = s.Save(ctx, snap.SavedDigest, encode(t, s, c)); !errors.Is(err, context.Canceled) {
 			t.Fatal(err)
 		}
 		current, _ := os.ReadFile(path)
@@ -161,7 +169,7 @@ func TestExecutionConfigSave(t *testing.T) {
 	}
 	old, _ := os.ReadFile(filepath.Join(s.Home, "execution.json"))
 	parent, _ := os.Stat(s.Home)
-	unchanged, err := s.Save(ctx, snapshot.SavedDigest, encode(t, c))
+	unchanged, err := s.Save(ctx, snapshot.SavedDigest, encode(t, s, c))
 	if err != nil || unchanged.SavedDigest != snapshot.SavedDigest {
 		t.Fatal("no-op save rewrote config", err)
 	}
@@ -169,21 +177,21 @@ func TestExecutionConfigSave(t *testing.T) {
 	if !bytes.Equal(raw, old) {
 		t.Fatal("no-op changed bytes")
 	}
-	_, err = s.Save(ctx, "", encode(t, c))
+	_, err = s.Save(ctx, "", encode(t, s, c))
 	status(t, err, 428)
 	c.Profiles[0].Name = "新名称"
-	next, err := s.Save(ctx, snapshot.SavedDigest, encode(t, c))
+	next, err := s.Save(ctx, snapshot.SavedDigest, encode(t, s, c))
 	if err != nil || next.SavedDigest == snapshot.SavedDigest {
 		t.Fatal(err)
 	}
-	_, err = s.Save(ctx, snapshot.SavedDigest, encode(t, c))
+	_, err = s.Save(ctx, snapshot.SavedDigest, encode(t, s, c))
 	status(t, err, 412)
 	info, _ := os.Stat(s.Home)
 	if parent.Mode() != info.Mode() {
 		t.Fatal("parent permissions changed")
 	}
 	c.Runner.Version = "other"
-	_, err = s.Save(ctx, next.SavedDigest, encode(t, c))
+	_, err = s.Save(ctx, next.SavedDigest, encode(t, s, c))
 	status(t, err, 400)
 }
 func TestExecutionConfigConcurrentAndFrozen(t *testing.T) {
@@ -199,7 +207,7 @@ func TestExecutionConfigConcurrentAndFrozen(t *testing.T) {
 			copy := c
 			copy.Profiles = append([]cfg.Profile(nil), c.Profiles...)
 			copy.Profiles[0].Name = name
-			_, e := s.Save(ctx, snap.SavedDigest, encode(t, copy))
+			_, e := s.Save(ctx, snap.SavedDigest, encode(t, s, copy))
 			results <- e
 		}(name)
 	}
@@ -224,7 +232,7 @@ func TestExecutionConfigConcurrentAndFrozen(t *testing.T) {
 	if snap.Writable {
 		t.Fatal("debug scheme is editable")
 	}
-	_, err := s.Save(ctx, snap.SavedDigest, encode(t, c))
+	_, err := s.Save(ctx, snap.SavedDigest, encode(t, s, c))
 	status(t, err, 409)
 }
 func TestExecutionConfigSchemaAndPreservation(t *testing.T) {
@@ -233,16 +241,16 @@ func TestExecutionConfigSchemaAndPreservation(t *testing.T) {
 	snapshot, _ := s.Snapshot(ctx)
 	for _, settings := range []string{`{"access_mode":"full_access","model":"x","reasoning_effort":"invented"}`, `{"access_mode":"full_access","model":"x","extra":1}`, `{"access_mode":"full_access","model":"x","model":"y"}`, `{"access_mode":"full_access","model":"x","github_auth":{"app_id":1,"installation_id":2,"private_key_env":"EXAMPLE_KEY"}}`} {
 		c.Profiles[0].Execution.Settings = json.RawMessage(settings)
-		if _, err := s.Validate(ctx, encode(t, c)); err == nil {
+		if _, err := s.Validate(ctx, encode(t, s, c)); err == nil {
 			t.Fatal("invalid settings accepted", settings)
 		}
 	}
 	c.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access","executable":"codex.exe","model":"manual-unknown-model","reasoning_effort":"high"}`)
-	next, err := s.Save(ctx, snapshot.SavedDigest, encode(t, c))
+	next, err := s.Save(ctx, snapshot.SavedDigest, encode(t, s, c))
 	if err != nil {
 		t.Fatal("manual schema-valid model rejected", err)
 	}
-	valid := encode(t, next.Config)
+	valid, _ := json.Marshal(next.Config)
 	fresh := func() Config {
 		var config Config
 		if err := json.Unmarshal(valid, &config); err != nil {
@@ -253,16 +261,16 @@ func TestExecutionConfigSchemaAndPreservation(t *testing.T) {
 	c = fresh()
 	c.Profiles[0].Execution.Adapter = "orca-terminal"
 	c.Profiles[0].Execution.Target.Kind = "local"
-	if _, err = s.Validate(ctx, encode(t, c)); err == nil {
+	if _, err = s.Validate(ctx, encode(t, s, c)); err == nil {
 		t.Fatal("abandoned chain accepted")
 	}
 	c = fresh()
 	c.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access","executable":"new-arbitrary-program","model":"x"}`)
-	if _, err = s.Validate(ctx, encode(t, c)); err == nil {
+	if _, err = s.Validate(ctx, encode(t, s, c)); err == nil {
 		t.Fatal("new executable accepted")
 	}
 	var programError *Error
-	if !errors.As(err, &programError) || programError.Code != "program_read_only" {
+	if !errors.As(err, &programError) || programError.Code != "execution_source_differs" {
 		t.Fatal("new executable did not reach the program boundary", err)
 	}
 	// Current public schema optional fields survive editing a display name exactly.
@@ -275,7 +283,7 @@ func TestExecutionConfigSchemaAndPreservation(t *testing.T) {
 	}
 	snap, _ := s.Snapshot(ctx)
 	c.Profiles[0].Name = "rename"
-	got, err := s.Save(ctx, snap.SavedDigest, encode(t, c))
+	got, err := s.Save(ctx, snap.SavedDigest, encode(t, s, c))
 	if err != nil {
 		t.Fatal(err)
 	}

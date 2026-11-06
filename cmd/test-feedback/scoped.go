@@ -47,7 +47,7 @@ var quickOwnerCases = []struct {
 }{
 	{"quick-owner-catalogue", "github.com/erranliu/SteerLine/cmd/test-feedback", []string{"TestTMRegisteredCatalogueMatchesExecutableManifest", "TestScenarioContentListMatchesRegisteredIDsAndLevels", "TestRegisteredCommandsSelectExactlyTheirDefinitions"}},
 	{"quick-owner-prompts", "github.com/erranliu/SteerLine/internal/prompts", []string{"TestPromptGovernanceGolden", "TestPromptGovernanceRejectsInvalidInputs", "TestTestingContextOnlyBindsRuntimeFiles", "TestDocumentDrivenRuleCopies"}},
-	{"quick-owner-prompt-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestPromptGovernanceSourceBoundary", "TestThreeLayerRepositoryBoundary"}},
+	{"quick-owner-prompt-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestPromptGovernanceSourceBoundary", "TestThreeLayerRepositoryBoundary", "TestNativeConfigurationOwnership"}},
 }
 
 var quickPackages = func() []string {

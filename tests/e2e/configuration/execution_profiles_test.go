@@ -30,16 +30,14 @@ func TestExecutionProfiles(t *testing.T) {
 	s.Must(err)
 	var c cfg.File[cfg.Pin]
 	s.Must(cfg.Decode(raw, &c))
-	c.Profiles[0].Execution.Settings = json.RawMessage(`{"executable":` + strconvQuote(s.Run.Helper) + `,"model":"fixture-original","reasoning_effort":"high"}`)
-	helperBytes, err := os.ReadFile(s.Run.Helper)
-	s.Must(err)
-	helperSHA := cfg.Digest(helperBytes)
-	for _, agent := range []string{"codex", "pi", "dsh"} {
+	c.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access","executable":` + strconvQuote(s.Run.Helper) + `,"model":"fixture-original","reasoning_effort":"high"}`)
+	c.Profiles[0].Workflow.Version = 2
+	for _, agent := range []string{"codex", "pi"} {
 		template := c.Profiles[0]
 		template.ID = "template-" + agent
 		template.Name = "部署模板 " + agent
 		template.Execution.Adapter = "orca-terminal"
-		template.Execution.Settings, _ = json.Marshal(map[string]any{"agent": agent, "transport": map[string]any{"executable": "orca.exe"}, "agent_launch": map[string]any{"executable": map[string]string{"codex": "codex", "pi": "pi.cmd", "dsh": "dsh.cmd"}[agent], "runtime_executable": s.Run.Helper, "runtime_sha256": helperSHA}})
+		template.Execution.Settings, _ = json.Marshal(map[string]any{"access_mode": "full_access", "agent": agent})
 		c.Profiles = append(c.Profiles, template)
 	}
 	s.Must(controlled.Write(path, c))
@@ -64,11 +62,9 @@ func TestExecutionProfiles(t *testing.T) {
 	// Give this Web test an explicit offline contract and an absent, owned Orca
 	// userData so a controlled save cannot query the user's live Orca runtime.
 	offlineCaps := filepath.Join(p.Root, "web-offline-capabilities.json")
-	efforts := map[string]any{"enum": []string{"high"}}
-	s.Must(controlled.Write(offlineCaps, map[string]any{
-		"workflows":             []any{map[string]any{"id": "development", "version": 1, "supported_adapters": []string{"codex-app-server", "orca-terminal"}, "audit_model_required": false}},
-		"configuration_schemas": map[string]any{"version": 1, "run_configuration": map[string]any{"type": "object", "properties": map[string]any{"execution": map[string]any{"properties": map[string]any{"settings": map[string]any{"properties": map[string]any{"reasoning_effort": efforts, "agent_launch": map[string]any{"properties": map[string]any{"reasoning_effort": efforts}}}}}}}}, "adapters": map[string]any{"codex-app-server": map[string]any{"properties": map[string]any{"reasoning_effort": efforts}}}},
-	}))
+	metadata, err := os.ReadFile(filepath.Join(s.Run.Root, "internal/testkit/protocol/configuration_catalog.json"))
+	s.Must(err)
+	s.Must(os.WriteFile(offlineCaps, metadata, 0600))
 	orcaData := filepath.Join(p.Root, "owned-orca-unavailable")
 	s.Must(os.MkdirAll(orcaData, 0700))
 	startWeb := func() *testprocess.Process {
@@ -153,7 +149,7 @@ func TestExecutionProfiles(t *testing.T) {
 			expected[profile.ID] = profile
 		}
 	}
-	if len(expected) != 3 {
+	if len(expected) != 2 {
 		t.Fatalf("missing browser Agent combinations: %d", len(expected))
 	}
 	// The saved agents have distinct environment keys. Commit their fixture
@@ -223,11 +219,11 @@ func TestExecutionProfiles(t *testing.T) {
 			execution := input.Execution
 			launch := execution.Settings.Launch
 			agent := execution.Settings.Agent
-			if execution.Adapter == "orca-terminal" && execution.Target.Kind == "local" && execution.Target.Environment == "" && launch.Model == "fixture-"+agent && launch.Effort == "high" && launch.Runtime == s.Run.Helper && launch.SHA == helperSHA && launch.Executable == map[string]string{"codex": "codex", "pi": "pi.cmd", "dsh": "dsh.cmd"}[agent] {
+			if execution.Adapter == "orca-terminal" && execution.Target.Kind == "local" && execution.Target.Environment == "" && launch.Model == "fixture-"+agent && launch.Effort == "high" && launch.Runtime == "" && launch.SHA == "" && launch.Executable == "" {
 				found[agent] = true
 			}
 		}
-		return foundOld && len(found) == 3, nil
+		return foundOld && len(found) == 2, nil
 	})
 	snap, err := p.Snapshot()
 	s.Must(err)
