@@ -103,7 +103,7 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 		if e != nil {
 			return nil, fmt.Errorf("已有任务 #%s 的 Spec 无法读取: %w", t.TaskID, e)
 		}
-		n := roadmap.Existing{ID: t.TaskID, Title: t.Title, Spec: contract.SpecRef.Path, SpecText: string(spec), MaterialDigest: roadmap.Digest(spec), Predecessors: []string{}}
+		n := roadmap.Existing{ID: t.TaskID, Title: t.Title, Status: t.Status, Spec: contract.SpecRef.Path, SpecText: string(spec), MaterialDigest: roadmap.Digest(spec), Predecessors: []string{}}
 		for _, edge := range graph.Edges {
 			if edge.SuccessorID == t.TaskID {
 				n.Predecessors = append(n.Predecessors, edge.PredecessorID)

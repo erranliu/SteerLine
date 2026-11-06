@@ -30,7 +30,11 @@ func (p *roadmapPort) admissionBatch(ctx context.Context, r roadmap.Record) (tas
 	for _, d := range r.Documents {
 		documents[d.Key] = d
 	}
-	ordered, e := roadmap.Order(r.Analysis.Tasks)
+	analysis, e := roadmap.ValidateAnalysis(*r.Analysis, r.Source, r.Existing)
+	if e != nil {
+		return batch, e
+	}
+	ordered, e := roadmap.Order(analysis.Tasks)
 	if e != nil {
 		return batch, e
 	}

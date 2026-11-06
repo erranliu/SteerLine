@@ -58,6 +58,7 @@ export type RoadmapRecord = {
   revision: number;
   created_at: string;
   state: string;
+  existing?: { id: string; title: string; status?: string }[];
   diagnostic?: string;
   run_id?: string;
   analysis?: { tasks: Node[]; questions: string[]; overlap: string };
@@ -110,11 +111,24 @@ const states: Record<string, string> = {
   "admission-unknown": "入图回执待核实",
   admitted: "已正式入图",
 };
-const dependencies = (d: Dependencies) =>
-  [
-    ...d.local.map((k) => "本 Roadmap " + k),
-    ...d.formal.map((id) => "正式 #" + id),
-  ].join("、") || "无";
+function DependenciesView({ value, existing, dag }: {
+  value: Dependencies;
+  existing: RoadmapRecord["existing"];
+  dag: (id: string) => string;
+}) {
+  const entries = [
+    ...value.local.map((key) => <span key={"local:" + key}>本 Roadmap {key}</span>),
+    ...value.formal.map((id) => {
+      const task = existing?.find((task) => task.id === id);
+      return <Link key={"formal:" + id} to={dag(id)}>
+        正式 #{id}{task ? " · " + task.title : ""}
+      </Link>;
+    }),
+  ];
+  return entries.length ? <>{entries.map((entry, i) =>
+    <span key={entry.key}>{i > 0 && "、"}{entry}</span>,
+  )}</> : <>无</>;
+}
 
 export function Roadmaps() {
   const { api, identity, online, submit, busy, refresh, requests } = useWorkspace();
@@ -477,9 +491,9 @@ export function Roadmaps() {
                         <blockquote>{t.evidence}</blockquote>
                       </details>
                     </td>
-                    <td>{dependencies(t.original_dependencies)}</td>
+                    <td><DependenciesView value={t.original_dependencies} existing={record?.existing} dag={dag} /></td>
                     <td>
-                      {dependencies(t.proposed_dependencies)}
+                      <DependenciesView value={t.proposed_dependencies} existing={record?.existing} dag={dag} />
                       {t.existing_task_id && (
                         <p>
                           <Link to={dag(t.existing_task_id)}>
