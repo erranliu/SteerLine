@@ -245,6 +245,9 @@ func (p *runtimeProjectPort) maintenanceRead(ctx context.Context, route, mode, p
 	if m == nil {
 		return nil, errors.New("maintenance unavailable")
 	}
+	if route == "/maintenance/readiness" {
+		return m.projectReadiness(ctx)
+	}
 	if strings.HasPrefix(route, "/maintenance/tasks/") {
 		return m.taskDocuments(ctx, strings.TrimPrefix(route, "/maintenance/tasks/"))
 	}

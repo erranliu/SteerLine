@@ -12,6 +12,7 @@ import { MemoryRouter } from "react-router-dom";
 import { WorkspaceContext, type Workspace } from "../../app/context";
 import { Api } from "../../shared/api/client";
 import type {
+  ProjectReadiness,
   Candidate,
   Identity,
   Profile,
@@ -156,11 +157,18 @@ function setup({
       },
     ],
   };
-  let materials = { status: materialsStatus, commit: "base" };
+  const readiness = (status: string): ProjectReadiness => ({
+    status: status === "ready" ? "ready" : "not_ready",
+    commit: "base",
+    total: 2,
+    ready: status === "ready" ? 2 : 1,
+    blockers: status === "ready" ? [] : ["任务 #99 的材料与测试安排未就绪"],
+  });
+  let materials = readiness(materialsStatus);
   let materialsError: Error | undefined;
   vi.spyOn(api, "get").mockImplementation(
     async (path) =>
-      (path === "/maintenance/tasks/38?view=status"
+      (path === "/maintenance/readiness"
         ? materialsError
           ? Promise.reject(materialsError)
           : materials
@@ -209,7 +217,7 @@ function setup({
   clients.push(client);
   if (materialsStatus === "ready")
     client.setQueryData(
-      projectQueries(api).taskReadiness("38").queryKey,
+      projectQueries(api).projectReadiness().queryKey,
       materials,
     );
   render(
@@ -226,12 +234,12 @@ function setup({
     api,
     client,
     async updateMaterials(status: string, error?: Error, refresh = true) {
-      materials = { ...materials, status };
+      materials = readiness(status);
       materialsError = error;
       if (!refresh) return;
       await act(async () => {
         await client.refetchQueries({
-          queryKey: projectQueries(api).taskReadiness("38").queryKey,
+          queryKey: projectQueries(api).projectReadiness().queryKey,
         });
       });
     },
@@ -239,7 +247,7 @@ function setup({
 }
 
 it.each([true, false])(
-  "blocks startup until tests are ready and blocks an open confirmation again if preparation changes, firstStart=%s",
+  "blocks startup until every unfinished task is ready and blocks an open confirmation again if preparation changes, firstStart=%s",
   async (firstStart) => {
     const { start, updateMaterials } = setup({
       firstStart,
@@ -249,14 +257,14 @@ it.each([true, false])(
     const button = await screen.findByRole("button", {
       name: firstStart ? "手动启动" : "新增并行候选",
     });
-    await screen.findByText("测试安排生成中");
+    await screen.findByText("任务 #99 的材料与测试安排未就绪");
     expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(start).not.toHaveBeenCalled();
 
-    await updateMaterials("ready", undefined, false);
-    await waitFor(() => expect(button).toBeEnabled(), { timeout: 4000 });
+    await updateMaterials("ready");
+    await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     const confirm = screen.getByRole("button", { name: "确认启动" });
     await waitFor(() => expect(confirm).toBeEnabled());
@@ -290,7 +298,7 @@ it.each([
     const button = await screen.findByRole("button", { name: "手动启动" });
     await waitFor(() =>
       expect(
-        client.getQueryState(projectQueries(api).taskReadiness("38").queryKey)
+        client.getQueryState(projectQueries(api).projectReadiness().queryKey)
           ?.status,
       ).toBe("success"),
     );
@@ -309,7 +317,7 @@ it("disables startup after a failed refresh even with cached ready materials and
   const button = await screen.findByRole("button", { name: "手动启动" });
   await waitFor(() => expect(button).toBeEnabled());
   await updateMaterials("ready", new Error("材料查询失败"));
-  await screen.findByText("测试安排查询失败，等待重新核实");
+  await screen.findByText("项目未就绪（状态查询失败）");
   expect(button).toBeDisabled();
   fireEvent.click(button);
   expect(start).not.toHaveBeenCalled();

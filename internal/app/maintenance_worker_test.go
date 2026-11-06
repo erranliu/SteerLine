@@ -105,7 +105,7 @@ func TestMaintenanceCandidateAdmissionNeverGeneratesMaterials(t *testing.T) {
 		return "", nil
 	})
 	var rejected *taskmodel.Error
-	if !errors.As(err, &rejected) || rejected.Code != "materials_not_ready" || cli.submits != 0 || len(store.materials) != 0 {
+	if !errors.As(err, &rejected) || rejected.Code != "project_not_ready" || cli.submits != 0 || len(store.materials) != 0 {
 		t.Fatal(err)
 	}
 	if err := m.processPreparation(context.Background()); err != nil || cli.submits != 0 || len(store.materials) != 0 {

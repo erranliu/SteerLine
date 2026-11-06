@@ -190,15 +190,17 @@ it("keeps cached output visible while refreshing and stops polling the hidden ou
   client.setQueryData(options.final(run).queryKey, final);
   const get = vi.spyOn(api, "get").mockImplementation(
     async (path) =>
-      (path.includes("/activity?")
-        ? activity
-        : path.includes("/last-message?")
-          ? {
-              run_id: run.execution_id,
-              attempt_id: run.attempt_id,
-              message: null,
-            }
-          : tasks) as never,
+      (path === "/maintenance/readiness"
+        ? { status: "not_ready", commit: "", total: 0, ready: 0, blockers: [] }
+        : path.includes("/activity?")
+          ? activity
+          : path.includes("/last-message?")
+            ? {
+                run_id: run.execution_id,
+                attempt_id: run.attempt_id,
+                message: null,
+              }
+            : tasks) as never,
   );
   let resolve!: (value: unknown) => void;
   const fetchFinal = vi.spyOn(api, "final").mockImplementation(
@@ -310,15 +312,17 @@ it("shows recent changes newest first and keeps each event's workflow context", 
   client.setQueryData(options.activity(run).queryKey, activity);
   vi.spyOn(api, "get").mockImplementation(
     async (path) =>
-      (path.includes("/activity?")
-        ? activity
-        : path.includes("/last-message?")
-          ? {
-              run_id: run.execution_id,
-              attempt_id: run.attempt_id,
-              message: null,
-            }
-          : tasks) as never,
+      (path === "/maintenance/readiness"
+        ? { status: "not_ready", commit: "", total: 0, ready: 0, blockers: [] }
+        : path.includes("/activity?")
+          ? activity
+          : path.includes("/last-message?")
+            ? {
+                run_id: run.execution_id,
+                attempt_id: run.attempt_id,
+                message: null,
+              }
+            : tasks) as never,
   );
   mountFeature(<Runs />, api, client);
   expect(screen.getByText("状态切换：执行中 → 已阻塞")).toBeVisible();
@@ -401,11 +405,13 @@ function stopWorkspace(
   });
   vi.spyOn(api, "get").mockImplementation(
     async (path) =>
-      (path.includes("/activity?")
-        ? { page: { activity: [], diagnostics: [] } }
-        : path.includes("/last-message?")
-          ? { run_id: "execution", attempt_id: "attempt", message: null }
-          : taskPage) as never,
+      (path === "/maintenance/readiness"
+        ? { status: "not_ready", commit: "", total: 0, ready: 0, blockers: [] }
+        : path.includes("/activity?")
+          ? { page: { activity: [], diagnostics: [] } }
+          : path.includes("/last-message?")
+            ? { run_id: "execution", attempt_id: "attempt", message: null }
+            : taskPage) as never,
   );
   const runs = [1, 2, 3].map((number) => ({
     ...run,

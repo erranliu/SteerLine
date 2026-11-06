@@ -56,9 +56,42 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 		candidate.TestPlan, _ = json.Marshal(testmanagement.Snapshot{Project: testmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Status: "ready", PlanPath: c.PlanRef.Path, Commit: commit, GenerationID: material.GenerationID, Inputs: material.Inputs, Definitions: definitions})
 		material.TestPlan = candidate.TestPlan
 		require(t, s.SaveMaterial(ctx, project, material))
+		for _, sibling := range tasks[1:] {
+			other := material
+			other.TaskID = sibling.TaskID
+			require(t, s.SaveMaterial(ctx, project, other))
+		}
 		input.Workflow.PromptOverrides = map[string]string{"implement.execute": testPromptContext(t, candidate.TestPlan)}
 		input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"tests":["one"]}`))}
 		candidate.Submit.Input, _ = json.Marshal(input)
+		if i < 2 {
+			// The chosen task is ready, but another unfinished task changes
+			// after preparation and before this reservation transaction.
+			other, err := s.Material(ctx, project, tasks[1].TaskID)
+			require(t, err)
+			bad := other
+			bad.Status = "failed"
+			require(t, s.SaveMaterial(ctx, project, bad))
+			err = reserveFixtureCandidate(t, s, ctx, work, candidate, i > 0)
+			requireNativeAuditCode(t, err, "project_not_ready")
+			g, err := s.TaskGraphSnapshot(ctx, project)
+			require(t, err)
+			if g.ByID[record.TaskID].Version != record.Version {
+				t.Fatal("project-wide rejection changed the chosen task")
+			}
+			// A sibling generation can be cancelled while its material still
+			// says ready; final admission reads the original generation too.
+			generation, err := s.Generation(ctx, project, material.GenerationID)
+			require(t, err)
+			generation.ID, generation.Cancelled = "sibling-"+commit, true
+			require(t, s.SaveGeneration(ctx, generation, 0))
+			bad = other
+			bad.GenerationID = generation.ID
+			require(t, s.SaveMaterial(ctx, project, bad))
+			err = reserveFixtureCandidate(t, s, ctx, work, candidate, i > 0)
+			requireNativeAuditCode(t, err, "project_not_ready")
+			require(t, s.SaveMaterial(ctx, project, other))
+		}
 		if i == 0 {
 			bad := material
 			bad.Status = "pending"
@@ -91,6 +124,11 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 	}
 
 	// Seven historical versions do not consume the five-current-version limit.
+	other, err := s.Material(ctx, project, tasks[1].TaskID)
+	require(t, err)
+	other.Status = "failed"
+	require(t, s.SaveMaterial(ctx, project, other))
+	// An unready project must not invalidate an already reserved request.
 	require(t, reserveFixtureCandidate(t, s, ctx, firstWork, first, false))
 	saved, e := s.Candidate(ctx, project, first.ID)
 	require(t, e)

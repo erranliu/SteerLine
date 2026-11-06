@@ -61,45 +61,63 @@ function mock() {
       Response.json(
         url === "/api/web/execution-config"
           ? configSnapshot
-          : url.endsWith("/maintenance")
+          : url.endsWith("/maintenance/readiness")
             ? {
-                observation: { commit: "" },
-                tasks: [],
-                profiles: [],
-                profile: "",
+                status: "not_ready",
+                commit: "",
+                total: 0,
+                ready: 0,
+                blockers: [],
               }
-            : url === "/auth/status"
-              ? session
-              : url.endsWith("/projects")
-                ? { projects }
-                : url.endsWith("/identity")
-                  ? identity(url.includes(a) ? a : b)
-                  : url.endsWith("/snapshot")
-                    ? {
-                        connection: {
-                          state: "connected",
-                          can_control: true,
-                          identity_matched: true,
-                          config_matched: true,
-                          snapshot: {
-                            page: {
-                              service: {
-                                instance_id:
-                                  "instance-" + (url.includes(a) ? "a" : "b"),
-                              },
-                              runs: [],
-                              control: {
-                                revision: 1,
-                                dispatch_mode: "manual",
-                                dispatch_paused: false,
+            : url.endsWith("/maintenance")
+              ? {
+                  readiness: {
+                    status: "not_ready",
+                    commit: "",
+                    total: 0,
+                    ready: 0,
+                    blockers: [],
+                  },
+                  observation: { commit: "" },
+                  tasks: [],
+                  profiles: [],
+                  profile: "",
+                }
+              : url === "/auth/status"
+                ? session
+                : url.endsWith("/projects")
+                  ? { projects }
+                  : url.endsWith("/identity")
+                    ? identity(url.includes(a) ? a : b)
+                    : url.endsWith("/snapshot")
+                      ? {
+                          connection: {
+                            state: "connected",
+                            can_control: true,
+                            identity_matched: true,
+                            config_matched: true,
+                            snapshot: {
+                              page: {
+                                service: {
+                                  instance_id:
+                                    "instance-" + (url.includes(a) ? "a" : "b"),
+                                },
+                                runs: [],
+                                control: {
+                                  revision: 1,
+                                  dispatch_mode: "manual",
+                                  dispatch_paused: false,
+                                },
                               },
                             },
                           },
+                        }
+                      : {
+                          presentation: {
+                            profiles: [],
+                            default_profile_id: "",
+                          },
                         },
-                      }
-                    : {
-                        presentation: { profiles: [], default_profile_id: "" },
-                      },
       ),
     ),
   );
@@ -150,19 +168,50 @@ it("recognizes direct roadmap routes, keeps the page when switching projects, an
   const original = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation((...args) =>
     String(args[0]).endsWith("/roadmaps")
-      ? Promise.resolve(Response.json({ sources: [], records: [], profiles: [], documents_available: false, documents_reason: "" }))
+      ? Promise.resolve(
+          Response.json({
+            sources: [],
+            records: [],
+            profiles: [],
+            documents_available: false,
+            documents_reason: "",
+          }),
+        )
       : original(...args),
   );
   mount(`/projects/${a}/roadmaps?source=draft-a`);
-  await screen.findByRole("heading", { name: "Roadmap 草稿" }, { timeout: 5000 });
+  await screen.findByRole(
+    "heading",
+    { name: "Roadmap 草稿" },
+    { timeout: 5000 },
+  );
   expect(screen.getByRole("combobox", { name: "当前项目" })).toHaveValue(a);
-  fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), { target: { value: b } });
-  await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/projects/${b}/roadmaps`));
-  await screen.findByRole("heading", { name: "Roadmap 草稿" }, { timeout: 5000 });
+  fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), {
+    target: { value: b },
+  });
+  await waitFor(() =>
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      `/projects/${b}/roadmaps`,
+    ),
+  );
+  await screen.findByRole(
+    "heading",
+    { name: "Roadmap 草稿" },
+    { timeout: 5000 },
+  );
   fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
-  await waitFor(() => expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute("href", `/projects/${b}/roadmaps`));
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
+      "href",
+      `/projects/${b}/roadmaps`,
+    ),
+  );
   fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
-  await screen.findByRole("heading", { name: "Roadmap 草稿" }, { timeout: 5000 });
+  await screen.findByRole(
+    "heading",
+    { name: "Roadmap 草稿" },
+    { timeout: 5000 },
+  );
 });
 
 it("cancels the old project's pending preload and never installs its late response in the new cache", async () => {

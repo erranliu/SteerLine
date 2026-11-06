@@ -239,7 +239,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.storage",
-      "check": "固定 ./internal/storage/sqlite、./internal/pathguard 普通测试完整执行，隔离数据库/路径，非零用例、零跳过、断言通过。",
+      "check": "固定 ./internal/storage/sqlite、./internal/pathguard 普通测试完整执行，隔离数据库/路径，非零用例、零跳过、断言通过；含全部未完成任务材料/生成资格在候选事务内重核、阻断原子回滚及已有候选原请求重放。",
       "note": "Go/Git；平台专属文件沿 Go 平台选择；不代表其他平台或 go.full 通过。"
     },
     {

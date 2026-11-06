@@ -77,7 +77,7 @@ func TestUnifiedStartupAuthenticationRoutesAndUnavailable(t *testing.T) {
 }
 
 func TestPMReadRoutesKeepMaintenanceWritesOnCommands(t *testing.T) {
-	for _, route := range []string{"/maintenance", "/maintenance/tasks/1", "/tests/generations/" + strings.Repeat("a", 32)} {
+	for _, route := range []string{"/maintenance", "/maintenance/readiness", "/maintenance/tasks/1", "/tests/generations/" + strings.Repeat("a", 32)} {
 		if !httpcontract.AllowedProjectRead(route) {
 			t.Fatal("missing read", route)
 		}

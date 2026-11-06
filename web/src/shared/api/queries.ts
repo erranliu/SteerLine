@@ -3,6 +3,7 @@ import type { Api } from "./client";
 import type { RunUsageView } from "./run-usage";
 import type { PlanTestsView } from "../../features/runs/plan-tests";
 import type {
+  ProjectReadiness,
   Activity,
   LastMessageView,
   Candidate,
@@ -24,6 +25,13 @@ export function projectQueries(api: Api) {
   ] as const;
   const defaults = { staleTime: 1000, retry: false } as const;
   return {
+    projectReadiness: () =>
+      queryOptions({
+        ...defaults,
+        queryKey: [...scope, "project-readiness"],
+        queryFn: ({ signal }) =>
+          api.get<ProjectReadiness>("/maintenance/readiness", signal),
+      }),
     taskReadiness: (id: string) =>
       queryOptions({
         retry: false,
@@ -236,6 +244,7 @@ export function projectQueries(api: Api) {
 }
 
 const taskResources = new Set([
+  "project-readiness",
   "snapshot",
   "tasks",
   "task",

@@ -10,7 +10,7 @@ import {
 import { useWorkspace } from "../../app/context";
 import { RoadmapTaskSource } from "../roadmaps/roadmaps";
 import { TaskMaterials } from "./task-materials";
-import { useTestReadiness } from "./use-test-readiness";
+import { useProjectReadiness } from "../project-maintenance/use-readiness";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { participating } from "../runs/state";
@@ -26,7 +26,7 @@ export function TaskDetail({
   const { api, online, snapshot, candidateStarts } = useWorkspace();
   const navigate = useNavigate();
   const environment = useEnvironmentReadiness();
-  const tests = useTestReadiness(id);
+  const project = useProjectReadiness();
   const [params] = useSearchParams();
   const restored =
     params.get("task") === id ? params.get("start_profile") || "" : "";
@@ -135,7 +135,7 @@ export function TaskDetail({
       : preparation?.status === "ready"
         ? ""
         : preparation?.reason || "环境准备状态尚未核实";
-  const entryReason = startReason || tests.reason;
+  const entryReason = startReason || project.reason;
   const reason = entryReason || profileReason || environmentReason;
   if (!task)
     return (
@@ -189,10 +189,12 @@ export function TaskDetail({
       <div className="detail-section">
         <h3>交付与执行</h3>
         {!task.delivery && (
-          <div role="status" aria-label="当前测试安排">
-            <p className="muted">{tests.text}</p>
-            {tests.diagnostic && <p className="muted">{tests.diagnostic}</p>}
-            {!tests.ready && (
+          <div role="status" aria-label="项目就绪状态">
+            <p className="muted">{project.text}</p>
+            {project.diagnostic && (
+              <p className="muted">{project.diagnostic}</p>
+            )}
+            {!project.ready && (
               <Link
                 to={`/projects/${api.identity.project_id}/dag?maintenance=preparation&task=${encodeURIComponent(id)}`}
               >
