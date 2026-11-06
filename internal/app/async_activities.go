@@ -39,7 +39,7 @@ func (p *runtimeProjectPort) readAsyncActivities(ctx context.Context, values url
 	if !ok {
 		return nil, &httpclient.ClientError{Status: 503, Code: "activities_unavailable", Reason: "activity reader unavailable"}
 	}
-	options := query.AsyncActivityOptions{PublicProjectID: string(httpcontract.ProjectID(p.config.Identity())), Sources: []string{"environment_detection", "baseline_check", "test_preparation", "task_candidate"}, Filter: values.Get("filter"), Cursor: values.Get("cursor"), Limit: limit, RequestIDs: query.ParseAsyncActivityRequestIDs(values.Get("request_ids"))}
+	options := query.AsyncActivityOptions{PublicProjectID: string(httpcontract.ProjectID(p.config.Identity())), Filter: values.Get("filter"), Cursor: values.Get("cursor"), Limit: limit, RequestIDs: query.ParseAsyncActivityRequestIDs(values.Get("request_ids"))}
 	var result any
 	var err error
 	if mode == "links" {

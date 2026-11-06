@@ -17,6 +17,7 @@ import { identity, mountFeature, testClient } from "../../test/workspace";
 import { Activities } from "./activities";
 import {
   provisionalActivities,
+  activityDestination,
   type Activity,
   type ActivityPage,
 } from "./model";
@@ -46,6 +47,66 @@ const activity: Activity = {
   observation: "current",
   details_ref: { kind: "candidate", target: "start", task_id: "1" },
 };
+it.each([
+  ["roadmap_parse", "提交 Roadmap 草稿解析", "roadmap-source", "source"],
+  [
+    "roadmap_generate_documents",
+    "提交 Spec / Plan / 验收文档生成",
+    "roadmap",
+    "record",
+  ],
+  ["roadmap_publish", "提交 Roadmap 文档发布", "roadmap", "record"],
+  ["roadmap_admit", "提交 Roadmap 入图", "roadmap", "record"],
+])(
+  "tracks %s until its original roadmap record is linked",
+  (action, title, kind, query) => {
+    const request = {
+      envelope: {
+        request_id: "request",
+        project_id: "project",
+        instance_id: "instance",
+        action,
+        target_id: "target",
+      },
+    } as StoredRequest;
+    const provisional = provisionalActivities(
+      "project",
+      "instance",
+      [request],
+      [],
+      {},
+      [],
+    );
+    expect(provisional).toHaveLength(1);
+    expect(provisional[0].title).toBe(title);
+    expect(provisional[0].details_ref.kind).toBe(kind);
+    expect(activityDestination("project", provisional[0])).toBe(
+      `/projects/project/roadmaps?${query}=target`,
+    );
+    const official = {
+      ...activity,
+      source: "roadmap",
+      request_ids: ["request"],
+      details_ref: { kind: "roadmap", target: "original-record" },
+    };
+    expect(
+      provisionalActivities(
+        "project",
+        "instance",
+        [request],
+        [],
+        { request: official },
+        [],
+      ),
+    ).toHaveLength(0);
+    expect(activityDestination("project", official)).toBe(
+      "/projects/project/roadmaps?record=original-record",
+    );
+    expect(
+      provisionalActivities("project", "new-instance", [request], [], {}, []),
+    ).toHaveLength(0);
+  },
+);
 function page(items: Activity[] = []): ActivityPage {
   return {
     project_id: "project",

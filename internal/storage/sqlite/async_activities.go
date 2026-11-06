@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"strings"
@@ -55,6 +56,24 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		finished = "json_extract(CAST(a.payload AS TEXT),'$.projection.updated_at')"
 		related = `json_object('task_status',(SELECT t.status FROM tasks t WHERE t.project_identity=a.project_identity AND t.task_id=a.task_id),'title',(SELECT json_extract(CAST(t.payload AS TEXT),'$.title') FROM tasks t WHERE t.project_identity=a.project_identity AND t.task_id=a.task_id),'winner',(SELECT d.selected_workflow_run_id FROM task_deliveries d WHERE d.project_identity=a.project_identity AND d.task_id=a.task_id),'progress',json((SELECT CAST(p.payload AS TEXT) FROM candidate_progress p WHERE p.project_identity=a.project_identity AND p.candidate_id=a.candidate_id)))`
 		request = "a.candidate_id IN (%s)"
+	case "roadmap":
+		table = `(SELECT *,row_number() OVER (PARTITION BY project_identity,json_extract(payload,'$.source.id') ORDER BY json_extract(payload,'$.created_at') DESC,roadmap_id DESC) AS source_rank FROM roadmaps) a`
+		id = "a.roadmap_id"
+		payload = `json_object('project',a.project_identity,'id',a.roadmap_id,'revision',a.revision,
+		'purpose',json_extract(a.payload,'$.purpose'),'state',json_extract(a.payload,'$.state'),
+		'created_at',json_extract(a.payload,'$.created_at'),'request_id',json_extract(a.payload,'$.request_id'),
+		'diagnostic',json_extract(a.payload,'$.diagnostic'),'submission',json_extract(a.payload,'$.submission'),
+		'cancelled',json(CASE WHEN json_extract(a.payload,'$.cancelled') THEN 'true' ELSE 'false' END),'source',json_object('path',json_extract(a.payload,'$.source.path')),
+		'publication',json_extract(a.payload,'$.publication'),
+		'operation',json((SELECT json_object('status',c.status,'instance',json_extract(c.payload,'$.instance_id')) FROM commands c WHERE c.project_identity=a.project_identity AND c.kind='roadmap_command' AND c.target_id=a.roadmap_id AND json_extract(c.payload,'$.action') IN ('roadmap_publish','roadmap_admit','roadmap_resume') ORDER BY c.created_at DESC,c.command_id DESC LIMIT 1)),
+		'projection',CASE WHEN json_type(a.payload,'$.projection')='object' THEN json_object(
+		'status',json_extract(a.payload,'$.projection.status'),'stop_status',json_extract(a.payload,'$.projection.stop_status'),
+		'resume_required',json(CASE WHEN json_extract(a.payload,'$.projection.resume_required') THEN 'true' ELSE 'false' END),'updated_at',json_extract(a.payload,'$.projection.updated_at')) ELSE NULL END)`
+		created = "json_extract(a.payload,'$.created_at')"
+		finished = "CASE WHEN json_type(a.payload,'$.publication') IS NULL THEN json_extract(a.payload,'$.projection.updated_at') ELSE NULL END"
+		related = `json_object('current',a.source_rank=1,
+		'requests',json((SELECT COALESCE(json_group_array(r.request_id),'[]') FROM roadmap_requests r WHERE r.project_identity=a.project_identity AND r.roadmap_id=a.roadmap_id)))`
+		request = `EXISTS(SELECT 1 FROM roadmap_requests r WHERE r.project_identity=a.project_identity AND r.roadmap_id=a.roadmap_id AND r.request_id IN (%s))`
 	default:
 		return nil, false, fmt.Errorf("unknown activity source %q", in.Source)
 	}
@@ -167,6 +186,13 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 			}
 			relation["settled"] = record.Settled()
 			relation["domain_diagnostic"] = record.DiagnosticText()
+		}
+		if in.Source == "roadmap" {
+			var record roadmap.Stored
+			if err = json.Unmarshal(f.Payload, &record); err != nil {
+				return nil, false, err
+			}
+			relation["settled"] = record.Value().Settled()
 		}
 		if in.Source == "test_preparation" {
 			var relationValues struct {
