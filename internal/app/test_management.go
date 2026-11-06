@@ -140,12 +140,9 @@ func (p *testManagementPort) close() error {
 }
 
 func (p *testManagementPort) observe(ctx context.Context) error {
-	stages := []func(context.Context) error{p.progress.ObserveNext, p.service.ObserveNext}
+	stages := []func(context.Context) error{p.progress.ObserveNext}
 	if p.roadmaps != nil {
 		stages = append(stages, p.roadmaps.service.ObserveNext)
-	}
-	if p.maintenance != nil {
-		stages = append(stages, p.maintenance.refresh)
 	}
 	var failures []error
 	for range stages {
@@ -157,5 +154,5 @@ func (p *testManagementPort) observe(ctx context.Context) error {
 		p.nextObservation = (index + 1) % len(stages)
 		failures = append(failures, stages[index](ctx))
 	}
-	return errors.Join(failures...)
+	return errors.Join(append(failures, ctx.Err())...)
 }

@@ -532,7 +532,7 @@ func tmPoll(ctx context.Context, check func() (bool, error)) error {
 	}
 }
 
-// WaitFixtureMaterials observes the product's automatic generator. It never
+// WaitFixtureMaterials registers preparation through project maintenance. It never
 // supplies a result, writes an arrangement, or approves a material version.
 func WaitFixtureMaterials(ctx context.Context, home string, identity httpcontract.Identity, plan, out string) (pmm.Material, error) {
 	var material pmm.Material
@@ -545,7 +545,7 @@ func WaitFixtureMaterials(ctx context.Context, home string, identity httpcontrac
 	}
 	defer client.Close()
 	body := json.RawMessage(`{}`)
-	in := httpcontract.CommandEnvelope{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "maintenance_check", TargetID: identity.ProjectID, ExpectedVersion: 1, Payload: body}
+	in := httpcontract.CommandEnvelope{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "maintenance_generate_all", TargetID: identity.ProjectID, ExpectedVersion: 1, Payload: body}
 	var response httpcontract.CommandResponse
 	if e = client.Post(ctx, "/projects/"+identity.ProjectID+"/commands", in, &response); e != nil {
 		return material, e

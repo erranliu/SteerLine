@@ -74,7 +74,7 @@ func TestTMAuxiliaryStagesAdvanceAfterCancellation(t *testing.T) {
 		t.Fatal("cancelled stage did not yield", err, store.generations)
 	}
 	store.cancel = nil
-	if err := p.observe(context.Background()); err == nil || store.generations != 1 {
-		t.Fatal("next stage was starved or its error hidden", err, store.generations)
+	if err := p.observe(context.Background()); err == nil || store.generations != 0 {
+		t.Fatal("actor polled maintenance generations or hid its progress error", err, store.generations)
 	}
 }

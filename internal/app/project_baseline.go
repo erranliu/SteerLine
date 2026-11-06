@@ -167,7 +167,18 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 	for _, task := range graph.Tasks {
 		value, e := store.Material(ctx, m.config.Identity(), task.TaskID)
 		if e == nil {
+			if value.Commit != o.Commit || o.Diagnostic != "" {
+				value.Status = "unknown"
+			}
 			materials = append(materials, value)
+		} else if errors.Is(e, storageports.ErrNotFound) && (task.Status == "open" || task.Status == "in_progress") {
+			contract, err := m.store.TaskContract(ctx, m.config.Identity(), task)
+			if err != nil {
+				return nil, err
+			}
+			materials = append(materials, pm.Material{TaskID: task.TaskID, Contract: contract, Status: "unprepared", Diagnostic: "请准备材料与测试安排"})
+		} else if !errors.Is(e, storageports.ErrNotFound) {
+			return nil, e
 		}
 	}
 	type profile struct {
@@ -187,6 +198,16 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 			return nil, err
 		}
 		progress = m.batchProgress(ctx, batch)
+		if batch.Status == "queued" || batch.Status == "preparing" {
+			for i := range materials {
+				for _, item := range batch.Items {
+					if materials[i].TaskID == item.TaskID {
+						materials[i].Status = "preparing"
+						materials[i].Diagnostic = "正在准备任务材料与测试安排"
+					}
+				}
+			}
+		}
 	}
 	local := m.localBaseline(ctx)
 	remote := m.commitInfo(ctx, o.Commit, true)

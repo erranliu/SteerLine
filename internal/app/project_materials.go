@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"time"
 
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance"
 	pmm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
@@ -79,14 +81,22 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 	return result, nil
 }
 
-// refresh runs under the existing project actor. Queries never call it.
+// Material preparation belongs to the maintenance worker, never to a query or
+// the candidate/auxiliary actor's five-second observation budget.
 func (m *projectMaintenance) refresh(ctx context.Context) error {
+	return m.refreshMaterials(ctx, nil, true, "", "")
+}
+
+func (m *projectMaintenance) refreshMaterials(ctx context.Context, selected map[string]bool, prepare bool, profile, commit string) error {
 	ctx = materialReads(ctx)
 	store, ok := m.store.(materialStore)
 	if !ok {
 		return errors.New("project material store unavailable")
 	}
 	observed := m.current()
+	if commit != "" {
+		observed.Commit = commit
+	}
 	if observed.Commit == "" || observed.Diagnostic != "" {
 		return m.completeGenerationBatch(ctx)
 	}
@@ -97,19 +107,33 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 	tasks := append([]taskmodel.TaskRecord(nil), graph.Tasks...)
 	sort.Slice(tasks, func(i, j int) bool { return tasks[i].TaskID < tasks[j].TaskID })
 	for _, task := range tasks {
+		if selected != nil && !selected[task.TaskID] {
+			continue
+		}
 		if task.Status != "open" && task.Status != "in_progress" {
 			continue
 		}
 		previous, previousErr := store.Material(ctx, m.config.Identity(), task.TaskID)
+		if previousErr != nil && !errors.Is(previousErr, storageports.ErrNotFound) {
+			return previousErr
+		}
+		if !prepare && (previousErr != nil || previous.Commit != observed.Commit || previous.Digest == "") {
+			continue
+		}
 		material := previous
 		var inputErr error
 		if previousErr != nil || previous.Commit != observed.Commit || previous.Status == "pending" && previous.Digest == "" {
-			material, inputErr = m.materialInput(ctx, task, observed.Commit)
+			readCtx, cancel := context.WithTimeout(ctx, positiveDuration(m.config.CommandTimeout, time.Minute))
+			material, inputErr = m.materialInput(readCtx, task, observed.Commit)
+			cancel()
 		}
 		if previousErr == nil && previous.Commit == observed.Commit && previous.Status == "invalid" && previous.Digest == "" {
 			continue
 		}
 		if inputErr != nil {
+			if isRetryableMaterialRead(inputErr) {
+				material.Status = "pending"
+			}
 			material.Diagnostic = inputErr.Error()
 			if e = store.SaveMaterial(ctx, m.config.Identity(), material); e != nil {
 				return e
@@ -178,11 +202,17 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 			material.Status = "failed"
 			material.Diagnostic = previous.Diagnostic
 		} else {
-			profile := store.MaterialProfile(ctx, m.config.Identity())
-			if profile == "" {
-				profile = m.config.RunnerExecution.DefaultProfile
+			if !prepare {
+				continue
 			}
-			p, err := m.config.RunnerExecution.Profile(profile, "")
+			selectedProfile := profile
+			if selectedProfile == "" {
+				selectedProfile = store.MaterialProfile(ctx, m.config.Identity())
+			}
+			if selectedProfile == "" {
+				selectedProfile = m.config.RunnerExecution.DefaultProfile
+			}
+			p, err := m.config.RunnerExecution.Profile(selectedProfile, "")
 			if err == nil {
 				_, err = runnerclient.GenerationExecution(p.Execution)
 			}
@@ -216,7 +246,7 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 				if e = store.SaveMaterial(ctx, m.config.Identity(), material); e != nil {
 					return e
 				}
-				generated, generateErr := m.tests.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: material.GenerationID, Plan: material.Contract.PlanRef.Path, Profile: profile, Commit: observed.Commit})
+				generated, generateErr := m.tests.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: material.GenerationID, Plan: material.Contract.PlanRef.Path, Profile: selectedProfile, Commit: observed.Commit})
 				err = generateErr
 				if err != nil {
 					material.Status = "failed"
@@ -259,6 +289,9 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 			_, _ = m.tests.service.Stop(ctx, g.ID, pmm.Hash([]string{g.ID, "superseded"})[:32])
 		}
 	}
+	if !prepare {
+		return m.completeGenerationBatch(ctx)
+	}
 	return m.syncGenerationBatch(ctx)
 }
 
@@ -285,16 +318,19 @@ func (m *projectMaintenance) prepareLatest(ctx context.Context, w taskmodel.Fixe
 	if _, e := m.check(ctx); e != nil {
 		return w, "", e
 	}
-	if e := m.refresh(ctx); e != nil {
-		return w, "", e
-	}
 	store, ok := m.store.(materialStore)
 	if !ok {
 		return w, "", errors.New("project material store unavailable")
 	}
 	material, e := store.Material(ctx, m.config.Identity(), w.Record.TaskID)
+	if errors.Is(e, storageports.ErrNotFound) {
+		return w, "", &taskmodel.Error{Code: "materials_not_ready", Message: "请先前往项目维护准备材料与测试安排"}
+	}
 	if e != nil {
 		return w, "", e
+	}
+	if material.Commit != m.current().Commit {
+		return w, "", &taskmodel.Error{Code: "materials_not_ready", Message: "远端文档版本已变化，请前往项目维护重新准备材料与测试安排"}
 	}
 	if material.Status != "ready" {
 		return w, "", &taskmodel.Error{Code: "materials_not_ready", Message: "测试安排尚未就绪：" + material.Status + " " + material.Diagnostic}
@@ -397,6 +433,17 @@ func (m *projectMaintenance) taskReadiness(ctx context.Context, id string) (task
 		return taskPreparation{}, errors.New("material store unavailable")
 	}
 	latest, err := store.Material(ctx, m.config.Identity(), id)
+	if errors.Is(err, storageports.ErrNotFound) {
+		graph, graphErr := m.store.TaskGraphSnapshot(ctx, m.config.Identity())
+		if graphErr != nil {
+			return taskPreparation{}, graphErr
+		}
+		for _, task := range graph.Tasks {
+			if task.TaskID == id {
+				return taskPreparation{Status: "unprepared", Diagnostic: "请前往项目维护准备材料与测试安排"}, nil
+			}
+		}
+	}
 	if err != nil {
 		return taskPreparation{}, err
 	}
@@ -409,6 +456,16 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 		return nil, errors.New("material store unavailable")
 	}
 	latest, e := store.Material(ctx, m.config.Identity(), id)
+	if errors.Is(e, storageports.ErrNotFound) {
+		status, err := m.taskReadiness(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		return struct {
+			taskPreparation
+			Files []any `json:"files"`
+		}{status, []any{}}, nil
+	}
 	if e != nil {
 		return nil, e
 	}

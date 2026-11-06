@@ -14,62 +14,77 @@ import (
 func TestGQBatchReusesActiveAndPersistsCompletion(t *testing.T) {
 	ctx := context.Background()
 	m, store, cli := pmsFixture(t)
-	// Two tasks share exactly the same generator inputs: one generation item.
 	duplicate := store.graph.Tasks[0]
 	duplicate.TaskID = "102"
 	store.graph.Tasks = append(store.graph.Tasks, duplicate)
-	if _, err := m.check(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := m.refresh(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if cli.submits != 1 || len(store.batch.Items) != 1 {
-		t.Fatal("shared input not deduplicated", store.batch)
-	}
-	// A completed item remains in the same active batch across another click.
-	completed := store.generations[store.materials["101"].GenerationID]
-	completed.ID, completed.Inputs, completed.State = "previous", "previous-input", "generated"
-	completed.Projection = &runnercontract.Run{StopStatus: "stopped"}
-	store.generations[completed.ID] = completed
-	store.batch.Items = append(store.batch.Items, pm.GenerationBatchItem{TaskID: "previous-task", Inputs: completed.Inputs, GenerationID: completed.ID})
 	id := strings.Repeat("d", 32)
 	p, err := m.generateAll(ctx, id)
-	if err != nil || p.Total != 2 || p.Running != 1 || p.Succeeded != 1 {
-		t.Fatal(p, err)
+	if err != nil || p.Total != 2 || p.Status != "queued" || cli.submits != 0 || len(store.materials) != 0 {
+		t.Fatal("registration performed preparation inline", p, err)
+	}
+	if err = m.processPreparation(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if cli.submits != 1 {
+		t.Fatal("shared Plan was not deduplicated", cli.submits)
+	}
+	p = m.batchProgress(ctx, store.batch)
+	if p.Running != 2 {
+		t.Fatal(p)
 	}
 	if _, err = m.generateAll(ctx, id); err != nil || cli.submits != 1 {
 		t.Fatal("batch replay submitted", err)
 	}
 	cli.finish()
-	if err = m.tests.service.Observe(ctx); err != nil {
-		t.Fatal(err)
-	}
-	m.observation.Diagnostic = "remote temporarily offline"
-	if err = m.refresh(ctx); err != nil {
+	if err = m.processPreparation(ctx); err != nil {
 		t.Fatal(err)
 	}
 	batch := store.batch
 	p = m.batchProgress(ctx, batch)
-	if p.Succeeded != 2 || p.CompletedAt == nil {
+	if p.Succeeded != 2 || p.CompletedAt == nil || p.Status != "completed" {
 		t.Fatal(p)
 	}
-	if err = m.refresh(ctx); err != nil {
+	if err = m.processPreparation(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if !store.batch.CompletedAt.Equal(*batch.CompletedAt) {
 		t.Fatal("completion timestamp restarted")
 	}
-	if _, err := m.generateAll(ctx, id); err != nil || !store.batch.CompletedAt.Equal(*batch.CompletedAt) {
-		t.Fatal("lost outer receipt reset the completed display window", err)
+	if _, err = m.generateAll(ctx, id); err != nil || !store.batch.CompletedAt.Equal(*batch.CompletedAt) {
+		t.Fatal("replay reset completion", err)
 	}
 	reopened := newProjectMaintenance(m.config, store)
 	p = reopened.batchProgress(ctx, store.batch)
 	if p.Succeeded != 2 || !p.CompletedAt.Equal(*batch.CompletedAt) {
-		t.Fatal("page/restart lost progress", p)
+		t.Fatal("restart lost progress", p)
 	}
-	if _, err = m.generateAll(ctx, strings.Repeat("e", 32)); err != nil || cli.submits != 1 {
+	if _, err = m.generateAll(ctx, strings.Repeat("e", 32)); err != nil {
+		t.Fatal(err)
+	}
+	if err = m.processPreparation(ctx); err != nil || cli.submits != 1 {
 		t.Fatal("ready item regenerated", err)
+	}
+}
+
+func TestGQOriginalObservationRecoveryCompletesOnlyCurrentSource(t *testing.T) {
+	m, store, _ := pmsFixture(t)
+	m.observation.Commit = "source"
+	store.materials["101"] = pm.Material{TaskID: "101", Commit: "source", Status: "ready", Inputs: "inputs", GenerationID: "generation"}
+	batch := pm.GenerationBatch{ID: "batch", Commit: "source", Status: "failed", Diagnostic: "original result was unknown", Items: []pm.GenerationBatchItem{{TaskID: "101", Inputs: "inputs", GenerationID: "generation"}}}
+	store.batch = batch
+	if err := m.completeGenerationBatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if store.batch.Status != "completed" || store.batch.Diagnostic != "" || store.batch.CompletedAt == nil {
+		t.Fatal("recovered original generation still looked failed", store.batch)
+	}
+	store.batch = batch
+	m.observation.Commit = "new-source"
+	if err := m.completeGenerationBatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if store.batch.Status != "failed" || store.batch.CompletedAt != nil {
+		t.Fatal("stale source was declared completed", store.batch)
 	}
 }
 
@@ -112,7 +127,14 @@ func TestGQBatchRetriesSettledFailureOnceAndBlocksUnknown(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, err := m.generateAll(ctx, strings.Repeat("b", 32))
-	if err != nil || p.Running != 1 || cli.submits != 2 {
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = m.processPreparation(ctx); err != nil {
+		t.Fatal(err)
+	}
+	p = m.batchProgress(ctx, store.batch)
+	if p.Running != 1 || cli.submits != 2 {
 		t.Fatal(p, cli.submits, err)
 	}
 	if _, err = m.generateAll(ctx, strings.Repeat("b", 32)); err != nil || cli.submits != 2 {

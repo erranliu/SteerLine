@@ -67,13 +67,9 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 			out.Diagnostic = e.Error()
 			var external *runnerclient.Failure
 			durableUnknown := false
-			if in.Action == "maintenance_generate_all" {
+			if in.Action == "maintenance_generate_all" || in.Action == "maintenance_retry" {
 				_, readErr := p.config.runtimeMaintenance.store.MaintenanceReceipt(context.WithoutCancel(ctx), p.config.Identity(), in.RequestID)
 				durableUnknown = readErr == nil
-			}
-			if in.Action == "maintenance_retry" {
-				g, readErr := p.config.runtimeMaintenance.store.Generation(context.WithoutCancel(ctx), p.config.Identity(), in.RequestID)
-				durableUnknown = readErr == nil && g.State != "rejected"
 			}
 			if in.Action == "maintenance_stop_generation" {
 				var target api.TestStopGenerationRequest
@@ -92,9 +88,6 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 				out.Status = update.Status
 				out.Code = update.Status
 				out.Diagnostic = update.Diagnostic
-			}
-			if g, ok := result.(api.TestGeneration); ok && in.Action == "maintenance_retry" && g.RunID == "" && g.State == "unknown" {
-				out.Status = "outcome_unknown"
 			}
 		}
 		// An accepted external operation keeps its own original durable ID even if this write fails.
@@ -119,7 +112,7 @@ func (p *runtimeProjectPort) maintenanceAction(ctx context.Context, in httpcontr
 		if _, e := m.check(ctx); e != nil {
 			return nil, e
 		}
-		return nil, m.refresh(ctx)
+		return nil, nil
 	case "maintenance_update":
 		if e := decodeStrictJSON(in.Payload, &struct{}{}); e != nil {
 			return nil, e
@@ -149,7 +142,7 @@ func (p *runtimeProjectPort) maintenanceAction(ctx context.Context, in httpcontr
 		if e = store.SetMaterialProfile(ctx, m.config.Identity(), v.Profile); e != nil {
 			return nil, e
 		}
-		return nil, m.refresh(ctx)
+		return nil, nil
 	case "maintenance_retry":
 		var v struct {
 			TaskID string `json:"task_id"`
@@ -160,11 +153,7 @@ func (p *runtimeProjectPort) maintenanceAction(ctx context.Context, in httpcontr
 		if in.TargetID != v.TaskID || in.ExpectedVersion != 1 {
 			return nil, errors.New("retry target mismatch")
 		}
-		g, e := m.retryGeneration(ctx, v.TaskID, in.RequestID)
-		if e == nil {
-			e = m.syncGenerationBatch(ctx)
-		}
-		return publicGeneration(g), e
+		return m.requestPreparation(ctx, in.RequestID, v.TaskID)
 	case "maintenance_generate_all":
 		if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
 			return nil, errors.New("generation target/version mismatch")
@@ -204,10 +193,10 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 	if e == nil && out.Status == "outcome_unknown" {
 		var value any
 		switch in.Action {
-		case "maintenance_generate_all":
+		case "maintenance_generate_all", "maintenance_retry":
 			if raw, err := p.config.runtimeMaintenance.store.MaintenanceReceipt(ctx, p.config.Identity(), in.RequestID); err == nil {
 				var batch pm.GenerationBatch
-				if json.Unmarshal(raw, &batch) == nil && batch.ID == in.RequestID && batch.Processed {
+				if json.Unmarshal(raw, &batch) == nil && batch.Processed {
 					value = p.config.runtimeMaintenance.batchProgress(ctx, batch)
 					out.Status = "applied"
 				}
@@ -218,15 +207,6 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 				value = fact
 				out.Status = fact.Status
 				out.Diagnostic = fact.Diagnostic
-			}
-		case "maintenance_retry":
-			if g, err := p.config.runtimeMaintenance.store.Generation(ctx, p.config.Identity(), in.RequestID); err == nil {
-				value = publicGeneration(g)
-				if g.RunID != "" {
-					out.Status = "applied"
-				} else if g.State == "rejected" {
-					out.Status = "rejected"
-				}
 			}
 		case "maintenance_stop_generation":
 			var target struct {
