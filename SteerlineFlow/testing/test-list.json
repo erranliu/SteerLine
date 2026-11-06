@@ -1,6 +1,15 @@
 {
   "tests": [
     {
+      "id": "runtime.async-activities",
+      "name": "异步活动中心只读观察与抽屉",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.async-activities",
+      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测、准备与候选可发现，PR-ready保持等待；跨路由、320px模态、键盘焦点、观察断连保留、刷新及同构建重启原活动/Run不变，零新增执行输入，最终唯一交付及资源结算。",
+      "note": "Windows/Go/Git、Node/npm/Edge；先 npm --prefix web ci 和 npm --prefix web run build，场景只读共享资产/依赖，Web EXE由本次构建冻结；home/repo/DB/provider/端口/浏览器/证据独立，不依赖其他场景产物。总并发最多二；受控不证明真实模型/PR。"
+    },
+    {
       "id": "recovery.runner-wait-retry",
       "name": "Runner 准备读取等待与恢复展示",
       "level": "L3",

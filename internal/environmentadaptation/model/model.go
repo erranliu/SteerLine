@@ -132,22 +132,24 @@ type Round struct {
 	TimedOut             bool                       `json:"timed_out"`
 }
 type Record struct {
-	FormatVersion  int                           `json:"format_version"`
-	ID             string                        `json:"id"`
-	Project        string                        `json:"project"`
-	Revision       uint64                        `json:"revision"`
-	Kind           string                        `json:"kind"`
-	Profile        string                        `json:"profile_id"`
-	Execution      runnercontract.ExecutionInput `json:"execution"`
-	Build          runnercontract.BuildPin       `json:"runner"`
-	CreatedAt      time.Time                     `json:"created_at"`
-	Requests       []Request                     `json:"requests"`
-	Prepared       Prepared                      `json:"prepared"`
-	TimeoutSeconds int                           `json:"round_timeout_seconds"`
-	Rounds         []Round                       `json:"rounds"`
-	State          string                        `json:"state"`
-	Diagnostic     string                        `json:"diagnostic,omitempty"`
-	Cancelled      bool                          `json:"cancelled"`
+	FormatVersion         int                           `json:"format_version"`
+	ObservedAt            *time.Time                    `json:"observed_at,omitempty"`
+	ObservationDiagnostic string                        `json:"observation_diagnostic,omitempty"`
+	ID                    string                        `json:"id"`
+	Project               string                        `json:"project"`
+	Revision              uint64                        `json:"revision"`
+	Kind                  string                        `json:"kind"`
+	Profile               string                        `json:"profile_id"`
+	Execution             runnercontract.ExecutionInput `json:"execution"`
+	Build                 runnercontract.BuildPin       `json:"runner"`
+	CreatedAt             time.Time                     `json:"created_at"`
+	Requests              []Request                     `json:"requests"`
+	Prepared              Prepared                      `json:"prepared"`
+	TimeoutSeconds        int                           `json:"round_timeout_seconds"`
+	Rounds                []Round                       `json:"rounds"`
+	State                 string                        `json:"state"`
+	Diagnostic            string                        `json:"diagnostic,omitempty"`
+	Cancelled             bool                          `json:"cancelled"`
 }
 
 func (r Record) Settled() bool {

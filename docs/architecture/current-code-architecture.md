@@ -108,3 +108,7 @@ flowchart LR
 ## 维护范围
 
 随实现更新受影响的图、模块与来源链接；格式版本唯一定位在数据模型，不在本页重复数字。技术栈和开发操作归 Web README；任务安排归 Spec/Plan，审计及验证归[历史证据入口](../../SteerlineFlow/archive/design/architecture-web-history.md)。本页不追加日期增量、已完成任务清单或拟议模块。
+
+## 统一异步观察
+
+`storage/ports.AsyncActivityReader` 提供中性有界事实；SQLite 单条查询获取来源及关联，产品 `query/async_activities.go` 只做状态、相关性与列表投影。App 注入四个静态来源并暴露 `GET /activities`，绕开 actor 的业务执行路径；不调用 Runner 或 Git。业务 owner 负责批次/关联/观察元数据的持久化，读取方没有执行能力。Web 的 App 在 keyed Workspace 外保存抽屉偏好，Workspace 内按 home/project/instance 保存查询；入口通过 slot 交给应用壳。设计与扩展约定见[异步活动中心](../product-design/async-activities.md)，实际验证见[专属验收](../../SteerlineFlow/testing/acceptance/async-activity-center.md)。

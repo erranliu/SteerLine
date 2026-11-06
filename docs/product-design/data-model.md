@@ -1,6 +1,6 @@
 # 任务、候选与交付数据模型
 
-本文维护调用方实体、身份与事务不变量。SteerLine 与 Runner 分别单写自己的数据库，只通过公开契约协作；旧开发格式不读取、迁移、双写或回退。当前格式唯一定位在[源码表](#当前格式来源)，历史字段及版本见[历史入口](../../SteerlineFlow/archive/design/runner-reliability-history.md#第四批整理来源)。
+本文维护调用方实体、身份与事务不变量。SteerLine 与 Runner 分别单写自己的数据库，只通过公开契约协作；正常运行不读取、迁移、双写或回退旧开发格式；显式放弃旧运行的只读归档例外见[安装部署](../integration/install-deploy.md#显式放弃旧运行后升级-runner)。当前格式唯一定位在[源码表](#当前格式来源)，历史字段及版本见[历史入口](../../SteerlineFlow/archive/design/runner-reliability-history.md#第四批整理来源)。
 
 ## 权威与身份
 
@@ -61,7 +61,7 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 
 | 格式或事实 | 当前来源 |
 | --- | --- |
-| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 40`；数值只在此表定位，正文不保留旧版本副本 |
+| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 41`；数值只在此表定位，正文不保留旧版本副本 |
 | 项目契约配置 | [app/config.go](../../internal/app/config.go) 要求显式 `task_authority=native`、`workflow_protocol=worker-flow-v2`；后者不代表 Runner 当前 workflow 版本 |
 | 全局执行配置 | [executionconfig](../../internal/executionconfig/config.go) 的严格解码与版本校验；构建选择由 [app](../../internal/app/runner_config.go) 校验 |
 | TaskContract 与 DAG | [taskcontract](../../internal/taskcontract) 的结构及 [task/model](../../internal/task/model) 的规则 |
@@ -72,3 +72,7 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 | 进度、项目接口与结果 | [进度通道](../integration/runtime-progress.md) · [环境工作流](../../SteerlineFlow/spec/project-environment-workflow.spec.md)；各格式由原 owner 维护 |
 
 历史数字、字段和旧验收结论按[原版本来源](../../SteerlineFlow/archive/design/runner-reliability-history.md#第四批整理来源)取证，不能据此读取旧库或回填运行。本文不证明安装版已部署或各原生路径已通过验收。
+
+## 异步活动只读投影
+
+`preparation_batches` 按项目与批次 ID 保存原准备事实和业务结果快照；`maintenance_settings.generation_batch` 只保存当前批次 ID。`preparation_associations` 保存原 TaskID/Inputs/GenerationID，随生成初次登记事务在外部提交前绑定，历史批次不被新引用覆盖。`source_observations` 独立保存最近成功观察及错误，不递增业务版本或赋予执行权限。查询返回来源事实，由产品 query 只读聚合；不存在统一活动业务写表或调度器。完整职责与接入约定见[异步活动中心](async-activities.md)。

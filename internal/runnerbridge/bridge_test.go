@@ -15,6 +15,50 @@ type memoryStore struct {
 	events map[string]bool
 }
 
+type observationStore struct {
+	*memoryStore
+	diagnostic string
+	contextErr error
+	revision   uint64
+}
+
+func (s *observationStore) RecordSourceObservation(ctx context.Context, _, _, _ string, revision uint64, _ time.Time, diagnostic string) error {
+	s.diagnostic, s.contextErr = diagnostic, ctx.Err()
+	s.revision = revision
+	return nil
+}
+
+func TestCandidateObservationFailureDoesNotClaimUncommittedRevision(t *testing.T) {
+	b, store, cli := setup()
+	store.value.RunID = cli.run.RunID
+	store.value.InputDigest = cli.run.InputDigest
+	store.fail = true
+	metadata := &observationStore{memoryStore: store}
+	b.Store = metadata
+	candidate := clone(store.value)
+	if err := b.observe(context.Background(), cli, &candidate); err == nil || metadata.revision != store.value.Revision || metadata.diagnostic == "" {
+		t.Fatalf("failed commit published a future observation revision: %+v", metadata)
+	}
+}
+
+type timeoutObservationCLI struct{ CLI }
+
+func (f timeoutObservationCLI) Observe(ctx context.Context, _, _ string) (runnerclient.RunObservation, error) {
+	<-ctx.Done()
+	return runnerclient.RunObservation{}, ctx.Err()
+}
+func TestCandidateTimeoutRecordsObservationWithoutChangingExecution(t *testing.T) {
+	b, store, cli := setup()
+	metadata := &observationStore{memoryStore: store}
+	b.Store = metadata
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	err := b.observe(ctx, timeoutObservationCLI{CLI: cli}, &store.value)
+	if !errors.Is(err, context.DeadlineExceeded) || metadata.diagnostic != context.DeadlineExceeded.Error() || metadata.contextErr != nil || cli.submits != 0 || cli.stops != 0 {
+		t.Fatalf("timeout metadata changed execution or was lost: %+v %v", metadata, err)
+	}
+}
+
 func clone(c Candidate) Candidate {
 	raw, _ := json.Marshal(c)
 	var result Candidate

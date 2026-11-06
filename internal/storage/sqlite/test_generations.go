@@ -134,5 +134,8 @@ func (s *SQLiteStore) SaveGeneration(ctx context.Context, r testmodel.Generation
 		}
 	}
 
+	if err = bindPreparationGenerations(ctx, tx, r.Project); err != nil {
+		return err
+	}
 	return tx.Commit()
 }

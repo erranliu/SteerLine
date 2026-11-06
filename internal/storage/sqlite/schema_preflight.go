@@ -34,15 +34,18 @@ type schemaQuery interface {
 
 // Check definitions as well as the version stamp before reading or writing state.
 func validateDatabaseSchema(ctx context.Context, db schemaQuery) error {
+	return validateDatabaseDefinitions(ctx, db, domainSchemaVersion, append(append([]string{}, taskServiceSchema...), nativeTaskSchema...))
+}
+
+func validateDatabaseDefinitions(ctx context.Context, db schemaQuery, acceptedVersion int, definitions []string) error {
 	var version int
 	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&version); err != nil {
 		return schemaFailure(err, "existing SQLite database has an unknown schema; preserve it for manual recovery")
 	}
-	if version != domainSchemaVersion {
-		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; only schema %d is accepted", version, domainSchemaVersion))
+	if version != acceptedVersion {
+		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; only schema %d is accepted", version, acceptedVersion))
 	}
 	expected := map[string]string{}
-	definitions := append(append([]string{}, taskServiceSchema...), nativeTaskSchema...)
 	for _, stmt := range definitions {
 		fields := strings.Fields(stmt)
 		if len(fields) < 3 || fields[0] != "CREATE" {

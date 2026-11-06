@@ -21,6 +21,8 @@ import (
 type SQLiteStore struct {
 	Reader
 	db                *sql.DB
+	activityDB        *sql.DB
+	activityErr       error
 	readOnly          bool
 	path              string
 	createdNew        bool
@@ -87,6 +89,9 @@ func OpenSQLiteStoreWithAdmissionPolicy(path string, policy env.AdmissionPolicy)
 		store.abortNewDatabase()
 		return nil, err
 	}
+	// Observation owns a separate, bounded read-only pool. Its availability is
+	// not an admission gate for domain work; errors surface only on activity reads.
+	store.activityDB, store.activityErr = openAsyncActivityPool(path)
 	return store, nil
 }
 
@@ -131,7 +136,13 @@ func openSQLiteInspector(path string) (*SQLiteStore, error) {
 	return &SQLiteStore{db: db, readOnly: true, Reader: NewReader(db, nil)}, nil
 }
 
-func (s *SQLiteStore) Close() error { return s.db.Close() }
+func (s *SQLiteStore) Close() error {
+	var observationErr error
+	if s.activityDB != nil {
+		observationErr = s.activityDB.Close()
+	}
+	return errors.Join(observationErr, s.db.Close())
+}
 
 // Only a file created by this resource can be removed after failed initialization.
 // Existing or unsupported databases are always retained for recovery.

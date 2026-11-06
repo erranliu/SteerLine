@@ -55,6 +55,8 @@ func RunnerCLI(args []string) (bool, error) {
 				return true, err
 			}
 			data["version"] = "caller-fixture-v1"
+			data["recovery"] = controlledCapabilities()["recovery"]
+			data["run_observation"] = controlledCapabilities()["run_observation"]
 			data["resource_digest"] = strings.Repeat("a", 64)
 			return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "protocol": "steerrunner-cli/v1", "data": data})
 		}
@@ -71,6 +73,8 @@ func RunnerCLI(args []string) (bool, error) {
 				return true, err
 			}
 			data["version"] = "caller-fixture-v1"
+			data["recovery"] = controlledCapabilities()["recovery"]
+			data["run_observation"] = controlledCapabilities()["run_observation"]
 			data["resource_version"] = 1
 			advertiseRepository(data)
 			advertiseResult(data)

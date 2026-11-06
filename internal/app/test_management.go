@@ -63,6 +63,7 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 }
 func publicGeneration(r testmanagement.Generation) api.TestGeneration {
 	v := api.TestGeneration{Plan: r.Command.Plan, Profile: r.Command.Profile, SourceCommit: r.Command.Commit, ID: r.ID, Revision: r.Revision, State: r.State, Target: r.Target, RunID: r.RunID, Diagnostic: r.Diagnostic, Result: r.Result}
+	v.Settled, v.NeedsAttention = r.Settled(), r.NeedsAttention()
 	if r.Projection != nil {
 		v.StopStatus = r.Projection.StopStatus
 	}

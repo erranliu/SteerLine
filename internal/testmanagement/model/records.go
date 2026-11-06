@@ -91,3 +91,9 @@ func (g Generation) DiagnosticText() string {
 func (g Generation) Settled() bool {
 	return g.Unsubmitted() && g.Cancelled || g.State == "rejected" && g.RunID == "" || g.Projection != nil && g.Projection.StopStatus == "stopped"
 }
+
+// NeedsAttention is a display fact, not a terminal state or retry permission.
+func (g Generation) NeedsAttention() bool {
+	return g.State == "accepted" && !g.Cancelled && !g.Settled() && g.Projection != nil &&
+		(g.Projection.Status == "blocked" || g.Projection.Phase == "manual_intervention_required")
+}

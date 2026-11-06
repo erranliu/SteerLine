@@ -303,6 +303,109 @@ it("GQ keeps progress in the collapsed title and submits one bulk command", asyn
   expect(submit).toHaveBeenCalledTimes(1);
 });
 
+it("shows four ready arrangements and one blocked original without a perpetual spinner", async () => {
+  const { submit } = setup({
+    tasks: [
+      {
+        task_id: "102",
+        contract: { plan_ref: { path: "native-102.plan.md" } },
+        status: "accepted",
+        generation_id: "original",
+        needs_attention: true,
+        can_retry: false,
+        diagnostic: "Original operation reconciliation deadline exhausted",
+      },
+    ],
+    generation_progress: {
+      id: "batch",
+      status: "generating",
+      total: 5,
+      succeeded: 4,
+      running: 1,
+      attention: 1,
+      queued: 0,
+      failed: 0,
+      blocked: 0,
+    },
+  });
+  expect(await screen.findByText("4/5 生成受阻，1 项需处理")).toBeVisible();
+  expect(screen.queryByLabelText("正在生成")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
+  expect(screen.getByText("#102 · 生成受阻，需人工处理")).toBeVisible();
+  expect(
+    screen.getByText("Original operation reconciliation deadline exhausted"),
+  ).toBeVisible();
+  expect(screen.queryByRole("button", { name: "重试生成" })).toBeNull();
+  expect(submit).not.toHaveBeenCalled();
+});
+
+it("keeps the spinner while another generation is running alongside a blocked one", () => {
+  render(
+    <GenerationProgress
+      value={{
+        id: "mixed",
+        status: "generating",
+        total: 5,
+        succeeded: 3,
+        running: 2,
+        attention: 1,
+        queued: 0,
+        failed: 0,
+        blocked: 0,
+      }}
+      online
+    />,
+  );
+  expect(screen.getByText("3/5 生成中，1 项需处理")).toBeVisible();
+  expect(screen.getByLabelText("正在生成")).toBeVisible();
+});
+
+it.each([false, true])(
+  "uses server retry permission after cancellation (settled=%s)",
+  async (settled) => {
+    const { get, submit, view } = setup({
+      tasks: [
+        {
+          task_id: "102",
+          status: "cancelled",
+          generation_id: "original",
+          contract: { plan_ref: { path: "native-102.plan.md" } },
+          can_retry: settled,
+        },
+      ],
+    });
+    get.mockImplementation(async (route) =>
+      route.startsWith("/tests/generations/")
+        ? ({
+            state: "cancelled",
+            settled,
+            stop_status: settled ? "stopped" : "",
+          } as never)
+        : (view as never),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
+    const retry = await screen.findByRole("button", { name: "重试生成" });
+    if (settled) expect(retry).toBeEnabled();
+    else expect(retry).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "查看生成执行" }));
+    if (!settled) expect(await screen.findByText("等待停止确认")).toBeVisible();
+    fireEvent.click(retry);
+    if (settled) {
+      await waitFor(() =>
+        expect(submit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: "maintenance_retry",
+            target_id: "102",
+            payload: { task_id: "102" },
+          }),
+        ),
+      );
+    } else {
+      expect(submit).not.toHaveBeenCalled();
+    }
+  },
+);
+
 it("GQ hides success after five seconds using the backend completion timestamp", () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-22T00:00:00Z"));

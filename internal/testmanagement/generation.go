@@ -359,7 +359,30 @@ func generationObservationComplete(r Generation) bool {
 	return false
 }
 
-func (s *GenerationService) observe(ctx context.Context, r Generation) (Generation, error) {
+func (s *GenerationService) observe(ctx context.Context, r Generation) (out Generation, err error) {
+	observed := false
+	committedRevision := r.Revision
+	defer func() {
+		if errors.Is(ctx.Err(), context.Canceled) || !observed && err == nil {
+			return
+		}
+		if recorder, ok := s.Store.(interface {
+			RecordSourceObservation(context.Context, string, string, string, uint64, time.Time, string) error
+		}); ok {
+			at, diagnostic := time.Now().UTC(), ""
+			if err != nil {
+				at = time.Time{}
+				diagnostic = err.Error()
+			}
+			metadataCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 100*time.Millisecond)
+			defer cancel()
+			revision := out.Revision
+			if err != nil || revision == 0 {
+				revision = committedRevision
+			}
+			_ = recorder.RecordSourceObservation(metadataCtx, r.Project, "test_generation", r.ID, revision, at, diagnostic)
+		}
+	}()
 	if generationObservationComplete(r) {
 		return r, nil
 	}
@@ -382,6 +405,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 		return r, err
 	}
 	r.RunID, r.InputDigest, r.Projection = run.RunID, run.InputDigest, run
+	observed = true
 	r.Diagnostic = run.Diagnostic
 	if r.Cancelled {
 		r.State = "cancelled"

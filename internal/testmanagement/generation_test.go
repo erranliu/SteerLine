@@ -191,9 +191,95 @@ func TestTMGenerationTerminalObservation(t *testing.T) {
 	}
 }
 
+func TestTMGenerationBlockedRunIsObservedWithoutResubmission(t *testing.T) {
+	ctx := context.Background()
+	s, store, cli, input := generationFixture(t)
+	_, err := s.Generate(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli.run.Status, cli.run.Phase = "blocked", "manual_intervention_required"
+	for range 2 {
+		if err := s.ObserveNext(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g, _ := store.Generation(ctx, s.Project, input.RequestID)
+	if !g.NeedsAttention() || g.State != "accepted" || g.Settled() || cli.inspects != 2 || cli.submits != 1 || cli.stops != 0 {
+		t.Fatalf("blocked original stopped being observed: %+v", g)
+	}
+	_, err = s.Stop(ctx, g.ID, strings.Repeat("d", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.RequestID = strings.Repeat("e", 32)
+	if _, err = s.Generate(ctx, input); err == nil || cli.submits != 1 {
+		t.Fatal("unsettled cancellation allowed a new Run", err)
+	}
+	cli.run.StopStatus = "stopped"
+	if err = s.ObserveNext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Generate(ctx, input); err != nil || cli.submits != 2 {
+		t.Fatal("settled cancellation did not allow one explicit retry", err)
+	}
+}
+
 type slowGenerationCLI struct {
 	GenerationRunner
 	seen []string
+}
+
+type observationGenerations struct {
+	*memoryGenerations
+	diagnostic string
+	revision   uint64
+	contextErr error
+}
+
+type timeoutGenerationCLI struct{ GenerationRunner }
+
+func (f timeoutGenerationCLI) Inspect(ctx context.Context, _, _ string) (runnerclient.Inspection, error) {
+	<-ctx.Done()
+	return runnerclient.Inspection{}, ctx.Err()
+}
+
+func (m *observationGenerations) RecordSourceObservation(ctx context.Context, _, _, _ string, revision uint64, _ time.Time, diagnostic string) error {
+	m.diagnostic, m.revision, m.contextErr = diagnostic, revision, ctx.Err()
+	return nil
+}
+func TestTMGenerationTimeoutRecordsObservationWithoutChangingExecution(t *testing.T) {
+	s, store, _, input := generationFixture(t)
+	r, err := s.Generate(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := &observationGenerations{memoryGenerations: store}
+	s.Store = metadata
+	s.Runner = timeoutGenerationCLI{}
+	r.RunID = "run-a"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err = s.observe(ctx, r)
+	if !errors.Is(err, context.DeadlineExceeded) || metadata.diagnostic != context.DeadlineExceeded.Error() || metadata.revision != r.Revision || metadata.contextErr != nil {
+		t.Fatalf("timeout observation lost: %+v %v", metadata, err)
+	}
+}
+
+func TestTMGenerationObservationFailureDoesNotClaimUncommittedRevision(t *testing.T) {
+	s, store, cli, input := generationFixture(t)
+	r, err := s.Generate(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := &observationGenerations{memoryGenerations: store}
+	s.Store = metadata
+	cli.run.Revision++
+	store.fail = true
+	_, err = s.observe(context.Background(), r)
+	if err == nil || metadata.revision != r.Revision || metadata.diagnostic == "" {
+		t.Fatalf("failed commit published a future observation revision: %+v %v", metadata, err)
+	}
 }
 
 func (f *slowGenerationCLI) Inspect(ctx context.Context, _, id string) (runnerclient.Inspection, error) {

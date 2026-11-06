@@ -79,6 +79,10 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHo
 }
 
 func loadConfigSnapshotWithQueries(path string, projectBytes, globalBytes []byte, processHost executionbackend.ManagedProcessHost, requireSupport bool, queries *startupQueries) (Config, error) {
+	return loadConfigSnapshotWithValidation(path, projectBytes, globalBytes, processHost, requireSupport, queries, ValidateApplicationPaths)
+}
+
+func loadConfigSnapshotWithValidation(path string, projectBytes, globalBytes []byte, processHost executionbackend.ManagedProcessHost, requireSupport bool, queries *startupQueries, validatePaths func(Config) error) (Config, error) {
 	input, err := DecodeProjectConfigInput(projectBytes)
 	config := configFromProjectInput(input)
 	if err != nil {
@@ -166,7 +170,7 @@ func loadConfigSnapshotWithQueries(path string, projectBytes, globalBytes []byte
 	if err := validateRuntimeHomePaths(config); err != nil {
 		return config, err
 	}
-	if err := ValidateApplicationPaths(config); err != nil {
+	if err := validatePaths(config); err != nil {
 		return config, err
 	}
 	return config, nil

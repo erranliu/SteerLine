@@ -17,6 +17,7 @@
 | `/identity` | 项目/实例、进程、ready、能力、诊断及认证后的原锁路径 |
 | `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务 |
 | `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
+| `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
 | `/runs/{run_id}` | 精确候选、参与/提交状态、Runner 观察、PR 与交付 |
 | `/runs/{run_id}/activity`、`/last-message`、`/usage` | 原执行的活动、最近消息和用量 |
 | `/runs/{run_id}/conversation`、`/final`、`/body` | 公开会话事件、final 和原正文分段 |
