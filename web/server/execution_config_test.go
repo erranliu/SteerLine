@@ -5,6 +5,7 @@ import (
 	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -15,6 +16,9 @@ import (
 
 func TestMain(m *testing.M) {
 	if os.Getenv("SL_WEB_CONFIG_META") == "1" && len(os.Args) > 1 {
+		if protocol.RunExecutionConfigurationFixture("web-fixture") {
+			os.Exit(0)
+		}
 		command := os.Args[1]
 		log := os.Getenv("SL_WEB_CONFIG_LOG")
 		if log != "" {
@@ -60,7 +64,7 @@ func TestMain(m *testing.M) {
 }
 func TestWebExecutionConfigRoutes(t *testing.T) {
 	t.Setenv("SL_WEB_CONFIG_META", "1")
-	schema, _ := filepath.Abs("../../internal/runnerclient/testdata/workflow-capabilities.json")
+	schema, _ := filepath.Abs("../../internal/testkit/protocol/configuration_catalog.json")
 	t.Setenv("SL_WEB_CONFIG_SCHEMA", schema)
 	s, backend := fixture(t)
 	cookie, csrf := login(t, s)
@@ -85,7 +89,7 @@ func TestWebExecutionConfigRoutes(t *testing.T) {
 		Digest string `json:"saved_digest"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &snap)
-	if !strings.Contains(w.Body.String(), `"local_helper"`) || !strings.Contains(w.Body.String(), `"combinations"`) {
+	if !strings.Contains(w.Body.String(), `"profile_views"`) || !strings.Contains(w.Body.String(), `"combinations"`) {
 		t.Fatal("missing structured support contract")
 	}
 	for _, body := range []string{`{"kind":"models","host":"local"}`, `{"kind":"models","host":"local","adapter":"orca-terminal","api_key":"fixture-secret"}`, `{"kind":"models","host":"local","adapter":"orca-terminal","environment":"remote"}`, `{"kind":"models","host":"local","adapter":"orca-terminal","endpoint":"arbitrary"}`} {
@@ -95,7 +99,7 @@ func TestWebExecutionConfigRoutes(t *testing.T) {
 	}
 	originalDigest := snap.Digest
 	config.Profiles[0].Name = "新名称"
-	body, _ := json.Marshal(config)
+	body, _ := json.Marshal(map[string]any{"saved_digest": snap.Digest, "config": config, "profile_edits": []any{}})
 	send := func(etag string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("PUT", "http://"+s.options.Address+path, strings.NewReader(string(body)))
 		r.RemoteAddr = "127.0.0.1:11111"

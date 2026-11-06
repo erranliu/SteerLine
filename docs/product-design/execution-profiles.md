@@ -1,5 +1,8 @@
 # 执行方案配置
 
+2026-11-05 编辑与资格边界更新：原生字段映射、用途转换和通用 identity 由固定 Runner 的 execution-config 提供。页面保存逻辑 selection/unset 与保存前 base_profile_id；新增或改变 execution/workflow 必须有恰好一条 profile_edit，服务端重新构造、比较后保存。名称、默认选择与删除不伪造 edit；固定模型/effort 不进入环境身份，空偏好容器只在身份投影中省略。能力缺失或非法 profile 原文只读展示，不新增兼容清洗/旧 helper gate。实际范围见[Spec](../../SteerlineFlow/spec/native-execution-configuration-boundary.spec.md)及[验收](../../SteerlineFlow/testing/acceptance/native-execution-configuration-boundary.md)。
+
+
 `max_generate_concurrency` 是 SteerLine 调用 Runner generate 的 home 级最大并发数；省略时为 5，显式值必须是正整数。在 Web“配置”页中保存，重启 SteerLine 后生效；所有项目的自动生成、一键生成和单项重试共享队列，名额覆盖实际执行与待核实调用。开发候选和 Runner 内部其他 LLM 操作不计入该配额。实现及验证见 [生成队列验收](../../SteerlineFlow/testing/acceptance/generate-queue.md)。
 
 当前实现支持本机 Codex、Windows/amd64 本机 Orca/Codex、Pi、DSH 及远端 Orca environment/Codex。详见[Web 执行配置 Spec](../../SteerlineFlow/spec/web-execution-config.spec.md)及[Plan](../../SteerlineFlow/plans/web-execution-config.plan.md)，实际验证和人工验收独立登记。执行由独立 SteerRunner 管理。SteerLine 保留多执行方案与默认方案选择，不维护业务执行的原生 codec、权限策略、会话或 workflow 状态机。所有 LLM 操作的职责以[架构边界](../architecture.md#llm-执行边界)为准，本页维护两层默认链路的配置含义。

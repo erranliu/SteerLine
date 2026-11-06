@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/erranliu/SteerLine/internal/executionconfig"
+	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -54,7 +55,7 @@ func TestEnvironmentUnqualifiedQueryDoesNotReadDependencyBasis(t *testing.T) {
 	p, c, _ := environmentFixture(t)
 	profile, err := c.RunnerExecution.Profile("remote", "")
 	require(t, err)
-	key, err := env.Key(profile.Execution)
+	key, err := env.Key(profile.Execution, nativefixture.ExecutionIdentity(profile.Execution))
 	require(t, err)
 	path := filepath.Join(c.Repository, filepath.FromSlash(env.DocumentPath()))
 	document := environmentFixtureDocument("ps1", []string{"missing-dependency.md"})
@@ -124,7 +125,7 @@ func TestProjectEnvironmentReadinessRefreshRejectsBeforeMaterialPreparation(t *t
 	fixtureGit(t, c.Repository, "push", "origin", "HEAD:refs/heads/environment-validation")
 	prepared, err := p.prepare(ctx, "remote")
 	require(t, err)
-	record := env.Record{ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Settled: true}}}
+	record := env.Record{FormatVersion: 1, ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Settled: true}}}
 	require(t, store.StartEnvironment(ctx, record, 0))
 	maintenance := newProjectMaintenance(c, store)
 	c.runtimeMaintenance = maintenance
@@ -217,9 +218,13 @@ func TestProjectEnvironmentReadinessLocalAndModelGrouping(t *testing.T) {
 	other.Name = "Local high"
 	other.Execution.Settings = json.RawMessage(`{"executable":"native-fixture","model":"two","reasoning_effort":"high"}`)
 	p.config.RunnerExecution.Profiles = []RunnerProfile{local, other}
+	for _, profile := range p.config.RunnerExecution.Profiles {
+		_, e := p.config.describeProfile(ctx, profile)
+		require(t, e)
+	}
 	prepared, err := p.prepare(ctx, "local")
 	require(t, err)
-	record := env.Record{ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "local", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Settled: true}}}
+	record := env.Record{FormatVersion: 1, ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "local", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Settled: true}}}
 	require(t, store.StartEnvironment(ctx, record, 0))
 	_, _, err = p.admission(ctx, "local-high", "", false)
 	require(t, err)
@@ -258,15 +263,15 @@ func TestProjectEnvironmentReadinessLocalTargetOccupancyAcrossContexts(t *testin
 	first := profile.Execution
 	other := first
 	other.Settings = json.RawMessage(`{"executable":"other-entry"}`)
-	key1, err := env.Key(first)
+	key1, err := env.Key(first, nativefixture.ExecutionIdentity(first))
 	require(t, err)
-	key2, err := env.Key(other)
+	key2, err := env.Key(other, nativefixture.ExecutionIdentity(other))
 	require(t, err)
 	if key1 == key2 || executionconfig.Target(first) != executionconfig.Target(other) || executionconfig.Target(first) == "" {
 		t.Fatal("qualification and occupancy keys conflated")
 	}
 	id := env.ID()
-	require(t, store.StartEnvironment(ctx, env.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: profile.ID, Execution: first, State: "running", Requests: []env.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1}}}, 0))
+	require(t, store.StartEnvironment(ctx, env.Record{FormatVersion: 1, ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: profile.ID, Execution: first, Prepared: env.Prepared{Identity: nativefixture.ExecutionIdentity(first), DerivedExecution: first, Input: runnercontract.RunInput{Execution: first}}, State: "running", Requests: []env.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1}}}, 0))
 	admitted := false
 	if err := c.runtimeEnvironmentAdmission.adapt(ctx, executionconfig.Target(other), "other", func() error { admitted = true; return nil }); err == nil || admitted {
 		t.Fatal("different local context bypassed original target occupancy", err)

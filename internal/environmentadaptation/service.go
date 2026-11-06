@@ -93,7 +93,7 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 			return envmodel.Record{}, e
 		}
 	}
-	r := envmodel.Record{ID: id, Project: s.Project, Profile: in.Profile, Build: s.Build, CreatedAt: s.now(), State: "queued", Requests: []envmodel.Request{{ID: id, Original: original, Action: "start"}}, Rounds: []envmodel.Round{}}
+	r := envmodel.Record{FormatVersion: 1, ID: id, Project: s.Project, Profile: in.Profile, Build: s.Build, CreatedAt: s.now(), State: "queued", Requests: []envmodel.Request{{ID: id, Original: original, Action: "start"}}, Rounds: []envmodel.Round{}}
 	if in.TimeoutSeconds <= 0 || int64(in.TimeoutSeconds) > int64(^uint64(0)>>1)/int64(time.Second) {
 		return r, errors.New("round_timeout_seconds must be positive and fit a duration")
 	}
@@ -104,12 +104,12 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 	r.Kind = "adaptation"
 	r.Prepared = prepared
 	r.Execution = prepared.Input.Execution
-	key, keyErr := envmodel.Key(r.Execution)
+	key, keyErr := envmodel.Key(r.Execution, r.Prepared.Identity)
 	if keyErr != nil || key != in.EnvironmentKey {
 		return r, errors.New("selected environment and execution profile differ")
 	}
 	r.TimeoutSeconds = in.TimeoutSeconds
-	if _, err := envmodel.Key(r.Execution); err != nil {
+	if _, err := envmodel.Key(r.Execution, r.Prepared.Identity); err != nil {
 		return r, errors.New("environment adaptation requires a supported execution profile")
 	}
 	create := func() error {
@@ -140,8 +140,12 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 		return errors.New("detection is a single invocation")
 	}
 	input := r.Prepared.Input
-	if err := useNativeOrcaExecutor(&input); err != nil {
+	if err := runnercontract.ValidateExecutionIdentity(r.Execution, r.Prepared.Identity); err != nil {
 		return err
+	}
+	input.Execution = r.Prepared.DerivedExecution
+	if input.Execution.Adapter != r.Execution.Adapter || input.Execution.Target != r.Execution.Target || len(input.Execution.Settings) == 0 {
+		return errors.New("derived execution differs from the selected environment")
 	}
 	input.NamePrefix = "sl-env"
 	input.Title = "项目环境检测: " + r.Profile
@@ -166,47 +170,6 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 	return nil
 }
 
-// Select Orca's native Codex executor only for the submitted detection Run.
-// The prepared execution still identifies the development environment being checked.
-func useNativeOrcaExecutor(input *runnercontract.RunInput) error {
-	if input.Execution.Adapter != "orca-terminal" || input.Workflow.ID != "execute" || input.Workflow.Version != 1 {
-		return nil
-	}
-	var settings map[string]json.RawMessage
-	if err := json.Unmarshal(input.Execution.Settings, &settings); err != nil {
-		return err
-	}
-	var agent string
-	if raw, ok := settings["agent"]; ok {
-		if err := json.Unmarshal(raw, &agent); err != nil {
-			return err
-		}
-	}
-	launchSettings, ok := settings["agent_launch"]
-	if agent != "" && agent != "codex" || !ok {
-		return nil
-	}
-	var launch map[string]json.RawMessage
-	if err := json.Unmarshal(launchSettings, &launch); err != nil {
-		return err
-	}
-	delete(launch, "executable")
-	delete(launch, "runtime_executable")
-	delete(launch, "runtime_sha256")
-	delete(launch, "args")
-	if len(launch) == 0 {
-		delete(settings, "agent_launch")
-	} else {
-		encoded, err := json.Marshal(launch)
-		if err != nil {
-			return err
-		}
-		settings["agent_launch"] = encoded
-	}
-	var err error
-	input.Execution.Settings, err = json.Marshal(settings)
-	return err
-}
 func (s *Service) Stop(ctx context.Context, id, request string, revision uint64, original json.RawMessage) (envmodel.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

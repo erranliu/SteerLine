@@ -38,8 +38,8 @@ func TestOrcaEnvironmentLocalRepositoryRequiresExactSource(t *testing.T) {
 			t.Fatalf("local source selection %q/%q = %v", tc.path, tc.url, got)
 		}
 	}
-	if !remote.matchesRepository("D:/remote/project", origin, "C:/isolated/source", origin) {
-		t.Fatal("remote source routing changed")
+	if !remote.matchesRepository("D:/remote/source", origin, "C:/isolated/source", origin) || remote.matchesRepository("D:/remote/project", origin, "C:/isolated/source", origin) {
+		t.Fatal("remote source routing must match Runner's directory basename and repository URL")
 	}
 }
 

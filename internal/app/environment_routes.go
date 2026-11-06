@@ -82,6 +82,7 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 			}
 			var start env.Start
 			if e = decodeStrictJSON(in.Payload, &start); e == nil {
+				p.config.runtimeNative.RefreshFailures()
 				r, e = s.Start(ctx, in.RequestID, raw, start)
 			}
 
@@ -253,6 +254,6 @@ func (p *runtimeProjectPort) reconcileInvalidationFailure(ctx context.Context, o
 }
 
 func environmentRecordKey(r env.Record) string {
-	key, _ := env.Key(r.Execution)
+	key, _ := env.Key(r.Execution, r.Prepared.Identity)
 	return key
 }

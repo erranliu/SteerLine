@@ -41,6 +41,7 @@ type roadmapPort struct {
 }
 
 func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *roadmapPort {
+	c = bindNativeConfiguration(c, cli)
 	p := &roadmapPort{config: c, store: store}
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source
@@ -50,19 +51,11 @@ func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client
 		if e != nil {
 			return runnercontract.ExecutionInput{}, nil, e
 		}
-		execution, e := runnerclient.GenerationExecution(profile.Execution)
-		if e != nil {
-			return execution, nil, e
+		resolved, e := c.deriveProfile(ctx, profile, "generate", "read_only")
+		if e != nil || resolved.Execution == nil {
+			return runnercontract.ExecutionInput{}, nil, e
 		}
-		if c.runtimeCatalog != nil {
-			return execution, c.runtimeCatalog, nil
-		}
-		version, e := cli.Version(ctx)
-		if e != nil {
-			return execution, nil, e
-		}
-		catalog, e := cli.Catalog(ctx, version)
-		return execution, catalog, e
+		return *resolved.Execution, c.runtimeNative.Catalog, nil
 	}
 	p.service.PrepareDocuments = p.documentContext
 	p.service.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
@@ -183,7 +176,7 @@ func (p *roadmapPort) read(ctx context.Context, route string, values url.Values)
 	}
 	profiles := []map[string]string{}
 	for _, profile := range p.config.RunnerExecution.Profiles {
-		if _, e := generationProfile(profile); e == nil {
+		if _, e := p.config.deriveProfile(ctx, profile, "generate", "read_only"); e == nil {
 			profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
 		}
 	}
@@ -266,6 +259,7 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 		return p.prepareStatic(ctx, in)
 	}
 	if in.Action == "roadmap_parse" {
+		p.config.runtimeNative.RefreshFailures()
 		if !p.preparation(ctx).Ready {
 			return nil, errors.New("Roadmap 静态材料未就绪：请先初始化材料，再提交并发布到项目目标分支后重试")
 		}
@@ -326,6 +320,7 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 		}
 		return p.resumePublication(ctx, r)
 	case "roadmap_generate_documents":
+		p.config.runtimeNative.RefreshFailures()
 		if e := decodeStrictJSON(in.Payload, &struct{}{}); e != nil {
 			return nil, e
 		}

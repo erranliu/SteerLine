@@ -5,11 +5,13 @@ param(
     [string]$DebugRoot = '',
     [string]$CatalogEnvironment = '',
     [switch]$ZeroProjects,
+    [switch]$ConfigurationEdit,
     [switch]$LocalOrca,
     [switch]$IndependentProcess
 )
 $ErrorActionPreference = 'Stop'
-if (!$LocalOrca) {
+if ($ConfigurationEdit -and !$ZeroProjects) {throw 'Configuration editing requires explicit -ZeroProjects'}
+if (!$LocalOrca -and !$ConfigurationEdit) {
     if (!$RemoteProfile) { $RemoteProfile=$env:STEERLINE_L4_REMOTE_PROFILE }
     if (!$RemoteProfile -or !$OutRoot) { throw 'Remote directory L4 requires -RemoteProfile (or STEERLINE_L4_REMOTE_PROFILE) and a new absolute -OutRoot' }
     if (!$IndependentProcess) {
@@ -33,7 +35,8 @@ $PSDefaultParameterValues=@{'Out-File:Encoding'='utf8'}
 if (-not $IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
     $driverArgs = @('-SteerRunnerExe', $SteerRunnerExe)
-    $driverArgs += '-LocalOrca'
+    if ($LocalOrca) {$driverArgs += '-LocalOrca'}
+    if ($ConfigurationEdit) {$driverArgs += '-ConfigurationEdit'}
     if ($OutRoot) { $driverArgs += @('-OutRoot', $OutRoot) }
     if ($DebugRoot) { $driverArgs += @('-DebugRoot', $DebugRoot) }
     if ($CatalogEnvironment) { $driverArgs += @('-CatalogEnvironment', $CatalogEnvironment) }
@@ -53,9 +56,20 @@ $oldTarget = $env:STEERLINE_CONFIG_REMOTE
 $oldLocal = $env:STEERLINE_CONFIG_LOCAL_ORCA
 $oldEvidence = $env:STEERLINE_WEB_EVIDENCE
 $oldZeroProjects = $env:STEERLINE_CONFIG_ZERO_PROJECTS
+$oldEdit = $env:STEERLINE_CONFIG_EDIT
 $evidence = if ($OutRoot) { [IO.Path]::GetFullPath($OutRoot) } else { Join-Path $package.root 'evidence\native-discovery' }
 New-Item -ItemType Directory -Path $evidence | Out-Null
 $env:STEERLINE_HOME = Join-Path $package.root 'home'
+if ($ConfigurationEdit) {
+    # A separate fresh home, with no package manifest, uses the same pinned
+    # deployment assets. The generated package itself remains frozen.
+    $env:STEERLINE_HOME=Join-Path $evidence 'configuration-home'
+    New-Item -ItemType Directory -Path $env:STEERLINE_HOME | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $env:STEERLINE_HOME 'etc') | Out-Null
+    foreach ($name in @('execution.json','web.json')) {Copy-Item -LiteralPath (Join-Path $package.root ('home\'+$name)) -Destination (Join-Path $env:STEERLINE_HOME $name)}
+}
+$env:STEERLINE_CONFIG_EDIT=if($ConfigurationEdit){'1'}else{''}
+
 $env:STEERLINE_CONFIG_WEB = Join-Path $package.root 'bin\steerline-web.exe'
 $env:STEERLINE_CONFIG_REMOTE = $CatalogEnvironment
 $env:STEERLINE_CONFIG_LOCAL_ORCA = if($LocalOrca) { '1' } else { '' }
@@ -65,8 +79,14 @@ $cli = Join-Path $package.root 'bin\steerline.exe'
 $failed = $null
 Push-Location $repo
 try {
+    if ($ConfigurationEdit) {
+        & $cli install *> (Join-Path $evidence 'edit-home-install.log')
+        if ($LASTEXITCODE -ne 0) {throw 'Independent editable home setup failed'}
+        & $env:STEERLINE_CONFIG_WEB install *> (Join-Path $evidence 'edit-home-web-install.log')
+        if ($LASTEXITCODE -ne 0) {throw 'Independent editable Web setup failed'}
+    }
     if ($ZeroProjects) {
-        $fixtureEtc = Join-Path $package.root 'home\etc'
+        $fixtureEtc = Join-Path $env:STEERLINE_HOME 'etc'
         $fixtureRegistrations = @(Get-ChildItem -LiteralPath $fixtureEtc -Filter '*.json' -File)
         $fixtureRemoved = @()
         foreach ($registration in $fixtureRegistrations) {
@@ -98,6 +118,7 @@ try {
     $env:STEERLINE_CONFIG_LOCAL_ORCA = $oldLocal
     $env:STEERLINE_WEB_EVIDENCE = $oldEvidence
     $env:STEERLINE_CONFIG_ZERO_PROJECTS = $oldZeroProjects
+    $env:STEERLINE_CONFIG_EDIT = $oldEdit
     Pop-Location
 }
 Write-Output "Native discovery evidence: $evidence"

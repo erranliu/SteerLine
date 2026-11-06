@@ -166,6 +166,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeRunner = &runner.client
 	r.config.runtimeGenerations = runner.generations
 	r.config.runtimeCatalog = runner.catalog
+	r.config.runtimeNative = runner.native
 	r.config.runtimeEnvironmentAdmission = runner.environments
 	if runner.environments != nil {
 		runner.environments.register(r.config)

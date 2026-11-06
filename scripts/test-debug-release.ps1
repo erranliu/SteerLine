@@ -11,21 +11,11 @@ if (-not $IndependentProcess) {
 }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $generator = Join-Path $PSScriptRoot 'new-debug-release.ps1'
-# Invalid remote helper selections must fail before creating a package or
-# consulting any installed Runner. Paths belong to the selected execution host.
-foreach ($invalidRuntime in @(
-    @{Orca=$true},
-    @{Orca=$true;OrcaRuntimeExecutable='relative.exe';OrcaRuntimeSHA256=('a'*64)},
-    @{Orca=$true;OrcaRuntimeExecutable='C:/runtime/agent.exe';OrcaRuntimeSHA256='bad'},
-    @{Orca=$true;OrcaRuntimeExecutable='C:/runtime/agent.exe';OrcaRuntimeSHA256=(('a'*64)+"`n")},
-    @{OrcaRuntimeExecutable='C:/runtime/agent.exe'}
-)) {
-    $rejected = $false
-    try { & $generator @invalidRuntime | Out-Null } catch {
-        if ($_.Exception.Message -notmatch '^Orca (requires|runtime parameters require)') { throw }
-        $rejected = $true
-    }
-    if (-not $rejected) { throw 'Invalid Orca runtime selection was accepted' }
+# Unsupported native selections fail before creating a package.
+foreach ($invalidSelection in @(@{Orca=$true;OrcaAgent='dsh'},@{Orca=$true;OrcaAgent='pi';OrcaEnvironment='remote'},@{Orca=$true;AgentExecutable='C:/custom/agent.exe'})) {
+    $rejected=$false
+    try { & $generator @invalidSelection | Out-Null } catch { if ($_.Exception.Message -notmatch '^(Local Orca supports|Orca uses its native executor)') {throw};$rejected=$true }
+    if (-not $rejected) {throw 'Unsupported native selection was accepted'}
 }
 $testRoot = Join-Path 'C:\SteerlineDebug' (([string][char]0x4E2D + [char]0x6587) + ' test-' + [Guid]::NewGuid().ToString('N').Substring(0,12))
 $oldHome = $env:STEERLINE_HOME

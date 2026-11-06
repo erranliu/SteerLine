@@ -214,7 +214,7 @@ func (m *projectMaintenance) refreshMaterials(ctx context.Context, selected map[
 			}
 			p, err := m.config.RunnerExecution.Profile(selectedProfile, "")
 			if err == nil {
-				_, err = runnerclient.GenerationExecution(p.Execution)
+				_, err = m.config.deriveProfile(ctx, p, "generate", "read_only")
 			}
 			if err != nil || m.tests == nil {
 				material.Status = "configuration_required"

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -30,6 +31,12 @@ function fixture(
     remoteAgents?: boolean;
     remotePair?: boolean;
     contentWorkflow?: boolean;
+    onlyRemote?: boolean;
+    externalModel?: string;
+    localPair?: boolean;
+    reloadProgram?: boolean;
+    delayLocalDirectory?: { resolve?: () => void };
+    defaultWithoutEffort?: boolean;
   } = {},
 ) {
   let saved: ConfigSnapshot = {
@@ -37,7 +44,7 @@ function fixture(
     saved_digest: "old",
     writable: !options.readOnly,
     efforts: ["medium", "high", "ultra"],
-    local_helper: { available: !!options.helper, reason: "helper 未部署" },
+    profile_views: {},
     combinations: [
       ...["codex-app-server", "orca-terminal"].map((adapter) => ({
         host: "local",
@@ -141,9 +148,11 @@ function fixture(
           agent: options.helperAgent ?? "codex",
           transport: { executable: "orca.exe" },
           agent_launch: {
-            executable: options.helperAgent === "pi" ? "pi.cmd" : "codex",
-            runtime_executable: "C:/deployment/helper.exe",
-            runtime_sha256: "a".repeat(64),
+            ...(options.defaultWithoutEffort
+              ? { reasoning_effort: "high" }
+              : {
+                  executable: options.helperAgent === "pi" ? "pi.cmd" : "codex",
+                }),
           },
         },
       },
@@ -154,24 +163,85 @@ function fixture(
     delete saved.config.execution_profiles[0].execution.settings
       .reasoning_effort;
   }
+  if (
+    options.localPair ||
+    options.reloadProgram ||
+    options.defaultWithoutEffort
+  )
+    delete saved.config.execution_profiles[0].execution.settings.github_auth;
+  if (options.localPair) {
+    const original = saved.config.execution_profiles[0];
+    original.execution.settings.executable = "C:/chosen/first-codex.exe";
+    const second = structuredClone(original);
+    second.id = "local-second";
+    second.name = "第二本机方案";
+    second.execution.settings.executable = "C:/chosen/second-codex.exe";
+    saved.config.execution_profiles.push(second);
+  }
   if (options.remotePair) {
-    for (const target of ["one", "two"]) saved.config.execution_profiles.push({
-      id: `remote-${target}`, name: `远端${target}方案`,
-      execution: {adapter: "orca-terminal", target: {kind: "orca_environment", environment: target}, settings: {agent: "codex", agent_launch: {model: "selected"}}},
-      workflow: {id: "development", version: 2},
-    });
+    for (const target of ["one", "two"])
+      saved.config.execution_profiles.push({
+        id: `remote-${target}`,
+        name: `远端${target}方案`,
+        execution: {
+          adapter: "orca-terminal",
+          target: { kind: "orca_environment", environment: target },
+          settings: { agent: "codex", agent_launch: { model: "selected" } },
+        },
+        workflow: { id: "development", version: 2 },
+      });
+  }
+  if (options.onlyRemote) {
+    saved.config.execution_profiles = saved.config.execution_profiles.filter(
+      (p) => p.execution.target.kind === "orca_environment",
+    );
+    saved.config.default_execution_profile =
+      saved.config.execution_profiles[0].id;
   }
   const snapshot = () => {
     const environments: ConfigSnapshot["environments"] = [];
     for (const profile of saved.config.execution_profiles) {
-      let group = environments.find((g) => g.adapter === profile.execution.adapter &&
-        g.target.kind === profile.execution.target.kind && g.target.environment === profile.execution.target.environment);
-      if (!group) { group = {adapter: profile.execution.adapter, target: profile.execution.target, profile_ids: []}; environments.push(group); }
+      let group = environments.find(
+        (g) =>
+          g.adapter === profile.execution.adapter &&
+          g.target.kind === profile.execution.target.kind &&
+          g.target.environment === profile.execution.target.environment,
+      );
+      if (!group) {
+        group = {
+          adapter: profile.execution.adapter,
+          target: profile.execution.target,
+          profile_ids: [],
+        };
+        environments.push(group);
+      }
       group.profile_ids.push(profile.id);
     }
-    return {...saved, environments};
+    const profile_views: ConfigSnapshot["profile_views"] = {};
+    for (const p of saved.config.execution_profiles) {
+      const fields = (
+        p.execution.adapter === "orca-terminal"
+          ? p.execution.settings.agent_launch
+          : p.execution.settings
+      ) as { model?: string; reasoning_effort?: string } | undefined;
+      profile_views[p.id] = {
+        editable: !options.unknown,
+        view: {
+          adapter: p.execution.adapter,
+          target: p.execution.target,
+          agent: String(p.execution.settings.agent ?? "codex"),
+          access_mode: String(
+            p.execution.settings.access_mode ?? "full_access",
+          ),
+          model: fields?.model,
+          reasoning_effort: fields?.reasoning_effort,
+        },
+      };
+    }
+    return { ...saved, environments, profile_views };
   };
   const writes: unknown[] = [];
+  let reads = 0;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -206,6 +276,7 @@ function fixture(
           });
         }
         if (q.adapter === "orca-terminal") {
+          if (options.delay) await new Promise((r) => setTimeout(r, 120));
           if (q.agent === "pi") {
             if (options.piProviders)
               return response({
@@ -249,14 +320,52 @@ function fixture(
               {
                 id: q.agent + "-local",
                 label: q.agent + "-local",
-                efforts: [{ value: "high" }],
+                efforts: options.defaultWithoutEffort
+                  ? []
+                  : [{ value: "high" }],
                 is_default: true,
-                default_effort: "high",
+                default_effort: options.defaultWithoutEffort
+                  ? undefined
+                  : "high",
               },
             ],
             context_unverified: true,
           });
         }
+        if (options.reloadProgram) {
+          const reloaded = saved.saved_digest === "reloaded";
+          if (!reloaded && options.delayLocalDirectory)
+            await new Promise<void>((resolve) => {
+              options.delayLocalDirectory!.resolve = resolve;
+            });
+          return response({
+            state: "ready",
+            models: [
+              {
+                id: reloaded ? "new-program-model" : "old-program-model",
+                label: reloaded ? "New program model" : "Old program model",
+                efforts: [],
+              },
+            ],
+          });
+        }
+        if (options.localPair)
+          return response({
+            state: "ready",
+            models: [
+              {
+                id:
+                  q.profile_id === "local-second"
+                    ? "second-model"
+                    : "first-model",
+                label:
+                  q.profile_id === "local-second"
+                    ? "Second program model"
+                    : "First program model",
+                efforts: [],
+              },
+            ],
+          });
         return response({
           state: "ready",
           origin: "probe",
@@ -274,20 +383,68 @@ function fixture(
           ],
         });
       }
+      if (url.endsWith("/compose")) {
+        const q = JSON.parse(init!.body as string);
+        const base = saved.config.execution_profiles.find(
+          (p) => p.id === q.base_profile_id,
+        );
+        const selection = q.selection;
+        const matching =
+          base &&
+          base.execution.adapter === selection.adapter &&
+          JSON.stringify(base.execution.target) ===
+            JSON.stringify(selection.target);
+        const settings: Record<string, unknown> = matching
+          ? structuredClone(base.execution.settings)
+          : {};
+        settings.access_mode = selection.access_mode;
+        const fields =
+          selection.adapter === "orca-terminal"
+            ? ((settings.agent_launch ??= {}) as Record<string, unknown>)
+            : settings;
+        if (selection.adapter === "orca-terminal")
+          settings.agent = selection.agent;
+        if (selection.model) fields.model = selection.model;
+        if (selection.reasoning_effort)
+          fields.reasoning_effort = selection.reasoning_effort;
+        for (const key of q.unset) delete fields[key];
+        return response({
+          execution: {
+            adapter: selection.adapter,
+            target: selection.target,
+            settings,
+          },
+          view: selection,
+        });
+      }
       if (init?.method === "PUT") {
-        writes.push(JSON.parse(init.body as string));
-        if (options.conflict)
+        writes.push(JSON.parse(init.body as string).config);
+        if (options.conflict) {
+          if (options.externalModel)
+            saved.config.execution_profiles[0].execution.settings.model =
+              options.externalModel;
           return response(
             { code: "configuration_changed", reason: "changed" },
             412,
           );
+        }
         saved = {
           ...saved,
-          config: JSON.parse(init.body as string),
+          config: JSON.parse(init.body as string).config,
           saved_digest: "new",
         };
         if (options.lost) throw new TypeError("lost response");
         return response(snapshot());
+      }
+      if (
+        options.reloadProgram &&
+        url.endsWith("/execution-config") &&
+        !init?.method &&
+        ++reads > 1
+      ) {
+        saved.config.execution_profiles[0].execution.settings.executable =
+          "C:/chosen/reloaded-codex.exe";
+        saved.saved_digest = "reloaded";
       }
       return response(snapshot());
     }),
@@ -491,23 +648,21 @@ it("creates a local Orca Codex profile from a Pi-only local deployment with expl
   await screen.findByRole("option", { name: "codex-local" });
   fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
   await waitFor(() => expect(writes).toHaveLength(1));
-  const created = (writes[0] as ConfigSnapshot["config"]).execution_profiles.at(-1)!;
+  const created = (writes[0] as ConfigSnapshot["config"]).execution_profiles.at(
+    -1,
+  )!;
   expect(created.execution).toMatchObject({
     adapter: "orca-terminal",
     target: { kind: "local" },
     settings: {
       access_mode: "full_access",
       agent: "codex",
-      agent_launch: {
-        executable: "codex", model: "codex-local",
-        runtime_executable: "C:/deployment/helper.exe",
-        runtime_sha256: "a".repeat(64),
-      },
+      agent_launch: { model: "codex-local" },
     },
   });
 });
 
-it("maps local Orca agents, inherits deployment material and strips it remotely", async () => {
+it("composes local and remote logical selections without retired helper fields", async () => {
   const writes = fixture({ helper: true, delay: true });
   await screen.findByDisplayValue("本机日常");
   fireEvent.change(screen.getByLabelText("执行链路"), {
@@ -516,14 +671,16 @@ it("maps local Orca agents, inherits deployment material and strips it remotely"
   await screen.findByRole("option", { name: "codex-local" });
   fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "pi" } });
   fireEvent.change(screen.getByLabelText("Agent"), {
-    target: { value: "dsh" },
+    target: { value: "pi" },
   });
-  await screen.findByRole("option", { name: "dsh-local" });
-  await new Promise((r) => setTimeout(r, 160));
-  expect(screen.getByLabelText("模型")).toHaveValue("dsh-local");
-  expect(screen.getByLabelText("Thinking effort").textContent).not.toContain(
-    "ultra",
-  );
+  await screen.findByText("Pi 未注册目录；可手动填写");
+  fireEvent.click(screen.getByRole("button", { name: "手动填写" }));
+  fireEvent.change(screen.getByLabelText("模型标识"), {
+    target: { value: "provider/manual" },
+  });
+  fireEvent.change(screen.getByLabelText("Thinking effort"), {
+    target: { value: "high" },
+  });
   fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
   await waitFor(() => expect(writes).toHaveLength(1));
   const local = (writes[0] as ConfigSnapshot["config"]).execution_profiles[0];
@@ -534,13 +691,10 @@ it("maps local Orca agents, inherits deployment material and strips it remotely"
     adapter: "orca-terminal",
     target: { kind: "local" },
     settings: {
-      agent: "dsh",
+      agent: "pi",
       agent_launch: {
-        executable: "dsh.cmd",
-        model: "dsh-local",
+        model: "provider/manual",
         reasoning_effort: "high",
-        runtime_executable: "C:/deployment/helper.exe",
-        runtime_sha256: "a".repeat(64),
       },
     },
   });
@@ -563,7 +717,7 @@ it("maps local Orca agents, inherits deployment material and strips it remotely"
     "runtime_sha256",
   );
 });
-it("keeps local directory querying available without helper and labels missing Pi catalogs", async () => {
+it("allows logical local selection without retired helper gating and labels missing Pi catalogs", async () => {
   fixture();
   await screen.findByDisplayValue("本机日常");
   fireEvent.change(screen.getByLabelText("执行链路"), {
@@ -571,7 +725,7 @@ it("keeps local directory querying available without helper and labels missing P
   });
   fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "pi" } });
   await screen.findByText("Pi 未注册目录；可手动填写");
-  expect(screen.getByText("helper 未部署")).toBeVisible();
+  expect(screen.queryByText("helper 未部署")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "手动填写" }));
   fireEvent.change(screen.getByLabelText("模型标识"), {
     target: { value: "provider/manual" },
@@ -579,7 +733,7 @@ it("keeps local directory querying available without helper and labels missing P
   expect(screen.getByLabelText("Thinking effort").textContent).not.toContain(
     "ultra",
   );
-  expect(screen.getByRole("button", { name: "保存配置" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "保存配置" })).not.toBeDisabled();
   const calls = vi
     .mocked(fetch)
     .mock.calls.filter(([, init]) =>
@@ -620,9 +774,9 @@ it("selects an Orca-provided Pi provider without storing credentials or widening
   fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
   await waitFor(() => expect(writes).toHaveLength(1));
   const profile = (writes[0] as ConfigSnapshot["config"]).execution_profiles[0];
-  expect(profile.execution.settings.agent_launch?.model).toBe(
-    "openrouter/deepseek/deepseek-chat",
-  );
+  expect(
+    (profile.execution.settings.agent_launch as Record<string, unknown>)?.model,
+  ).toBe("openrouter/deepseek/deepseek-chat");
   expect(profile.execution.settings).not.toHaveProperty("provider");
   expect(profile.execution.settings).not.toHaveProperty("api_key");
   expect(screen.getByText(/Provider 与 API key 请在目标 Orca/)).toBeVisible();
@@ -691,15 +845,151 @@ it("configuration reconciles a lost save response and disables writes in a froze
 });
 
 it("binds discovery to the complete saved remote target", async () => {
-  fixture({remotePair: true});
-  fireEvent.click(await screen.findByRole("button", {name: /远端one方案/}));
-  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([, init]) => {
-    const q = init?.body && JSON.parse(String(init.body));
-    return q?.environment === "one" && q.profile_id === "remote-one";
-  })).toBe(true));
-  fireEvent.click(screen.getByRole("button", {name: /远端two方案/}));
-  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([, init]) => {
-    const q = init?.body && JSON.parse(String(init.body));
-    return q?.environment === "two" && q.profile_id === "remote-two";
-  })).toBe(true));
+  fixture({ remotePair: true });
+  fireEvent.click(await screen.findByRole("button", { name: /远端one方案/ }));
+  await waitFor(() =>
+    expect(
+      vi.mocked(fetch).mock.calls.some(([, init]) => {
+        const q = init?.body && JSON.parse(String(init.body));
+        return q?.environment === "one" && q.profile_id === "remote-one";
+      }),
+    ).toBe(true),
+  );
+  fireEvent.click(screen.getByRole("button", { name: /远端two方案/ }));
+  await waitFor(() =>
+    expect(
+      vi.mocked(fetch).mock.calls.some(([, init]) => {
+        const q = init?.body && JSON.parse(String(init.body));
+        return q?.environment === "two" && q.profile_id === "remote-two";
+      }),
+    ).toBe(true),
+  );
+});
+
+it("keeps a manually selected model when an older directory response arrives", async () => {
+  fixture({ delay: true });
+  await screen.findByDisplayValue("本机日常");
+  fireEvent.change(screen.getByLabelText("执行链路"), {
+    target: { value: "orca-terminal" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "手动填写" }));
+  fireEvent.change(screen.getByLabelText("模型标识"), {
+    target: { value: "user-selected" },
+  });
+  await new Promise((r) => setTimeout(r, 220));
+  expect(screen.getByLabelText("模型标识")).toHaveValue("user-selected");
+});
+it("reloads both the saved execution and its new logical view after a conflict", async () => {
+  fixture({ conflict: true, externalModel: "external-new-model" });
+  fireEvent.change(await screen.findByLabelText("配置名称"), {
+    target: { value: "my rename" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await screen.findByText(/配置已被其他页面修改。当前草稿已保留/);
+  fireEvent.click(screen.getByRole("button", { name: "重新读取配置" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("模型")).toHaveValue("external-new-model"),
+  );
+  expect(screen.getByRole("button", { name: "保存配置" })).toBeDisabled();
+});
+it("creates a logical default without an existing local source", async () => {
+  fixture({ remotePair: true, onlyRemote: true });
+  await screen.findByDisplayValue("远端one方案");
+  fireEvent.click(screen.getByRole("button", { name: "新建方案" }));
+  await screen.findByDisplayValue("新的执行方案");
+  expect(screen.getByLabelText("执行链路")).toHaveValue("codex-app-server");
+  await waitFor(() => {
+    const calls = vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url, init]) =>
+          String(url).endsWith("/discover") &&
+          JSON.parse(String(init?.body)).kind === "models",
+      );
+    expect(JSON.parse(String(calls.at(-1)?.[1]?.body))).toMatchObject({
+      adapter: "codex-app-server",
+      host: "local",
+    });
+    expect(JSON.parse(String(calls.at(-1)?.[1]?.body))).not.toHaveProperty(
+      "profile_id",
+    );
+  });
+});
+
+it("discovers the selected saved program and keeps that source when copying", async () => {
+  fixture({ localPair: true });
+  await screen.findByRole("option", { name: "First program model" });
+  fireEvent.click(screen.getByRole("button", { name: /第二本机方案/ }));
+  await screen.findByRole("option", { name: "Second program model" });
+  expect(
+    screen.queryByRole("option", { name: "First program model" }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "复制" }));
+  await screen.findByDisplayValue("第二本机方案 副本");
+  await screen.findByRole("option", { name: "Second program model" });
+  const calls = vi
+    .mocked(fetch)
+    .mock.calls.filter(
+      ([url, init]) =>
+        String(url).endsWith("/discover") &&
+        JSON.parse(String(init?.body)).kind === "models",
+    );
+  expect(calls).toHaveLength(3);
+  expect(
+    calls.slice(1).map(([, init]) => JSON.parse(String(init?.body)).profile_id),
+  ).toEqual(["local-second", "local-second"]);
+});
+
+it("requeries a reloaded saved program and rejects its older directory response", async () => {
+  const delayed: { resolve?: () => void } = {};
+  fixture({
+    reloadProgram: true,
+    delayLocalDirectory: delayed,
+    conflict: true,
+  });
+  await screen.findByDisplayValue("本机日常");
+  await waitFor(() => expect(delayed.resolve).toBeDefined());
+  const oldCall = vi
+    .mocked(fetch)
+    .mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith("/discover") &&
+        JSON.parse(String(init?.body)).kind === "models",
+    )!;
+  fireEvent.change(screen.getByLabelText("配置名称"), {
+    target: { value: "本地草稿" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await screen.findByText(/配置已被其他页面修改。当前草稿已保留/);
+  fireEvent.click(screen.getByRole("button", { name: "重新读取配置" }));
+  await screen.findByRole("option", { name: "New program model" });
+  expect(oldCall[1]?.signal?.aborted).toBe(true);
+  await act(async () => delayed.resolve!());
+  expect(
+    screen.queryByRole("option", { name: "Old program model" }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("option", { name: "New program model" }),
+  ).toBeInTheDocument();
+});
+
+it("keeps explicit effort removal when a saved base supplies a default model without effort", async () => {
+  const writes = fixture({ helper: true, defaultWithoutEffort: true });
+  await screen.findByDisplayValue("本机日常");
+  fireEvent.change(screen.getByLabelText("执行链路"), {
+    target: { value: "orca-terminal" },
+  });
+  await screen.findByRole("option", { name: "codex-local" });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  const compose = vi
+    .mocked(fetch)
+    .mock.calls.find(([url]) => String(url).endsWith("/compose"))!;
+  expect(JSON.parse(String(compose[1]?.body)).unset).toContain(
+    "reasoning_effort",
+  );
+  const profile = (writes[0] as ConfigSnapshot["config"]).execution_profiles[0];
+  expect(profile.execution.settings.agent_launch).not.toHaveProperty(
+    "reasoning_effort",
+  );
 });

@@ -119,7 +119,7 @@ func (p *Project) checkRemoteEnvironment(seconds int) env.Record {
 		s.t.Fatal("missing stopped final report")
 	}
 	// Retain only caller-owned/public evidence, never Runner private storage.
-	s.Must(controlled.Write(filepath.Join(s.Output, "environment-proof.json"), map[string]any{"execution_digest": s.Run.Remote.ExecutionDigest, "source_commit": r.Prepared.Commit, "activity_id": id, "state": r.State, "rounds": len(r.Rounds), "round_details": r.Rounds, "run_id": last.RunID, "run": last.Run, "result": last.Result, "report": last.Report, "manifest": r.Prepared.Manifest, "round_timeout_seconds": seconds}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "environment-proof.json"), map[string]any{"execution_digest": s.Run.Remote.ExecutionDigest, "execution_identity": r.Prepared.Identity, "source_commit": r.Prepared.Commit, "activity_id": id, "state": r.State, "rounds": len(r.Rounds), "round_details": r.Rounds, "run_id": last.RunID, "run": last.Run, "result": last.Result, "report": last.Report, "manifest": r.Prepared.Manifest, "round_timeout_seconds": seconds}))
 
 	return r
 }
@@ -134,7 +134,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 	in := s.Run.Remote
 	config, err := driver.DecodeProjectConfig(in.ProjectConfig)
 	s.Must(err)
-	p := &Project{Scenario: s, Name: "308", Root: filepath.Join(s.Root, "308"), Home: filepath.Join(s.Root, "308", "home"), Repo: filepath.Join(s.Root, "308", "merge-h-308-code"), Config: filepath.Join(s.Root, "308", "home", "etc", "308.json"), Provider: filepath.Join(s.Root, "308", "provider.json"), Executable: s.Run.Binary, Chain: "environment-live", Tasks: map[string]Task{}}
+	p := &Project{Scenario: s, Name: "308", Root: filepath.Join(s.Root, "308"), Home: filepath.Join(s.Root, "308", "home"), Repo: filepath.Join(s.Root, "308", filepath.Base(in.Project)), Config: filepath.Join(s.Root, "308", "home", "etc", "308.json"), Provider: filepath.Join(s.Root, "308", "provider.json"), Executable: s.Run.Binary, Chain: "environment-live", Tasks: map[string]Task{}}
 	s.projects = append(s.projects, p)
 	s.register("project", p.Root, 0)
 	for _, dir := range []string{p.Root, filepath.Join(p.Home, "etc"), filepath.Join(p.Home, "temp"), filepath.Join(p.Home, "codex")} {
@@ -176,7 +176,11 @@ func runProjectEnvironment(t *testing.T, id string) {
 	s.Must(controlled.Write(p.Config, config))
 	selection, err := driver.RunnerSelection(s.Run.Runner)
 	s.Must(err)
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": in.Profile.ID, "execution_profiles": []any{in.Profile}}))
+	profiles := []any{in.Profile}
+	if in.GenerationProfile != nil {
+		profiles = append(profiles, *in.GenerationProfile)
+	}
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": in.Profile.ID, "execution_profiles": profiles}))
 	raw, err := p.Driver.Run(s.Context, "home", "-config", p.Config)
 	s.Must(err)
 	for _, line := range strings.Split(string(raw), "\n") {
@@ -198,6 +202,14 @@ func runProjectEnvironment(t *testing.T, id string) {
 	if in.Profile.Execution.Adapter == "orca-terminal" {
 		r := loadOrcaTarget(s, p)
 		r.Fetch(s, p, fixture)
+	}
+	if in.GenerationProfile != nil {
+		p.StartService()
+		receipt := p.EnvironmentCommand("maintenance_profile", map[string]string{"profile": in.GenerationProfile.ID})
+		s.Must(controlled.Write(filepath.Join(s.Output, "generation-profile-selection.json"), receipt))
+		if receipt.Status != "applied" {
+			t.Fatal("explicit admission generation profile was not applied", receipt)
+		}
 	}
 	p.CreateTasks()
 	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "resume_dispatch", ""))
@@ -236,6 +248,30 @@ func runProjectEnvironment(t *testing.T, id string) {
 		p.StopService()
 		t.Fatal("native environment remains not_ready; negative evidence was preserved and does not count as a positive L4 pass")
 	}
+	// Restart the same isolated home after its original detection has settled.
+	// The retained request/result must survive both application and Runner restart.
+	p.StopService()
+	p.StartService()
+	reader, err := sqlite.OpenSQLiteReader(p.Database)
+	s.Must(err)
+	restored, err := reader.Environment(s.Context, p.ProjectID, activity.ID)
+	reader.Close()
+	s.Must(err)
+	if len(restored.Rounds) != 1 {
+		t.Fatal("same-home restart changed the detection invocation count")
+	}
+	originalPrepared, err := json.Marshal(activity.Prepared)
+	s.Must(err)
+	restoredPrepared, err := json.Marshal(restored.Prepared)
+	s.Must(err)
+	originalResult, err := json.Marshal(activity.Rounds[0].Result)
+	s.Must(err)
+	restoredResult, err := json.Marshal(restored.Rounds[0].Result)
+	s.Must(err)
+	if restored.Status() != "ready" || len(restored.Rounds) != 1 || !bytes.Equal(originalPrepared, restoredPrepared) || !bytes.Equal(originalResult, restoredResult) || restored.Rounds[0].RunID != activity.Rounds[0].RunID || restored.Rounds[0].InputDigest != activity.Rounds[0].InputDigest || !bytes.Equal(restored.Rounds[0].Request.Input, activity.Rounds[0].Request.Input) || restored.Rounds[0].Run == nil || restored.Rounds[0].Run.StopStatus != "stopped" || restored.Rounds[0].Result == nil || restored.Rounds[0].Result.CollectionStatus != "closed" {
+		t.Fatal("same-home restart changed the frozen detection or its settlement")
+	}
+	s.Must(controlled.Write(filepath.Join(s.Output, "environment-restart-proof.json"), map[string]any{"original": activity, "restored": restored, "same_home": p.Home, "runner": s.Run.Runner}))
 	p.Claim("a")
 	var admitted, admittedCandidate, admittedDigest string
 	var probe admissionProbe

@@ -226,7 +226,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if c.EnvironmentReadinessSkipped {
 			c.Environment = nil
 		} else {
-			if err := verifyCandidateEnvironment(ctx, tx.tx, c.Project, c.Environment, input.Execution); err != nil {
+			if err := s.verifyCandidateEnvironment(ctx, tx.tx, c.Project, c.Environment, input.Execution); err != nil {
 				return err
 			}
 		}

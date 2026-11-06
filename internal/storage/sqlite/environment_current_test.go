@@ -20,7 +20,11 @@ import (
 )
 
 func readinessRecord(project string) env.Record {
-	return env.Record{ID: env.ID(), Project: project, Revision: 1, Kind: "adaptation", Profile: "one", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"codex","model":"one"}`)}, Prepared: env.Prepared{Inputs: "basis"}, CreatedAt: time.Now().UTC(), State: "running", Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1}}}
+	record := env.Record{FormatVersion: 1, ID: env.ID(), Project: project, Revision: 1, Kind: "adaptation", Profile: "one", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"codex","model":"one"}`)}, Prepared: env.Prepared{Inputs: "basis"}, CreatedAt: time.Now().UTC(), State: "running", Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1}}}
+	record.Prepared.Identity = fixtureExecutionIdentity(record.Execution)
+	record.Prepared.DerivedExecution = record.Execution
+	record.Prepared.Input.Execution = record.Execution
+	return record
 }
 func invalidateReadiness(t *testing.T, s *SQLiteStore, project, key string, revision uint64) {
 	t.Helper()
@@ -36,7 +40,7 @@ func TestProjectEnvironmentReadinessCurrentAtomicityAndLateReady(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
 	record := readinessRecord("project")
-	key, _ := env.Key(record.Execution)
+	key, _ := env.Key(record.Execution, fixtureExecutionIdentity(record.Execution))
 	require(t, s.StartEnvironment(ctx, record, 0))
 	current, err := s.CurrentEnvironment(ctx, "project", key)
 	require(t, err)
@@ -80,7 +84,7 @@ func TestProjectEnvironmentReadinessTransactionProofAndIdentity(t *testing.T) {
 	record.State = "ready"
 	record.Rounds[0].Settled = true
 	require(t, s.StartEnvironment(ctx, record, 0))
-	key, _ := env.Key(record.Execution)
+	key, _ := env.Key(record.Execution, fixtureExecutionIdentity(record.Execution))
 	current, err := s.CurrentEnvironment(ctx, "project", key)
 	require(t, err)
 	proof, err := env.Qualify(current, record, "basis")
@@ -93,11 +97,28 @@ func TestProjectEnvironmentReadinessTransactionProofAndIdentity(t *testing.T) {
 		defer tx.Rollback()
 		var evidence *runnerstate.EnvironmentAdmission
 		if p != nil {
-			evidence = &runnerstate.EnvironmentAdmission{Key: p.Key, Revision: p.Revision, ActivityID: p.ActivityID, Basis: p.Basis}
+			evidence = &runnerstate.EnvironmentAdmission{Identity: fixtureExecutionIdentity(execution), Key: p.Key, Revision: p.Revision, ActivityID: p.ActivityID, Basis: p.Basis}
 		}
-		return verifyCandidateEnvironment(ctx, tx, project, evidence, execution)
+		return s.verifyCandidateEnvironment(ctx, tx, project, evidence, execution)
 	}
 	require(t, check("project", &proof, record.Execution))
+	// Even a self-consistent new source digest cannot authorize a reused context.
+	t.Run("forged_source_with_ready_context", func(t *testing.T) {
+		changed := record.Execution
+		changed.Settings = json.RawMessage(`{"executable":"injected","model":"one"}`)
+		identity := record.Prepared.Identity
+		identity.SourceExecutionDigest = runnercontract.ConfigurationValueDigest(changed)
+		tx, err := s.db.BeginTx(ctx, nil)
+		require(t, err)
+		defer tx.Rollback()
+		evidence := &runnerstate.EnvironmentAdmission{Identity: identity, Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
+		if err = s.verifyCandidateEnvironment(ctx, tx, "project", evidence, changed); err == nil {
+			t.Fatal("forged source reused a ready context")
+		}
+	})
+	changedModel := record.Execution
+	changedModel.Settings = json.RawMessage(`{"executable":"codex","model":"two","reasoning_effort":"high"}`)
+	require(t, check("project", &proof, changedModel))
 	if check("project", nil, record.Execution) == nil || check("other", &proof, record.Execution) == nil {
 		t.Fatal("missing/foreign proof allowed")
 	}
@@ -126,7 +147,7 @@ func reserveFixtureCandidate(t *testing.T, s *SQLiteStore, ctx context.Context, 
 	if input.Execution.Adapter == "" {
 		input.Execution = readinessRecord(c.Project).Execution
 	}
-	key, err := env.Key(input.Execution)
+	key, err := env.Key(input.Execution, fixtureExecutionIdentity(input.Execution))
 	if err != nil {
 		return err
 	}
@@ -137,6 +158,9 @@ func reserveFixtureCandidate(t *testing.T, s *SQLiteStore, ctx context.Context, 
 		}
 		record := readinessRecord(c.Project)
 		record.Execution = input.Execution
+		record.Prepared.Identity = fixtureExecutionIdentity(record.Execution)
+		record.Prepared.Input.Execution = record.Execution
+		record.Prepared.DerivedExecution = record.Execution
 		record.State = "ready"
 		record.Rounds[0].Settled = true
 		if err := s.StartEnvironment(ctx, record, 0); err != nil {
@@ -155,7 +179,7 @@ func reserveFixtureCandidate(t *testing.T, s *SQLiteStore, ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	c.Environment = &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
+	c.Environment = &runnerstate.EnvironmentAdmission{Identity: fixtureExecutionIdentity(input.Execution), Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
 	c.Submit.Input, _ = json.Marshal(input)
 	return s.ReserveRunnerCandidate(ctx, work, c, extra)
 }
@@ -181,14 +205,14 @@ func TestProjectEnvironmentReadinessReservationCommitOrder(t *testing.T) {
 				record.State = "ready"
 				record.Rounds[0].Settled = true
 				require(t, s.StartEnvironment(ctx, record, 0))
-				key, _ := env.Key(record.Execution)
+				key, _ := env.Key(record.Execution, fixtureExecutionIdentity(record.Execution))
 				current, err := s.CurrentEnvironment(ctx, project, key)
 				require(t, err)
 				proof, err := env.Qualify(current, record, record.Prepared.Inputs)
 				require(t, err)
 				input := runnerclient.RunInput{Execution: record.Execution, Title: work.Record.Title, Repository: runnerclient.Repository{URL: contract.Repository, Remote: contract.Remote, BaseBranch: contract.Branch, BaseRevision: strings.Repeat("a", 40)}, Documents: runnerclient.Documents{Spec: runnerclient.Document{Path: contract.SpecRef.Path}, Plan: runnerclient.Document{Path: contract.PlanRef.Path}}, Publication: runnerclient.Publication{BaseBranch: contract.Branch}}
 				raw, _ := json.Marshal(input)
-				candidate := runnerbridge.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "candidate", Revision: 1, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", ContractDigest: contract.Digest, BaseRevision: strings.Repeat("a", 40), Participation: "active", Explicit: true, Environment: &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}, SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "original-request", Input: raw}}
+				candidate := runnerbridge.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "candidate", Revision: 1, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", ContractDigest: contract.Digest, BaseRevision: strings.Repeat("a", 40), Participation: "active", Explicit: true, Environment: &runnerstate.EnvironmentAdmission{Identity: fixtureExecutionIdentity(input.Execution), Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}, SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "original-request", Input: raw}}
 				release := make(chan struct{})
 				done := make(chan error, 1)
 				go func() { <-release; done <- s.ReserveRunnerCandidate(ctx, work, candidate, false) }()
@@ -252,11 +276,14 @@ func prepareFixtureServiceEnvironment(t *testing.T, s *SQLiteStore, service *tas
 			profile.Input.Execution = readinessRecord(service.Project).Execution
 			service.Profiles[id] = profile
 		}
-		key, err := env.Key(profile.Input.Execution)
+		key, err := env.Key(profile.Input.Execution, fixtureExecutionIdentity(profile.Input.Execution))
 		require(t, err)
 		if _, err = s.CurrentEnvironment(ctx, service.Project, key); errors.Is(err, env.ErrNotFound) {
 			record := readinessRecord(service.Project)
 			record.Execution = profile.Input.Execution
+			record.Prepared.Identity = fixtureExecutionIdentity(record.Execution)
+			record.Prepared.DerivedExecution = record.Execution
+			record.Prepared.Input.Execution = record.Execution
 			record.State = "ready"
 			record.Rounds[0].Settled = true
 			require(t, s.StartEnvironment(ctx, record, 0))
@@ -265,7 +292,7 @@ func prepareFixtureServiceEnvironment(t *testing.T, s *SQLiteStore, service *tas
 		}
 	}
 	service.CheckExecution = func(ctx context.Context, id string, _ bool) error {
-		key, err := env.Key(service.Profiles[id].Input.Execution)
+		key, err := env.Key(service.Profiles[id].Input.Execution, fixtureExecutionIdentity(service.Profiles[id].Input.Execution))
 		if err != nil {
 			return err
 		}
@@ -292,7 +319,7 @@ func TestProjectEnvironmentObservedRevocationCannotRevokeNewSelection(t *testing
 	old.State = "ready"
 	old.Rounds[0].Settled = true
 	require(t, s.StartEnvironment(ctx, old, 0))
-	key, _ := env.Key(old.Execution)
+	key, _ := env.Key(old.Execution, fixtureExecutionIdentity(old.Execution))
 	if s.RevokeEnvironmentBasis(ctx, "project", key, env.ID(), "changed", 1) == nil {
 		t.Fatal("foreign observation revoked original selection")
 	}

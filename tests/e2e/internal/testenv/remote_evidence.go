@@ -18,9 +18,10 @@ func (p *Project) cleanupRemoteValidation(base string) {
 	s := p.Scenario
 	p.RemoteCleanupFailed = true
 	ownedWorkspaces := map[string]string{}
+	ownedReports := map[string]string{}
 	defer func() {
 		if !p.RemoteCleanupFailed && p.orcaEvidence != nil && p.orcaEvidence.ownedLocalSetup {
-			if err := p.orcaEvidence.cleanupLocalRegistration(s, p, ownedWorkspaces); err != nil {
+			if err := p.orcaEvidence.cleanupLocalRegistration(s, p, ownedWorkspaces, ownedReports); err != nil {
 				p.RemoteCleanupFailed = true
 				s.t.Error("own local Orca registration cleanup unverified:", err)
 			}
@@ -68,6 +69,7 @@ func (p *Project) cleanupRemoteValidation(base string) {
 				refs[round.Run.Execution.Branch] = true
 				if round.Run.Execution.Workspace != "" {
 					ownedWorkspaces[round.Run.Execution.Workspace] = round.Run.Execution.Branch
+					ownedReports[round.Run.Execution.Workspace] = round.Run.RunID
 				}
 			}
 		}
@@ -89,6 +91,7 @@ func (p *Project) cleanupRemoteValidation(base string) {
 		}
 		if candidate.Projection != nil && candidate.Projection.Execution.Workspace != "" && candidate.Projection.Execution.Branch != "" {
 			ownedWorkspaces[candidate.Projection.Execution.Workspace] = candidate.Projection.Execution.Branch
+			ownedReports[candidate.Projection.Execution.Workspace] = candidate.RunID
 		}
 	}
 	for ref := range refs {

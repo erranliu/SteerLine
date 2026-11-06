@@ -18,7 +18,8 @@
         "settings": {
           "executable": "codex",
           "model": "gpt-6-luna",
-          "reasoning_effort": "medium"
+          "reasoning_effort": "medium",
+          "access_mode": "full_access"
         }
       },
       "workflow": {
@@ -35,7 +36,8 @@
           "kind": "local"
         },
         "settings": {
-          "executable": "__ROOT__/bin/debug-helper.exe"
+          "executable": "__ROOT__/bin/debug-helper.exe",
+          "access_mode": "full_access"
         }
       },
       "workflow": {

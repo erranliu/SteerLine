@@ -5,6 +5,7 @@ package nativequery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/erranliu/SteerLine/internal/processwindow"
 	"io"
 	"os"
@@ -139,7 +140,7 @@ func RunInput(ctx context.Context, home, executable string, args []string, input
 		return nil, errors.New("metadata query exceeds 1 MiB")
 	}
 	if err = p.Wait(); err != nil {
-		return raw, errors.New("metadata query failed or timed out")
+		return raw, fmt.Errorf("metadata query failed or timed out: %w", err)
 	}
 	return raw, nil
 }

@@ -40,6 +40,8 @@ func (p *environmentPort) observe(ctx context.Context) {
 }
 
 func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *environmentPort {
+	c = bindNativeConfiguration(c, cli)
+	store.BindExecutionIdentityLookup(c.runtimeNative.Identity)
 	p := &environmentPort{config: c, store: store}
 	s := &env.Service{Project: c.Identity(), Store: store, Runner: cli, Build: cli.BuildPin(), Admit: admit}
 	p.service = s
@@ -91,7 +93,11 @@ func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prep
 	if e != nil {
 		return envmodel.Prepared{}, e
 	}
-	if e = p.config.runtimeCatalog.ValidateEnvironmentExecution(profile.Execution); e != nil {
+	derived, e := p.config.deriveProfile(ctx, profile, "execute", "full_access")
+	if e != nil || derived.Execution == nil {
+		return envmodel.Prepared{}, e
+	}
+	if e = p.config.runtimeCatalog.ValidateEnvironmentExecution(*derived.Execution); e != nil {
 		return envmodel.Prepared{}, e
 	}
 	return p.materialAt(ctx, id, "")
@@ -104,7 +110,11 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if e != nil {
 		return out, e
 	}
-	key, e := envmodel.Key(profile.Execution)
+	_, e = p.config.describeProfile(ctx, profile)
+	if e != nil {
+		return out, e
+	}
+	key, e := p.config.profileEnvironmentKey(ctx, profile)
 	if e != nil {
 		return out, e
 	}
@@ -133,7 +143,11 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if total > 1<<20 {
 		return out, &invalidEnvironmentBasis{errors.New("环境调用材料超限")}
 	}
-	execution, e := envmodel.Context(profile.Execution)
+	description, e := p.config.describeProfile(ctx, profile)
+	if e != nil || description.Identity == nil {
+		return out, e
+	}
+	execution, e := envmodel.Context(profile.Execution, *description.Identity)
 	if e != nil {
 		return out, e
 	}
@@ -156,7 +170,11 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if e != nil {
 		return out, e
 	}
-	out = envmodel.Prepared{Commit: commit, Inputs: envmodel.Digest(basis), ScriptDigest: envmodel.Digest(script), Manifest: manifest, Input: input}
+	derived, e := p.config.deriveProfile(ctx, profile, "execute", "full_access")
+	if e != nil || derived.Execution == nil {
+		return out, e
+	}
+	out = envmodel.Prepared{Identity: *description.Identity, DerivedExecution: *derived.Execution, Commit: commit, Inputs: envmodel.Digest(basis), ScriptDigest: envmodel.Digest(script), Manifest: manifest, Input: input}
 	return out, nil
 }
 
@@ -207,7 +225,7 @@ func (p *environmentPort) current(ctx context.Context, id string) (envmodel.Curr
 	if err != nil {
 		return envmodel.Current{}, envmodel.Record{}, err
 	}
-	key, err := envmodel.Key(profile.Execution)
+	key, err := p.config.profileEnvironmentKey(ctx, profile)
 	if err != nil {
 		return envmodel.Current{}, envmodel.Record{}, err
 	}
@@ -225,6 +243,16 @@ func (p *environmentPort) current(ctx context.Context, id string) (envmodel.Curr
 	return current, record, err
 }
 func (p *environmentPort) admission(ctx context.Context, id, candidateCommit string, refresh bool) (envmodel.Admission, envmodel.Record, error) {
+	if refresh {
+		p.config.runtimeNative.RefreshFailures()
+		profile, err := p.config.RunnerExecution.Profile(id, "")
+		if err != nil {
+			return envmodel.Admission{}, envmodel.Record{}, err
+		}
+		if _, err = p.config.describeProfile(ctx, profile); err != nil {
+			return envmodel.Admission{}, envmodel.Record{}, err
+		}
+	}
 	current, record, err := p.current(ctx, id)
 	if err != nil {
 		return envmodel.Admission{}, record, err

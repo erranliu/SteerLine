@@ -18,7 +18,8 @@ import {
   saveExecutionConfig,
   stable,
   type Profile,
-  type Settings,
+  type Selection,
+  type ProfileEdit,
   type ConfigSnapshot,
   type ExecutionConfig,
   type Catalog,
@@ -31,20 +32,7 @@ import {
 import "./execution-configs.css";
 
 const clone = <T,>(value: T): T => structuredClone(value);
-const values = (p: Profile) =>
-  p.execution.adapter === "orca-terminal"
-    ? (p.execution.settings.agent_launch ?? {})
-    : p.execution.settings;
 const remote = (p: Profile) => p.execution.target.kind === "orca_environment";
-const agentOf = (p: Profile) => p.execution.settings.agent || "codex";
-const editable = (p: Profile) =>
-  (p.execution.adapter === "codex-app-server" &&
-    p.execution.target.kind === "local") ||
-  (p.execution.adapter === "orca-terminal" &&
-    (remote(p)
-      ? agentOf(p) === "codex"
-      : p.execution.target.kind === "local" &&
-        ["codex", "pi", "dsh"].includes(agentOf(p))));
 const effortNames: Record<string, string> = {
   none: "None · 无",
   minimal: "Minimal · 最小",
@@ -76,6 +64,16 @@ export function ExecutionConfigs({
   });
   const [base, setBase] = useState<ConfigSnapshot>();
   const [draft, setDraft] = useState<Profile>();
+  const [selection, setSelection] = useState<Selection>();
+  const [baseProfileID, setBaseProfileID] = useState<string>();
+  const [unset, setUnset] = useState<string[]>([]);
+  const values = (p: Profile): Partial<Selection> =>
+    (p === draft ? selection : base?.profile_views[p.id]?.view) ?? {};
+  const agentOf = (p: Profile) =>
+    (p === draft ? selection?.agent : base?.profile_views[p.id]?.view?.agent) ??
+    "";
+  const editable = (p: Profile) =>
+    p === draft ? !!selection : !!base?.profile_views[p.id]?.editable;
   const [defaultChoice, setDefaultChoice] = useState(false);
   const [manual, setManual] = useState(false);
   const [providerChoice, setProviderChoice] = useState("");
@@ -88,12 +86,16 @@ export function ExecutionConfigs({
   const [pending, setPending] = useState<(() => void) | null>(null);
   const [deleting, setDeleting] = useState(false);
   const latest = useRef(0);
+  const saveEpoch = useRef(0);
+  const preferenceEdits = useRef(0);
   const environments = useExecutionEnvironments(home, csrf);
   useEffect(() => {
     if (!base && query.data) {
       setBase(query.data);
       const first = query.data.config.execution_profiles[0];
       setDraft(clone(first));
+      setSelection(query.data.profile_views[first.id]?.view);
+      setBaseProfileID(first.id);
       setDefaultChoice(
         first.id === query.data.config.default_execution_profile,
       );
@@ -109,14 +111,17 @@ export function ExecutionConfigs({
     if (!draft || !editable(draft)) return;
     const controller = new AbortController();
     const generation = ++latest.current;
+    const preferenceEpoch = preferenceEdits.current;
     setLoading(true);
     setCatalog(undefined);
     setProviderChoice("");
     const probeProfile = base?.config.execution_profiles.find(
       (p) =>
+        p.id === baseProfileID &&
         p.execution.adapter === draft.execution.adapter &&
         p.execution.target.kind === draft.execution.target.kind &&
-        (p.execution.target.environment || "") === (draft.execution.target.environment || "") &&
+        (p.execution.target.environment || "") ===
+          (draft.execution.target.environment || "") &&
         agentOf(p) === agentOf(draft),
     );
     let attempts = 0;
@@ -145,32 +150,33 @@ export function ExecutionConfigs({
       } while (true);
       if (generation !== latest.current || controller.signal.aborted) return;
       setCatalog(result);
-      if (result.state === "ready" && result.models?.length) {
-        setDraft((current) => {
-          if (!current || current.id !== draft.id || values(current).model)
-            return current;
-          if (
-            base?.config.execution_profiles.some(
-              (p) => p.id === current.id && stable(p) === stable(current),
-            )
-          )
-            return current;
-          const m =
-            result.models!.find((x) => x.is_default) ?? result.models![0];
-          const choice = base?.combinations.find(
-            (c) =>
-              c.host === current.execution.target.kind &&
-              c.adapter === current.execution.adapter &&
-              c.agent === agentOf(current),
-          );
-          return changeModel(
-            current,
-            m.id,
-            choice?.efforts.includes(m.default_effort ?? "")
-              ? m.default_effort
-              : undefined,
-          );
-        });
+      if (
+        result.state === "ready" &&
+        result.models?.length &&
+        (!saved ||
+          stable(base?.profile_views[saved.id]?.view) !== stable(selection)) &&
+        !selection?.model &&
+        preferenceEpoch === preferenceEdits.current
+      ) {
+        const m = result.models.find((x) => x.is_default) ?? result.models[0];
+        setSelection((current) =>
+          current && !current.model
+            ? {
+                ...current,
+                model: m.id,
+                ...(m.default_effort
+                  ? { reasoning_effort: m.default_effort }
+                  : {}),
+              }
+            : current,
+        );
+        setUnset((current) =>
+          current.filter(
+            (field) =>
+              field !== "model" &&
+              !(field === "reasoning_effort" && m.default_effort),
+          ),
+        );
       }
     };
     void run()
@@ -195,12 +201,23 @@ export function ExecutionConfigs({
     };
     // Model/effort edits do not launch a new native query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, draftID, host, adapter, agent, environment, refresh]);
+  }, [
+    api,
+    draftID,
+    baseProfileID,
+    base?.saved_digest,
+    host,
+    adapter,
+    agent,
+    environment,
+    refresh,
+  ]);
   const saved = base?.config.execution_profiles.find((p) => p.id === draft?.id);
   const dirty =
     !!draft &&
     (!saved ||
       stable(saved) !== stable(draft) ||
+      stable(base?.profile_views[draft.id]?.view) !== stable(selection) ||
       defaultChoice !== (base?.config.default_execution_profile === draft.id));
   const models = catalog?.models ?? [];
   const model = draft ? String(values(draft).model ?? "") : "";
@@ -232,14 +249,6 @@ export function ExecutionConfigs({
   );
   const schemaEfforts = combination?.efforts ?? [];
   const workflowChoices = combination?.workflows ?? [];
-  const localOrca = host === "local" && adapter === "orca-terminal";
-  const executionUnchanged =
-    !!saved &&
-    !!draft &&
-    stable(saved.execution) === stable(draft.execution) &&
-    stable(saved.workflow) === stable(draft.workflow);
-  const materialReady =
-    !localOrca || !!base?.local_helper.available || executionUnchanged;
   const allowed =
     models
       .find((m) => m.id === model)
@@ -257,7 +266,6 @@ export function ExecutionConfigs({
     effort === String(values(saved).reasoning_effort ?? "");
   const valid =
     !!draft?.name.trim() &&
-    materialReady &&
     !!combination?.supported &&
     (preservedModelChoice ||
       (!!model &&
@@ -269,9 +277,14 @@ export function ExecutionConfigs({
     if (dirty) setPending(() => action);
     else action();
   };
-  function select(p: Profile) {
+  function select(p: Profile, snapshot = base) {
+    saveEpoch.current++;
+    preferenceEdits.current++;
     setDraft(clone(p));
-    setDefaultChoice(p.id === base?.config.default_execution_profile);
+    setSelection(snapshot?.profile_views[p.id]?.view);
+    setBaseProfileID(p.id);
+    setUnset([]);
+    setDefaultChoice(p.id === snapshot?.config.default_execution_profile);
     setManual(false);
     setError("");
     setNotice("");
@@ -281,36 +294,73 @@ export function ExecutionConfigs({
   function create(copy = false) {
     if (!base) return;
     const id = "profile-" + crypto.randomUUID().slice(0, 8);
-    const localExecutable =
-      base.config.execution_profiles.find(
-        (p) => p.execution.adapter === "codex-app-server",
-      )?.execution.settings.executable ?? "codex.exe";
-    const p: Profile =
+    const source =
       copy && draft
-        ? { ...clone(draft), id, name: draft.name + " 副本" }
-        : {
-            id,
-            name: "新的执行方案",
-            execution: {
-              adapter: "codex-app-server",
-              target: { kind: "local" },
-              settings: {
-                access_mode: "full_access",
-                executable: localExecutable,
-              },
-            },
-            workflow: {
-              id: "development",
-              version:
-                base.workflows.find((w) => w.id === "development")?.version ??
-                2,
-            },
-          };
+        ? draft
+        : base.config.execution_profiles.find(
+            (p) =>
+              p.execution.adapter === "codex-app-server" &&
+              p.execution.target.kind === "local",
+          );
+    const defaultChoice = base.combinations.find(
+      (c) =>
+        c.supported && c.host === "local" && c.adapter === "codex-app-server",
+    );
+    const defaultView: Selection | undefined = defaultChoice
+      ? {
+          adapter: defaultChoice.adapter,
+          target: { kind: defaultChoice.host },
+          agent: defaultChoice.agent,
+          access_mode: "full_access",
+        }
+      : undefined;
+    const view =
+      copy && selection
+        ? selection
+        : source
+          ? base.profile_views[source.id]?.view
+          : defaultView;
+    if (!view) {
+      setError("没有可编辑的配置来源");
+      return;
+    }
+    const p: Profile = source
+      ? {
+          ...clone(source),
+          id,
+          name: copy ? source.name + " 副本" : "新的执行方案",
+        }
+      : {
+          id,
+          name: "新的执行方案",
+          execution: {
+            adapter: view.adapter,
+            target: view.target,
+            settings: {},
+          },
+          workflow: { id: "development", version: 2 },
+        };
     select(p);
+    setSelection(clone(view));
+    setBaseProfileID(copy ? baseProfileID : source?.id);
+    setUnset(copy ? [...unset] : []);
     setDefaultChoice(false);
   }
   function setMain(modelValue: string, effortValue?: string) {
-    if (draft) setDraft(changeModel(draft, modelValue, effortValue));
+    preferenceEdits.current++;
+    setSelection((current) =>
+      current
+        ? {
+            ...current,
+            model: modelValue || undefined,
+            reasoning_effort: effortValue || undefined,
+          }
+        : current,
+    );
+    setUnset([
+      ...(modelValue ? [] : ["model"]),
+      ...(effortValue ? [] : ["reasoning_effort"]),
+    ]);
   }
   function changeRoute(
     kind: string,
@@ -319,60 +369,6 @@ export function ExecutionConfigs({
     env?: string,
   ) {
     if (!draft || !base) return;
-    const templates = base.config.execution_profiles;
-    const template = templates.find(
-      (p) =>
-        p.execution.adapter === chain &&
-        p.execution.target.kind === kind &&
-        agentOf(p) === selectedAgent,
-    );
-    let settings: Settings;
-    if (chain === "codex-app-server") {
-      settings = template
-        ? clone(template.execution.settings)
-        : { executable: "codex.exe" };
-      delete settings.model;
-      delete settings.reasoning_effort;
-    } else {
-      const localTemplate = templates.find(
-        (p) =>
-          p.execution.adapter === chain && p.execution.target.kind === "local",
-      );
-      const routeTemplate =
-        template ??
-        templates.find(
-          (p) =>
-            p.execution.adapter === chain && p.execution.target.kind === kind,
-        );
-      settings = template
-        ? clone(template.execution.settings)
-        : {
-            transport: clone(
-              routeTemplate?.execution.settings.transport ?? {
-                executable: "orca.exe",
-              },
-            ),
-            agent_launch: {
-              executable: { codex: "codex", pi: "pi.cmd", dsh: "dsh.cmd" }[
-                selectedAgent
-              ],
-            },
-          };
-      settings.agent = selectedAgent;
-      settings.agent_launch ??= {};
-      delete settings.agent_launch.model;
-      delete settings.agent_launch.reasoning_effort;
-      delete settings.agent_launch.runtime_executable;
-      delete settings.agent_launch.runtime_sha256;
-      if (kind === "local" && localTemplate?.execution.settings.agent_launch) {
-        const source = localTemplate.execution.settings.agent_launch;
-        if (source.runtime_executable)
-          settings.agent_launch.runtime_executable = source.runtime_executable;
-        if (source.runtime_sha256)
-          settings.agent_launch.runtime_sha256 = source.runtime_sha256;
-      }
-    }
-    settings.access_mode = "full_access";
     const choice = base.combinations.find(
       (c) =>
         c.host === kind && c.adapter === chain && c.agent === selectedAgent,
@@ -404,10 +400,29 @@ export function ExecutionConfigs({
       execution: {
         adapter: chain,
         target: kind === "local" ? { kind } : { kind, environment: env },
-        settings,
+        settings: draft.execution.settings,
       },
       workflow: nextWorkflow,
     });
+    preferenceEdits.current++;
+    setBaseProfileID(
+      base.config.execution_profiles.find((p) => {
+        const view = base.profile_views[p.id]?.view;
+        return (
+          view?.adapter === chain &&
+          view.agent === selectedAgent &&
+          view.target.kind === kind &&
+          (view.target.environment ?? "") === (env ?? "")
+        );
+      })?.id,
+    );
+    setSelection({
+      adapter: chain,
+      target: kind === "local" ? { kind } : { kind, environment: env },
+      agent: selectedAgent,
+      access_mode: "full_access",
+    });
+    setUnset(["model", "reasoning_effort"]);
     setManual(false);
     setError("");
   }
@@ -415,19 +430,47 @@ export function ExecutionConfigs({
     if (value === "local") changeRoute("local", adapter ?? "codex-app-server");
     else changeRoute("orca_environment", "orca-terminal", "codex", value);
   }
-  async function saveConfig(config: ExecutionConfig, selectedID: string) {
+  async function saveConfig(
+    config: ExecutionConfig,
+    selectedID: string,
+    edits: ProfileEdit[] = [],
+  ) {
     if (!base) return;
     setSaving(true);
     setError("");
     setNotice("");
     try {
-      const result = await saveExecutionConfig(api, config, base.saved_digest);
+      const generation = ++saveEpoch.current;
+      if (edits.length) {
+        const profile = config.execution_profiles.find(
+          (p) => p.id === selectedID,
+        )!;
+        const composed = await api.compose({
+          saved_digest: base.saved_digest,
+          base_profile_id: edits[0].base_profile_id,
+          selection: edits[0].selection,
+          unset: edits[0].unset,
+          workflow: profile.workflow,
+        });
+        if (generation !== saveEpoch.current) return;
+        profile.execution = composed.execution;
+      }
+      const result = await saveExecutionConfig(
+        api,
+        config,
+        base.saved_digest,
+        edits,
+      );
+      if (generation !== saveEpoch.current) return;
       setBase(result);
       client.setQueryData([home, "execution-config"], result);
       const p =
         result.config.execution_profiles.find((v) => v.id === selectedID) ??
         result.config.execution_profiles[0];
       setDraft(clone(p));
+      setSelection(result.profile_views[p.id]?.view);
+      setBaseProfileID(p.id);
+      setUnset([]);
       setDefaultChoice(p.id === result.config.default_execution_profile);
       setDeleting(false);
       setPending(null);
@@ -453,7 +496,23 @@ export function ExecutionConfigs({
     if (i < 0) config.execution_profiles.push(draft);
     else config.execution_profiles[i] = draft;
     if (defaultChoice) config.default_execution_profile = draft.id;
-    void saveConfig(config, draft.id);
+    const executionChanged =
+      !saved ||
+      stable(saved.execution) !== stable(draft.execution) ||
+      stable(saved.workflow) !== stable(draft.workflow) ||
+      stable(base.profile_views[draft.id]?.view) !== stable(selection);
+    const edits: ProfileEdit[] =
+      executionChanged && selection
+        ? [
+            {
+              profile_id: draft.id,
+              base_profile_id: baseProfileID,
+              selection,
+              unset,
+            },
+          ]
+        : [];
+    void saveConfig(config, draft.id, edits);
   }
   function remove() {
     if (!base || !draft || draft.id === base.config.default_execution_profile)
@@ -469,7 +528,7 @@ export function ExecutionConfigs({
       .read()
       .then((result) => {
         setBase(result);
-        select(result.config.execution_profiles[0]);
+        select(result.config.execution_profiles[0], result);
         client.setQueryData([home, "execution-config"], result);
       })
       .catch((e) => setError(String(e)));
@@ -583,10 +642,16 @@ export function ExecutionConfigs({
               const profiles = environment.profile_ids.map((id) =>
                 base.config.execution_profiles.find((p) => p.id === id)!,
               );
-              const target = JSON.stringify([environment.adapter, environment.target]);
+              const target = JSON.stringify([
+                environment.adapter,
+                environment.target,
+              ]);
               return (
                 <section key={target} aria-label={hostName(profiles[0])}>
-                  <h3 className="sl-host-heading">{hostName(profiles[0])} · {environment.adapter === "orca-terminal" ? "Orca" : "Codex"}</h3>
+                  <h3 className="sl-host-heading">
+                    {hostName(profiles[0])} ·{" "}
+                    {environment.adapter === "orca-terminal" ? "Orca" : "Codex"}
+                  </h3>
                   {profiles.map((p) => (
                     <button
                       type="button"
@@ -856,13 +921,6 @@ export function ExecutionConfigs({
                     </p>
                   </div>
                 )}
-                {localOrca && (
-                  <p className="sl-help">
-                    {base.local_helper.available
-                      ? "本机 helper 部署材料已核对；路径与摘要由部署配置提供。"
-                      : base.local_helper.reason}
-                  </p>
-                )}
                 <div className="sl-query" aria-live="polite">
                   <div>
                     <strong>
@@ -1008,15 +1066,13 @@ export function ExecutionConfigs({
                             };
                           if (!w.audit_model_required)
                             delete workflow.audit_model;
+                          setSelection((current) =>
+                            current
+                              ? { ...current, access_mode: "full_access" }
+                              : current,
+                          );
                           setDraft({
                             ...draft,
-                            execution: {
-                              ...draft.execution,
-                              settings: {
-                                ...draft.execution.settings,
-                                access_mode: "full_access",
-                              },
-                            },
                             workflow,
                           });
                         }}
@@ -1195,18 +1251,4 @@ export function ExecutionConfigs({
       </div>
     </div>
   );
-}
-
-function changeModel(p: Profile, model: string, effort?: string): Profile {
-  const next = clone(p);
-  const settings = next.execution.settings;
-  const fields =
-    next.execution.adapter === "orca-terminal"
-      ? (settings.agent_launch ??
-        (settings.agent_launch = { executable: "codex" }))
-      : settings;
-  fields.model = model;
-  if (effort !== undefined && effort !== "") fields.reasoning_effort = effort;
-  else delete fields.reasoning_effort;
-  return next;
 }

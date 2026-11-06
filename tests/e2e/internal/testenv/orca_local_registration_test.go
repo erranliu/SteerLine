@@ -95,6 +95,11 @@ func TestOrcaEnvironmentRegistrationCleanupEffectsAndRefusals(t *testing.T) {
 					return false, errors.New("filesystem read failed")
 				}
 				return fault != "retained-files" && (fault != "delayed-files" || fileChecks >= 2), nil
+			}, func(path string) error {
+				if path != "C:/worker" {
+					t.Fatal("unowned archive", path)
+				}
+				return nil
 			})
 			pass := fault == "none" || fault == "remote-omitted" || fault == "delayed-workspace" || fault == "delayed-files"
 			if pass && (err != nil || removed != 1 || deleted != 1) {
@@ -143,4 +148,65 @@ func TestOrcaEnvironmentLocalDeletionRequiresFilesAndGitSettlement(t *testing.T)
 	check(false) // Files gone alone cannot confirm the Git registration is gone.
 	git("worktree", "prune")
 	check(true)
+}
+
+func TestOrcaEnvironmentOwnedReportArtifactCleanup(t *testing.T) {
+	for _, fault := range []string{"none", "foreign", "tracked", "another-run"} {
+		t.Run(fault, func(t *testing.T) {
+			root, evidence := t.TempDir(), filepath.Join(t.TempDir(), "archive")
+			git := func(args ...string) {
+				t.Helper()
+				if b, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v %s", args, err, b)
+				}
+			}
+			git("init")
+			if err := os.WriteFile(filepath.Join(root, "tracked.txt"), []byte("original"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			git("add", "tracked.txt")
+			git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-m", "fixture")
+			runID := strings.Repeat("a", 32)
+			paths := []string{}
+			for _, kind := range []string{"progress", "result"} {
+				path := filepath.Join(root, ".steerrunner", kind, runID, kind+".bin")
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte{0, 255, 1}, 0600); err != nil {
+					t.Fatal(err)
+				}
+				paths = append(paths, path)
+			}
+			switch fault {
+			case "foreign":
+				if err := os.WriteFile(filepath.Join(root, "foreign.txt"), []byte("keep"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "tracked":
+				if err := os.WriteFile(filepath.Join(root, "tracked.txt"), []byte("changed"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "another-run":
+				runID = strings.Repeat("b", 32)
+			}
+			err := archiveOwnedRunnerReports(context.Background(), root, runID, evidence)
+			if (err == nil) != (fault == "none") {
+				t.Fatal(fault, err)
+			}
+			for _, path := range paths {
+				if fault == "none" {
+					if _, err := os.Stat(path); !os.IsNotExist(err) {
+						t.Fatal("original report retained", err)
+					}
+					b, err := os.ReadFile(filepath.Join(evidence, runID+"-"+filepath.Base(path)))
+					if err != nil || string(b) != string([]byte{0, 255, 1}) {
+						t.Fatal("archive bytes differ", err)
+					}
+				} else if _, err := os.Stat(path); err != nil {
+					t.Fatal("refused cleanup changed original", err)
+				}
+			}
+		})
+	}
 }

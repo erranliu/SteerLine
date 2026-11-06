@@ -11,6 +11,7 @@ import (
 	"runtime"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 
 	_ "modernc.org/sqlite"
 
@@ -19,11 +20,32 @@ import (
 
 type SQLiteStore struct {
 	Reader
-	db         *sql.DB
-	readOnly   bool
-	path       string
-	createdNew bool
-	admission  env.AdmissionPolicy
+	db                *sql.DB
+	readOnly          bool
+	path              string
+	createdNew        bool
+	admission         env.AdmissionPolicy
+	executionIdentity func(runnercontract.ExecutionInput) (runnercontract.ExecutionIdentity, error)
+}
+
+// BindExecutionIdentityLookup installs the application's immutable, in-memory
+// Runner snapshot before publishing this writer. The lookup must perform no I/O.
+func (s *SQLiteStore) BindExecutionIdentityLookup(lookup func(runnercontract.ExecutionInput) (runnercontract.ExecutionIdentity, error)) {
+	s.executionIdentity = lookup
+}
+
+func (s *SQLiteStore) verifyExecutionIdentity(execution runnercontract.ExecutionInput, identity runnercontract.ExecutionIdentity) error {
+	if s.executionIdentity == nil {
+		return errors.New("trusted execution identity snapshot is unavailable")
+	}
+	trusted, err := s.executionIdentity(execution)
+	if err != nil {
+		return err
+	}
+	if runnercontract.ValidateExecutionIdentity(execution, identity) != nil || runnercontract.ConfigurationValueDigest(trusted) != runnercontract.ConfigurationValueDigest(identity) {
+		return errors.New("execution identity differs from trusted Runner snapshot")
+	}
+	return nil
 }
 
 func OpenSQLiteStore(path string) (_ *SQLiteStore, retErr error) {

@@ -1,7 +1,6 @@
 package model
 
 import (
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -10,44 +9,21 @@ import (
 )
 
 // Context is solely a preparation projection. Never use it to construct a Run.
-func Context(execution runnercontract.ExecutionInput) (runnercontract.ExecutionInput, error) {
-	// Validate this model's accepted context without depending on the global
-	// configuration projection or constructing its target identity.
-	if (execution.Adapter != "codex-app-server" && execution.Adapter != "orca-terminal") || (execution.Target.Kind != "local" && execution.Target.Kind != "orca_environment") || execution.Target.Kind == "local" && execution.Target.Environment != "" || execution.Target.Kind == "orca_environment" && (execution.Adapter != "orca-terminal" || execution.Target.Environment == "") {
-		return execution, errors.New("unsupported environment execution target")
+func Context(execution runnercontract.ExecutionInput, identity runnercontract.ExecutionIdentity) (runnercontract.ExecutionInput, error) {
+	if (execution.Adapter != "codex-app-server" && execution.Adapter != "orca-terminal") || execution.Target.Kind != "local" && execution.Target.Kind != "orca_environment" || execution.Target.Kind == "local" && execution.Target.Environment != "" || execution.Target.Kind == "orca_environment" && (execution.Adapter != "orca-terminal" || execution.Target.Environment == "") {
+		return runnercontract.ExecutionInput{}, errors.New("unsupported project environment target")
 	}
-	var settings map[string]json.RawMessage
-	canonical, err := runnercontract.CanonicalJSON(execution.Settings)
-	if err != nil || json.Unmarshal(canonical, &settings) != nil || settings == nil || len(settings) == 0 {
-		return execution, errors.New("environment settings must be a nonempty object")
+	if err := runnercontract.ValidateExecutionIdentity(execution, identity); err != nil {
+		return runnercontract.ExecutionInput{}, err
 	}
-	switch execution.Adapter {
-	case "codex-app-server":
-		delete(settings, "model")
-		delete(settings, "reasoning_effort")
-	case "orca-terminal":
-		if raw, ok := settings["agent_launch"]; ok {
-			var agent map[string]json.RawMessage
-			if json.Unmarshal(raw, &agent) != nil || agent == nil {
-				return execution, errors.New("invalid environment agent settings")
-			}
-			delete(agent, "model")
-			delete(agent, "reasoning_effort")
-			settings["agent_launch"], _ = json.Marshal(agent)
-		}
-	default:
-		return execution, errors.New("unsupported environment adapter")
-	}
-	execution.Settings, err = json.Marshal(settings)
-	return execution, err
+	return identity.Context, nil
 }
-
-func Key(execution runnercontract.ExecutionInput) (string, error) {
-	context, err := Context(execution)
+func Key(execution runnercontract.ExecutionInput, identity runnercontract.ExecutionIdentity) (string, error) {
+	value, err := Context(execution, identity)
 	if err != nil {
 		return "", err
 	}
-	return ExecutionDigest(context), nil
+	return runnercontract.ConfigurationValueDigest(value), nil
 }
 
 // Current contains selection and revocation only. Record owns execution state.
@@ -77,7 +53,7 @@ func Qualify(current Current, record Record, basis string) (Admission, error) {
 	if current.Invalidated {
 		return fail("已标记失效：" + current.Reason)
 	}
-	key, err := Key(record.Execution)
+	key, err := Key(record.Execution, record.Prepared.Identity)
 	if err != nil || current.Project == "" || current.Project != record.Project || current.Key != key || current.ActivityID == "" || current.ActivityID != record.ID || record.Kind != "adaptation" {
 		return fail("当前准备引用与原活动不符")
 	}

@@ -50,7 +50,7 @@ function setup({
     "fetch",
     vi.fn(async (_url, init) => {
       if (init?.method === "PUT") {
-        const config = JSON.parse(String(init.body));
+        const config = JSON.parse(String(init.body)).config;
         writes.push(config);
         const digest = new Headers(init.headers).get("If-Match")!;
         digests.push(digest);

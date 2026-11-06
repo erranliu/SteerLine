@@ -15,12 +15,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 )
 
 type catalog struct {
+	Configuration  json.RawMessage
 	Native         json.RawMessage
 	ResourceDigest string
 	Schema         *jsonschema.Schema
@@ -77,6 +77,8 @@ func readCatalog(ctx context.Context, home string, pin cfg.Pin) (*catalog, error
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	type metadata struct {
+		Configuration        json.RawMessage `json:"execution_configuration"`
+		CapabilityCatalog    json.RawMessage `json:"capability_catalog"`
 		Native               json.RawMessage `json:"native_catalog"`
 		Protocol             string          `json:"protocol"`
 		Version              string          `json:"version"`
@@ -122,6 +124,8 @@ func readCatalog(ctx context.Context, home string, pin cfg.Pin) (*catalog, error
 	if err != nil {
 		return nil, err
 	}
+	result.Configuration = caps.Configuration
+	result.project(caps.CapabilityCatalog)
 	result.Native = caps.Native
 	result.ResourceDigest = caps.ResourceDigest
 	return result, nil
@@ -156,7 +160,6 @@ func compileCatalog(raw json.RawMessage, workflows []runnercontract.WorkflowChoi
 		fields.Properties.Effort.Enum = []string{}
 	}
 	cat := &catalog{Schema: schema, Workflows: workflows, Efforts: fields.Properties.Effort.Enum}
-	cat.project(doc)
 	return cat, nil
 }
 func (c *catalog) Validate(p cfg.Profile) error {
@@ -182,85 +185,52 @@ type Combination struct {
 	Workflows []runnercontract.WorkflowChoice `json:"workflows"`
 }
 
-func (c *catalog) project(doc any) {
-	candidates := []string{}
-	var walk func(any)
-	walk = func(v any) {
-		switch x := v.(type) {
-		case map[string]any:
-			if e, ok := x["reasoning_effort"].(map[string]any); ok {
-				if values, ok := e["enum"].([]any); ok {
-					for _, v := range values {
-						if str, ok := v.(string); ok {
-							found := false
-							for _, a := range candidates {
-								found = found || a == str
-							}
-							if !found {
-								candidates = append(candidates, str)
-							}
-						}
-					}
-				}
-			}
-			for _, v := range x {
-				walk(v)
-			}
-		case []any:
-			for _, v := range x {
-				walk(v)
-			}
-		}
+// project consumes the finite release catalog. It never probes fabricated
+// native settings against a schema to infer execution support.
+func (c *catalog) project(raw json.RawMessage) {
+	var published struct {
+		Version      int `json:"version"`
+		Combinations []struct {
+			Adapter    string                  `json:"adapter"`
+			Host       string                  `json:"target_kind"`
+			Agent      string                  `json:"agent"`
+			Workflow   runnercontract.Workflow `json:"workflow"`
+			AccessMode string                  `json:"access_mode"`
+		} `json:"combinations"`
 	}
-	walk(doc)
-	sort.Strings(candidates)
-	for _, mapping := range [][3]string{{"local", "codex-app-server", "codex"}, {"local", "orca-terminal", "codex"}, {"local", "orca-terminal", "pi"}, {"local", "orca-terminal", "dsh"}, {"orca_environment", "orca-terminal", "codex"}} {
-		if mapping[0] == "local" && mapping[1] == "orca-terminal" && (runtime.GOOS != "windows" || runtime.GOARCH != "amd64") {
+	if json.Unmarshal(raw, &published) != nil || published.Version != 1 {
+		return
+	}
+	var logical runnercontract.ExecutionConfigurationCapability
+	if json.Unmarshal(c.Configuration, &logical) != nil {
+		return
+	}
+	for _, entry := range published.Combinations {
+		if entry.AccessMode != "full_access" || !productSelection(runnercontract.ExecutionSelection{Adapter: entry.Adapter, Target: runnercontract.ExecutionTarget{Kind: entry.Host, Environment: map[bool]string{true: "catalog-target"}[entry.Host == "orca_environment"]}, Agent: entry.Agent}) {
 			continue
 		}
-		choice := Combination{Host: mapping[0], Adapter: mapping[1], Agent: mapping[2], Efforts: []string{}, Workflows: []runnercontract.WorkflowChoice{}}
-		for _, w := range c.Workflows {
-			if w.ID != "development" && w.ID != "development-audited" {
+		for _, workflow := range c.Workflows {
+			if workflow.ID != entry.Workflow.ID || workflow.Version != entry.Workflow.Version || (workflow.ID != "development" && workflow.ID != "development-audited") {
 				continue
 			}
-			settings := map[string]any{"access_mode": "full_access"}
-			if choice.Adapter == "orca-terminal" {
-				launch := map[string]any{"model": "web-schema-model"}
-				if choice.Host == "local" {
-					launch["runtime_executable"] = "C:/deployment/steerrunner-agent.exe"
-					launch["runtime_sha256"] = strings.Repeat("a", 64)
-				}
-				settings["agent"], settings["agent_launch"] = choice.Agent, launch
-			} else {
-				settings["model"] = "web-schema-model"
-			}
-			raw, _ := json.Marshal(settings)
-			p := cfg.Profile{Execution: runnercontract.ExecutionInput{Adapter: choice.Adapter, Target: runnercontract.ExecutionTarget{Kind: choice.Host}, Settings: raw}, Workflow: runnercontract.Workflow{ID: w.ID, Version: w.Version}}
-			if choice.Host == "orca_environment" {
-				p.Execution.Target.Environment = "web-schema-target"
-			}
-			if w.AuditModelRequired {
-				p.Workflow.AuditModel = &runnercontract.ModelSettings{Model: "web-schema-audit"}
-			}
-			if c.Validate(p) != nil {
-				continue
-			}
-			choice.Supported = true
-			choice.Workflows = append(choice.Workflows, w)
-			if len(choice.Efforts) == 0 {
-				for _, effort := range candidates {
-					if choice.Adapter == "orca-terminal" {
-						settings["agent_launch"].(map[string]any)["reasoning_effort"] = effort
-					} else {
-						settings["reasoning_effort"] = effort
-					}
-					p.Execution.Settings, _ = json.Marshal(settings)
-					if c.Validate(p) == nil {
-						choice.Efforts = append(choice.Efforts, effort)
-					}
+			i := -1
+			for j, choice := range c.Combinations {
+				if choice.Host == entry.Host && choice.Adapter == entry.Adapter && choice.Agent == entry.Agent {
+					i = j
+					break
 				}
 			}
+			if i < 0 {
+				c.Combinations = append(c.Combinations, Combination{Host: entry.Host, Adapter: entry.Adapter, Agent: entry.Agent, Supported: true, Efforts: logical.ReasoningEfforts[entry.Agent], Workflows: []runnercontract.WorkflowChoice{}})
+				i = len(c.Combinations) - 1
+			}
+			c.Combinations[i].Workflows = append(c.Combinations[i].Workflows, workflow)
 		}
-		c.Combinations = append(c.Combinations, choice)
 	}
+}
+func productSelection(view runnercontract.ExecutionSelection) bool {
+	if view.Target.Kind == "local" && view.Target.Environment == "" {
+		return view.Adapter == "codex-app-server" && view.Agent == "codex" || view.Adapter == "orca-terminal" && runtime.GOOS == "windows" && runtime.GOARCH == "amd64" && (view.Agent == "codex" || view.Agent == "pi")
+	}
+	return view.Adapter == "orca-terminal" && view.Target.Kind == "orca_environment" && strings.TrimSpace(view.Target.Environment) != "" && view.Agent == "codex"
 }
