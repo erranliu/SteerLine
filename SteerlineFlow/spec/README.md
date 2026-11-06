@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-待合并 PR 冲突解决与原 Run 续作（2026-11-06，仅设计，未实施）：[Spec](pr-conflict-resolution.spec.md) · [Plan](../plans/pr-conflict-resolution.plan.md) · [验收规划](../testing/acceptance/pr-conflict-resolution.md)。手动按钮、SteerLine 短提示词与 Runner 原会话 message；直接沿用原现场，不增加冲突检测、现场预检或业务编排框架。
+待合并 PR 冲突解决与原 Run 续作（2026-11-06，已实现）：[Spec](pr-conflict-resolution.spec.md) · [Plan](../plans/pr-conflict-resolution.plan.md) · [验收记录](../testing/acceptance/pr-conflict-resolution.md)。手动按钮、SteerLine 短提示词与 Runner 原会话 message；直接沿用原现场，不增加冲突检测、现场预检或业务编排框架。
 
 用量事实与计费职责划分（2026-11-05，已实施/隔离验证，未部署）：[Spec](billing-ownership.spec.md) · [Plan](../plans/billing-ownership.plan.md) · [验收](../testing/acceptance/billing-ownership.md)。Runner提供Token事实，SteerLine维护价表和本地估价；远端Codex授权闭环实测成功，原Task 101安装现场未修改。
 

@@ -1,6 +1,6 @@
 # 待合并 PR 冲突解决与原 Run 续作 Spec
 
-2026-11-06。状态：审计修订后实施中；用户已授权两仓实现及 Runner 独立 worktree/PR。配套 [Plan](../plans/pr-conflict-resolution.plan.md) 和[验收规划](../testing/acceptance/pr-conflict-resolution.md)。普通开发，不进入 roadmap，不分配任务编号。
+2026-11-06。状态：审计修订后已实现；两仓验证与独立审核见[验收记录](../testing/acceptance/pr-conflict-resolution.md)。用户已授权两仓实现及 Runner 独立 worktree/PR，配套 [Plan](../plans/pr-conflict-resolution.plan.md)。普通开发，不进入 roadmap，不分配任务编号。
 
 ## 1. 成果与现状
 

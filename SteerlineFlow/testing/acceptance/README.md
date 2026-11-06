@@ -1,6 +1,6 @@
 # 验收流程与记录
 
-待合并 PR 冲突解决与原 Run 续作（2026-11-06）：[验收规划](pr-conflict-resolution.md)，仅规划、待验收，尚未实施或安排实际验收；不进入 roadmap 待验队列。
+待合并 PR 冲突解决与原 Run 续作（2026-11-06）：[实现与验收](pr-conflict-resolution.md)。两仓已实现，L1/L2、专项、重启与真实 PR 两轮消息通过，独立审核通过；体验走查待安排，未部署，不进入 roadmap 队列。
 
 启动回执保存失败后的原请求核实（2026-11-06）：[修复、验证与普通更新](start-receipt-reconciliation-20261106.md)。L1/L2、前端全集 309 项通过；回执保存错误立即查询原 ID，已生效更新成功，未知保持待核实且不重复 POST，真实拒绝仍显示原因。已部署，101 的原 Run/Execution、pr_ready 和 applied 回执保留。
 
