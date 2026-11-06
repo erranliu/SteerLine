@@ -1,119 +1,111 @@
 # 本机客户端协议
 
-准备查询等待随原候选 `runner_delivery.execution_wait` 返回完整公开对象或显式 null，契约为 `steerrunner-execution-wait/v1`，字段见[Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)。原 activity 流把 `execution_wait_changed` 投影为 `kind=execution_wait`，`meta.execution_wait` 保留对象/null；无新路由、命令或计时事件。等待字段仅展示，操作仍使用原候选/Runner revision 与控制资格；查询异常保留最后已知内容并标不可核实。
-
-应用 v2 是当前产品的本机入口，Web 为唯一交互前端。`httpcontract` 的项目 DTO/信封、`httpapi` 的查询/命令处理与 `product/api` 用例保持原事务和资格规则；共享后端在进程内调用项目端口，不启动项目 HTTP listener 或通过回环 HTTP 转发。下表保留项目端口的逻辑路由；外部路径统一在 `/v2/application/projects/{project_id}` 下。
+本页维护当前应用 v2 的连接、查询、命令和恢复约束；业务资格分别见[数据模型](data-model.md)、[反馈与恢复](decisions.md)、[项目维护](project-maintenance.md)和[Runner 接入](../integration/steerrunner.md)。Web 是当前交互前端；应用在进程内调用各项目端口，不启动项目 HTTP listener。
 
 ## 发现、连接和身份
 
-`steerline serve` 发布 `<home>/application-api/discovery.json` 与私有 Bearer，协议为 `steerline-application/v2`。凭证、目录和记录仅当前用户可读，严格核对 home、实例、精确 OS PID/创建时间/exe、loopback Host 和在线 identity，拒绝 Origin、重定向与错实例。共享 PID 不代替各项目 runtime instance；项目和宿主的实例分别换代。业务事实仍由原项目 Task/WorkflowRun/Execution/Attempt/Decision/Command/Operation 和唯一交付拥有。
+原生客户端读取当前用户私有的 `<home>/application-api/discovery.json` 和 Bearer，核对 `steerline-application/v2`、home、实例、OS PID/创建时间/exe 与在线 identity。只接受精确 loopback Host，拒绝 Origin 和重定向；凭证不进入浏览器。宿主与项目实例分别换代，共享 PID 不代替项目身份。
+
+项目路由根为 `/v2/application/projects/{project_id}`。应用目录从启动时冻结的配置装载；列表查询不建库，项目须经过身份冲突核验和持锁装载。未 ready、项目冲突或身份不符返回明确诊断，不能当作记录不存在。
 
 ## 查询路由
 
-所有项目查询以 `/v2/application/projects/{project_id}` 为根。任务/图的版本和游标沿用现有 DTO；cursor 绑定原快照/筛选条件，失效时客户端刷新整页，不拼接不同 revision。活动查询必须绑定原 WorkflowRun、Execution、Attempt。会话 final 查询返回正式正文引用；body 按原 revision、SHA-256、UTF-8 offset 有界读取。客户端用 `presentation` 查询现有 `ProjectPresentation`，展示 `DefaultProfileID`、profile 摘要及 `UnavailableReason`；命令只发送用户选择的 profile ID，服务仍通过原 `StartTaskPayload` 取得并核验配置 digest。
+下表路径均相对项目根；仅 GET。完整白名单由[共享路由定义](../../internal/product/httpcontract/routes.go)维护，字段由[公共契约](../../internal/product/httpcontract/contracts.go)及原产品 DTO 定义。
 
-| 方法与路径 | DTO / 用途 |
+| 路径 | 用途 |
 | --- | --- |
-| `GET /v2/application/projects/{project_id}/identity` | `Identity`：协议、项目、实例、进程、能力、`ready`、诊断与认证后的两个原锁路径 `lock_paths` |
-| `GET /v2/application/projects/{project_id}/snapshot?task_id=` | `api.ProjectSnapshot`：连接、服务运行、决策/历史和选中任务 |
-| `GET /v2/application/projects/{project_id}/tasks?cursor=&limit=` | `api.TaskPage`：有界任务列表 |
-| `GET /v2/application/projects/{project_id}/tasks/{task_id}` | `api.TaskPage`：任务详情、直接依赖、交付和阻断 |
-| `GET /v2/application/projects/{project_id}/graph?cursor=&limit=` | `api.GraphPage`：有界基本 DAG |
-| `GET /v2/application/projects/{project_id}/candidates` | `api.TaskCandidates`：当前可领取任务候选 |
-| `GET /v2/application/projects/{project_id}/presentation` | `ProjectPresentation`：现有安全执行方案摘要、DefaultProfileID、配置 digest 和不可用原因，供客户端选择 start_task/start_candidate 的 profile ID |
-| `GET /v2/application/projects/{project_id}/runs/{run_id}` | 精确 run 的 `api.CandidateSummary`，含候选、Decision、PR 与交付状态 |
-| `GET /v2/application/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&cursor=` | `ActivityPage`，只读规范数据库活动，不回退私有日志 |
-| `GET /v2/application/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&recent=true` | 同一原 Execution/Attempt 的有界近期活动投影；近期查询使用，不能混用流式 cursor |
-| `GET /v2/application/projects/{project_id}/runs/{run_id}/conversation?execution_id=&attempt_id=&session_id=&source=&turn_id=&finals_only=&cursor=&limit=` | 有界会话事件页和原正文引用 |
-| `GET /v2/application/projects/{project_id}/runs/{run_id}/final` | `FinalReply`，返回 final 事件及不超过 4 MiB 的完整正文；更大的正文使用 body 路由分段读取 |
-| `GET /v2/application/projects/{project_id}/runs/{run_id}/body?ref=<hex-json>&offset=&limit=` | `api.ConversationBodyPage`，原消息 revision/SHA 校验，单页不超过 256 KiB |
-| `GET /v2/application/projects/{project_id}/runs/{run_id}/recovery?execution_id=&attempt_id=` | `api.RecoveryInspection`，只读原恢复核验，必须绑定当前 Execution/Attempt，不授予继续资格 |
-| `GET /v2/application/projects/{project_id}/runs/{run_id}/decision-eligibility?execution_id=&attempt_id=` | 只读原决策资格核验，同样要求精确绑定 |
-| `GET /v2/application/projects/{project_id}/commands/{request_id}` | 查询原 command/control 回执；没有权威记录才返回 `command_not_found` |
+| `/identity` | 项目/实例、进程、ready、能力、诊断及认证后的原锁路径 |
+| `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务 |
+| `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
+| `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
+| `/runs/{run_id}` | 精确候选、参与/提交状态、Runner 观察、PR 与交付 |
+| `/runs/{run_id}/activity`、`/last-message`、`/usage` | 原执行的活动、最近消息和用量 |
+| `/runs/{run_id}/conversation`、`/final`、`/body` | 公开会话事件、final 和原正文分段 |
+| `/runs/{run_id}/recovery`、`/decision-eligibility` | 当前 Execution/Attempt 的只读资格核验，不授予继续权限 |
+| `/runs/{run_id}/tests`、`/documents` | 候选固定测试安排/进度与文档版本、差异 |
+| `/tests/catalogue`、`/tests/records`、`/tests/records/{id}`、`/tests/generations/{id}` | 清单、固定测试记录和原生成详情 |
+| `/maintenance`、`/maintenance/readiness`、`/maintenance/log`、`/maintenance/commits/{sha}`、`/maintenance/tasks/{task_id}` | 项目同步、统一就绪资格、提交及材料详情 |
+| `/environment`、`/environment/options`、`/environment/materials`、`/environment/{id}` | 环境选项、材料、活动摘要和原活动详情 |
+| `/roadmaps`、`/roadmaps/{id}`、`/roadmaps/sources/{id}` | [Roadmap 读取与转正](roadmap-promotion.md)的专用投影 |
+| `/commands/{request_id}` | 原请求回执；仅权威明确无记录才返回 `command_not_found` |
 
-`TaskPage`, `GraphPage`, conversation event/body 和活动 cursor 保留各自实际身份、版本、采样/事件时间。PR、交付和历史 Decision 从现有查询投影返回，不使用 UI 缓存补写。conversation 的空 attempt 选择原 run/Execution 的完整历史；指定历史 attempt 时核对正式会话投影归属。body 保留原 Attempt/revision/SHA，不改向当前 Attempt。
+分页保留原身份、revision、筛选条件和 cursor，失效后刷新原查询，不拼接不同快照。activity 的近期查询 `recent=true` 不混用流式 cursor。conversation 空 attempt 读取原 Execution 的完整历史，指定历史 attempt 则核对正式投影归属；recovery/decision-eligibility 必须绑定当前 Execution/Attempt。
 
-候选详情 `CandidateSummary` 与历史 `WorkflowSummary` 明确返回 `participation`、`submission_status`、`stop_requested`；`workflow_status` 有公开 Runner Projection 时保留其 Status，无 Projection 时取提交状态。caller 的 abandoned/completed 不再覆盖执行观察；详情 winner/loser 仍由同一快照的 TaskDelivery 产生，历史没有交付上下文时不补造 winner。Web 的参与筛选使用 participation，回答等操作继续按原事实保守判断；停止请求不等于进程已停止。人工 `stop_candidate` 只退出 participation，不设置 Runner 停止义务的 stop_requested；详情另返回 candidate_stop_reason、candidate_stopped_by、candidate_ended_at 作为固定历史事实。当前开发版本不为缺字段的旧 DTO 增加回退。
+final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取，单页最多 256 KiB，核对原 Attempt、revision、SHA-256 和 UTF-8 offset。来源规则见[公开会话结果](execution-observability.md#公开结果来源)，不回退原生日志。
+
+候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](worker-lifecycle.md)。
+
+准备等待沿原候选 `runner_delivery.execution_wait` 返回完整 `steerrunner-execution-wait/v1` 对象或 null，activity 的 `kind=execution_wait` 保留 `meta.execution_wait`。只展示，不新增计时命令；读取异常保留最后已知值并标待核实。字段及验证范围见[等待 Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)。
 
 ## 命令映射
 
-所有 POST 使用唯一的 32 位小写十六进制 `request_id`、当前 `project_id`/`instance_id`、精确 `target_id`、显示时的 `expected_version`，并按动作携带控制或图 revision。请求信封在发送前由调用方持久保存。服务将完整原信封先原子登记，再写入现有宿主 immutable control inbox 或调用 SQLite CommandService；同 ID 不同信封返回 `request_id_conflict`。服务端从当前 OS 用户取得 `requested_by`，忽略客户端不能证明的身份。控制请求绑定原实例/显示 revision，由运行服务再次核对实例、control/graph/task/decision 版本和领域资格；过期目标保留原 request 并拒绝，不转向当前最新对象。
+`POST /commands` 使用 32 位小写十六进制 request_id、当前 project_id/instance_id、精确 target_id、expected_version，以及动作要求的 control/graph revision。客户端发送前持久保存完整原信封；服务登记原信封与首次规范化的固定意图，再交给原控制入口/项目事务。同 ID 不同信封返回 `request_id_conflict`，过期请求拒绝且保留原回执，不改投最新对象；requested_by 由服务取得，不信任客户端自报身份。
 
-POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `request_body_too_large`。登记前还核对完整原信封、实际规范化映射意图、digest、创建时间及 JSON framing/newline 的聚合编码大小：不含结果摘要的记录上限 1,064,960 bytes，为有界结果预留 16 KiB；超出返回 HTTP 413 / `request_record_too_large`，该新 ID 不登记，不提交 control/SQLite 或触发业务副作用。各动作的既有字段/领域限制仍适用，正文在 1 MiB 内不代表映射后一定可准入。持久文件写入与正式读取共用 1,081,344-byte（1 MiB + 32 KiB）硬上限。
-
-仲裁文件只保存一份完整原信封和完整原映射意图；结果摘要只保存 status、code、diagnostic 和采样时间，不重复保存 `original` 或 typed authority DTO。GET/同 ID 重交从原信封恢复身份与 `original`，并从正式 authority 查询完整 typed receipt；后续回执大小不扩张仲裁文件。authority 明确丢失时保留原信封并返回 `outcome_unknown`，不重放；原 rejection 保持 `rejected`。只有持久摘要的 code/diagnostic 限为各 1,024 UTF-8 bytes，超长文本保留前缀及 ` [truncated]`；正常 authority 查询输出仍保留完整回执。当前开发格式不迁移旧记录，不双读或回退。
-
-| `action` | `target_id` / 版本 | `payload` | 现有入口 |
-| --- | --- | --- | --- |
-| `start_task` | task ID / task version + `expected_control_revision` | `{"execution_profile_id":"..."}` | `StartTaskPayload` → 原 `start_task` control；服务再次核对 task version、资格、实例与 revision |
-| `start_candidate` | task ID / task version + graph/control revision | `{"execution_profile_id":"..."}` | 原 `start_candidate` control 与原 candidate command |
-| `answer_decision` | decision ID / decision version；payload 绑定 run revision/attempt/recovery | `{"run_id":"...","decision_id":"...","option_id":"...","note":"...","answers":{},"expected_run_revision":7,"source_attempt_id":"...","expected_recovery_version":2}` | 原 `DecisionPort.Submit` 与 SQLite `CommandService` |
-| `discard_task` | task ID / task version | `{"reason":"..."}` | 原 `TaskCommands.Discard` 与持久 discard command/receipt |
-| `set_dispatch_mode` | `dispatch` / control revision | `{"mode":"manual"}` 或 `{"mode":"auto"}` | 原控制命令与 authority CAS |
-| `pause_dispatch`, `resume_dispatch` | `dispatch` / control revision | `{}` | 原控制命令与 authority CAS |
-| `open_terminal`, `recheck_environment` | run ID / blocker version + control revision | `{"target":{"run_id":"...","execution_id":"...","attempt_id":"...","turn_id":"...","blocker_id":"...","version":2}}` | 原宿主 environment control |
-| `open_native_session` | run ID / expected version 0 | `api.NativeSessionTarget`：run/Execution/Attempt/session/generation | 原冻结路径核验后打开原生查看器；持久标记 unknown 后只调用一次，无新业务轮次 |
-
-`create_task`, `add_predecessors`, planning、人工验收和自定义前置操作目前返回 `unsupported`。服务把有效 request ID 的 unsupported 拒绝保存在原 envelope 记录中；之后 GET 仍返回 `unsupported` rejection，不会伪装成 `command_not_found`。
-
-命令外层 `status` 为 `submitted`, `accepted`, `applied`, `rejected`, `outcome_unknown` 之一。服务端原 control/command receipt 原样附带，内部 `applying` 表示 `accepted`，不表示 agent 已处理。`indeterminate` 或 `pending_verification` 映射为 `outcome_unknown`，客户端只查询原 request ID，不生成新 ID。
-
-实现仍由单个 commandRegistry 共用锁和 request-ID 命名空间，文件记录仅经 requestRecordAccess 访问。普通有效新请求在首次业务映射时解析载荷一次，派发消费记录中固定的 Decision/Discard/Control intent；权威身份匹配仍独立核对原信封，不以缓存的业务解析取代。登记后重读、能力/就绪和决策新鲜资格检查保留，正常派发不再次解析并重建业务输入。
-
-三种受理顺序保留如下（完整断言由 command_boundary/reconciliation、environment/native 现有测试保护）：
-
-| 路径 | 受理顺序与失败边界 |
+| action | 目标、版本与 payload |
 | --- | --- |
-| 普通 Submit | 锁 → 原记录/权威仲裁 → 首次解析与映射、记录体积校验 → Register → 重读记录 → 校验/能力/就绪 → 决策目标复核 → 派发固定 intent → 出错再查原权威 → 保存结果摘要；非法普通 action 可登记拒绝；已有接受摘要且权威丢失保持 unknown，不重放 |
-| 环境检查 | 同锁 → 严格信封校验/端口可用 → 原记录与权威仲裁 → 登记原信封 → 就绪检查 → 专用领域目标核验/派发 → 保存摘要；已有记录只查原环境检查权威，保留先验证后登记的顺序 |
-| native viewer | 同锁/ID → 原记录/权威仲裁与原会话资格 → 登记 outcome_unknown → 打开一次 → 保存结果；中断未知不能再次打开 |
+| `start_task` | task ID / task version，control revision；`{execution_profile_id}` |
+| `start_candidate` | task ID / task version，graph/control revision；`{execution_profile_id}` |
+| `stop_candidate`、`resolve_pr_conflict` | candidate ID / candidate version，control revision、graph revision 必须为 0；`{task_id}`。前者退出参与，后者沿原冲突处理入口 |
+| `answer_decision` | decision ID / version；`{run_id,decision_id,option_id,note,answers,expected_run_revision,source_attempt_id,expected_recovery_version}`，核对当前问题及原执行身份 |
+| `discard_task` | task ID / version；`{reason}`，原因不能为空 |
+| `set_dispatch_mode` | dispatch / control revision；`{"mode":"manual"}` 或 `{"mode":"auto"}` |
+| `pause_dispatch`、`resume_dispatch` | dispatch / control revision；`{}` |
+| `open_terminal`、`recheck_environment` | run ID / blocker version，control revision；`{target:{run_id,execution_id,attempt_id,turn_id,blocker_id,version}}`，只作用于原 blocker |
+| `open_native_session` | run ID / 0；原 `NativeSessionTarget` 的 run/Execution/Attempt/session/generation。只打开原查看器，无新业务轮次 |
+
+以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning、人工验收和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
+
+POST 正文最大 1,048,576 bytes。登记前检查原信封、固定意图、digest、时间与 JSON framing 聚合编码：无结果摘要最多 1,064,960 bytes，为结果预留 16 KiB；持久读写硬上限 1,081,344 bytes。超限分别返回 HTTP 413 / request_body_too_large 或 request_record_too_large，新 ID 不登记、零业务副作用。持久摘要的 code/diagnostic 各限 1,024 UTF-8 bytes，超长保留前缀与 ` [truncated]`；正式 authority 回执保持完整。仲裁文件只存一份原信封、意图与紧凑结果，typed receipt 从原权威查询，不复制膨胀。
+
+三条受理顺序由同一命令仲裁保护：普通命令先解析映射和大小校验、登记、重读，再核对能力/就绪/目标并派发固定意图；环境动作严格校验信封与端口后登记，再作领域核验；原生查看器核实原会话后先持久化 outcome_unknown，再仅调用一次。未知查看器不得重开。当前实现与验证见[读取/命令边界验收](../../SteerlineFlow/testing/acceptance/product-read-command-web-refactor.md)。
 
 ### 回执与故障恢复
 
-`GET /commands/{request_id}` 对 HTTP control envelope 先读同项目原 control request/receipt（例如 dispatch control 同时会产生 SQLite `set_dispatch_state` 命令记录），再查项目 SQLite command authority；answer/discard 先查 SQLite，再查 control inbox。数据库缺失、权限、格式、身份或读取错误均返回诊断错误，不映射成不存在。HTTP 已登记但尚未派发的 envelope，只有底层两种权威都明确无记录且没有持久拒绝回执时才返回：
+公开 status 为 submitted、accepted、applied、rejected、outcome_unknown；内部 applying 映射 accepted，indeterminate/pending_verification 映射 outcome_unknown。applied 说明相应命令生效，不证明模型完成、PR 合并或资源停止。
 
-```json
-{"code":"command_not_found","reason":"the project database and control request authority contain no record for this request_id","request_id":"0123456789abcdef0123456789abcdef"}
-```
+原请求仲裁同时核对 journal、control inbox 和 SQLite 权威；HTTP control 优先查原 control，answer/discard 优先查 SQLite。权限、数据库、格式、身份和读取错误保留诊断，不映射成不存在。原权威曾受理而后缺失时保持 unknown；原 rejection 保持 rejected。
 
-发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；对于允许补交的动作，同一实例返回权威 `command_not_found` 后才可按原完整 envelope、原 ID、原 payload 和原版本补交；候选停止、环境检查、项目维护与环境适配等动作只对账，浏览器不自动补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `application-commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
-
-Web 将完整原信封保存在现有 IndexedDB；服务端的原请求记录仍是跨动作仲裁。原生查看器的未知结果不得重放。
-
-POST 返回 `request_receipt_persist_failed` 时，表示 HTTP 回执摘要未能保存，不能据此判断业务启动失败。Web 保留原信封和错误诊断，立即在 5 秒预算内 GET 原 request ID，并严格核对项目、实例、目标、版本及完整原信封；已核实 applied 按生效结果显示，明确 rejected 仍显示拒绝。核实超时、读取失败、身份不符或暂时 command_not_found 时保留 outcome_unknown，启动界面显示“提交结果待核实”并继续原请求查询，不显示任务启动失败。已有 submitted/accepted/outcome_unknown 回执或上述回执保存错误的原请求，即使后续查询缺失也只读核实，不自动补发 POST；只有尚无任何回执的允许补交请求仍沿上一段规则执行。
-
-公开 stop_service action/capability 已退役，不映射为全局停机；旧原请求结果仍可只读查询。关闭浏览器不停止业务。
-
-本协议不提供 SSE、离线查询进程、完整原始过程阅读器或通用 artifact DTO。Roadmap 提供专用只读查询及沿原命令仲裁的转正动作，见 [Roadmap 转正](roadmap-promotion.md)。
+- 重连先 GET 原 ID，核对项目、实例、目标、版本及完整原信封；未知只读对账，不换 ID。
+- 仅从未收到任何回执、明确允许补交的动作，且同实例两层业务权威均明确无记录时，才能按原完整信封、ID、payload 和版本补交。候选停止、环境与项目维护动作只对账，不自动补交。
+- 一旦已有 submitted/accepted/outcome_unknown 或 `request_receipt_persist_failed`，后来 not_found 也不能自动 POST。
+- 回执保存失败时，Web 保留原信封与诊断，立即在 5 秒预算内 GET 核实；确认 applied/rejected 后据实显示。超时、暂缺、读取或身份问题保留“提交结果待核实”，继续原号查询。
+- 浏览器 journal 保存在 IndexedDB；它不替代服务端权威，也不允许跨实例补交旧请求。
 
 ## 应用入口与浏览器转接
 
-`GET /v2/application/identity` 无项目也可用；`GET /v2/application/projects` 返回冻结配置快照与 starting/ready/failed/stopping/stopped 投影。目录查询不建库；项目装载先通过只读身份 census/冲突核验并取得仓库及运行目录锁，随后初始化原项目。配置变更在下次宿主启动生效。
+`GET /v2/application/identity` 无项目可用；`GET /v2/application/projects` 返回冻结项目目录与装载状态。原生应用管理还包括 usage-collection 和 shutdown，均不因存在原生入口而自动开放给浏览器。
 
-各项目 identity、查询及 commands 经目录直接取得进程内端口；保留原 project/runtime instance、原 request ID、版本与完整 JSON 数字。缺失、冲突或未 ready 返回明确不可用；只有原权威缺失才返回 command_not_found，不用 POST 重放查证。
+原生任务接口为 POST `/task-batch-validation`、`/task-batches`、`/tasks/{task}/predecessors`，原结果 GET `/task-batches/{request_id}`、`/tasks/{task}/predecessors/requests/{request_id}`；沿项目 actor 和原任务事务办理，不开第二写者，也不进入 Web 通用白名单。
 
-CLI 通过项目选择访问原任务用例：POST `/task-batch-validation`、`/task-batches`、`/tasks/{task}/predecessors`；原结果 GET `/task-batches/{request_id}` 和 `/tasks/{task}/predecessors/requests/{request_id}`。这些窄路由只接受原生认证，不进入 Web AllowedRead 或浏览器写入白名单。任务事务由原项目 actor 串行办理，CLI 不开第二写者。
+原生 shutdown 先关闭全部项目新输入，再按原宿主身份聚合关闭结果。私有 shutdown.json、精确进程退出与租约共同核验；缺失/损坏/旧实例不算正常停机。恢复与部署归[安装部署](../integration/install-deploy.md#同构建更新与重启)。
 
-`POST /v2/application/shutdown` 先关闭全部项目新输入资格再确认原宿主 identity，按项目聚合正常关闭与资源结算。私有 `shutdown.json` 绑定原宿主，stop 同时核验此结果、精确进程退出与租约；缺失、损坏、旧实例或任何未核实项均失败。本地关闭未知保留库/锁；worker 未知但本地已关时可重开原库取证，禁止替代 worker 或新业务输入。
-
-Web 只提供受限 `/api/v2/application/projects…` 同源转接；不代理管理/CLI 专有路由。浏览器会话绑定 home/Web 实例，原生 `/native/identity`、`/native/backend`、`/native/shutdown` 使用独立 launcher Bearer，无 Origin，浏览器 cookie 不能停服。Web 可独立重启，重新 open 授权后只读重连；原信封仍按原实例/请求查询。见[Web 指南](../../web/README.md)、[统一启动 Spec](../../SteerlineFlow/spec/unified-startup.spec.md)。
-
+Web 只作受限同源 `/api/v2/application/...` 转接；原生 `/native/identity`、`/native/backend`、`/native/shutdown` 使用独立 launcher Bearer，无 Origin。浏览器 cookie 不授予停服或 CLI 管理权限。独立 Web 重启后重新 open 授权并只读重连；认证和配置专用接口见[Web 指南](../../web/README.md)。统一宿主的契约与证据见[统一启动 Spec](../../SteerlineFlow/spec/unified-startup.spec.md)。
 
 ## 项目环境适配
 
-同一项目根提供 `GET /environment/options`（profiles 与去重 environments 的环境键、当前引用 revision/activity、二态/阶段/原因、材料与历史通过入口，及本机生成方案的公开模型参数；列表不返回所有材料正文）、`GET /environment/materials?environment_key=…`（所选环境材料、期望上下文预览/导出及固定输入诊断）、`GET /environment?environment_key=…`（先按键筛选、再取最近20条活动摘要；省略参数为项目全部活动最近20条）及 `GET /environment/{id}`（原活动完整轮次、两通道快照、脚本报告、Agent排障回复或生成文本）。读取不执行环境脚本、不启动Agent。长Agent回复节选标明截断，原内容保留在原Run。
-
-`POST /commands` 使用以下动作；均沿原项目actor、认证及命令journal，不使用图/控制revision。
+查询 environment/options 返回环境键、方案、当前引用 revision、就绪原因和历史入口；materials 返回所选环境材料与固定输入诊断；environment 可按 environment_key 筛选最近 20 条，environment/{id} 返回原活动详情。GET 不执行脚本或启动 Agent；长回复节选明确标注，全文保留在原 Run。
 
 | action | target_id / expected_version | payload |
 | --- | --- | --- |
-| `environment_start` | 当前project_id / 1 | `{environment_key,profile_id,round_timeout_seconds,expected_current_revision}`，正整数秒；首次加两次重试，每轮同预算 |
-| `environment_invalidate` | 当前project_id / 1 | `{environment_key,expected_current_revision,reason}`，仅失效本项目组合；引用和原命令回执原子提交 |
-| `environment_generate` | 当前project_id / 1 | `{target_environment_key,generator_profile_id}`，明确材料目标并选本机Codex只读生成方案；输出准备文档/脚本/gaps，生成不授予准入 |
-| `environment_stop` | 原活动id / 活动revision | `{}`，只处理原活动，取消后零新轮次 |
+| `environment_start` | project_id / 1 | `{environment_key,profile_id,round_timeout_seconds,expected_current_revision}` |
+| `environment_invalidate` | project_id / 1 | `{environment_key,expected_current_revision,reason}` |
+| `environment_stop` | 原活动 ID / revision | `{}` |
 
-回执的 `environment` 为活动投影，`applied` 仅表示命令持久受理；任务资格由当前引用与原活动及材料依据共同决定，查询仅投影。开始/失效的 expected_current_revision 必填，缺行初值 0，不能代替原活动 revision；生成不选择当前引用。本机与远端均受门禁，失效只阻断新候选。结果不明时通过原 `GET /commands/{request_id}` 核实，浏览器不因command_not_found补交；重复完整原信封返回原受理记录，变更原信封拒绝。progress持续提供进度，独立result-file仅在原Run结束且停止后封存一次；pr_ready触发停止，不决定ready。result版本0表示未成功采集，closed/0须保留采集diagnostic；closed/1才有最终文件，封存后不刷新。progress及Agent回复不决定ready，Runner停止与最终报告/PR未核实仍阻断新任务。详见[适配Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)。
+动作不使用图/控制 revision。开始/失效的 expected_current_revision 必填，无当前引用时为 0；它不代替活动 revision。当前仅单次普通 Run，round_timeout_seconds 为正整数秒，无自动多轮重试；environment_generate 已删除。
 
-## 旧 Runner Check 接入退役
+环境结果以原 Run 绑定、停止结算、封存的 result-file、脚本报告及 verified 成功 final 共同核验；进度/回复或命令 applied 不单独授予 ready。最终结果 closed/0 保留采集失败，closed/1 才有文件，封存后不重采。失效只阻断新候选，未知按原号核实，不因 not_found 补交。当前单次执行和准入以[服务实现](../../internal/environmentadaptation/service.go)及[模型](../../internal/environmentadaptation/model/model.go)为准；[适配 Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)记录原交付范围。
 
-旧 `environment-checks` 查询、start/stop 动作和专用投影已删除，不保留兼容入口。环境准备使用上节项目环境活动：项目文档/脚本由普通 Run 执行，Runner 封存 result，SteerLine 判定准备资格。Runner 不承担环境检测业务。[退役规格](../../SteerlineFlow/spec/legacy-environment-check-retirement.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)记录实际范围。
+## 项目维护动作与能力边界
+
+维护动作沿原项目 actor、命令 journal 和原请求回执，不使用图/控制 revision。
+
+| action | target_id / expected_version | payload |
+| --- | --- | --- |
+| maintenance_check、maintenance_update、maintenance_generate_all | project_id / 1 | `{}` |
+| maintenance_profile | project_id / 1 | `{profile}` |
+| maintenance_retry | task_id / 1 | `{task_id}` |
+| maintenance_stop_generation | generation_id / 1（当前客户端） | `{generation_id}`；request_id 使用外层原号 |
+
+生成登记不等于材料已就绪；完整流程归[项目维护](project-maintenance.md)，动作定义归[领域路由](../../internal/app/maintenance_routes.go)。Roadmap 动作见[专用协议](roadmap-promotion.md)，不另维护一份转正字段表。
+
+本协议没有 SSE、离线查询进程、完整原始过程阅读器或通用 artifact DTO。旧 Runner Check 路由/动作及投影已删除，不提供兼容；项目脚本通过普通 Run 执行，Runner 不承担检测业务。退役范围见[Spec](../../SteerlineFlow/spec/legacy-environment-check-retirement.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)。精简前版本及补充证据从[历史来源](../../SteerlineFlow/archive/design/runner-reliability-history.md#第五批整理来源)追溯。

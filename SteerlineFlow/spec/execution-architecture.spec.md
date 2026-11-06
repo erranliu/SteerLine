@@ -12,7 +12,7 @@ SteerLine 管 Task/DAG、候选参与关系、原 CLI outbox、公开事实投�
 
 ## 身份、候选与交付
 
-Task、Candidate、Runner Run、Attempt、原生会话/轮次、命令与 PR 分别绑定。候选在领取事务冻结原任务材料、仓库/base、执行预设和完整提交；后续事实不能覆盖原身份或兄弟候选。首次冻结及必要材料检查见[项目维护](../../docs/product-design/project-maintenance.md)，候选规则见[数据模型](../../docs/product-design/data-model.md#人工候选实验)。
+Task、Candidate、Runner Run、Attempt、原生会话/轮次、命令与 PR 分别绑定。候选在领取事务冻结原任务材料、仓库/base、执行预设和完整提交；后续事实不能覆盖原身份或兄弟候选。首次冻结及必要材料检查见[项目维护](../../docs/product-design/project-maintenance.md)，候选规则见[数据模型](../../docs/product-design/data-model.md#候选参与与原请求)。
 
 人工停止参与只改变参与关系并保护最后一个参与候选，不授权 Runner 停止或宣告资源结算；Task 丢弃和终态停止义务分别记录。具体要求见[候选停止参与验收](../testing/acceptance/web-candidate-stop.md)。
 

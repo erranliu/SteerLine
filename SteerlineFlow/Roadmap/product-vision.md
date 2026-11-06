@@ -28,7 +28,7 @@ SteerLine 是一款带有研究性质的开发工具，长期远景是通往**�
 
 **当前交付判定：**Web 的查询、任务操作、反馈、final、恢复/原生会话查看通过现有客户端和服务边界完成。项目添加/纳管和规划产品流程尚未实现；人工桌面体验仍按对应验收记录待确认。历史 TUI 体验不再作为当前能力声明。
 
-后续可发展按需 SSE、项目添加/结构核验及受控规划 Agent；这些能力按各自 Spec/roadmap 状态推进，不从旧原型推定已实现。早期 Web 构想见[设计归档](../archive/design/planning-ui.md)和[原型说明](../../docs/product-design/prototypes/planning-ui/README.md)。人控制取舍与授权，Go 业务权威不移入界面或模型。
+后续可发展按需 SSE、项目添加/结构核验及受控规划 Agent；这些能力按各自 Spec/roadmap 状态推进，不从旧原型推定已实现。早期 Web 构想见[设计归档](../archive/design/planning-ui.md)和[原型说明](../archive/design/prototypes/planning-ui/README.md)。人控制取舍与授权，Go 业务权威不移入界面或模型。
 
 ### 3. 正式可发布产品
 

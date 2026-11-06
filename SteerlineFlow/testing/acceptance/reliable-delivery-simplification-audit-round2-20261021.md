@@ -1,6 +1,6 @@
 # 可靠性交付简化方案第二轮审计
 
-2026-10-21，对[修订方案](../../../docs/architecture/reliable-delivery-chain.md#可以简化的流程)进行第二轮静态设计审计，逐项复核[首轮报告](reliable-delivery-simplification-audit-20261021.md)的三个 P1、两个 P2，并检查启动、文件替换、崩溃和新 writer 交接窗口。本轮由当前聊天复核，没有另行独立代理评审；未修改生产实现、部署或操作安装环境。
+2026-10-21，对[修订方案](../../archive/design/reliability-simplification-analysis.md#可以简化的流程)进行第二轮静态设计审计，逐项复核[首轮报告](reliable-delivery-simplification-audit-20261021.md)的三个 P1、两个 P2，并检查启动、文件替换、崩溃和新 writer 交接窗口。本轮由当前聊天复核，没有另行独立代理评审；未修改生产实现、部署或操作安装环境。
 
 结论：首轮五项问题已在设计上逐项补齐，本轮未发现遗留 P1/P2 设计缺口。方案可以按依赖分阶段实施；这不代表新增协议、租约或离线恢复能力已经实现、通过运行验证。删除现有检查的条件仍是相应公开能力接线及反例验证通过。
 
@@ -19,13 +19,13 @@
 
 | 首轮问题 | 本次设计补齐 | 结论与实施放行条件 |
 | --- | --- | --- |
-| P1：预查询取消后，实际命令缺少副作用前完整校验 | [完整绑定](../../../docs/architecture/reliable-delivery-chain.md#用实际命令的实例围栏减少预查询)固定 instance/state-dir/EXE/version/resource/协议；受理门闩使 ready→stopping 与新请求有明确先后；能力逐命令声明，响应元数据仅补查 | 设计闭合。SIM-A02 验证零新副作用后才移除对应预查询；未覆盖命令保持检查，实际 EXE 散列保留 |
-| P1：离线核验没有原完整项目集合的来源 | [原启动清单](../../../docs/architecture/reliable-delivery-chain.md#原启动清单)在 Store 准备后、worker/业务入口前原子发布 complete census；正文与原宿主身份绑定，旧清单连续性先于重建 Store，缺失不等于空集合 | 设计闭合。SIM-A03 覆盖配置与 Store 同时丢失、部分启动和普通重启；历史缺证据不回填，不能据当前目录反推原集合 |
-| P1：JSON 返回后不再持有 writer lease | [排他租约与交接](../../../docs/architecture/reliable-delivery-chain.md#覆盖实际替换的排他租约)选定公开共享/独占安装租约、固定锁对象、同一 Go 进程持锁替换；实际 writer lease 内重核及原 stop 优先，部署要求 fresh writer | 设计闭合。SIM-A04/A05 验证真实 OS 锁、所有受支持入口及交接插入写者；报告只在实际持锁窗口有效 |
-| P2：命令记录合并混淆旧效果补查与旧输入重放 | [本地命令收口](../../../docs/architecture/reliable-delivery-chain.md#合并同一权威内的产品命令记录)逐类区分终态、已提交效果、原处理轮、明确未应用和未知；原处理与补查串行，重启零补发，HTTP 超时不撤销已进入处理 | 设计闭合。SIM-A06 验证候选/Action 已存但回执缺失、外部未知、同 ID 改正文和 Store 不可读；领域事务、候选 outbox 不在首版合并 |
-| P2：阶段和 EXE 摘要不能冻结续装目标 | [不变目标续装](../../../docs/architecture/reliable-delivery-chain.md#用既有部署包表示安装进度)在首次写入前保存完整 old/target 配置字节、全部 EXE 摘要及确定目标 manifest；实际磁盘按旧/目标/冲突判定，不凭 phase 续装 | 设计闭合。SIM-A07/A08 覆盖各替换窗口、配置第三种值及原子提交；不调用要求原 EXE 均不变的普通宿主恢复入口 |
+| P1：预查询取消后，实际命令缺少副作用前完整校验 | [完整绑定](../../archive/design/reliability-simplification-analysis.md#用实际命令的实例围栏减少预查询)固定 instance/state-dir/EXE/version/resource/协议；受理门闩使 ready→stopping 与新请求有明确先后；能力逐命令声明，响应元数据仅补查 | 设计闭合。SIM-A02 验证零新副作用后才移除对应预查询；未覆盖命令保持检查，实际 EXE 散列保留 |
+| P1：离线核验没有原完整项目集合的来源 | [原启动清单](../../archive/design/reliability-simplification-analysis.md#原启动清单)在 Store 准备后、worker/业务入口前原子发布 complete census；正文与原宿主身份绑定，旧清单连续性先于重建 Store，缺失不等于空集合 | 设计闭合。SIM-A03 覆盖配置与 Store 同时丢失、部分启动和普通重启；历史缺证据不回填，不能据当前目录反推原集合 |
+| P1：JSON 返回后不再持有 writer lease | [排他租约与交接](../../archive/design/reliability-simplification-analysis.md#覆盖实际替换的排他租约)选定公开共享/独占安装租约、固定锁对象、同一 Go 进程持锁替换；实际 writer lease 内重核及原 stop 优先，部署要求 fresh writer | 设计闭合。SIM-A04/A05 验证真实 OS 锁、所有受支持入口及交接插入写者；报告只在实际持锁窗口有效 |
+| P2：命令记录合并混淆旧效果补查与旧输入重放 | [本地命令收口](../../archive/design/reliability-simplification-analysis.md#合并同一权威内的产品命令记录)逐类区分终态、已提交效果、原处理轮、明确未应用和未知；原处理与补查串行，重启零补发，HTTP 超时不撤销已进入处理 | 设计闭合。SIM-A06 验证候选/Action 已存但回执缺失、外部未知、同 ID 改正文和 Store 不可读；领域事务、候选 outbox 不在首版合并 |
+| P2：阶段和 EXE 摘要不能冻结续装目标 | [不变目标续装](../../archive/design/reliability-simplification-analysis.md#用既有部署包表示安装进度)在首次写入前保存完整 old/target 配置字节、全部 EXE 摘要及确定目标 manifest；实际磁盘按旧/目标/冲突判定，不凭 phase 续装 | 设计闭合。SIM-A07/A08 覆盖各替换窗口、配置第三种值及原子提交；不调用要求原 EXE 均不变的普通宿主恢复入口 |
 
-表中 SIM-A01–A09 是方案内的[实施验证约束](../../../docs/architecture/reliable-delivery-chain.md#最小实施验证约束)，尚未登记为可执行场景，也没有本轮运行通过的含义。
+表中 SIM-A01–A09 是方案内的[实施验证约束](../../archive/design/reliability-simplification-analysis.md#最小实施验证约束)，尚未登记为可执行场景，也没有本轮运行通过的含义。
 
 ## 二轮补充检查
 
@@ -49,7 +49,7 @@
 
 直接离线恢复和续装的收益是减少人工恢复原版及重复启停，但需新增启动清单、公开安装租约、owned 启动上下文和持久 pending 阻断。这部分不能按“只删除几步校验”的成本估算，也不应捆绑为第一批简化的前置。两仓先交付前置能力，新环境留下原证据后再启用；不会为过去的无清单中断追认资格。
 
-Worker 统一规则的[当前实现与缺口](../../../docs/product-design/worker-lifecycle.md#可靠性交付简化前置方案)已同步 W/E/V 映射和待实施状态；方案未另建 Worker 状态机，未放宽原请求、未知输入、唯一交付和停止义务。
+Worker 统一规则的[当前实现与缺口](../../archive/design/reliability-simplification-analysis.md#可靠性交付简化前置方案)已同步 W/E/V 映射和待实施状态；方案未另建 Worker 状态机，未放宽原请求、未知输入、唯一交付和停止义务。
 
 ## 本轮验证及边界
 

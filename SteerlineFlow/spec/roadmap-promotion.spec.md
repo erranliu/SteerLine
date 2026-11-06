@@ -1,6 +1,6 @@
 # Roadmap Markdown 读取、任务解析与正式转正 Spec
 
-日期：2026-10-26。状态：用户已于本轮授权实施。已接入读取、Runner 解析、确认、发布/入图及 Web；2026-10-27 已接入 Runner 固定仓库 generate/1，完整业务路径和真实本机 Codex 生成均已验证；正式浏览器整链与真实 GitHub 文档 PR 合并/入图/清理已通过；人工体验、Gitea 外部写入和安装部署未验。普通开发文档，不分配本仓开发任务号、不修改 execution-map。配套 [Plan](../plans/roadmap-promotion.plan.md)、[专属验收计划](../testing/acceptance/roadmap-promotion.md)、[交互原型](../../docs/product-design/prototypes/planning-ui/index.html)。
+日期：2026-10-26。状态：用户已于本轮授权实施。已接入读取、Runner 解析、确认、发布/入图及 Web；2026-10-27 已接入 Runner 固定仓库 generate/1，完整业务路径和真实本机 Codex 生成均已验证；正式浏览器整链与真实 GitHub 文档 PR 合并/入图/清理已通过；人工体验、Gitea 外部写入和安装部署未验。普通开发文档，不分配本仓开发任务号、不修改 execution-map。配套 [Plan](../plans/roadmap-promotion.plan.md)、[专属验收计划](../testing/acceptance/roadmap-promotion.md)、[交互原型](../archive/design/prototypes/planning-ui/index.html)。
 
 ## 1. 成果与范围
 

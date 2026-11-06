@@ -1,6 +1,19 @@
 # SteerLine Web
 
-本机浏览器客户端，使用独立 Web 程序、Go 应用目录与原项目服务。[Spec](../SteerlineFlow/spec/web-project-switch.spec.md) · [Plan](../SteerlineFlow/plans/web-project-switch.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-project-switch.md)。项目添加、远程 Web 和 SSE 尚未实现。
+本机浏览器客户端，使用独立 Web 程序和共享 Go 后端的应用 API。[Spec](../SteerlineFlow/spec/web-project-switch.spec.md) · [Plan](../SteerlineFlow/plans/web-project-switch.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-project-switch.md)。项目添加、远程 Web 和 SSE 尚未实现；远端 worker 能力不等于远程 Web 访问。客户端与服务的职责唯一维护在[代码架构](../docs/architecture/current-code-architecture.md#客户端与服务边界)。
+
+## 工程结构与技术栈
+
+页面是 React/TypeScript SPA，静态资源嵌入独立 Go Web 程序；Node/npm 用于开发和构建，运行不需要 Node 服务。具体依赖及版本以 [package.json](package.json) 和 [package-lock.json](package-lock.json) 为准。
+
+| 职责 | 当前实现 |
+| --- | --- |
+| 页面、路由与控件 | React、TypeScript、React Router、Tailwind CSS 及仓库内 UI 组件 |
+| 服务读取与图形 | TanStack Query + fetch、React Flow |
+| 页面状态与恢复 | React state/context；IndexedDB 保存绑定原身份的草稿和请求 |
+| 构建与验证 | Vite/npm；Vitest + Testing Library；Playwright 浏览器场景 |
+
+`src/app/` 管理导航、连接和操作上下文；`src/features/` 放领域页面，`src/shared/ui/` 放控件，`src/shared/api/` 放请求、类型、journal 与 Query options。`server/` 提供浏览器认证、同源 API、配置和元数据查询协调；产品路由与回执语义见[本机协议](../docs/product-design/local-client-protocol.md)。
 
 ## 构建与启动
 
@@ -29,6 +42,8 @@ Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742
 
 Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的新实例，再恢复只读连接。草稿与完整原请求存 IndexedDB，按 home/项目/实例及执行身份隔离；切换取消旧查询、资格检查和未发送回调。已发送命令只按原 ID 查询；原实例变化后仍可读取旧回执，但不把旧信封补交到新实例。离线只保留当前标签页已有缓存并禁写。
 
+业务命令禁止通用自动重试，完整原信封保存失败零发送；仅按协议对明确允许的请求补交，不能借 Query 重试或组件重挂载重做未知动作。原生凭证不存浏览器；Agent/文档正文按不可信内容渲染，不执行原始 HTML。输入区保留中文 IME 组词、换行与显式提交的区别。
+
 ## 查询与缓存
 
 服务读取统一使用 `src/shared/api/queries.ts` 的 TanStack Query options，按 home/项目/原生实例及输出身份隔离。连接核验后后台预取当前项目的执行方案和任务列表首屏；DAG/执行页共享任务列表，已有缓存先展示，后台刷新保留内容。任务列表和执行方案的在途读取可跨页面复用，项目/实例切换仍取消原 Workspace 的读取。
@@ -45,7 +60,7 @@ Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的
 & 'C:\SteerlineDebug\<同一包>\stop.bat'
 ```
 
-Web 是唯一交互前端，原 TUI 已移除。默认 live，AI 显式 `--simulate`；首次方案冻结。生成器默认包含业务/Web 双 exe、helper、配置和启动器，两项目使用独立 clone/common-dir/provider，配置源在 `home/config-source`，etc 仅保存活动项目。包内 `reset-SteerlineTest.bat` 同时检查两项目、应用、Web 与启动器锁，再重置本包执行状态。不使用安装目录准备或运行调试。
+Web 是唯一交互前端，原 TUI 已移除。默认 live，AI 显式 `--simulate`；首次方案冻结。生成器包含固定业务/Web/Runner 程序、配置及启动材料，两项目使用独立 clone/common-dir/provider，配置源在 `home/config-source`，etc 仅保存活动项目。包内 `reset-SteerlineTest.bat` 同时检查两项目、应用、Web 与启动器锁，再重置本包执行状态。不使用安装目录准备或运行调试。
 
 热更新：先在 `web/` 运行 `npm run dev`，为 Vite 设置 `STEERLINE_WEB_DEV_PORT=18742`；启动本包 Web 前设置 `STEERLINE_WEB_DEV_ORIGIN=http://127.0.0.1:5173`。浏览器始终通过 Go 的固定 Origin，只有静态/Vite HMR 路由转到 Vite；认证和 API 留在 Go。
 
@@ -64,7 +79,7 @@ go run ./cmd/test-feedback -level=L1
 
 ## 执行配置管理
 
-全局入口 `/settings/execution-configs` 支持本机 Codex、本机 Orca/Codex、Pi、DSH（Windows/amd64）、已配对远端 Orca/Codex 的配置编辑、复制、默认选择及条件保存。Web 后端直接查询原生目录；`execution.json` 是唯一配置文件，Go 执行服务只消费启动快照。保存后通过既有原生命令 `steerline restart --no-open` 生效；浏览器不会自动重启。目录结果始终标明原生默认账号范围，不等于项目执行资格。冻结调试包拒绝保存，换方案须生成新包。
+全局入口 `/settings/execution-configs` 支持本机 Codex、本机 Orca/Codex、Pi、DSH（Windows/amd64）、已配对远端 Orca/Codex 的配置编辑、复制、默认选择及条件保存。Web 通过固定 Runner EXE 的无服务目录和配置接口处理原生语义，保留逻辑编辑及条件保存；`execution.json` 是唯一执行配置文件，Go 后端消费启动快照。保存后通过 `steerline restart --no-open` 生效；浏览器不会自动重启。目录结果标明原生默认账号范围，不等于项目执行资格。冻结调试包拒绝保存，换方案须生成新包。
 
 定向验证：
 
@@ -75,6 +90,4 @@ go run ./cmd/test-feedback -level=L3 -suite=configuration -scenario=configuratio
 
 前者使用独立 controlled 现场覆盖保存/正式重启/CLI消费；后者内部先生成新调试包，只验证真实目录查询并正常清理，不运行模型任务。结果见[专属验收](../SteerlineFlow/testing/acceptance/web-execution-config.md)。
 
-本机 Orca 目录由 Web 自有 named pipe 客户端查询，仅允许 status/agents/modelCatalog，无 Runner 探测接口。本机执行所需 helper 路径/SHA 来自部署模板，缺材料不阻止查询目录；Pi/DSH 无 Orca 结构化目录时可手动填 schema 合法值，并保持未验证标识。helper 的正式发布材料准备与新包复制方式见 Spec，页面不能任意配置程序。
-
-本机和远端Orca共用status/agents/modelCatalog目录流程，只在连接认证与目标身份上区分。发现Agent不代表SteerLine支持其执行；远端目录入口可以按注册Agent查询，配置生成仍保留现有支持范围。Pi提供只读Provider筛选并保存完整provider/model；API key/OAuth/base URL由目标Orca中的Agent原生配置，页面不管理或复制凭据。目录可见不等于实际调用通过，查询与执行上下文仍显示未核实。
+本机和远端原生目录协议、连接与元数据进程归 Runner，Web 只合并同上下文在途请求、判断产品支持并展示。发现 Agent 或模型不代表支持其执行；provider 凭据由目标 Agent 原生配置，页面不管理或复制。当前能力与来源校验见[Runner 接入](../docs/integration/steerrunner.md#配置与能力要求)，原版本页面验证与后续边界收口分别按对应验收判断。

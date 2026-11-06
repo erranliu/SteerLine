@@ -1,6 +1,6 @@
 # 规划原型长期文档交互验收
 
-仅归属 PR #363，源码 `5612f97d6754b98e79b5be409ba688e204cd8832` 中的[单文件原型](../../../docs/product-design/prototypes/planning-ui/index.html)及[说明](../../../docs/product-design/prototypes/planning-ui/README.md)。本项只验页面演示，不涉及真实文档写入、模型、PR、Task 或 roadmap 执行。
+仅归属 PR #363，源码 `5612f97d6754b98e79b5be409ba688e204cd8832` 中的[单文件原型](../../archive/design/prototypes/planning-ui/index.html)及[说明](../../archive/design/prototypes/planning-ui/README.md)。本项只验页面演示，不涉及真实文档写入、模型、PR、Task 或 roadmap 执行。
 
 2026-10-20，用户授权补验。Windows / headless Edge / 本仓 Playwright，实际打开本地 HTML。自动五项均通过：流程与项目文档分组可见、流程文档有规范维护入口、保存演示规范保留原正文、待合入预览含编辑内容、项目文档不显示流程规范维护按钮；`pageerror=[]`。
 

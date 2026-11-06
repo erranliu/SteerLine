@@ -36,4 +36,4 @@ schema 41 的 `preparation_batches` 保存每个批次，settings 只指向当�
 
 先确定活动单位、稳定原 ID、原请求关联、业务结果与资源结算边界；原 owner 补齐必要持久事实和观察时间。随后扩展中性有界读取、静态注册与纯映射，定义未知状态、提醒相关性和原详情导航。验证没有 UI 仍推进、GET 零副作用、部分故障、分页、重启和跨范围隔离。原页面迁移成统一投影另行安排，不要求一次性替换。
 
-本功能与数据库审计摘要流 [Activity](activity.md) 职责不同。成果约束见 [Spec](../../SteerlineFlow/spec/async-activity-center.spec.md)，实施与验证安排见 [Plan](../../SteerlineFlow/plans/async-activity-center.plan.md)，实际通过、失败和未验范围见[专属验收](../../SteerlineFlow/testing/acceptance/async-activity-center.md)。本期未部署。
+本功能与数据库审计摘要流 [Activity](execution-observability.md#流程与状态活动) 职责不同。成果约束见 [Spec](../../SteerlineFlow/spec/async-activity-center.spec.md)，实施与验证安排见 [Plan](../../SteerlineFlow/plans/async-activity-center.plan.md)，实际通过、失败和未验范围见[专属验收](../../SteerlineFlow/testing/acceptance/async-activity-center.md)。本期未部署。

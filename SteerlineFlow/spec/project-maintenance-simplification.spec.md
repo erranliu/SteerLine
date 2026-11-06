@@ -1,6 +1,6 @@
 # Spec：项目更新与候选版本收敛
 
-状态：2026-10-21 用户已确认方案，已按本文实施，验证结果与未验项登记专属验收。普通开发，无 roadmap Task ID，不修改 execution-map。配套 [Plan](../plans/project-maintenance-simplification.plan.md)、[专属验收](../testing/acceptance/project-maintenance-simplification.md)；统一规则归[项目维护设计](../../docs/product-design/project-maintenance.md)，执行节点与异常规则归 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md#项目基线与材料维护2026-10-21)。
+状态：2026-10-21 用户已确认方案，已按本文实施，验证结果与未验项登记专属验收。普通开发，无 roadmap Task ID，不修改 execution-map。配套 [Plan](../plans/project-maintenance-simplification.plan.md)、[专属验收](../testing/acceptance/project-maintenance-simplification.md)；统一规则归[项目维护设计](../../docs/product-design/project-maintenance.md)，执行节点与异常规则归 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md#项目材料与辅助执行)。
 
 ## 目标与确认结论
 

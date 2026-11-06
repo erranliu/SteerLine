@@ -1,65 +1,75 @@
 # Roadmap 读取、解析与入图
 
-Web 的项目导航提供 Roadmap 页面。当前实现读取 `SteerlineFlow/Roadmap/drafts/` 下的普通 UTF-8 Markdown，保留工作树原文、摘要、HEAD 与未提交标记；不创建或改写草稿，不要求用户提供 JSON。
+当前 Web 读取 SteerlineFlow/Roadmap/drafts/ 下普通 UTF-8 Markdown，提供解析、确认、文档生成/审阅、发布与正式入图。草稿由外部维护，产品不改写原文或要求手写 JSON；完整项目添加仍是[后续方案](project-onboarding.md)。
 
-草稿修改标记和跨阶段内容复核容许 LF/CRLF 差异；原文、原始摘要保持。解析自动从 Task owner 取已有图和来源映射，文档生成自动采用已确认规划；这些材料通过 Runner 正式 `kind=file` 交付为私有只读文件，提示只引用路径和摘要。Git 源码/静态规范和动态文件各自核验 manifest，不要求用户手写 JSON 或把动态快照提交到项目。
+## 材料与解析
 
-解析通过 Runner `generate/1`，固定完整原文、已有正式 Task/Spec/DAG 和本来源已有映射。返回内部代号、目标/范围/约束/通过条件、逐字依据、原有和建议依赖、变化理由与待澄清问题。SteerLine 校验引用、环、来源和已有关联；关键问题阻止确认。确认时重新核对原文、图及材料摘要，变化要求重新解析。新任务此时没有正式编号。
+解析通过 Runner generate/1，固定工作树原文/摘要、HEAD/未提交标记、已有正式 Task/Spec/DAG 与本来源映射。返回内部代号、目标/范围/约束/通过条件、逐字依据、原有/建议依赖、理由与待澄清问题；SteerLine 核对来源、引用和环。关键问题阻止确认，确认前重核原文、图与材料，变化要求重解析。此时不分配正式 Task 编号。
 
-## 固定版本文档生成
+静态规范通过固定 Git repository 提供；原 Markdown、任务图、来源映射与确认规划由原请求自动冻结，通过 Runner 正式 kind=file 私有只读渠道交付，不提交动态 JSON，也不将正文内联进提示词。新请求须有 frozen_private_files/v1；缺能力或材料阻断。恢复只使用原请求已保存文件，不读取当前值重建。
 
-2026-10-27 已接入 Runner generate/1 的 repository={local_path,commit}，根据所选构建的公开 capability/schema 开放按钮。Runner 从本地 Git 对象建立固定提交的只读快照；SteerLine 冻结原 Markdown、已确认规划、完整 commit/tree、SpecGuide 与测试/编写规范。新请求要求 Runner 公布 `frozen_private_files/v1`，原文/图/确认规划由原请求自动供给；恢复只使用该请求已保存的文件，不读当前值重建。没有能力、规范或原文/图材料变化时明确阻止。
+原始字节与摘要保留；草稿修改标记、跨阶段内容比较允许 LF/CRLF 差异。Run/结果 manifest 须匹配原仓库与上传字节，证明材料来源，不证明模型逐文件已读或结论正确。具体供给边界归[提示词治理](../prompt-governance.md)。
 
-文档生成是 purpose=documents 的独立内容记录，通过 parent_id 关联原确认，复用现有队列、原请求、查询、停止及接管。原解析和文档 Run 不混用；排队/未知/失败可观察，不自动换号重发。
+## 文档生成与审阅
 
-逐任务 Spec/Plan/验收文件的内部代号、稳定语义路径和完整集合由输出 Schema 固定。结果还包含整批设计、调查引用和问题；调查引用按公开版本 manifest 核对路径及 SHA-256。manifest 证明固定版本提供了哪些文件，不能当作模型逐文件读取或结论正确的证明。存在关键问题时只保存问题，回到外部修改 Markdown 并重新解析确认，不通过正文暗改 DAG。
+确认后的解析记录派生 purpose=documents 的**独立文档记录**，parent_id 指向原解析；两者分别持有 Run、revision、原请求与停止义务，不混用目标。文档生成固定完整 commit/tree、原规划、SpecGuide 与测试/编写规范，能力按所选 Runner 公开 schema 校验。
 
-整个 Runner 最终 JSON 限 1 MiB；完整结果通过公开 content_result.json 读取。仅原生来源核实、Run completed、stop_status=stopped、Run/结果仓库 manifest 一致且业务校验通过后进入文档审阅。页面展示提交、整体设计、调查引用及 Spec/Plan/验收正文；支持受控修改，并在发布前展示所有原/新文件和目标。
+输出 Schema 固定内部代号、稳定语义路径及完整 Spec/Plan/验收文件集合，同时返回整体设计、调查引用和问题。引用核对公开 manifest 路径/SHA；关键问题回到外部草稿修订并重新解析确认，不靠编辑正文暗改 DAG。
+
+完整最终 JSON 上限 1 MiB，从公开 content_result.json 读取。原生来源已核实、Run completed、stop_status=stopped、仓库 manifest 一致且业务校验通过后进入审阅。页面展示来源提交、整体设计、引用及完整正文，允许修改未发布的文档记录；发布前展示所有原/新文件及目标。
 
 ## 发布与编号
 
-文档使用稳定语义路径和 Roadmap 内部代号。发布保存原意图、审阅摘要、文档分支、固定提交、目标和合并授权，在独立 worktree 准备文档 PR；核实 provider 的原 PR、仓库、base/head、真实 merge commit 和合并后的文件。用户可授权创建并合并；不强制绕过保护规则。文档已合并但未入图时仍没有新正式编号。
+发布固定原请求、审阅摘要、文档分支/提交、目标及合并授权，在独立 worktree 准备文档 PR。核实 provider 的原 PR、仓库、base/head、真实 merge commit 和合并后文件；可按用户授权创建及合并，不绕过保护。文档合并尚未入图时没有新正式编号。
 
-正式入图经既有 Task owner 的批次事务：按仓库分配未使用的新编号，转换内部依赖，写入 Task/Contract/DAG、来源映射和原回执。一批全提交或全回滚；失去回执显示待核实，不能按页面行数猜部分创建。重新解析保留该来源内部代号已绑定的正式 Task，禁止换绑或再创建；不同草稿的同名内部代号互不冲突。
+正式入图由 Task owner 在批次事务分配新编号、转换内部依赖，写 Task/Contract/DAG、来源映射与原回执；整批提交或回滚。未知只核实原批次，不按页面行数猜部分成功。重新解析保留本来源内部代号到正式 Task 的绑定，不换绑/再创建；不同草稿同名代号互不冲突。
 
-入图后沿当前派发规则运行。页面在提交前提示项目开启自动派发时可能启动任务。
+入图不绕过[项目统一就绪与派发资格](project-maintenance.md#项目统一就绪与候选冻结)。页面提示自动派发可能启动合格任务，解析/生成/发布本身不等于开发任务已经启动。
 
 ## API 与原请求
 
-查询沿已有项目 HTTP / Web 转接，不接受额外查询参数，不运行模型或发布：
+路由相对应用 v2 项目根，通用信封及浏览器恢复归[本机协议](local-client-protocol.md)。
 
-| 查询 | 内容 |
+| GET | 内容 |
 | --- | --- |
-| `GET /roadmaps` | 来源/历史摘要、合格内容方案和文档能力缺口 |
-| `GET /roadmaps/sources/{source_id}` | 工作树 Markdown 原文 |
-| `GET /roadmaps/{record_id}` | 原快照、解析/确认、文档、发布及正式映射 |
+| /roadmaps | 来源/历史、合格方案、文档能力及静态准备状态 |
+| /roadmaps/sources/{source_id} | 工作树 Markdown 原文 |
+| /roadmaps/{record_id} | 原快照、解析/文档、发布及正式映射 |
 
-写操作均为 `POST /commands` 的原 `CommandEnvelope`。项目和实例校验沿现有协议；Roadmap 共用 HTTP 持久请求号仲裁及 SQLite 命令权威，不与派发控制/原生查看复用请求号。
+GET 不接受额外查询参数，不启动模型或执行发布。写操作统一 POST /commands，核对项目/实例并保留完整原信封；HTTP 请求号与 SQLite 权威共同仲裁，不与派发控制或原生查看复用 ID。
 
 | action | target / expected_version | payload |
 | --- | --- | --- |
-| `roadmap_parse` | source_id / 1 | `{request_id,path,source_digest,profile}`，request_id 等于信封 |
-| `roadmap_confirm` | parse_id / 当前记录 revision | `{}` |
-| `roadmap_generate_documents` | 已确认 parse_id / 当前记录 revision | `{}`；返回新的文档 record_id |
-| `roadmap_edit_documents` | parse_id / 当前记录 revision | `{local_key,kind,body}`；kind 为 spec/plan/acceptance，未发布结果可修改 |
-| `roadmap_publish` | parse_id / 当前记录 revision | `{review_digest,merge}`；固定本次发布与合并授权 |
-| `roadmap_admit` | parse_id / 当前记录 revision | `{}` |
-| `roadmap_observe` | parse_id / 1 | `{}`；仅查询原操作 |
-| `roadmap_stop` | parse_id / 1 | `{}`；保存该记录原内容请求的停止义务 |
-| `roadmap_resume` | parse_id / 当前记录 revision | `{}`；显式继续原意图中可证明尚未提交的阶段 |
+| roadmap_prepare_static | project_id / 1 | {commit}，页面观察的本地完整 HEAD |
+| roadmap_parse | source_id / 1 | {request_id,path,source_digest,profile}，request_id 等于信封 |
+| roadmap_confirm | 解析 record_id / 当前 revision | {} |
+| roadmap_generate_documents | 已确认解析 record_id / 当前 revision | {}；返回新的文档 record_id |
+| roadmap_edit_documents | 文档 record_id / 当前 revision | {local_key,kind,body}；kind 为 spec/plan/acceptance，仅未发布结果 |
+| roadmap_publish | 文档 record_id / 当前 revision | {review_digest,merge} |
+| roadmap_admit | 文档 record_id / 当前 revision | {} |
+| roadmap_observe、roadmap_stop | 原解析或文档 record_id / 1 | {}；查询原操作或保存原内容 Run 停止义务 |
+| roadmap_resume | 原文档 record_id / 当前 revision | {}；显式继续可证明未提交的发布/入图阶段 |
 
-回执保留原信封和 Roadmap 投影。相同请求换正文拒绝，重复请求不再次调用模型、发布或分配编号。内容请求先持久化、后提交，未知只查原请求；取消后迟到接受仍停止原 Run，原生资源未停止不能释放共享额度。启动、换构建和关闭纳入现有 Runner 原请求接管/停止核验。
+同 ID 改正文拒绝，重复请求不再调用模型、发布或编号。内容请求先保存再提交，未知只查原号；取消后迟到受理仍须停止原 Run，资源未停止不释放共享额度。启动/关闭核对原请求与停止义务，换构建遵守[当前排空规则](../integration/steerrunner.md#停止重启与升级)。
 
-发布未知只查原分支/PR。显式继续可以恢复本地准备、已核实推送后的尚未提交 PR 或已核实 PR 后尚未提交的授权合并；未知 POST/merge 不重发。Task 原回执不存在时，显式继续重检前置，仍以保存的原批次及原 Task 请求执行幂等事务。
-
-实现与验证范围以 [专属验收](../../SteerlineFlow/testing/acceptance/roadmap-promotion.md) 为准。真实 Runner/Codex 生成到隔离 Git/SQLite 入图已通过；正式浏览器整链与真实 GitHub PR 发布合并/入图/正常停服及清理已通过；人工体验与安装部署未验。
+发布未知只查原分支/PR。显式继续可恢复本地准备、核实推送后尚未提交的 PR 或核实 PR 后尚未提交的授权合并；未知 POST/merge 不重发。入图回执缺失时，显式继续重检前置，以保存的原批次与原 Task 请求执行幂等事务。领域动作与目标以[路由实现](../../internal/app/roadmaps.go)为准。
 
 ## 静态材料准备
 
-在已有 Git 项目根执行 `steerline project prepare-roadmap -repository <绝对目录>`，交付当前平台 parse-rules.md、document-rules.md 和缺失的 `SteerlineFlow/spec/SpecGuide.md`；`-check` 只检查。既有自定义 SpecGuide 保留，平台规则不同源会明确报错，需审阅更新，不静默覆盖。将新增静态文档按项目正常流程提交/合入，再使用 Roadmap 页面。命令不纳管、建库或创建任务，完整项目添加仍按其后续范围。
+| 入口 | 行为 |
+| --- | --- |
+| Web“初始化静态材料” | 显式提交 roadmap_prepare_static，绑定当前项目与观察到的 HEAD |
+| CLI | steerline project prepare-roadmap -repository <绝对目录>；-check 只检查 |
+| 独立调试包 | 新项目首次提交前调用同一准备 owner |
 
-原始动态文件的逻辑名称为 `roadmap-inputs/source.md`、`existing-task-graph.json`、`existing-roadmap-source-map.json` 和 `confirmed-planning.json`。它们由 Runner 给出实际 `file` 读取位置，与源码中的同名文件无关；Run/结果的文件清单须与原上传字节一致。
+三者共用[准备实现](../../internal/roadmap/prepare.go)：补缺少的 parse-rules.md、document-rules.md 与 SteerlineFlow/spec/SpecGuide.md；保留已有自定义 SpecGuide，平台规则不同源需审阅更新，不静默覆盖。只写静态材料，不调用模型、提交 Git、纳管、建库或建任务。
 
-## 静态初始化入口
+页面分别展示 HEAD 与已观察目标分支的三份材料状态。生成到工作树不等于就绪，须按项目正常流程提交/合入并同步；未发布、版本不符或目标未核实时禁止解析。GET 只观察，不 fetch 或自动初始化。
 
-Roadmap 页面在解析前展示 HEAD 与已观察目标分支的三份静态材料状态，提供显式“初始化静态材料”；服务按原项目/版本信封生成缺少文件，不调用模型或提交 Git。文件仅在工作树中时显示待提交/合入提示，解析保持禁用；初始化未决请求可按原号只读对账，部分结果保留并明确终止，不自动重跑。CLI `project prepare-roadmap` 仍供仓库准备使用；独立调试包的新项目在首次提交前自动调用同一准备 owner。完整项目添加/纳管仍属于后置范围。细则和验收见 [初始化闭环 Spec](../../SteerlineFlow/spec/roadmap-static-initialization.spec.md)。
+未决初始化按原号只读核实；中断后不重复文件写入，完整属性可核实则补收结果，部分结果保留并明确终止，需用户刷新后显式重新初始化。身份、原 HEAD 和写入前后仓库状态须匹配，见[应用核验](../../internal/app/roadmap_preparation.go)。
+
+动态文件逻辑名为 roadmap-inputs/source.md、existing-task-graph.json、existing-roadmap-source-map.json、confirmed-planning.json；实际读取位置由 Runner 返回，与仓库同名文件无关，不加入项目初始化清单。
+
+## 验证与历史
+
+当前实际范围见[转正验收](../../SteerlineFlow/testing/acceptance/roadmap-promotion.md)；静态准备见[初始化 Spec](../../SteerlineFlow/spec/roadmap-static-initialization.spec.md)及[验收](../../SteerlineFlow/testing/acceptance/roadmap-static-initialization.md)。原受测构建的真实 Runner/Codex、浏览器、GitHub PR 到入图链路不等于当前安装已部署；人工体验和安装部署未验范围仍按原记录保留。精简前日期增量及原文从[第六批历史入口](../../SteerlineFlow/archive/design/docs-sixth-batch-review.md)追溯。

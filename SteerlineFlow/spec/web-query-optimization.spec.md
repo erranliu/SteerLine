@@ -2,7 +2,7 @@
 
 2026-10-15 用户确认后续将引入 SSE，要求先规划在 SSE 前值得实施、基本不增加复杂度的正向优化。本任务为普通开发，不分配 roadmap Task ID，不纳入执行 DAG；本次按用户后续明确授权实施。
 
-[Plan](../plans/web-query-optimization.plan.md) · [专属验收](../testing/acceptance/web-query-optimization.md) · [现有 Web 设计](../../docs/product-design/web-frontend.md)。
+[Plan](../plans/web-query-optimization.plan.md) · [专属验收](../testing/acceptance/web-query-optimization.md) · [现有 Web 设计](../archive/design/architecture-web-history.md#web-首期技术方案)。
 
 ## 目标与当前问题
 

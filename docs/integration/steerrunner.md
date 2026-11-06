@@ -1,94 +1,79 @@
-# SteerRunner 依赖与运行
+# SteerRunner 接入与运行
 
-2026-11-06 原开发 Run 续作：当前变更通过既有 `message` 向 pr_ready 的原会话发送 SteerLine 正文，结果沿原执行/事件回传；SteerLine 提供手动“解决合并冲突”，不检测冲突或新增现场预检。Runner 管输入串行、原请求对账与原生停止，SteerLine 管候选/Task 资格。固定构建、实际验证及未验范围见[专属验收](../../SteerlineFlow/testing/acceptance/pr-conflict-resolution.md)，安装版未部署此增量。
+SteerLine 通过独立 Runner EXE 的公开 `steerrunner-cli/v1` 使用模型、原生 Agent 和执行工作流。Task、依赖、候选参与及唯一交付由 SteerLine 管理；工作区、会话、逐轮输入和执行资源由 Runner 管理。长期职责见[项目流程](../product-design/project-workflow.md)，异常及恢复见[Worker 生命周期](../product-design/worker-lifecycle.md)。
 
-计费职责调整见[Spec](../../SteerlineFlow/spec/billing-ownership.spec.md)、[实施 Plan](../../SteerlineFlow/plans/billing-ownership.plan.md)和[隔离验收](../../SteerlineFlow/testing/acceptance/billing-ownership.md)。Runner 只提供用量事实；SteerLine 管理价表、计算和展示估算。安装版尚未部署此次变更。
+本文说明当前接入。所选构建的公开能力及对应验收决定实际可用范围；源码接通不表示安装版已部署，旧构建通过不表示当前组合已验。首次接入构建、旧接管和历次修复统一从[历史证据入口](../../SteerlineFlow/archive/design/runner-reliability-history.md)追溯。
 
-## 原生执行配置边界
+## 依赖与固定构建
 
-2026-11-05 本轮实现以固定 EXE 的无服务 `execution-config --input - --json` 消费 describe/derive/compose。Runner 唯一解释原生 settings、有限组合/effort、用途转换及源绑定 identity；SteerLine 保留配置库、逻辑编辑来源、项目材料、ready/current、DAG 与交付。home 启动取得不可变配置快照；普通轮询和 SQLite 事务只读快照，明确用户准备/重试可重查失败项。环境记录格式与 SQLite schema 同步升级，不迁移旧活动。
+在独立 Runner 仓库检出所选提交，使用其构建入口生成 EXE 和来源记录，保留真实 version、SHA-256 和资源摘要。运行不需要 Runner 源码、模板、Node 或 Python；Git、Codex/Orca 和已有原生登录是执行环境依赖，不打包用户认证。
 
-Web validate/save 请求为 `{saved_digest,config,profile_edits}`；服务端从同一保存版本取 base，重新 compose 并规范比较完整 execution，仍要求 If-Match 和发布前复读。目录 profile 查询给 Runner 传服务器保存的 execution，保留自定义 Codex 程序上下文。浏览器只编辑逻辑选择，不再解释 Agent 原生字段或部署 helper。固定正文没有变化，实施/真实范围与失败记录见[专属验收](../../SteerlineFlow/testing/acceptance/native-execution-configuration-boundary.md)。
+在应用 home 配置 [execution.json](../../examples/execution.json)，填写 EXE 绝对路径、真实版本和摘要；示例占位值不能用于启动。部署选择、执行预设和每次任务输入各有固定时点，细节归[执行方案](../product-design/execution-configuration.md)。新配置不改写旧候选的原提交，流程 ID/version 取所选构建的公开目录。
 
+调试使用独立包，例如：
 
-## 无服务原生目录查询
+```powershell
+./scripts/new-debug-release.ps1 -SteerRunnerExe C:/Tools/SteerRunner/steerrunner.exe
+```
 
-2026-11-05 Web 已接入固定 EXE 的 `native-catalog --input - --json`，按离线 capabilities.native_catalog 的 `steerrunner-native-catalog/v1`、schema、构建 SHA256/resource_digest 判断资格。stdin 是查询对象，目录调用不带 state-dir/实例/Run 绑定，也不启动服务。支持登记环境、本机/远端 Orca Agent/模型、本机 Codex 模型目录；原生连接及精确元数据进程归 Runner，Web 保留产品支持判断、配置保存和在途合并。30 秒取数、1 MiB、五秒清理，失败旧结果明确过期。策略预检消费已有 model_input_contract.workflow.project_policies.slots。具体实现、固定构建、原生资格与独立审核见[验收](../../SteerlineFlow/testing/acceptance/runner-boundary-consolidation.md)。
+需要指定原生程序或模型时使用生成器的 `-AgentExecutable`、`-AgentModel`、`-AgentReasoningEffort`。换 EXE 或冻结方案须创建新包；构建、安装及隔离调试步骤见[安装部署](install-deploy.md)和[独立调试](../runtime-install-debug.md)。
 
-## 任务候选观察
+## 服务、目录与实例
 
-正常项目运行要求 Runner 在线 catalog 提供 `steerrunner-run-observation/v1`、`same_snapshot: true` 及至少 100 条每页。已绑定任务候选使用 `observe` 获取 Run 和事件页。原 `request_id` 对账、启动前离线读取和控制前 revision 仍走 `inspect`。启动前先完成停止信封交接，再检查在线观察能力。见[同快照观察 Spec](../../SteerlineFlow/spec/task-run-observation.spec.md)。
+Runner 同一 EXE 提供短命 CLI 和常驻服务。应用宿主持有每 home 一个固定 Runner 服务，各项目借用客户端；读取不自动启动服务。项目退出保留原 Run 与停止责任，整体关闭统一结算。
 
-## Git 型新 Run 的启动边界
+Runner state-dir 由规范绝对 home 和当前 v8 命名空间派生：Windows 位于本地卷根 `<drive>:\slr\<26位base32摘要>`，非 Windows 使用系统临时目录下的同类短目录。业务库仍按项目隔离，Runner 状态、材料、工作区和日志归其短目录。排查从运行信息取得准确 state-dir 和 Run ID，不手拼摘要或读私有数据库。布局与隔离规则见[路径清单](../../SteerlineFlow/paths.md)。
 
-SteerLine 校验固定 commit 的项目材料及接入条件，冻结候选与请求。Runner 按该 commit 创建新 worktree，沿创建回执绑定原资源，随后自主推进 Workflow。成功创建即满足该路径的工作区启动条件。自动生成的测试安排随冻结请求进入既有文件渠道，由 Agent 在工作区使用时读取。请求形成时发现的缺项由 SteerLine 阻断，运行期读不到安排由 Agent 报告。旧 Run 恢复继续走独立流程。见[启动边界 Spec](../../SteerlineFlow/spec/fresh-worktree-startup.spec.md)。
+应用在 `home/application-api/runner-build.json` 保存构建 pin，启动前核验。查询不创建目录；显式启动才准备私有目录，拒绝重定向和网络卷。旧目录、旧 pin 或旧格式不自动迁移。reset 须核对全部项目、生成、环境准备及未知原请求，准确清理授权目标，不能删除共享 `slr` 根。
 
-2026-10-28 调用方提示词改为短指令与固定文档：新请求仅保留动作、引用及少量参数，完整安排、规则、原文和报告通过既有固定仓库/工作区读取；缺文件或版本不符在投递前阻断，无 inline 兜底。generate 使用固定 `generate.repository` 且 materials 为空；schema 仅保留结构，结果仍核对原文和 manifest。完整冻结安排与原报告保存在原 owner；环境下一轮缺少完整报告到新工作区的正式渠道时停止创建新 Run。用户完整回答最多 2000 UTF-8 字节，超限拒绝；旧请求仅观察原冻结输入。[设计与供给边界](../../SteerlineFlow/spec/caller-prompt-convergence.spec.md)、[实际验收](../../SteerlineFlow/testing/acceptance/caller-prompt-convergence.md)。
+运行时绑定原服务实例及构建、目录和资源摘要。实际请求须带所选能力要求的期望绑定；不以先查询 status 代替实际命令围栏。存活的 ProjectRuntime 发现 Runner 替代实例时拒绝新业务，显式重启 SteerLine 后先核对原 Run/输入及停止义务，再开放准入。
 
-2026-10-26：项目环境适配已接入Runner主干`74d594c5f00e32e97d2ee911db5ac787302022bc`的最终result快照。要求独立`steerrunner-result-file/v1`、公开`collection=end_only`及`query_reads_file=false`；progress原契约不变。环境适配在pr_ready等原流程状态触发stop，确认停止后验收唯一closed快照；closed/version=0保留采集失败原因，不能刷新或放行。固定EXE公开接口和受控Run回传/结算、L1/L2及Web已验证；真实远端L2+完整PR业务验收单独安排，详见[环境适配验收](../../SteerlineFlow/testing/acceptance/project-environment-adaptation.md)。
+## 配置与能力要求
 
-2026-10-25：调用方已接入准备查询等待 `steerrunner-execution-wait/v1`。新 Orca 候选要求 `capabilities.execution_wait` 的公开 nullable schema 及原 `run_observation` 同快照能力；不足时仅该 profile 不可启动，原候选读取/停止和其它 adapter 依原资格。原 Run 对象或显式 null 随 controls/revision/事件原子保存，经 `runner_delivery.execution_wait` 展示。SteerLine 不重试 Orca CLI，也不从显示时间推导 blocked 或自动 resume。Runner #57 已合入 `5df57b6`，fixture 已固定其正式 schema；正常正式构建已通过扫描/只读与原触发路径受控复验，历史 Defender 告警单列保留；后续固定 Runner 与远端 Orca 的同候选等待、恢复和停止联验已通过，完整 Web 进程重启等限制仍见专属验收。具体范围见[Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)和[验收](../../SteerlineFlow/testing/acceptance/runner-wait-retry.md)。
+| 能力 | 当前接入边界 |
+| --- | --- |
+| 原生目录 | 使用固定 EXE 的无服务 `native-catalog`；Runner 管原生连接、认证及元数据进程，Web 管在途查询、产品支持判断和保存 |
+| 执行配置 | 无服务 `execution-config` 提供描述、派生、构造及来源 identity；Runner 解释原生 settings 和模型/effort 组合，Web 编辑逻辑选择，服务端重验可信保存版本 |
+| 工作流 | 按公开目录及组合 schema 验证预设；Runner 决定步骤、审计及修复预算，SteerLine 选择并展示 |
+| 候选观察 | 在线目录须提供 `steerrunner-run-observation/v1`、`same_snapshot: true` 及至少 100 条每页；正常同步用 `observe` |
+| 原请求与控制 | 原请求对账、启动前离线读取及控制前 revision 使用 `inspect` 等既有入口；按钮资格来自公开 controls 与调用方业务资格 |
+| 等待状态 | 准备等待展示 `execution_wait` 对象或显式 null，保留原 revision；SteerLine 不重试 Orca CLI，不根据倒计时自动恢复 |
+| 原会话查看 | 仅公开 `native_session_viewer.adapters` 声明支持时启用；Runner 校验原 Run/Attempt/session/generation 并打开，不创建替代业务会话 |
 
-2026-10-24：候选测试汇报改用 [progress-file 单文件通道](runtime-progress.md)，调用方冻结布尔字段、独立保存快照并解释展示。候选侧原 R2 收集、workspace-git 当前通过判定和自动转测试历史已移除；下文 2026-10-20 的 R2 接入只记录历史版本。独立标准报告与显式登记保留。安装及旧现场不自动迁移。
+缺少必要 schema、能力或固定材料时明确显示不可用，不退回旧字段、普通流程或内联材料。目录查询不取得项目就绪资格，也不能用空闲能力查询证明真实 Run 读取已接通。配置详情见[执行方案](../product-design/execution-configuration.md)，接线及已验范围见[目录与边界验收](../../SteerlineFlow/testing/acceptance/runner-boundary-consolidation.md)、[执行配置验收](../../SteerlineFlow/testing/acceptance/native-execution-configuration-boundary.md)。
 
+## 执行、观察与交付
 
-执行页“用量与费用”消费 Runner 的 `run-usage` 与固定 revision 的全部 `run-usage-events`，由 SteerLine 本地计算候选主会话费用。新 Runner 的 `run_usage` 明确发布 same_snapshot、events_schema 和 max_events；未发布足够明细能力时仍可显示 Token，费用明确不可用。Runner 已移除 estimate-run-cost、定价 schema 和 run_cost 能力。调用方保留原 Run/state-dir/实例绑定，不解析原生日志、不查私有数据库。
+SteerLine 固定项目 commit、任务材料、执行方案和完整请求后提交；Runner 按固定 commit 创建专属 worktree。成功创建后进入所选工作流，正常新启动不再叠加 HEAD、diff 或洁净度预检。原资源身份和未知操作沿生命周期核实，旧 Run 恢复独立处理。
 
-全局 `<home>/billing.json` 由 `internal/billingconfig` 独占，保存不可变价表版本、active 和 generation；首次 create-only，之后 ETag 条件保存/切换。价格变更立即用于历史用量重算，无需重启。四类互斥 Token 按每百万单价以精确十进制计算，reasoning 已含输出；仅实际 provider/model 与请求时间匹配，不以完成时间代替。未配置、事实缺失、部分覆盖和真实零分别展示；金额是按手工固定费率估算，非实际扣费。执行配置不再接受 pricing_policy。
+候选序号、显示名及工作区 `name_prefix` 随原提交固定，Runner 不从业务关联字段猜命名；规则和已验范围见[命名前缀 Plan](../../SteerlineFlow/plans/runner-name-prefix.plan.md)及[验收](../../SteerlineFlow/testing/acceptance/runner-name-prefix.md)。
 
-远端采集授权仍独立保存在 execution.json.usage_policy。设置页只选择 Runner 公开 access_requirements 已核实的 environment、host_id 和 session 日期叶目录；Web 经应用查询端口取得有效策略和需求，不另建 Runner 客户端。保存只表示待正式重启，实际生效以服务 status 的 usage_policy/digest/revision 为准；不热更新或自动重启。Runner 在缺许可时只发现原绑定元数据并公开最小需求，不登记或读取日志。远端 Codex 的真实隔离验证已完成，原安装候选恢复仍需以后显式部署、授权并正式停启。
+完整规则、测试安排和原文按各自固定文件来源供给；缺文件或版本不符时阻断，不内联补发。Runner 受理时固定运行依据，逐轮保存实际输入及来源；配置刷新不重建旧请求。具体供给规则归[提示词维护](../prompt-governance.md)。
 
-本机采集沿 Runner 默认策略。远端采集需要在 `execution.json` 顶层显式配置 Runner 的 `usage_policy`，启动时原样传入原 `service start`；例如关闭远端新增目录登记的策略为 `{"enabled":true,"remote_log_access":{"mode":"disabled","grants":[]}}`。允许远端登记时使用 Runner 公开 schema 的 `temporary` 模式，并显式指定 environment、已核实的稳定 host_id 和受限 session_roots。不要使用账号 home 或凭据根作为授权范围；具体根资格由 Runner 验证。策略省略不扩权，页面读取不授权；更改须经正式停服/启动，冲突不热更新。Web 编辑执行 profile 时保留这两项部署字段。
+SteerLine 校验公开 Run、输入、事件与游标绑定并保存投影。`native_outcome` 的失败、取消、unknown 或 unreported 均按原义保留；缺失不推定成功。公开阶段、原生结束、PR 就绪与资源结算分开展示。
 
-SteerLine 按候选冻结的 provider 查询已绑定 PR，交付和废弃共用平台查询，并在本地事务重核原候选和版本。Runner 自主核验 Workflow 发布，独立调用方仍可使用 `inspect --refresh-pr`。详见[任务 PR 核验 Spec](../../SteerlineFlow/spec/task-pr-merge-ownership.spec.md)。
+PR 就绪后允许的显式 message 沿原会话串行执行，不新增正常准备或现场预检；未知只查原请求。手动解决冲突由 SteerLine 提供业务入口，见[续作验收](../../SteerlineFlow/testing/acceptance/pr-conflict-resolution.md)。Runner 自主核验工作流发布；任务交付由 SteerLine 按候选冻结的 provider 直接查询平台并提交唯一交付，完整链路见[可靠性交付](../architecture/reliable-delivery-chain.md)。
 
-SteerLine 只通过 `steerrunner-cli/v1` 调用独立 EXE。Runner 同一个 EXE 提供短命 CLI 与常驻服务；CLI 连接同一 state-dir 的现有实例，读请求不自动启动服务。任务、DAG、候选参与及 TaskDelivery 留在 SteerLine。
+## 停止、重启与升级
 
-当前对接 Runner state/v8：同构建重启只重连原资源；换构建前由原版本排空业务、原生资源及未完成控制。不再调用已删除的 verify-takeover，也不维护旧兼容矩阵。启动前取消通过公开 inspect（冷态使用 --offline）核对原 Run/input/request，再提交原 pending_stops 信封；原资源丢失或未知结果耗尽后显示人工处理，显式 resume 只对账。v7 及更早格式保留原安装收尾，使用新的应用 home 与 v8 派生目录，不迁移旧状态。未来兼容且已排空时可复用同一目录，历史构建摘要不决定逐 Run 业务权限。部署步骤见[安装更新](install-deploy.md#同构建更新与重启)。此前服务换代/接管 Spec 和下文 A/B 结果仅是历史记录。
+同构建重启先核对原执行、停止义务和会话。Runner 保留原授权并可接续已证明未发送的后继；调用方 pending 输入撤回，unknown 仅观察原请求，SteerLine 不自动生成新的 submit/reply/message/resume。新反馈或恢复需符合当前 revision、controls 和显式授权。
 
-开发候选在预留事务内分配页面显示的候选序号，并将 `name_prefix`（C1 为 `sl-<task_id>`，C2 起为 `sl-<task_id>-c<Number>`）与最终 submit 一起冻结。Runner 将其作为通用命名标识，Orca worktree 使用 `<name_prefix>-<Runner Run ID>`；未提供时前缀为 `sr`。该字段不从 correlation 推导，也不改变原资源绑定或分支规则；需要发布了此字段/schema 的 Runner 构建，两仓验证见[专属验收](../../SteerlineFlow/testing/acceptance/runner-name-prefix.md)。
+当前状态格式为 `steerrunner-state/v8`。换构建前由原版本排空业务、原生资源及未完成控制；原服务退出、PR 就绪或资源停止其中一项均不足。已删除 `service verify-takeover`，不支持活动任务跨构建接管。公开 `verify-stopped` 与离线 inspect 按原 Run/input 集合核验；失败保留原 EXE、配置、状态和诊断。
 
-所有 LLM 执行操作统一经 Runner 承担，职责声明见[LLM 执行边界](../architecture.md#llm-执行边界)。SteerLine 的默认预设选择与 Runner 内部 LLM 操作的默认链路分别说明于[两层默认链路](../product-design/execution-profiles.md#两层默认链路)；实际接入使用所选构建发布的公开配置与能力契约。
+v7 及更早状态由原安装收尾，新安装使用分离的 home 与当前命名空间；不迁移、双写或回退读取。未来格式兼容且已排空的构建可按正式核验复用目录，历史构建摘要只表明来源。部署与显式放弃旧运行的完整操作归[安装部署](install-deploy.md#同构建更新与重启)，本页不授权安装维护。
 
-测试安排生成已接入 Runner PR #33 / `9586ac4` 的 `generate/1`，复用指定本机 Codex profile 的 executable/model/reasoning_effort，并显式构造 read_only；开发认证、权限、audit 和提示词不随之复制。内容流程的公开目录允许空 prompt_steps；开发候选拒绝 generate/conversation workflow。只接生成所需的 submit/inspect/content_result/stop，conversation 操作留待规划台。2026-10-20 核对 Runner PR #34 的 R2 已随历史固定版本 `bf3ec58` 发布：`artifacts discover/collect/list/read` 和 `workspace-git`，capabilities 的 run_evidence/schema 给出正式约束。当时 SteerLine 曾接入这五个命令及能力/schema 校验（候选侧收集现已移除）：原候选的 collect 请求先持久化，未知只 inspect 原请求，read 核验 Run/artifact/长度/base64/SHA256 后保存不可变副本；只读查询结合近期 verified commit/clean 计算当前结果。原 Run 使用项目忽略的 `.steerrunner/artifacts/<唯一执行ID>/`；首版收集 managed 报告与同目录 summary.json。独立生成对象已纳入兼容 takeover、启动前原 stop outbox 与离线结算核验，保留历史 build pin 和原请求。历史 bf3ec58 的 generate 接管误校验已由 Runner #37 修复：freeze/takeover 按 workflow 能力及实际 parser 意图判断结果解析配置。干净主干 13ef123 的同 EXE 真实 generate 及原 k 包只读复验通过；历史 A/B 接管另按其固定构建取证，不改写原 pin 或扩大恢复授权。当前报告格式见[测试规范](../../SteerlineFlow/testing/reports.md)，历史版本及验证边界见[本任务验收](../../SteerlineFlow/testing/acceptance/test-management.md)。
+## 原生路径与业务入口
 
-多 workflow 与分层冻结见[协作 Spec](../../SteerlineFlow/spec/runner-collaboration.spec.md) / [Plan](../../SteerlineFlow/plans/runner-collaboration.plan.md)，已实现调用方与 Runner 组合 schema。实际 workflow ID/version 取固定构建的公开目录，不从首次接入版本推定。样例不进入生产 capabilities；空闲契约查询不证明 Run 读取接通，须在同一真实 Run 经正式详情/历史核验。运行中的 ProjectRuntime 保持原实例绑定，单独重启 Runner 不授权自动重绑；显式重启 SteerLine 后核验新实例，旧停止请求不影响新实例。跨构建接管与未结算资源按[服务换代恢复契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md)逐项核验。实际固定构建及首次协作验证见[协作验收](../../SteerlineFlow/testing/acceptance/runner-collaboration.md)，首次接入基线仅用于追溯。
+当前配置覆盖本地 Codex、Windows/amd64 本机 Orca 和远端 Orca，逐项能力按所选构建和验收核对。远端 Orca 使用执行主机已有登录及原生链路，不部署 Runner helper；远端 `agent_launch.runtime_executable/runtime_sha256` 键连同空值均被拒绝，本机受管路径仍可使用其支持的 helper。模型、effort 和权限只按冻结配置及公开事实说明。
 
-首次接入基线来自 [SteerRunner](https://github.com/erranliu/SteerRunner)，执行实现 commit `41908e641b34a890448158d2f21a9edc597d08cb`（已可从远端获取）。Windows/amd64 验证构建使用 Go 1.26.4、版本 `0.1.0-dev.1`，EXE SHA-256 为 `5eb9c3a9162d13449d55d363dd136e0ee50dea0d1e06ac5afaa8b439b73e5a71`。当前没有正式 Release；[Runner 草稿 PR](https://github.com/erranliu/SteerRunner/pull/1)与[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)记录实际通过和剩余项。
+远端调试使用生成器的 `-Orca -OrcaEnvironment <environment>`。停止证据的 `orca_terminal` scope 仅证明原终端，不扩大为后台进程或凭据已清理；缺证据仍阻断。实际范围见[远端原生验收](../../SteerlineFlow/testing/acceptance/orca-remote-native.md)。
 
-在 Runner 仓库检出所选提交后运行 `./scripts/build.ps1`。构建输出 EXE 和 `.build.json`；保留其来源和 SHA。运行不需要 Runner 或 SteerLine 源码、模板、Node 或 Python；Git、Codex / Orca 以及既有原生登录属于执行环境依赖，不打包认证或用户配置。
+| 业务 | 唯一说明入口 |
+| --- | --- |
+| 项目材料与测试安排生成 | [项目维护](../product-design/project-maintenance.md)；生成 Run 不伪造开发候选 |
+| Roadmap 解析及固定版本文档生成 | [Roadmap 设计](../product-design/roadmap-promotion.md)；文件版本证明不等于模型逐文件已读或结论正确 |
+| 项目环境检测与结果封存 | [项目环境工作流](../../SteerlineFlow/spec/project-environment-workflow.spec.md)；使用普通 Run，旧专用 Check 已退役 |
+| 候选测试进度 | [progress-file](runtime-progress.md)；旧 R2 候选产物收集已移除 |
+| 用量、费用及远端采集授权 | [计费职责](../../SteerlineFlow/spec/billing-ownership.spec.md) · [验收](../../SteerlineFlow/testing/acceptance/billing-ownership.md)；Runner 提供用量，SteerLine 管理价表和估算，采集授权独立 |
 
-将 [execution.json](../../examples/execution.json) 放入自己的 SteerLine home，填入所选 EXE 的绝对路径、真实 version 和 SHA。示例占位 SHA 会拒绝启动，不能直接当作已安装配置。后端 settings 是 Runner 发布的公开 JSON，不再接受 implementation_configs、内部 codec 或旧版本配置。
-
-调试先用 `./scripts/new-debug-release.ps1 -SteerRunnerExe C:/Tools/SteerRunner/steerrunner.exe` 生成新包，需要固定原生程序时可传 `-AgentExecutable <absolute-codex.exe> -AgentModel gpt-6-luna -AgentReasoningEffort medium`。生成器把 EXE 固定到包内并核对 SHA。执行方案启动后冻结，换 EXE / 方案创建新包；禁止在安装现场调试。
-
-每个 home 由应用宿主持有一个 Runner 服务，项目借用同一固定客户端；整体关闭统一结算，单项目 caller 退出保留原 Run/检查事实，已有执行可能继续。产品请求号与 Runner 随机请求号分别持久化，跨项目同号不冲突。当前增量见[共享服务验收](../../SteerlineFlow/testing/acceptance/shared-runner-service.md)。
-
-SteerLine 为 Runner 指定本地卷根下的短目录：Windows 为 `<drive>:\slr\<26位base32摘要>`，摘要绑定带用途标记的规范绝对 home，同 home 项目共用一目录。深安装/调试目录不会增加 Runner 的认证 socket 路径，标准本地卷下当前 socket 为 98 字节；Runner 自身 106 字节限制不变。非 Windows 使用系统临时目录下同规则的 `slr/`，并检查相同预算。Task 数据库保留在 home；Runner 的 SQLite、执行材料、缓存、工作区与 `logs/` 归短目录。候选保存准确 state-dir，排查须同时提供 state-dir 和 Run ID。新布局不读取或迁移旧项目短目录或 `run-dir/runner`。应用在 `home/application-api/runner-build.json` 保留不可变构建 pin，先核验再启动共享服务；项目 checkpoint/候选/检查保存原操作绑定。
-
-查询不创建目录；显式服务启动才创建当前用户私有目录，拒绝重定向/网络卷。共享目录的整包 reset 须核对全部项目、检查、生成对象和原 Run 的停止/结算，不能只看当前项目；删除只针对该 home 的准确摘要目录，不能删除共享 `slr` 根。短路径来源见[短目录验收](../../SteerlineFlow/testing/acceptance/runner-short-state-path.md)，当前共享/reset 边界见[共享服务验收](../../SteerlineFlow/testing/acceptance/shared-runner-service.md)。SteerLine 只通过 CLI 读取公开 Run/事件，不读取 Runner 私有数据库或原生日志。
-
-新提交的恢复、回答和反馈需要当前公开 revision 的显式授权。兼容服务重启保留 Runner 原授权、会话与等待状态，可补收原结果并接续已证明未发送的后继，不因重启批量 resume；原资源丢失、不兼容、业务阻断和显式 stop 仍按原门槛处理。SteerLine 不自动生成新的 submit/reply/resume；旧调用方 pending 控制撤回，unknown 只查原 request_id。Runner 已受理且绑定原问题/执行范围的未发送答案按原授权对账，旧 epoch 或错范围仍需人工确认。不能换 ID 重发未知操作。详见[换代恢复契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md)。
-
-交付摘要只读取已有 Run 投影和原命令回执，分别展示受理、原生结果、业务阶段、PR 与资源停止；命令 completed、pr_ready 和 resources_settled 不能互相替代。刷新不发送输入，不创建资源；项目环境准备通过普通 Run/result，纯 validate 按需使用，候选测试进度由独立 progress-file 查询同步，Run 内的权限/来源/发布门槛保持。摘要实现与验收见[可靠性交付简化](../../SteerlineFlow/testing/acceptance/reliable-delivery-simplification.md)。
-
-原生查看通过 `open-native-session --run-id R --attempt-id A --session-id S --generation G` 调用；只有 Runner 发布的 `native_session_viewer.adapters` 中相应 adapter 可用时启用按钮。原服务负责私有 binding 和实时进程/thread/workspace 核验，调用方不读取这些私有材料。详情与本次构建/验证范围见[原会话查看验收](../../SteerlineFlow/testing/acceptance/native-session-viewer.md)。
-
-绑定运行时的业务和查询使用 `--expected-instance-id`，必须选择发布 `instance_binding.expected_instance_id: true` 的 Runner。该参数是实际请求的前置，不能用先查询 status 代替；绑定调用不会隐式启动替代服务。显式重启 SteerLine 后先只读核对原 Run/输入或原 submit 请求，再开放准入。原 pending 输入撤销，unknown 输入只读对账，不自动重发。该增量随两仓协作 PR 同步交付，旧构建不能用于新调用方联验。
-远端 Orca 使用执行主机已有 Codex/Git/gh 登录，通过原生 Orca 链路启动，不部署或运行 SteerRunner helper。远端 agent_launch 的 runtime_executable/runtime_sha256 键（含空值）被公开 schema 拒绝；本机 Orca 受管实现仍可使用 helper。模型、effort、access_mode 只承诺按冻结配置传递。
-
-调试生成器远端入口使用 -Orca -OrcaEnvironment <environment>，可传 -AgentExecutable/-AgentModel/-AgentReasoningEffort，不传 helper 参数。旧 Runner 专用 Check 已退役；远端项目准备与本机 Orca 使用同一普通 Run/result 执行、判定和取证流程，本机 Codex 可读取原工作区。service verify-stopped 的逐 Run stop_evidence_scope=orca_terminal 由 Runner 只读推导；SteerLine 展示该字段，部署继续只依据 resources_settled，旧未知仍阻断。见[本次接入验收](../../SteerlineFlow/testing/acceptance/orca-remote-native.md)。
-
-Runner 远端机制已随主干 `d4969d0`（PR #18）合入，其独立验收见 [Orca 远端记录](https://github.com/erranliu/SteerRunner/blob/d4969d0/docs/acceptance/orca-remote-20261017.md)。SteerLine 产品接线的本次结果独立登记在[专属验收](../../SteerlineFlow/testing/acceptance/orca-runtime-wiring.md)，不以 Runner 独立结果替代产品验证或改写旧安装候选。
-
-
-原生结果契约：execution.native_outcome / final.native_outcome 为 succeeded、failed、cancelled、unknown 或 unreported。unreported 表示接口未提供 outcome，不表示底层成功；只有 Runner 已核实原回合、完整结果及既有业务门后才能推进状态。SteerLine 原样保存/传递；任务状态、可用操作及 PR 事实仍由 Runner 给出，部署仍看 resources_settled。显式 unknown、失败、取消、未知输入不放行；历史记录不重新分类或自动恢复。CLI 结构/version v1 不变，不新增消费端容错开关。
-
-
-## Roadmap 固定版本文档生成（2026-10-27）
-
-已接入 Runner aa8c392f9798d05184788d83947dd7bf4afc75a6 的 generate/1 扩展。输入 generate.repository={local_path,commit}；Runner 从已有本地 Git 对象提供固定提交的只读快照，不采用脏工作树。公开 capabilities.generate / configuration_schemas.generate_input 判断能力，结果仍由 inspect 的 content_result.json 交付；Run 与结果均有 repository_source（commit/tree/files/blob/sha256/size_bytes）。manifest 证明可用文件版本，不证明模型逐文件已读或推论正确。
-
-整个 JSON 上限 1 MiB，无分页；SteerLine 固定内部代号和语义文档路径，校验完整文件集、原文/确认摘要、代码提交及调查引用。原请求、停止/资源结算和接管沿既有机制；文档生成不创建 Task/Candidate、不分配编号、不写 Git/PR。规范/版本缺失或结果不完整保持阻断。
-
-真实接入构建和本机 Codex 验证见 [Roadmap 验收](../../SteerlineFlow/testing/acceptance/roadmap-promotion.md)。使用时在本环境 execution.json 选择支持该 capability 的 Runner EXE，并核对实际版本与 SHA；不修改安装版或复用旧服务现场。流程与 API 见 [产品设计](../product-design/roadmap-promotion.md)。
+本文只维护当前使用方法与能力要求。版本 SHA、历史修复、通过与未验明细留在对应验收；[v8 接入记录](../../SteerlineFlow/testing/acceptance/runner-v8-install-reset.md)及[历史证据入口](../../SteerlineFlow/archive/design/runner-reliability-history.md)保留原范围，不据此扩大其他组合的资格。
