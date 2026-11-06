@@ -35,6 +35,7 @@ const (
 	StartTask          ControlAction = "start_task"
 	StartCandidate     ControlAction = "start_candidate"
 	StopCandidate      ControlAction = "stop_candidate"
+	ResolvePRConflict  ControlAction = "resolve_pr_conflict"
 	SetDispatchMode    ControlAction = "set_dispatch_mode"
 	PauseDispatch      ControlAction = "pause_dispatch"
 	ResumeDispatch     ControlAction = "resume_dispatch"

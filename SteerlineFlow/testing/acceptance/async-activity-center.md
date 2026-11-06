@@ -219,3 +219,11 @@ L1/L2、正式专项、E2E 的完整命令均按 Plan 第 8 节指定并带对�
 独立 PR 审核确认的唯一 P2 已修复并复核关闭，无新增可确认问题。提示词正文/组装/黄金样本未变，材料资产正文和字节已独立审核。范围为本聊天首期活动中心及本轮边界收紧，保留 main 的原生配置身份/就绪门禁/原回执核实；旧格式不迁移，原页面业务操作不变。提交 PR，不合并、不部署。人工体验、实机菜单 200% 缩放和 go.full/真实模型链仍不作本轮通过声明；原失败与未验边界保留上文，不反填原报告。
 
 PR 发布前最终独立复核：`audit_activity_boundary_pr` 逐项核实最终四包定向 40 项通过、零失败/跳过；最终 L1/L2/environment/活动 E2E 与本轮 Web/storage/http 全部通过，适用 E2E 清理完整。环境 P2 关闭，无未关闭确认问题，文档与报告一致，可提交 PR；只读审核未运行测试或部署。
+
+## PR #465 冲突解决（2026-11-06）
+
+将 main `5b8e08bc`（PR #464，原 Run 手动冲突续作）合入本 PR `63da5044`。唯一文本冲突位于 Spec 索引，保留异步活动中心与 PR 冲突续作两条入口；桥接代码自动合并后核对，原 message 保存屏障/未知结果不重发和活动观察元数据均保留。未更改统一观察边界、schema 41 或原业务权限。相对当前 main 的固定提示词/组装/黄金样本无差异，正文/字节变化 Δ0，沿用上游已合入实现，不新增提示词修改。
+
+本次新报告根仍为 `C:\SteerlineDebug\wt1369-activities\test-results`：`L1/merge-20261106-01`、`L2/merge-20261106-01`、`L4/web-merge-20261106-01` 全部通过；四包交叉定向 `diagnostics/merge-20261106-01` 与桥接 owner 全集 `diagnostics/message-merge-20261106-01` 通过，覆盖原 Run message、未知结果不重发、保存屏障、PR 冲突意图及活动 SQL 粗筛/资源预算契约。定向参数为 `-- ./internal/runnerbridge ./internal/taskrunner ./internal/product/query ./internal/storage/sqlite -run 'Test(AsyncActivity|Candidate|PRConflict|SteerRunner|.*Conflict)' -count=1`，桥接全集为 `-- ./internal/runnerbridge -count=1`；定向不代表这些包的全量专项。L2 清理完整。`npm --prefix web run build`、文档链接和 `git diff --check` 通过。
+
+仅更新原 PR 分支以解决冲突，不合并 PR、不部署；原验证与未验范围不反写。

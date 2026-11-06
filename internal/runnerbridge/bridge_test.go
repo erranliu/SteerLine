@@ -405,3 +405,84 @@ func TestCandidateStopReliabilityCancelledSubmissionIsObservationOnly(t *testing
 		t.Fatal("interrupted input resent", f.submits)
 	}
 }
+
+func TestRunMessageUsesOriginalOutbox(t *testing.T) {
+	b, s, f := setup()
+	s.value.RunID, s.value.SubmitState = "run", "accepted"
+	f.run.Controls.CanMessage = true
+	s.value.Projection = &f.run
+	request := runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "product-message", Input: json.RawMessage(`{"expected_revision":1,"text":"caller-only"}`)}
+	s.fail = true
+	if b.QueueControl(context.Background(), "project", "candidate", "message", request, "product-digest") == nil || f.inputs != 0 {
+		t.Fatal("save failure sent input")
+	}
+	s.fail = false
+	if err := b.QueueControl(context.Background(), "project", "candidate", "message", request, "product-digest"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.QueueControl(context.Background(), "project", "candidate", "message", request, "product-digest"); err != nil || len(s.value.Actions) != 1 {
+		t.Fatal("original intent duplicated", err)
+	}
+	if err := b.Step(context.Background(), "project", "candidate"); err != nil {
+		t.Fatal(err)
+	}
+	if f.inputs != 1 || f.submits != 0 || s.value.Actions[0].Command != "message" {
+		t.Fatal("message did not use original run", s.value)
+	}
+	if err := b.Step(context.Background(), "project", "candidate"); err != nil || f.inputs != 1 {
+		t.Fatal("message was resent", err)
+	}
+}
+
+type lostMessageCLI struct{ *fixtureCLI }
+
+func (f lostMessageCLI) Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error) {
+	f.inputs++
+	return runnerclient.Response{}, &runnerclient.Failure{Code: "request_outcome_unknown", Unknown: true, Exit: 6}
+}
+func TestUnknownRunMessageNeverResends(t *testing.T) {
+	b, s, f := setup()
+	s.value.RunID, s.value.SubmitState = "run", "accepted"
+	f.run.Controls.CanMessage = true
+	s.value.Projection = &f.run
+	b.Client = func(string) CLI { return lostMessageCLI{f} }
+	err := b.QueueControl(context.Background(), "project", "candidate", "message", runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "message", Input: json.RawMessage(`{"expected_revision":1,"text":"once"}`)}, "digest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Step(context.Background(), "project", "candidate") == nil || !s.value.Actions[0].ObserveOnly || f.inputs != 1 {
+		t.Fatal("message did not preserve unknown")
+	}
+	for i := 0; i < 2; i++ {
+		if err := b.Step(context.Background(), "project", "candidate"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.inputs != 1 {
+		t.Fatal("request_not_found resent an unknown message")
+	}
+}
+
+type failMessageBarrierStore struct{ *memoryStore }
+
+func (s failMessageBarrierStore) SaveCandidate(ctx context.Context, c Candidate, expected uint64, events []runnerclient.Event) error {
+	for _, action := range c.Actions {
+		if action.Command == "message" && action.ObserveOnly && action.State == "unknown" {
+			return errors.New("message barrier persistence fault")
+		}
+	}
+	return s.memoryStore.SaveCandidate(ctx, c, expected, events)
+}
+func TestRunMessageBarrierSaveFailureSendsNothing(t *testing.T) {
+	b, s, f := setup()
+	s.value.RunID, s.value.SubmitState = "run", "accepted"
+	f.run.Controls.CanMessage = true
+	s.value.Projection = &f.run
+	if err := b.QueueControl(context.Background(), "project", "candidate", "message", runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "message", Input: json.RawMessage(`{"expected_revision":1,"text":"once"}`)}, "digest"); err != nil {
+		t.Fatal(err)
+	}
+	b.Store = failMessageBarrierStore{s}
+	if b.Step(context.Background(), "project", "candidate") == nil || f.inputs != 0 {
+		t.Fatal("message crossed failed durable dispatch barrier")
+	}
+}

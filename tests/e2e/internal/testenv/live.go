@@ -95,7 +95,6 @@ git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false c
 if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
 git rev-parse HEAD
 `
-	s.Must(os.WriteFile(filepath.Join(p.Repo, "implement.ps1"), []byte(implement), 0600))
 	spec += "In implement.execute, run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once to write, verify and commit the candidate locally. Do not push or invoke publish.ps1 in implement.execute or implement.report. implement.report only summarizes its supplied source facts. publish.ps1 is reserved for the single publish step, which must return the JSON result contract in its native final reply.\n"
 	if s.ID == "workflow.local-codex-audited" {
 		// Keep the business acceptance independent of workflow history. Stage
@@ -109,6 +108,19 @@ git rev-parse HEAD
 		s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
 	}
 
+	if s.ID == "smoke.local-codex" {
+		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
+		profile["workflow"].(map[string]any)["prompt_overrides"] = map[string]string{
+			"publish":        "运行 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 一次。成功时，将脚本返回的完整 PR URL 单独写一行，末行单独写「本次发布已完成。」；失败或未知如实报告。",
+			"publish.report": "只报告已有发布结果，不补做工作。成功时，完整 PR URL 单独写一行，末行单独写「本次发布已完成。」；失败或未知如实报告。",
+		}
+		s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
+		spec = strings.ReplaceAll(spec, "which must return the JSON result contract in its native final reply", "which reports the actual publication result")
+		implement = strings.Replace(implement, "git add -- result.txt", "[IO.File]::WriteAllText((Join-Path (Get-Location) 'conflict.txt'), \"base=0 candidate=1\" + [char]10, [Text.UTF8Encoding]::new($false))\ngit add -- result.txt conflict.txt", 1)
+		s.Must(os.WriteFile(filepath.Join(p.Repo, "conflict.txt"), []byte("base=0 candidate=0\n"), 0600))
+		spec = strings.ReplaceAll(spec, "Stage only result.txt. Do not modify any other tracked file.", "Also change conflict.txt to exactly base=0 candidate=1 followed by a newline. The base flag belongs to the target branch; the candidate flag belongs to this task. Stage only result.txt and conflict.txt; preserve these two independent flags when integrating later target changes.")
+	}
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "implement.ps1"), []byte(implement), 0600))
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "spec", "task.spec.md"), []byte(spec), 0600))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the working branch and create or update its PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks public stage results, real Git delivery and dependency state.\n"), 0600))
@@ -116,6 +128,12 @@ git rev-parse HEAD
 		s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.plan.md"), []byte("# Audited fixture plan\n\nRead the bound Spec. Use implement.ps1 to write, verify and commit result.txt. The Runner owns workflow sequencing, report generation, audit and publication. Do not edit fixture scripts.\n\n## Test plan\n\nVerify the committed result.txt matches the exact requested content and newline; no additional business implementation is required.\n"), 0600))
 	}
 	planPath := filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.plan.md")
+	if s.ID == "smoke.local-codex" {
+		body, err := os.ReadFile(planPath)
+		s.Must(err)
+		body = []byte(strings.ReplaceAll(string(body), "return strict result JSON in the same native final", "report the actual publication result in the same native final"))
+		s.Must(os.WriteFile(planPath, body, 0600))
+	}
 	planBody, readErr := os.ReadFile(planPath)
 	s.Must(readErr)
 	s.Must(os.WriteFile(planPath, append(planBody, []byte("\nNo automated tests are required for this fixture. The committed test catalogue is {\"tests\":[]}; this fixture's automatic arrangement must also be {\"tests\":[]}. Verifying the repository-root result.txt is a manual implementation check, not a registered test ID. Local checks and external harness acceptance remain required.\n")...), 0600))
@@ -123,6 +141,9 @@ git rev-parse HEAD
 	s.Must(readErr)
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.tests.json"), arrangement, 0600))
 	p.prepareTestProtocol()
+	if p.RealPR {
+		p.writeLiveFixtureEnvironment()
+	}
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
@@ -140,6 +161,7 @@ func LiveDelivery(s *Scenario, chain string) {
 	p := s.NewLiveProject("live", chain)
 	p.CreateTasks()
 	p.StartService()
+	p.validateControlledEnvironment(chain, p.git(p.Repo, "rev-parse", "HEAD"))
 	p.Claim("a")
 	open := p.WaitPhase("waiting_pr_merge")
 	p.AssertRunnerBinding(open)
@@ -159,6 +181,12 @@ func LiveDelivery(s *Scenario, chain string) {
 	artifact := p.git(p.Repo, "show", pr.HeadRevision+":result.txt")
 	if artifact != "real model delivery" {
 		s.t.Fatal("committed artifact differs", artifact)
+	}
+	if s.ID == "smoke.local-codex" {
+		open = p.ResolveOriginalPRConflict(open)
+		c, pr = open.Runner.Candidates[0], open.Helper.PR
+		p.git(p.Repo, "fetch", "origin", pr.HeadBranch)
+		artifact = p.git(p.Repo, "show", pr.HeadRevision+":result.txt")
 	}
 	before := string(mustJSON(s, p.RunnerSubmit()))
 	p.Merge()

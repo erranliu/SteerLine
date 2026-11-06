@@ -18,6 +18,19 @@ func TestPersistentSQLiteSidecarACLIsNotIgnored(t *testing.T) {
 	if err := os.WriteFile(shm, []byte("sidecar"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	original, err := windows.GetNamedSecurityInfo(shm, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		dacl, _, err := original.DACL()
+		if err == nil {
+			err = windows.SetNamedSecurityInfo(shm, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.UNPROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
+		}
+		if err != nil {
+			t.Errorf("restore fixture sidecar ACL: %v", err)
+		}
+	})
 	token := windows.GetCurrentProcessToken()
 	user, err := token.GetTokenUser()
 	if err != nil {

@@ -3,6 +3,7 @@ package testenv
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -93,7 +94,7 @@ func (p *Project) validateControlledEnvironment(profile, commit string) {
 			Report *env.Report
 		}
 	}
-	s.Wait("controlled environment sealed and ready", func() (bool, error) {
+	s.Wait("project environment sealed and ready", func() (bool, error) {
 		err := client.Get(s.Context, prefix+"/environment/"+id, &view)
 		if err == nil && view.Settled && view.Status != "ready" {
 			s.t.Fatalf("controlled adaptation failed: %s", view.Diagnostic)
@@ -109,7 +110,14 @@ func (p *Project) validateControlledEnvironment(profile, commit string) {
 	round := view.Rounds[0]
 	_, err = runnerclient.ValidateResultFile(*round.Result, round.RunID)
 	s.Must(err)
-	raw, err := p.Driver.RunHelper(s.Context, s.Run.Helper, "inspect", "--state-dir", runnerstatepath.Directory(p.Home), "--run-id", round.RunID, "--json")
+	var raw []byte
+	if p.Chain != "" {
+		command := exec.CommandContext(s.Context, s.Run.Runner, "inspect", "--state-dir", runnerstatepath.Directory(p.Home), "--run-id", round.RunID, "--json")
+		command.Env = p.Driver.Environment(os.Environ())
+		raw, err = command.CombinedOutput()
+	} else {
+		raw, err = p.Driver.RunHelper(s.Context, s.Run.Helper, "inspect", "--state-dir", runnerstatepath.Directory(p.Home), "--run-id", round.RunID, "--json")
+	}
 	s.Must(err)
 	var observed struct {
 		Data struct{ Run runnercontract.Run }

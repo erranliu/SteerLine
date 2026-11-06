@@ -22,6 +22,7 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		{"testing-generate", func() (string, error) { return TestingGenerate("task.plan.md", "fixed", testProject) }},
 		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot)) }},
 		{"testing-readonly", TestingReadOnly},
+		{"pr-conflict-resolution", func() (string, error) { return PRConflictResolution("https://example.test/repo/pull/1", "main") }},
 		{"testing-step", func() (string, error) {
 			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true)
 		}},
