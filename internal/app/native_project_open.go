@@ -128,6 +128,10 @@ func openNativeTaskProject(ctx context.Context, c *Config, owned, writable bool)
 }
 
 func OpenNativeTaskReader(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
+	return openNativeTaskReader(ctx, c, sqlite.OpenSQLiteReader)
+}
+
+func openNativeTaskReader(ctx context.Context, c *Config, open func(string) (*sqlite.SQLiteStore, error)) (*sqlite.SQLiteStore, error) {
 	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, taskError("authority_mismatch", "native task reader requires task_authority=native")
 	}
@@ -141,7 +145,7 @@ func OpenNativeTaskReader(ctx context.Context, c *Config) (*sqlite.SQLiteStore, 
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
-	return openBoundNativeReader(ctx, *c, path)
+	return openBoundNativeReaderWith(ctx, *c, path, open)
 }
 
 func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
@@ -178,10 +182,14 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteS
 }
 
 func openBoundNativeReader(ctx context.Context, c Config, path string) (_ *sqlite.SQLiteStore, retErr error) {
+	return openBoundNativeReaderWith(ctx, c, path, sqlite.OpenSQLiteReader)
+}
+
+func openBoundNativeReaderWith(ctx context.Context, c Config, path string, open func(string) (*sqlite.SQLiteStore, error)) (_ *sqlite.SQLiteStore, retErr error) {
 	if err := validateRuntimeHomePaths(c); err != nil {
 		return nil, err
 	}
-	reader, err := sqlite.OpenSQLiteReader(path)
+	reader, err := open(path)
 	if err != nil {
 		return nil, err
 	}

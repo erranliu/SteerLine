@@ -26,6 +26,23 @@ import (
 
 const discardMarker = "deployment-discard.json"
 
+func openDiscardTaskReader(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
+	return openNativeTaskReader(ctx, c, sqlite.OpenSQLiteDiscardReader)
+}
+
+func validateDiscardApplicationPaths(c Config) error {
+	if err := validateNativeStateLocation(c); err != nil {
+		return err
+	}
+	return preflightNativeStatePathWithStore(c, func(ctx context.Context, _ host.Config) error {
+		reader, err := openDiscardTaskReader(ctx, &c)
+		if err != nil {
+			return err
+		}
+		return reader.Close()
+	})
+}
+
 // Kept outside application-api, which itself is archived. An interrupted swap
 // must not be mistaken for an empty installation by start or another deployment.
 type DeploymentDiscard struct {
@@ -155,7 +172,7 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 		if !ok && !interrupted {
 			return fail(errors.New("original project membership changed"))
 		}
-		c, err := loadConfigSnapshot(entry.ref.ConfigPath, entry.data, catalog.global, nil, false)
+		c, err := loadConfigSnapshotWithValidation(entry.ref.ConfigPath, entry.data, catalog.global, nil, false, nil, validateDiscardApplicationPaths)
 		if err != nil {
 			return fail(err)
 		}
@@ -182,7 +199,7 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 			return fail(err)
 		}
 		runLock.Close() // Directory rename cannot retain an open Windows lock file.
-		reader, err := OpenNativeTaskReader(ctx, &c)
+		reader, err := openDiscardTaskReader(ctx, &c)
 		if err != nil {
 			return fail(err)
 		}
@@ -301,7 +318,7 @@ func discardPlainPath(path string) error {
 }
 
 func prepareDiscardedTasks(ctx context.Context, c Config, dir string) (counts DiscardedProject, retErr error) {
-	reader, err := OpenNativeTaskReader(ctx, &c)
+	reader, err := openDiscardTaskReader(ctx, &c)
 	if err != nil {
 		return counts, err
 	}

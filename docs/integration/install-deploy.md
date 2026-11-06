@@ -56,7 +56,7 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 
 通过后自动把原项目 state、应用/Web 状态及原 Runner 目录移入 `<home>/maintenance/discard-runs-<调用ID>/`，将准备好的任务库切换到原位置，然后按原流程安装新程序。保留项目/Web 配置、执行方案及默认方案、任务编号/标题/类型/优先级/目标/完整固定契约和依赖，保留业务 Git 与远端 PR。**全部任务重新变为 open，所有项目设为 manual 且派发暂停**，旧领取、执行、交付、环境资格、测试生成、Roadmap 及控制历史只留在归档中，不恢复为新执行状态。已完成或已放弃的任务也会重新 open，恢复派发前应按实际业务选择任务。
 
-`-NoStart` 可以组合使用：任务库在安装前已准备好，不需要临时启动服务或手工导入任务。归档里的 `original-shutdown.json`、`discard.json` 保存原失败、原请求号、结算范围、任务数量和目录切换进度；部署包的 `shutdown-verification.json` 绑定本次调用及完整构建包。此流程只处理当前数据库格式和当前 Runner 命名空间，不迁移旧版状态。
+`-NoStart` 可以组合使用：任务库在安装前已准备好，不需要临时启动服务或手工导入任务。归档里的 `original-shutdown.json`、`discard.json` 保存原失败、原请求号、结算范围、任务数量和目录切换进度；部署包的 `shutdown-verification.json` 绑定本次调用及完整构建包。此流程使用当前 Runner 命名空间，不迁移旧版运行状态。schema 41 程序的显式放弃模式另允许只读检查 schema 40 的完整结构、任务及原运行归属，重建全新的 schema 41 任务库；旧库原样归档，不改版本号、不原地升级。正常启动、查询和写入仍只接受 schema 41，其他旧格式或定义不符继续阻断。
 
 原宿主中断且缺少 `application-api/shutdown.json` 时，放弃旧运行模式允许直接离线核验：必须确认原宿主与 Web 的精确进程退出、租约释放、全部项目数据库的原宿主检查点身份、仓库与固定 Runner 绑定及实际锁可用。检查点不要求已写入 stopped，但不接受其他宿主或不明归属。随后仍由原固定 Runner 停止原 Run 并证明全部资源结算，不临时重启项目宿主。缺失回执不会伪造成正常停机：`discard.json` 保存 `interrupted_host` 和原停止诊断，部署报告的 `stopped` 保存新核验事实；已有但损坏、过期或本地关闭未核实的回执仍阻断。
 
