@@ -43,6 +43,7 @@ function setup(
     revision: 3,
     created_at: "2026-10-26T00:00:00Z",
     state,
+    existing: [{ id: "8", title: "固定调度", status: "open" }],
     documents: [],
     formal_mapping: {},
     cancelled: false,
@@ -275,7 +276,9 @@ it("reads Markdown and shows original versus proposed dependencies without alloc
   expect(await screen.findByDisplayValue(/T1 候选控制/)).toHaveAttribute(
     "readonly",
   );
-  expect(await screen.findByRole("cell", { name: "正式 #8" })).toBeVisible();
+  expect(
+    await screen.findByRole("link", { name: "正式 #8 · 固定调度" }),
+  ).toHaveAttribute("href", "/projects/" + identity.project_id + "/dag?task=8");
   expect(screen.getByText("建议补充固定调度前置")).toBeVisible();
   expect(
     screen.queryByRole("button", { name: "生成 Spec / Plan" }),
@@ -294,6 +297,24 @@ it("reads Markdown and shows original versus proposed dependencies without alloc
     ),
   );
   expect(screen.queryByText("#91")).toBeNull();
+});
+it("shows mixed original references separately from proposed formal dependencies", async () => {
+  const { record } = setup();
+  const task = record.analysis!.tasks[0];
+  task.original_dependencies = { local: ["T0"], formal: ["8"] };
+  task.proposed_dependencies = { local: [], formal: ["8"] };
+  task.reason = "T0 已关联正式 #8，合并重复依赖";
+  await screen.findByText(task.reason);
+  const row = screen.getByRole("row", { name: /候选控制.*合并重复依赖/ });
+  const cells = within(row).getAllByRole("cell");
+  expect(within(cells[1]).getByText("本 Roadmap T0")).toBeVisible();
+  expect(
+    within(cells[1]).getByRole("link", { name: "正式 #8 · 固定调度" }),
+  ).toHaveAttribute("href", "/projects/" + identity.project_id + "/dag?task=8");
+  expect(within(cells[2]).queryByText("本 Roadmap T0")).toBeNull();
+  expect(
+    within(cells[2]).getByRole("link", { name: "正式 #8 · 固定调度" }),
+  ).toBeVisible();
 });
 it("submits an explicit Runner parse with original request identity and no formal IDs", async () => {
   const { submit, source } = setup();

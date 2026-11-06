@@ -13,6 +13,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ type Source struct {
 type Existing struct {
 	ID             string   `json:"id"`
 	Title          string   `json:"title"`
+	Status         string   `json:"status,omitempty"`
 	Spec           string   `json:"spec"`
 	SpecText       string   `json:"spec_text"`
 	MaterialDigest string   `json:"material_digest"`
@@ -174,6 +176,8 @@ func SourcePath(relative string) bool {
 func GraphDigest(graph []Existing) string {
 	graph = append([]Existing(nil), graph...)
 	for i := range graph {
+		// Runtime progress does not change the confirmed dependency contract.
+		graph[i].Status = ""
 		graph[i].Predecessors = append([]string(nil), graph[i].Predecessors...)
 		sort.Strings(graph[i].Predecessors)
 	}
@@ -201,6 +205,13 @@ func DecodeAnalysis(raw []byte, source Source, graph []Existing) (Analysis, erro
 	if e := d.Decode(&struct{}{}); e != io.EOF {
 		return a, errors.New("解析结果必须是一个完整对象")
 	}
+	return ValidateAnalysis(a, source, graph)
+}
+
+// ValidateAnalysis also resolves local aliases of formal Tasks before admission.
+// Original references remain available for review; only proposed edges normalize.
+func ValidateAnalysis(a Analysis, source Source, graph []Existing) (Analysis, error) {
+	a.Tasks = append([]Node(nil), a.Tasks...)
 	if len(a.Tasks) == 0 {
 		return a, errors.New("未识别到可独立交付的任务，请在外部补充 Markdown")
 	}
@@ -235,29 +246,25 @@ func DecodeAnalysis(raw []byte, source Source, graph []Existing) (Analysis, erro
 			existing[n.ExistingID] = true
 		}
 	}
-	for _, n := range a.Tasks {
-		for _, dep := range n.Proposed.Local {
-			if !keys[dep] || dep == n.Key {
-				return a, fmt.Errorf("%s 内部依赖无效：%s", n.Key, dep)
-			}
-		}
-		for _, dep := range n.Proposed.Formal {
-			if _, ok := known[dep]; !ok {
-				return a, fmt.Errorf("%s 正式依赖不存在：%s", n.Key, dep)
-			}
-			if dep == n.ExistingID {
-				return a, errors.New("已有任务不能依赖自己")
-			}
-		}
-	}
-	if _, e := Order(a.Tasks); e != nil {
-		return a, e
-	}
-	// Reused Tasks are read-only associations, never an opportunity to alter DAG edges.
 	byKey := map[string]Node{}
 	for _, n := range a.Tasks {
 		byKey[n.Key] = n
 	}
+	for i, n := range a.Tasks {
+		original, err := resolveDependencies(n, n.Original, byKey, known)
+		if err != nil {
+			return a, fmt.Errorf("原依赖：%w", err)
+		}
+		proposed, err := resolveDependencies(n, n.Proposed, byKey, known)
+		if err != nil {
+			return a, fmt.Errorf("建议依赖：%w", err)
+		}
+		if !sameDependencies(original, proposed) && strings.TrimSpace(n.Reason) == "" {
+			return a, fmt.Errorf("%s 调整依赖必须说明理由", n.Key)
+		}
+		a.Tasks[i].Proposed = proposed
+	}
+	// Reused Tasks are read-only associations, never an opportunity to alter DAG edges.
 	for _, n := range a.Tasks {
 		if n.ExistingID == "" {
 			continue
@@ -277,7 +284,95 @@ func DecodeAnalysis(raw []byte, source Source, graph []Existing) (Analysis, erro
 			return a, errors.New("已有正式任务的依赖必须保持原状")
 		}
 	}
+	if err := validateCombinedGraph(a.Tasks, graph); err != nil {
+		return a, err
+	}
 	return a, nil
+}
+
+func resolveDependencies(n Node, deps Dependencies, nodes map[string]Node, known map[string]Existing) (Dependencies, error) {
+	out := Dependencies{Local: []string{}, Formal: []string{}}
+	seen := map[string]bool{}
+	formal := func(id string) error {
+		number, err := strconv.ParseInt(id, 10, 64)
+		if err != nil || number < 0 || strconv.FormatInt(number, 10) != id {
+			return fmt.Errorf("%s 正式任务编号无效：%s", n.Key, id)
+		}
+		task, ok := known[id]
+		if !ok {
+			return fmt.Errorf("%s 正式依赖不存在于当前项目 DAG：#%s", n.Key, id)
+		}
+		if task.Status == "discarded" {
+			return fmt.Errorf("%s 正式依赖已丢弃：#%s", n.Key, id)
+		}
+		if id == n.ExistingID {
+			return fmt.Errorf("%s 不能依赖自己：#%s", n.Key, id)
+		}
+		if !seen["formal:"+id] {
+			seen["formal:"+id] = true
+			out.Formal = append(out.Formal, id)
+		}
+		return nil
+	}
+	for _, key := range deps.Local {
+		dep, ok := nodes[key]
+		if !ok || key == n.Key {
+			return out, fmt.Errorf("%s 内部依赖无效：%s", n.Key, key)
+		}
+		if dep.ExistingID != "" {
+			if err := formal(dep.ExistingID); err != nil {
+				return out, err
+			}
+		} else if !seen["local:"+key] {
+			seen["local:"+key] = true
+			out.Local = append(out.Local, key)
+		}
+	}
+	for _, id := range deps.Formal {
+		if err := formal(id); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
+func sameDependencies(a, b Dependencies) bool {
+	key := func(d Dependencies) string {
+		local, formal := append([]string{}, d.Local...), append([]string{}, d.Formal...)
+		sort.Strings(local)
+		sort.Strings(formal)
+		return ValueDigest(Dependencies{Local: local, Formal: formal})
+	}
+	return key(a) == key(b)
+}
+
+func validateCombinedGraph(nodes []Node, graph []Existing) error {
+	// Prefix namespaces so a draft key such as "8" never aliases formal #8.
+	all := []Node{}
+	for _, task := range graph {
+		n := Node{Key: "formal:" + task.ID}
+		for _, id := range task.Predecessors {
+			n.Proposed.Local = append(n.Proposed.Local, "formal:"+id)
+		}
+		all = append(all, n)
+	}
+	for _, task := range nodes {
+		if task.ExistingID != "" {
+			continue
+		}
+		n := Node{Key: "local:" + task.Key}
+		for _, key := range task.Proposed.Local {
+			n.Proposed.Local = append(n.Proposed.Local, "local:"+key)
+		}
+		for _, id := range task.Proposed.Formal {
+			n.Proposed.Local = append(n.Proposed.Local, "formal:"+id)
+		}
+		all = append(all, n)
+	}
+	if _, err := Order(all); err != nil {
+		return errors.New("草稿与正式 DAG 的依赖存在环或引用缺失")
+	}
+	return nil
 }
 func Order(nodes []Node) ([]Node, error) {
 	remaining := append([]Node(nil), nodes...)
@@ -335,6 +430,9 @@ func Confirm(r Record, source Source, graph []Existing, request string) (Record,
 	}
 	if !source.SameContent(r.Source) || GraphDigest(graph) != r.GraphDigest {
 		return r, errors.New("Markdown 或已有任务/依赖材料已变化，请重新解析")
+	}
+	if _, err := ValidateAnalysis(*r.Analysis, r.Source, graph); err != nil {
+		return r, err
 	}
 	r.ConfirmedDigest = ValueDigest(r.Analysis)
 	r.ConfirmationRequest = request

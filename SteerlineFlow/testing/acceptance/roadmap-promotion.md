@@ -240,3 +240,83 @@ Web 已开放生成、独立请求历史/停止、代码提交/整体设计/调�
 | 文档 | 594文件3755个本地链接，0错误；git diff --check通过 | 本聊天实际静态检查输出 |
 
 前述真实 Runner/Codex/Edge/GitHub #685 整链属于同步主分支之前的固定源码现场。本次同步后重跑上述受控回归与 Web 构建，未把旧真实链标记为同步后的重新执行；原证据及未验范围保留。
+
+## 2026-11-06：草稿与正式任务混合依赖
+
+本轮普通开发，基线 `01356834e4c791aba9c94064d5dfcb75f0d6b487` 加本工作树变更。补齐 RP-A02/A03/A06/A08：草稿使用 `T1、#8` 混合前置，分别输出 local/formal，正式前置不变成草稿条目或 existing_task_id；原依赖保留，建议关系按正式身份归一去重。原/建议引用均校验，语义调整缺理由、未知/跨项目/丢弃前置、自依赖及合并图中的环阻断。确认保留固定逐字依据及 LF/CRLF 等价，运行进度不进入结构摘要。页面显示正式编号、固定任务名称与 DAG 链接。
+
+### 提示词正文与独立审核
+
+唯一规则资产为 [roadmap-parse.md](../../../internal/prompts/materials/roadmap-parse.md)，仍由 prompts owner 交付项目静态文件，新请求读取固定提交中的材料；未增加业务层规则或 inline 兜底。UTF-8/LF 正文 **766 → 2019 字节（+1253）**；短模板和实际调用黄金正文均 **356 → 356 字节**。摘要快照随正文显式更新，无 CI 或守卫放宽。
+
+实际正文差异：原“禁止分配或输出新正式 Task ID”追加“允许引用当前项目 DAG 中已有的正式编号”；新增两段完整依赖规则，明确 `T1→local`、`#8/正式任务 8→formal`、`local=["T1"]/formal=["8"]` 示例、裸数字与 PR/普通提及澄清、正式前置与 existing_task_id 区分、原/建议关系及 reason、无效编号/questions、未完成前置和正式别名去重；原逐字依据、只读和输出约束保留。增长来自旧正文没有明确的引用语法与处理语义，不替换其他规则来源。完整正文差异保留在该资产 Git diff。
+
+独立只读审核者 `/root/independent_review` 已检查完整正文差异、摘要快照、固定文件/缺失阻断接线、对应测试及业务/UI 变更，批准正文 SHA-256 `e4c16c3b02965ea4414736fd7d3d215ff06bfccde4847e0787b6dfb611b7041d`；之后对固定来源换行复核及环测试夹具修复再次审核通过。此为本地独立审核，不代表 GitHub 原生审批或远端保护验收。
+
+### 验证与证据
+
+本轮证据根 `C:/SteerlineDebug/wt-97f1-roadmap-deps/`。测试使用真实本地 Git/SQLite 与受控 Runner/provider，未调用真实模型、远端 PR 或安装环境。
+
+首轮 `diagnostics/20261106-owner-a/summary.json` 保留失败：新增正式任务种子缺验收引用；环案例先触发只读依赖保护；确认新增复核使用当前 LF 原文而误拒固定 CRLF evidence。分别补完整种子契约、隔离环测试条件、使用已核对等价的固定原文校验，后续新目录复验，不覆盖原失败。
+
+| 验证 | 实际结果 | 证据 |
+| --- | --- | --- |
+| 提示词治理 | `go test ./internal/prompts -count=1 -v` 通过；正文 2019 字节、调用正文 356 字节，黄金样本未变 | 本聊天实际命令输出；最终 L1 同时覆盖治理测试 |
+| 混合依赖完整受控链路 | 通过；预置正式 #0，两项新任务，精确核验 #0→T1、#0→T2、T1→T2，原回执重放不重复 | `diagnostics/20261106-mixed-b/summary.json` |
+| Roadmap 页面与构建 | 13 项通过，包含正式名称/链接和原/建议混合依赖；tsc/Vite 构建通过 | 本聊天实际 npm 命令输出 |
+| 正式 L1 | 最终代码 passed=true，执行 19.3s；此前首轮 L1 亦通过 | `test-results/L1/20261106-final-b/summary.json`；首轮 `test-results/L1/20261106-a/summary.json` |
+| 正式 L2 | passed=true、cleanup_complete=true | `test-results/L2/20261106-a/summary.json` |
+| 正式 web.unit | passed=true，337 项通过，0 failed/skip | `test-results/L4/20261106-web-a/summary.json` 与 `web-unit/vitest.json` |
+| 正式 go.roadmap | passed=true；owner、App 11 根及全部子项、host 三组通过，包含混合正式前置及 LF/CRLF 完整发布/入图 | `test-results/L4/20261106-roadmap-b/summary.json` |
+| 测试清单与静态检查 | 两项清单/manifest 一致性检查通过；文档链接及 diff 格式检查通过 | `diagnostics/20261106-catalogue-final/summary.json`；本聊天实际静态命令输出 |
+
+本轮不把受控 Runner 返回的结构化结果视为真实模型对新语法的验证；真实模型、正式浏览器体验和外部发布链未重跑，历史证据保持其原版本范围。
+
+### 同日提示词精简（后续请求）
+
+用户要求适当精简解析规则。本轮只改规则正文、对应摘要快照和本记录，业务/UI 接线不变。UTF-8/LF 正文 **2019 → 1495 字节，减少 524 字节（26.0%）**；短模板和调用黄金正文仍为 **356 字节**。以合并重复表述为主：字段映射与混合引用示例合并；“依赖 #8”与条目自身关联的解释缩为一句；原/建议关系、reason 与 questions 集中说明；末段删除已经由 reason/evidence 段说明的“改变理由、原文逐字摘录”，保留全部输出和安全约束。
+
+本轮完整正文前后值及实际 unified diff 保存于证据根 `diagnostics/20261106-prompt-trim/{before.md,after.md,body.diff}`。前值为上节批准的 2019 字节版，不以 Git HEAD 的 766 字节版代替本轮比较基线。
+
+独立只读审核者 `/root/independent_review` 逐句对照前后正文，确认正式编号识别、混合依赖、歧义及无效引用、关联身份、原/建议关系、调度、归一去重、整行证据与只读约束保留，批准正文、摘要快照和原固定材料接线。新正文 SHA-256：`426c10f34a883e9066d3060bc06723bcf2823989e5cc74d78c50a3a3882738bb`。此为本地审核，不代表 GitHub 原生审批。
+
+| 验证 | 本轮结果 | 证据根内路径 |
+| --- | --- | --- |
+| 提示词治理 | `go test ./internal/prompts -count=1 -v` 通过，规则 1495 字节、调用正文 356 字节 | 本聊天实际命令输出 |
+| 正式 L1 | passed=true，执行 46.2s | `test-results/L1/20261106-prompt-trim-a/summary.json` |
+| 正式 L2 | passed=true，正常清理 | `test-results/L2/20261106-prompt-trim-a/summary.json` |
+| 正式 go.roadmap | passed=true，领域/App/host 全部通过，包含正式混合依赖和 CRLF 发布/入图 | `test-results/L4/20261106-roadmap-prompt-trim-a/summary.json` |
+
+本轮以独立语义审核和受控回归验证精简，未重跑真实模型、正式浏览器或外部发布；不由字节减少推断模型质量提升。
+
+### 提 PR 前同步主分支复核（2026-11-06）
+
+功能提交在最新 `origin/main=27172ac3` 上 rebase，受测实现提交为 `0ebdaaadbd84a196a0cce5dd3aefd6d7936271c5`。仅 `docs/product-design/roadmap-promotion.md` 出现内容冲突，保留主分支的新章节与静态材料说明，并加入本次混合依赖段；业务代码、页面、测试及提示词与同步前已审核/受测版本一致。独立审核者 `/root/independent_review` 已只读复核同步后的差异并维持批准，提示词字节数及 SHA-256 不变。
+
+同步后对上述干净实现提交重新执行完整 L1/L2，均 passed=true，L2 cleanup_complete=true；证据分别为 `test-results/L1/20261106-pr-main-a/summary.json` 与 `test-results/L2/20261106-pr-main-a/summary.json`，仍位于本轮证据根。文档链接及 diff 格式检查通过。本段仅补记同步与验证，不改变受测实现；上文 go.roadmap、web.unit 及构建结果保留其原受测基线，不标成同步后的重新执行。
+
+### PR #471 合并冲突修复（2026-11-06）
+
+合入 `origin/main=79bc8bb7` 的 Roadmap 进度/历史改造，保留已发布分支历史。冲突仅在 `web/src/features/roadmaps/roadmaps.tsx` 与对应测试：保留主分支 workflow 步骤、当前流程/历史选择、只读限制及相关测试导入；保留正式编号/快照名称/DAG 链接组件及混合依赖测试，移除主分支已淘汰的旧 states 表。业务 Go、提示词正文及摘要均未改变，最终正文仍为 1495 字节、SHA-256 `426c10f34a883e9066d3060bc06723bcf2823989e5cc74d78c50a3a3882738bb`。
+
+独立只读审核者 `/root/independent_review` 复核合并提交 `a4cfe5244c4e9ff0f0808432c8ddb9edf914a0f7` 后维持批准，确认双方语义保留；仍为本地审核，不代表 GitHub 审批。
+
+合并后的 Roadmap 定向 20 项及 TypeScript/Vite 构建通过。对同一干净合并提交运行完整 L1、L2、web.unit，均 passed=true；L2 cleanup_complete=true，前端 344 项通过、0 failed/skip。证据根不变，报告分别为 `test-results/L1/20261106-conflict-a/summary.json`、`test-results/L2/20261106-conflict-a/summary.json`、`test-results/L4/20261106-conflict-web-a/summary.json`；静态检查为 711 文件、4402 本地链接、0 错误，diff 格式通过。本段只补记实际结果，先前后端专项及真实链证据保持原受测范围。
+
+### PR #471 合入 Roadmap 活动中心（2026-11-06）
+
+继续合入 `origin/main=cf2f3ac8`。冲突仅为 `testing/l4.md` 与 `testing/test-list.json` 的 go.roadmap 覆盖说明，合并保留正式混合依赖、原/建议引用、别名去重、跨图环与正式前置入图，以及解析/文档/发布/入图活动、发布观察失败恢复的全部要求；测试选择和通过条件未放宽。其余自动合并，正式 #0 种子及三条混合依赖边断言与主分支八处活动状态断言同时保留。
+
+独立审核者 `/root/independent_review` 只读复核干净合并提交 `d45bb41c82ad478739aed11143fdb121aca0f9be` 后维持本地批准，确认活动导航及依赖名称/链接保留。提示词仍为 1495 字节，SHA-256 与上节一致，未修改正文或摘要。
+
+下列检查在该干净合并提交执行，证据仍位于本轮根目录；最后补记只修改本记录。未重跑真实模型、正式浏览器或外部发布链。
+
+| 验证 | 实际结果 | 证据根内路径 |
+| --- | --- | --- |
+| 完整 L1 | passed=true，执行 21.8s | `test-results/L1/20261106-conflict-activity-b/summary.json` |
+| 完整 L2 | passed=true，cleanup_complete=true | `test-results/L2/20261106-conflict-activity-b/summary.json` |
+| 完整 go.roadmap | passed=true，含正式前置与活动状态/恢复的组合链路及 CRLF | `test-results/L4/20261106-conflict-activity-roadmap-b/summary.json` |
+| 完整 go.storage | passed=true | `test-results/L4/20261106-conflict-activity-storage-b/summary.json` |
+| 活动 query/App 定向 | passed，非零且无跳过 | `diagnostics/20261106-conflict-activity-query-b/summary.json` |
+| 完整 web.unit | 351 项通过、0 failed/skip，其中 Roadmap 文件 23 项 | `test-results/L4/20261106-conflict-activity-web-b/summary.json` |
+| 构建/静态 | TypeScript/Vite 构建通过；711 文件、4402 链接、0 错误；diff 格式通过 | 本聊天实际命令输出 |

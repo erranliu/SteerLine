@@ -19,10 +19,11 @@ import (
 // This controlled public-protocol fixture returns full, schema-shaped results.
 // All Git, document preparation, publication and Task writes use production owners.
 type promotionRunner struct {
-	t       *testing.T
-	port    *roadmapPort
-	run     runnercontract.Run
-	request runnercontract.Request
+	t                 *testing.T
+	port              *roadmapPort
+	run               runnercontract.Run
+	request           runnercontract.Request
+	formalPredecessor string
 }
 
 func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) (runnerclient.Receipt, error) {
@@ -78,6 +79,21 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 		result = out
 	}
 	if a, ok := result.(roadmap.Analysis); ok {
+		if f.formalPredecessor != "" {
+			found := false
+			for _, material := range in.Generate.Materials {
+				if material.Path == roadmapservice.GraphPath && strings.Contains(*material.Content, `"id":"`+f.formalPredecessor+`"`) {
+					found = true
+				}
+			}
+			if !found {
+				f.t.Fatal("formal predecessor absent from frozen graph input")
+			}
+			for i := range a.Tasks {
+				a.Tasks[i].Original.Formal = []string{f.formalPredecessor}
+				a.Tasks[i].Proposed.Formal = []string{f.formalPredecessor}
+			}
+		}
 		for i := range a.Tasks {
 			if a.Tasks[i].Original.Local == nil {
 				a.Tasks[i].Original.Local = []string{}

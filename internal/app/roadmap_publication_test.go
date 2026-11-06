@@ -18,9 +18,13 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func TestRoadmapPublicationAndAdmissionWithRealGit(t *testing.T) { roadmapPromotionChain(t, false) }
+func TestRoadmapPublicationAndAdmissionWithRealGit(t *testing.T) {
+	t.Run("draft-dependencies", func(t *testing.T) { roadmapPromotionChain(t, false) })
+	t.Run("mixed-formal-dependencies", func(t *testing.T) { roadmapPromotionChainWithDependencies(t, false, false, true) })
+}
 
 func roadmapPromotionChain(t *testing.T, live bool) {
 	roadmapPromotionChainWithLineEndings(t, live, false)
@@ -31,6 +35,10 @@ func TestRoadmapPublicationAndAdmissionWithCRLFCheckout(t *testing.T) {
 }
 
 func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
+	roadmapPromotionChainWithDependencies(t, live, crlf, false)
+}
+
+func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool) {
 	c, _ := nativeTaskFixture(t)
 	ctx := context.Background()
 	if crlf {
@@ -174,8 +182,40 @@ func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
 	port := &roadmapPort{config: c, store: store}
 	configurePromotionGeneration(t, port, live)
+	seedCount := 0
+	if formal {
+		// A real pre-existing Task in this project's SQLite DAG, without copying
+		// its row into the source roadmap or allocating new IDs during parsing.
+		seedFiles := map[string]string{"seed.spec.md": "# Existing arithmetic foundation", "seed.plan.md": "# Implement the foundation", "seed.acceptance.md": "# Foundation acceptance"}
+		for path, body := range seedFiles {
+			require(t, os.WriteFile(filepath.Join(c.Repository, path), []byte(body), 0600))
+		}
+		fixtureGit(t, c.Repository, "add", ".")
+		fixtureGit(t, c.Repository, "commit", "-qm", "existing formal task documents")
+		fixtureGit(t, c.Repository, "push", "origin", "main")
+		commit := fixtureGit(t, c.Repository, "rev-parse", "HEAD")
+		target, err := c.TaskRepositoryTarget(ctx)
+		require(t, err)
+		contract := taskmodel.TaskContract{ContractID: "seed", Repository: target, Remote: c.Remote, Branch: c.Branch,
+			SpecRef:        taskmodel.FileReference{Path: "seed.spec.md", Commit: commit, SHA256: roadmap.Digest([]byte(seedFiles["seed.spec.md"]))},
+			PlanRef:        taskmodel.FileReference{Path: "seed.plan.md", Commit: commit, SHA256: roadmap.Digest([]byte(seedFiles["seed.plan.md"]))},
+			AcceptanceRefs: []taskmodel.FileReference{{Path: "seed.acceptance.md", Commit: commit, SHA256: roadmap.Digest([]byte(seedFiles["seed.acceptance.md"]))}}}
+		contract.Digest, err = taskmodel.ContractDigest(contract)
+		require(t, err)
+		batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion, ProjectID: c.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "foundation", Title: "Arithmetic foundation", Type: "task", Contract: contract}}}
+		receipt, err := NewTaskCommands(store, c).AdmitRoadmap(ctx, "existing-roadmap", batch, strings.Repeat("f", 32), 1, "fixture")
+		require(t, err)
+		if receipt.TaskIDs["foundation"] != "0" {
+			t.Fatal(receipt)
+		}
+		port.service.Runner.(*promotionRunner).formalPredecessor = "0"
+		seedCount = 1
+	}
 	var code string
 	sourceBody := "# Arithmetic roadmap\nT1: Add a pure Sum(a,b int) int function in package logic; Sum(2,3)=5. Scope is only integer arithmetic and unit tests.\nT2: Add Difference(a,b int) int implemented using Sum(a,-b); Difference(5,2)=3. Depends on T1. Do not implement the functions during planning."
+	if formal {
+		sourceBody = strings.ReplaceAll(sourceBody, "\nT2:", " Depends on formal task #0.\nT2:") + " Also depends on formal task #0."
+	}
 	sourcePath := roadmap.Root + "publish.md"
 	if actualProject {
 		sourcePath = roadmap.Root + "sample-demo.md"
@@ -240,6 +280,15 @@ func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
 		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
 	}
 	expectedTasks, expectedEdges := 2, 1
+	if formal {
+		expectedEdges = 3
+		if len(parsed.Analysis.Tasks) != 2 || parsed.Analysis.Tasks[0].ExistingID != "" ||
+			strings.Join(parsed.Analysis.Tasks[0].Proposed.Formal, ",") != "0" ||
+			strings.Join(parsed.Analysis.Tasks[1].Proposed.Local, ",") != "T1" ||
+			strings.Join(parsed.Analysis.Tasks[1].Original.Formal, ",") != "0" {
+			t.Fatal("mixed formal references were lost or created an existing-task row", parsed.Analysis)
+		}
+	}
 	if actualProject {
 		expectedTasks, expectedEdges = 6, 6
 		expected := map[string][]string{"demo-tools": {}, "demo-seed": {"demo-tools"}, "demo-left": {"demo-seed"}, "demo-right": {"demo-seed"}, "demo-join": {"demo-left", "demo-right"}, "demo-independent": {"demo-tools"}}
@@ -321,7 +370,7 @@ func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
 	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
 	graph, e := store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, e)
-	if len(graph.Tasks) != 0 {
+	if len(graph.Tasks) != seedCount {
 		t.Fatal("publication allocated Tasks")
 	}
 	if fixtureGit(t, c.Repository, "rev-parse", "HEAD") != code {
@@ -341,8 +390,21 @@ func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
 	assertRoadmapActivityState(t, store, c.Identity(), admitted.ID, "succeeded", false, "current")
 	graph, e = store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, e)
-	if len(graph.Tasks) != expectedTasks || len(graph.Edges) != expectedEdges {
+	if len(graph.Tasks) != expectedTasks+seedCount || len(graph.Edges) != expectedEdges {
 		t.Fatal(graph)
+	}
+	if formal {
+		want := map[string]bool{"0>" + admitted.Mapping["T1"]: true, "0>" + admitted.Mapping["T2"]: true, admitted.Mapping["T1"] + ">" + admitted.Mapping["T2"]: true}
+		for _, edge := range graph.Edges {
+			key := edge.PredecessorID + ">" + edge.SuccessorID
+			if !want[key] {
+				t.Fatal("unexpected DAG edge", edge)
+			}
+			delete(want, key)
+		}
+		if len(want) != 0 {
+			t.Fatal("missing mixed dependency edges", want)
+		}
 	}
 	recovered, e := port.reconcileAdmission(ctx, admitted)
 	require(t, e)
