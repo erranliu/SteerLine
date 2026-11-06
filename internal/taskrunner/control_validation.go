@@ -46,7 +46,7 @@ func ValidateControlRequest(req productapi.ControlRequest, instanceID, repositor
 
 func ValidControlAction(action string) bool {
 	switch action {
-	case "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment", "runner_reply", "runner_resume":
+	case "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment", "runner_reply", "runner_resume", "resolve_pr_conflict":
 		return true
 	}
 	return false
@@ -84,7 +84,7 @@ func DecodeControlPayload(req productapi.ControlRequest) (productapi.ControlPayl
 		allowed = map[string]bool{"run_id": true, "expected_run_revision": true, "runner_input": true, "caller_answer": true}
 	case "start_task":
 		allowed = map[string]bool{"task_id": true, "expected_task_version": true, "expected_graph_revision": true, "execution_profile_id": true, "execution_profile_digest": true}
-	case "stop_candidate":
+	case "stop_candidate", "resolve_pr_conflict":
 		allowed = map[string]bool{"task_id": true, "run_id": true, "expected_run_revision": true}
 	case "start_candidate":
 		allowed = map[string]bool{"task_id": true, "expected_task_version": true, "expected_graph_revision": true, "execution_profile_id": true, "execution_profile_digest": true}
@@ -101,7 +101,7 @@ func DecodeControlPayload(req productapi.ControlRequest) (productapi.ControlPayl
 		if !controlIDPattern.MatchString(p.RunID) || p.ExpectedRunRevision == 0 || p.RunnerInput == nil || !json.Valid([]byte(*p.RunnerInput)) || len(fields) < 3 || len(fields) > 4 {
 			return p, errors.New("Runner input requires exact candidate revision and frozen public input")
 		}
-	case "stop_candidate":
+	case "stop_candidate", "resolve_pr_conflict":
 		if taskmodel.ValidateID(p.TaskID) != nil || !controlIDPattern.MatchString(p.RunID) || p.ExpectedRunRevision == 0 || len(fields) != 3 {
 			return p, errors.New("stop_candidate requires task_id, run_id and current candidate revision")
 		}

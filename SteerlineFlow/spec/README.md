@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+待合并 PR 冲突解决与原 Run 续作（2026-11-06，已实现）：[Spec](pr-conflict-resolution.spec.md) · [Plan](../plans/pr-conflict-resolution.plan.md) · [验收记录](../testing/acceptance/pr-conflict-resolution.md)。手动按钮、SteerLine 短提示词与 Runner 原会话 message；直接沿用原现场，不增加冲突检测、现场预检或业务编排框架。
+
 用量事实与计费职责划分（2026-11-05，已实施/隔离验证，未部署）：[Spec](billing-ownership.spec.md) · [Plan](../plans/billing-ownership.plan.md) · [验收](../testing/acceptance/billing-ownership.md)。Runner提供Token事实，SteerLine维护价表和本地估价；远端Codex授权闭环实测成功，原Task 101安装现场未修改。
 
 原生执行配置边界收口（2026-11-06，已实施、独立审核及本轮自动验收，PR交付中）：[Spec](native-execution-configuration-boundary.spec.md) · [Plan](../plans/native-execution-configuration-boundary.plan.md) · [专属验收](../testing/acceptance/native-execution-configuration-boundary.md)。Runner提供无服务配置投影/派生/构造，SteerLine保留配置CRUD、业务资格、事务及原请求；上游[Runner PR #122](https://github.com/erranliu/SteerRunner/pull/122)在先，不启动roadmap、不合并或部署。

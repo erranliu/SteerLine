@@ -33,6 +33,7 @@ import { nativeSessionReason } from "./native-session";
 import { RunTask, taskDependencyReason } from "./run-task";
 import { CopyExecutionInfo } from "./copy-execution-info";
 import { StopCandidate } from "./stop-candidate";
+import { ResolvePRConflict } from "./resolve-pr-conflict";
 import { RunUsage } from "./run-usage";
 import { RejectedStart } from "./rejected-start";
 
@@ -152,6 +153,11 @@ function Output({ run }: { run: Candidate }) {
               </p>
             ))}
           {final.error && <p className="notice amber">{String(final.error)}</p>}
+          <p className="output-hint">以下为本执行的回复历史，包含先前轮次。</p>
+          {run.runner_delivery?.available &&
+            !run.runner_delivery.final_verified && (
+              <p className="muted">本轮尚未取得完整最终回复。</p>
+            )}
           {final.data?.bodies.map((body) => (
             <article key={body.item_key + "-" + body.revision}>
               <p className="eyebrow">
@@ -224,6 +230,7 @@ function CandidateDetail({
         </div>
         <div className="actions candidate-actions">
           <CopyExecutionInfo run={run} />
+          <ResolvePRConflict run={run} />
           {stopControl}
           <Button
             disabled={!!nativeUnavailable || busy}

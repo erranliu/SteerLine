@@ -114,3 +114,11 @@ func RoadmapDocuments(commit, source string) (string, error) {
 	}
 	return render("roadmap-documents", struct{ Source, Commit string }{source, commit})
 }
+
+// PRConflictResolution supplies the complete caller instruction and original PR facts.
+func PRConflictResolution(pr, base string) (string, error) {
+	if pr == "" || base == "" {
+		return "", errors.New("original PR and base branch are required")
+	}
+	return render("pr_conflict_resolution", struct{ PR, Base string }{pr, base})
+}

@@ -1,5 +1,7 @@
 # Worker 流程异常处理与重试
 
+2026-11-06 原 Run 后续消息（W08–W14 / V03–V04、V06–V08）：开发流程到 pr_ready 后可由显式 message 在原 worktree/session 上执行调用方正文，保留开发游标与原 PR/审计；正常续作不新增准备/恢复或现场预检。Orca 沿原结果保存的 fence 直接 Send，保留原生受理与发送后来源核验。Runner 仅管理原 Run 输入、对账和停止；SteerLine 管候选参与与任务终态，已调用的未知 message 固定只读对账。W17 交付及 W18 停止沿原规则。实现与未验边界见[Spec](../../SteerlineFlow/spec/pr-conflict-resolution.spec.md)和[验收](../../SteerlineFlow/testing/acceptance/pr-conflict-resolution.md)。
+
 2026-10-25 候选人工停止可靠性（W12/W17/W18，E04/E05，V03/V06–V08）：停止永久退出固定候选参与，显示时的候选/派发版本仅记录原意图，无关观察增长不使其失效；事务仍校验当前参与、最后一个和内部 CAS。原 actor 在收到持久 inbox 通知后取消当前调用方等待并优先处理停止，不取消 Runner/原生 worker；当前候选被打断的未知输入复用 ObserveOnly，只核实原请求。withdrawal/Command 作为原业务证据，外层回执丢失可只读恢复，身份损坏不得绕过。Web 有界独立核实，明确拒绝解除 pending，已应用与快照刷新分开表达，超时不伪造终态。没有新增参与版本、命令事务接口、GET 写业务或恢复授权。规则见 [Spec](../../SteerlineFlow/spec/candidate-stop-reliability.spec.md)，实际范围及未验项见 [专属验收](../../SteerlineFlow/testing/acceptance/candidate-stop-reliability.md)。
 
 2026-10-25 准备读取等待（W02/W04/W08–W11/W18，E01/E03–E05/E07，V01/V03/V06–V08）：SteerLine 只消费 Runner 的 `execution_wait` 与原事件；排队/调用/退避不创建恢复答案，耗尽后仍按原 controls/Decision。时间到达仅显示等待 Runner 更新，未知写操作、人工问题和停止保持原优先级。候选退出不等于 Runner stop，原 Task 取消资格不因等待放宽。新增 Orca profile 准入校验与调用方/受控验证见[Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)及[验收](../../SteerlineFlow/testing/acceptance/runner-wait-retry.md)；Runner 的实际重试与原生资格仍由其独立实现，真实联验后置。

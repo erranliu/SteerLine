@@ -217,7 +217,7 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 	page := api.TaskPage{Protocol: "native-tasks/v1", ProjectID: "project", AuthorityVersion: 8, GraphRevision: 4, DatabaseRevision: 21, DatabaseID: "db-a", SampledAt: now, Tasks: []api.TaskDetail{}}
 	reader := &apiReader{page: page, graph: api.GraphPage{Protocol: api.TaskGraphProtocol, ProjectID: "project", AuthorityVersion: 8, GraphRevision: 4, DatabaseRevision: 21, DatabaseID: "db-a", SampledAt: now, Nodes: []api.GraphNode{}, Edges: []api.GraphEdge{}},
 		activity: api.LogBatch{Cursor: api.ActivityCursor{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), Initialized: true}}, commands: map[string]api.CommandReceipt{}}
-	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
+	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "stop_candidate", "resolve_pr_conflict", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
 	servicePage := &api.ServicePage{Service: api.ServiceSummary{InstanceID: "instance-a", Status: "running", Ready: true, ControlProtocol: 1, Capabilities: capabilities}, Control: api.ControlSummary{Revision: 7}, Runs: []*api.CandidateSummary{}}
 	reader.snapshot = api.ProjectSnapshot{SelectedTaskID: "", FullReadAt: now,
 		Connection:  api.ServiceConnection{State: api.ConnectionConnected, IdentityMatched: true, ConfigMatched: true, CanControl: true, CanStop: true, Snapshot: api.ObservationSnapshot{Page: servicePage, State: api.SnapshotValid, SampledAt: now}},
@@ -616,5 +616,29 @@ func TestAPIServiceLifecycle(t *testing.T) {
 	rotated.ServeHTTP(response, request)
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("retired token was accepted by the new instance: %d", response.Code)
+	}
+}
+
+func TestPRConflictHTTPUsesCandidateControlAndOriginalReceipt(t *testing.T) {
+	server, _, _, control := newAPIFixture(t)
+	client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "resolve_pr_conflict", TargetID: strings.Repeat("a", 32), ExpectedVersion: 3, ExpectedControlRevision: 7, Payload: json.RawMessage(`{"task_id":"1"}`)}
+	response, err := client.SubmitCommand(context.Background(), envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "submitted" || control.submits != 1 {
+		t.Fatal(response, control.submits)
+	}
+	req := control.requests[envelope.RequestID]
+	var payload api.ControlPayload
+	if json.Unmarshal(req.Payload, &payload) != nil || payload.RunID != envelope.TargetID || payload.TaskID != "1" || payload.ExpectedRunRevision != 3 || payload.RunnerInput != nil {
+		t.Fatal("HTTP supplied prompt or changed target", req)
+	}
+	if _, err := client.SubmitCommand(context.Background(), envelope); err != nil || control.submits != 1 {
+		t.Fatal("replayed original command", err, control.submits)
 	}
 }
