@@ -72,6 +72,7 @@ foreach ($protected in @($sourceRoot, $RunnerRepo, 'C:\SteerlineRuntime', 'C:\St
 }
 foreach ($path in @($InstallHome, $sourceRoot, $RunnerRepo)) { Assert-Plain $path }
 foreach ($path in @((Join-Path $RunnerRepo 'bin\steerrunner.exe'), (Join-Path $sourceRoot 'bin\steerline.exe'), (Join-Path $sourceRoot 'bin\steerline-web.exe'))) { Assert-Plain $path }
+Repair-DeploymentHomeInheritance $InstallHome
 if ($DiscardRuns -and -not (Test-Path -LiteralPath (Join-Path $InstallHome 'bin\steerline.exe') -PathType Leaf)) { throw 'DiscardRuns requires an existing installation.' }
 New-Item -ItemType Directory -Path $InstallHome -Force | Out-Null
 $lockPath = Join-Path $InstallHome '.deploy.lock'

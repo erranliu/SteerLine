@@ -170,6 +170,36 @@ try {
     $null=Run-Deploy 'no-start' $true @('-NoStart')
     $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
     Assert (-not $calls.Contains(' start') -and -not $calls.Contains(' status')) 'NoStart started or checked readiness.'
+    # Reproduce billing's non-inheritable home ACL: Windows strips inherited
+    # access from existing bin/etc. The actual entry must repair before its
+    # DiscardRuns existence check, keeping protected lifecycle records private.
+    . (Join-Path $PSScriptRoot 'deployment-files.ps1')
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $privateBefore = (Get-Acl -LiteralPath (Join-Path $fixtureHome 'deployment.json')).Sddl
+    $originalHashes = @{}
+    foreach ($name in @('bin\steerline.exe','bin\steerline-web.exe','bin\steerrunner.exe','execution.json')) { $originalHashes[$name] = (Get-FileHash -LiteralPath (Join-Path $fixtureHome $name)).Hash }
+    function Restrict-FixtureHome {
+        $acl = [Security.AccessControl.DirectorySecurity]::new()
+        $acl.SetOwner($sid)
+        $acl.SetAccessRuleProtection($true, $false)
+        $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow))
+        [IO.Directory]::SetAccessControl($fixtureHome, $acl)
+    }
+    Restrict-FixtureHome
+    Assert (@((Get-Acl -LiteralPath (Join-Path $fixtureHome 'bin')).Access).Count -eq 0) 'Fixture did not reproduce empty bin ACL.'
+    $denied = $false
+    try { $null = Test-Path -LiteralPath (Join-Path $fixtureHome 'bin\steerline.exe') -PathType Leaf -ErrorAction Stop } catch [UnauthorizedAccessException] { $denied = $true }
+    Assert $denied 'Fixture did not reproduce the reported Test-Path access denial.'
+    Repair-DeploymentHomeInheritance $fixtureHome
+    foreach ($name in $originalHashes.Keys) { Assert ((Get-FileHash -LiteralPath (Join-Path $fixtureHome $name)).Hash -eq $originalHashes[$name]) "ACL repair changed $name" }
+    Assert ((Get-Acl -LiteralPath (Join-Path $fixtureHome 'deployment.json')).Sddl -eq $privateBefore) 'ACL repair altered a protected lifecycle record.'
+    $repaired = (Get-Acl -LiteralPath $fixtureHome).Sddl
+    Repair-DeploymentHomeInheritance $fixtureHome
+    Assert ((Get-Acl -LiteralPath $fixtureHome).Sddl -eq $repaired) 'ACL repair was not idempotent.'
+    Restrict-FixtureHome
+    $null=Run-Deploy 'restricted-home-recovery' $true @('-UpdateRunner','-DiscardRuns','-NoStart')
+    $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
+    Assert ($calls.Contains('--goal discard-runs') -and -not $calls.Contains(' start')) 'ACL recovery bypassed the requested deployment preparation.'
     foreach ($mode in @('build','stop','start','ready','drain')) {
         $env:SL_DEPLOY_FAIL=$mode
         $before=@{}
