@@ -393,6 +393,12 @@ func (b *Bridge) deliver(ctx context.Context, cli CLI, c *Candidate, action *Act
 	if !known(err, "request_not_found") {
 		return err
 	}
+	if action.Command == "message" {
+		action.ObserveOnly = true
+		if err := b.save(ctx, c); err != nil {
+			return err
+		}
+	}
 	response, err := cli.Call(ctx, action.Command, []string{"--run-id", c.RunID}, &action.Request)
 	if err != nil {
 		var failure *runnerclient.Failure
@@ -416,7 +422,7 @@ func (b *Bridge) deliver(ctx context.Context, cli CLI, c *Candidate, action *Act
 // QueueControl freezes an explicit current user reply or resume before it can
 // cross the process boundary. Restarting Step never manufactures these inputs.
 func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, request runnerclient.Request, callerDigest string) error {
-	if command != "reply" && command != "resume" {
+	if command != "reply" && command != "resume" && command != "message" {
 		return inputError("invalid_request", "unsupported candidate control")
 	}
 	entry, _ := b.locks.LoadOrStore(project+"\x00"+id, &sync.Mutex{})
@@ -452,11 +458,11 @@ func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, 
 		return inputError("stale_version", "control requires the current observed Run revision")
 	}
 	for _, action := range c.Actions {
-		if action.State == "pending" || action.State == "unknown" {
+		if action.State == "pending" || action.State == "unknown" || command == "message" && action.State == "accepted" && action.ActionStatus != "completed" && action.ActionStatus != "failed" && action.ActionStatus != "rejected" && action.ActionStatus != "cancelled" {
 			return inputError("input_reconciliation_required", "an original control still requires reconciliation")
 		}
 	}
-	if command == "resume" && !c.Projection.Controls.CanResume || command == "reply" && !c.Projection.Controls.CanReply {
+	if command == "resume" && !c.Projection.Controls.CanResume || command == "reply" && !c.Projection.Controls.CanReply || command == "message" && !c.Projection.Controls.CanMessage {
 		return inputError("candidate_inactive", "current Run does not permit this control")
 	}
 	request.RequestID = newID()

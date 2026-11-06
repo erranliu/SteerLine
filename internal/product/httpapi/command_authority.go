@@ -137,7 +137,7 @@ func mappedControlMatchesEnvelope(original CommandEnvelope, input api.ControlInp
 	}
 	payload := input.Payload
 	switch original.Action {
-	case "stop_candidate":
+	case "stop_candidate", "resolve_pr_conflict":
 		var stop candidateStopPayload
 		return decodeStrict(original.Payload, &stop) == nil && payload == (api.ControlPayload{TaskID: stop.TaskID, RunID: original.TargetID, ExpectedRunRevision: original.ExpectedVersion})
 	case "start_task", "start_candidate":
@@ -207,7 +207,7 @@ func matchesCommand(original CommandEnvelope, record *requestRecord, command api
 
 func isControlAction(action string) bool {
 	switch action {
-	case "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
+	case "start_task", "start_candidate", "stop_candidate", "resolve_pr_conflict", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
 		return true
 	default:
 		return false

@@ -116,7 +116,7 @@ func parseActionEnvelope(envelope CommandEnvelope) (parsed actionPayload, err er
 		if err := decodeStrict(envelope.Payload, payload); err != nil || payload.ExecutionProfileID == "" || envelope.ExpectedVersion == 0 || envelope.ExpectedControlRevision == 0 {
 			return parsed, invalidCommand("start_task requires a profile, expected task version and displayed control revision")
 		}
-	case "stop_candidate":
+	case "stop_candidate", "resolve_pr_conflict":
 		payload := &parsed.stop
 		if err := decodeStrict(envelope.Payload, payload); err != nil || payload.TaskID == "" || envelope.ExpectedVersion == 0 || envelope.ExpectedControlRevision == 0 || envelope.ExpectedGraphRevision != 0 {
 			return parsed, invalidCommand("stop_candidate requires task_id, target candidate and candidate/control revisions")
@@ -187,9 +187,9 @@ func (s *commandRegistry) mappedControlInput(ctx context.Context, envelope Comma
 		control.ExpectedRevision = &revision
 	}
 	switch envelope.Action {
-	case "stop_candidate":
+	case "stop_candidate", "resolve_pr_conflict":
 		payload := parsed.stop
-		control.Action, control.Payload = api.StopCandidate, api.ControlPayload{TaskID: payload.TaskID, RunID: envelope.TargetID, ExpectedRunRevision: envelope.ExpectedVersion}
+		control.Action, control.Payload = api.ControlAction(envelope.Action), api.ControlPayload{TaskID: payload.TaskID, RunID: envelope.TargetID, ExpectedRunRevision: envelope.ExpectedVersion}
 	case "start_task", "start_candidate":
 		payload := parsed.profile
 		payloadValue, err := s.commands.StartTaskPayload(ctx, envelope.TargetID, payload.ExecutionProfileID)

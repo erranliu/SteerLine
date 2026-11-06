@@ -369,6 +369,7 @@ export class Api {
         error.code === "command_not_found" &&
         !stored.response &&
         envelope.action !== "stop_candidate" &&
+        envelope.action !== "resolve_pr_conflict" &&
         !envelope.action.startsWith("maintenance_") &&
         !envelope.action.startsWith("environment_")
       ) {

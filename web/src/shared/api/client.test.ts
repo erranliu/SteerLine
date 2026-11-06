@@ -134,6 +134,7 @@ describe("immutable browser requests", () => {
     ["environment_generate", "command_not_found"],
     ["environment_stop", "command_not_found"],
     ["stop_candidate", "command_not_found"],
+    ["resolve_pr_conflict", "command_not_found"],
   ])(
     "keeps unknown %s query-only on %s, including repeat submit",
     async (action, code) => {
@@ -505,7 +506,12 @@ it.each(["foreign-attempt", "repeated-cursor"])(
   },
 );
 
-it.each(["start_task", "runner_resume", "stop_candidate"])(
+it.each([
+  "start_task",
+  "runner_resume",
+  "stop_candidate",
+  "resolve_pr_conflict",
+])(
   "blocks a replacement %s request while the original target is uncertain",
   async (action) => {
     envelope.action = action;

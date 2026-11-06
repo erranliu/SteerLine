@@ -78,7 +78,7 @@ func (c Controls) Handle(ctx context.Context, req api.ControlRequest, instance s
 			return c.finish(ctx, old, receipt)
 		}
 	}
-	if found && (req.Action == "runner_reply" || req.Action == "runner_resume") {
+	if found && (req.Action == "runner_reply" || req.Action == "runner_resume" || req.Action == "resolve_pr_conflict") {
 		if candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID); err == nil {
 			for _, action := range candidate.Actions {
 				if action.CallerRequestID == req.RequestID && action.CallerRequestDigest == receipt.RequestDigest {
@@ -139,7 +139,7 @@ func (c Controls) finish(ctx context.Context, command ports.CommandRecord, recei
 }
 func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api.ControlPayload, receipt *api.ControlReceipt) error {
 	switch req.Action {
-	case "runner_reply", "runner_resume":
+	case "runner_reply", "runner_resume", "resolve_pr_conflict":
 		if c.Tasks.Admit != nil {
 			if err := c.Tasks.Admit(ctx); err != nil {
 				return failure("runner_unavailable", err.Error())
@@ -165,7 +165,24 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 		if req.Action == "runner_resume" {
 			command = "resume"
 		}
-		body := json.RawMessage(*payload.RunnerInput)
+		var body json.RawMessage
+		if req.Action == "resolve_pr_conflict" {
+			graph, err := c.Store.TaskGraphSnapshot(ctx, c.Tasks.Project)
+			if err != nil {
+				return err
+			}
+			task, ok := graph.ByID[candidate.TaskID]
+			if !ok || candidate.TaskID != payload.TaskID || task.Status != "in_progress" {
+				return failure("candidate_inactive", "任务已结束或候选不属于此任务")
+			}
+			command = "message"
+			body, err = conflictInput(candidate)
+			if err != nil {
+				return err
+			}
+		} else {
+			body = json.RawMessage(*payload.RunnerInput)
+		}
 		if payload.CallerAnswer != nil {
 			if payload.CallerAnswer.ServiceInstanceID != req.InstanceID || payload.CallerAnswer.AnsweredBy != req.RequestedBy {
 				return failure("invalid_request", "answer belongs to another service or requester")

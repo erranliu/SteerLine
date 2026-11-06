@@ -1,5 +1,7 @@
 # SteerRunner 依赖与运行
 
+2026-11-06 原开发 Run 续作：当前变更通过既有 `message` 向 pr_ready 的原会话发送 SteerLine 正文，结果沿原执行/事件回传；SteerLine 提供手动“解决合并冲突”，不检测冲突或新增现场预检。Runner 管输入串行、原请求对账与原生停止，SteerLine 管候选/Task 资格。固定构建、实际验证及未验范围见[专属验收](../../SteerlineFlow/testing/acceptance/pr-conflict-resolution.md)，安装版未部署此增量。
+
 计费职责调整见[Spec](../../SteerlineFlow/spec/billing-ownership.spec.md)、[实施 Plan](../../SteerlineFlow/plans/billing-ownership.plan.md)和[隔离验收](../../SteerlineFlow/testing/acceptance/billing-ownership.md)。Runner 只提供用量事实；SteerLine 管理价表、计算和展示估算。安装版尚未部署此次变更。
 
 ## 无服务原生目录查询

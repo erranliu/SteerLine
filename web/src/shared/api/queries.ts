@@ -96,7 +96,11 @@ export function projectQueries(api: Api) {
               view.cost.usage_revision !== view.usage?.snapshot_revision)
           )
             throw new Error("用量身份或快照已变化，请刷新执行详情");
-          if (view.cost && pricingGeneration !== undefined && view.cost.settings_generation !== pricingGeneration)
+          if (
+            view.cost &&
+            pricingGeneration !== undefined &&
+            view.cost.settings_generation !== pricingGeneration
+          )
             throw new Error("价表版本已变化，等待重新读取当前设置");
           return view;
         },
@@ -263,9 +267,13 @@ export function invalidateCommand(
 ) {
   const { project_id, instance_id, action } = envelope;
   const affectsOutput =
-    action === "answer_decision" || action === "stop_candidate";
+    action === "answer_decision" ||
+    action === "stop_candidate" ||
+    action === "resolve_pr_conflict";
   const runID =
-    action === "stop_candidate" ? envelope.target_id : envelope.payload.run_id;
+    action === "stop_candidate" || action === "resolve_pr_conflict"
+      ? envelope.target_id
+      : envelope.payload.run_id;
   return client.invalidateQueries({
     predicate: ({ queryKey: key }) => {
       if (key[0] !== home) return false;

@@ -40,7 +40,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &catalog))
 	catalog["default_execution_profile"] = chain
-	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 2}}}
+	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium", "access_mode": "full_access"}}, "workflow": map[string]any{"id": "development", "version": 2}}}
 	if s.ID == "workflow.local-codex-audited" {
 		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
 		profile["name"] = "Real E2E audited preset"
@@ -109,6 +109,10 @@ git rev-parse HEAD
 		s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
 	}
 
+	if s.ID == "smoke.local-codex" {
+		s.Must(os.WriteFile(filepath.Join(p.Repo, "conflict.txt"), []byte("base=0 candidate=0\n"), 0600))
+		spec = strings.ReplaceAll(spec, "Stage only result.txt. Do not modify any other tracked file.", "Also change conflict.txt to exactly base=0 candidate=1 followed by a newline. The base flag belongs to the target branch; the candidate flag belongs to this task. Stage only result.txt and conflict.txt; preserve these two independent flags when integrating later target changes.")
+	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "spec", "task.spec.md"), []byte(spec), 0600))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the working branch and create or update its PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks public stage results, real Git delivery and dependency state.\n"), 0600))
@@ -123,6 +127,7 @@ git rev-parse HEAD
 	s.Must(readErr)
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.tests.json"), arrangement, 0600))
 	p.prepareTestProtocol()
+	p.writeLiveFixtureEnvironment()
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
@@ -140,6 +145,7 @@ func LiveDelivery(s *Scenario, chain string) {
 	p := s.NewLiveProject("live", chain)
 	p.CreateTasks()
 	p.StartService()
+	p.validateControlledEnvironment(chain, p.git(p.Repo, "rev-parse", "HEAD"))
 	p.Claim("a")
 	open := p.WaitPhase("waiting_pr_merge")
 	p.AssertRunnerBinding(open)
@@ -159,6 +165,12 @@ func LiveDelivery(s *Scenario, chain string) {
 	artifact := p.git(p.Repo, "show", pr.HeadRevision+":result.txt")
 	if artifact != "real model delivery" {
 		s.t.Fatal("committed artifact differs", artifact)
+	}
+	if s.ID == "smoke.local-codex" {
+		open = p.ResolveOriginalPRConflict(open)
+		c, pr = open.Runner.Candidates[0], open.Helper.PR
+		p.git(p.Repo, "fetch", "origin", pr.HeadBranch)
+		artifact = p.git(p.Repo, "show", pr.HeadRevision+":result.txt")
 	}
 	before := string(mustJSON(s, p.RunnerSubmit()))
 	p.Merge()
