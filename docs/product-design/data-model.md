@@ -1,81 +1,77 @@
-# 任务、执行与交付数据模型
+# 任务、候选与交付数据模型
 
-SteerLine 与 SteerRunner 分别单写自己的 SQLite。各执行路径的验证按固定构建和专属验收分别判断；历史 Orca 结果不自动覆盖当前 Runner 或其他场景。repository 的 remote 指 Git 托管来源。
-
-SteerLine 尚未发布。项目显式使用 task_authority=native 与 workflow_protocol=worker-flow-v2，全局执行配置为格式 3；旧数据库、配置和内部执行格式直接拒绝，不迁移、双写、回填或回退。
+本文维护调用方实体、身份与事务不变量。SteerLine 与 Runner 分别单写自己的数据库，只通过公开契约协作；正常运行不读取、迁移、双写或回退旧开发格式；显式放弃旧运行的只读归档例外见[安装部署](../integration/install-deploy.md#显式放弃旧运行后升级-runner)。当前格式唯一定位在[源码表](#当前格式来源)，历史字段及版本见[历史入口](../../SteerlineFlow/archive/design/runner-reliability-history.md#第四批整理来源)。
 
 ## 权威与身份
 
-SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、Roadmap 来源/解析/文档及编号映射、测试生成原请求与结果、候选测试进度投影及自身服务 checkpoint；候选侧旧 R2 产物收集已移除，独立测试报告按[报告约定](../../SteerlineFlow/testing/reports.md)登记。当前 schema 41 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
+| 实体或事实 | 负责方与存储范围 |
+| --- | --- |
+| Task、TaskContract、DAG 与 TaskDelivery | SteerLine：目标、依赖、固定依据、项目权威和唯一交付 |
+| Candidate 与原请求 | SteerLine：参与、独立冻结快照、原提交和控制 outbox、停止义务、公开 Run 投影及事件副本 |
+| 维护、生成、环境和 Roadmap | SteerLine：各业务活动、固定输入、结果、当前引用及正式入图映射 |
+| 宿主 checkpoint | SteerLine：服务身份、构建绑定、关闭及锁事实，不替代任务或执行状态 |
+| Run、Attempt、原生资源、问题和逐轮输入/结果 | Runner：执行与恢复事实；SteerLine 不读其数据库、codec 或原生日志 |
 
-Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、原生资源、问题、输入、恢复与停止事实。SteerLine 不读该库、原生 codec、IPC 或私有日志；只消费固定 EXE 公布的 CLI/Run/事件。
+项目以规范 Git common-dir 标识，数据库保留 database_id / database_revision。Task、authority、graph、候选和 Runner revision 分属不同事实，不互相代替。候选 ID 与 Run ID 分开，原生会话/轮次也不作为项目任务身份。
 
-项目以规范化 Git common-dir 标识；数据库另有稳定 database_id 与 database_revision。Task version、authority_version、graph_revision、候选 revision 和 Runner revision 分属不同权威，不能互相代替。读页面/资格/候选在同一 Task 库事务中采样；服务进程活性与 checkpoint 内容分别核实。
+产品 Decision、Runtime 和 RunView 是公开事实与任务/checkpoint 的投影，不恢复旧中心 WorkflowRun/Execution/Attempt/Decision/Operation 写表或原生执行状态机。显示名、缓存、配置和诊断不成为第二业务权威。
 
-候选 ID 与 Runner Run ID 分开。候选原子领取时固定完整 Spec/Plan 引用、原预设 ID/名称/参数摘要、原执行/流程配置、目标、原 request_id/body 与各自 base；响应丢失只查原请求。项目 checkpoint 固定 Runner EXE/version/SHA/resource_digest/state-dir，候选同时记录该构建绑定；instance_id 仅属于本次 ProjectRuntime，不永久写死到 Run。接受后 Run、输入摘要、分支和 PR 绑定不能替换。候选参与状态不冒充 Runner 原生执行状态。
+## 仓库与工作区身份
 
-人工候选退出在原候选 payload 固定 `withdrawal`（request_id、expected_revision、requested_by、at），与 `participation=abandoned` 同事务保存；原请求重放不重写首次事实。`stop_requested` 专指独立的 Runner 停止义务，不由人工退出设置。退出与名额统计在写事务中重检，至少保留一个参与候选；Task 终态之后仍可另行增加停止义务，保留原 withdrawal。当前 Web 及调用方验证见[专属验收](../../SteerlineFlow/testing/acceptance/web-candidate-stop.md)。
+项目状态位于仓库外的受管目录；同 common-dir 的 linked worktree 共用仓库身份。项目运行时持有仓库和状态目录锁，不允许另一 home 或 linked worktree 绕过同仓写者；数据库身份、格式及归属在业务写入前核验。现有 `.beads`、`.beads.db` 或 `beads.db` 状态阻断原生初始化，保留供人工处理，不自动删除或迁移，见[状态前置](../../internal/app/host/native_state_preflight.go)。
 
-## 固定契约与领取
+Runner 按调用方固定 commit 创建专属工作区并管理原生资源。候选保存公开路径、分支/base 和 Run 绑定，不能把旧工作区重建成同名新执行。成功新建后的启动条件与未知创建的恢复分别按[生命周期](worker-lifecycle.md)处理。
 
-当前规则（2026-10-21）：[项目基线与材料维护](project-maintenance.md)将项目最新材料与各候选执行快照分别保存。`project_materials` 保存远端解析后的全部引用、内容摘要、生成输入摘要及系统 Generation；`maintenance_settings` 保存一次性生成方案与最近远端观察，`maintenance_requests` 保存原快进事实。每个新候选 fresh fetch 后绑定同 commit 的代码、材料及已就绪测试安排，预留事务重核材料/生成摘要并原子保存候选与 outbox。候选 payload 保存完整独立 Contract、base、MaterialDigest 和系统测试快照（原 submit 的执行提示绑定经固定来源核对的 ID/来源/摘要视图；完整定义及 note 保存在原候选）。原号重放保持原版本；内容变化只标记旧候选过期，不修改其参与状态或原执行。已删除 Task 唯一快照和人工批准/文件应用权威，无旧库迁移。Generation 保存不可变输入与系统结果，不创建 Task/Candidate、不写旁置安排文件。
+应用 home 内项目共用一个 Runner 服务和准确 state-dir，任务库仍按项目隔离。目录布局与清理目标归[路径清单](../../SteerlineFlow/paths.md)，执行准备归[Runner 接入](../integration/steerrunner.md)。未知请求、原资源或停止义务未核实前不删除恢复依据，不用进程退出或窗口消失代替资源证明。
 
-TaskContract 固定目标仓库、remote、base 分支及 Spec/Plan/其他材料的 commit、路径和 SHA-256。启动前核对 Task 版本、DAG 就绪、authority、图版本、目标仓库及前置合并是否进入当前 base；最终领取事务再次进行同图 CAS。领取与完整 CLI outbox 一次提交，失败零派发。正常 implement/report/publish 不创建额外 DAG Task。
+## 候选参与与原请求
 
-同一 Task 的各候选分别绑定创建时最新 base 和材料。新的参与候选只生成自己的 caller 候选 ID、原始提交和 Runner Run，不能用旧候选换绑出新执行。旧提交未知、迟到接受和终态后接受仍沿原记录对账。
+预留事务同时核验 Task/图版本、依赖、当前项目资格和材料，并固定候选自己的 Contract、base、材料摘要、测试快照、预设 ID/名称/参数摘要、Runner 构建和完整原提交。项目最新材料与候选快照分开；新候选采用当次有效版本，原号重放不升级旧输入。具体新鲜度和准备要求归[项目维护](project-maintenance.md)。
 
-## 输入与恢复
+接受后 Run/input_digest、分支及 PR 不能替换；实例 ID 属于当前 ProjectRuntime，不永久写死到历史 Run。构建摘要记录来源，实际服务准入及 v8 升级依当前公开契约判断，不由历史摘要授予权限。
 
-CLI 请求 ID 和正文不可变，同 ID 换正文冲突。SteerLine 保存原 host 控制信封和 caller 语义摘要，回执对外保留原信封身份；不能以重新序列化或替换 ID 掩盖未知结果。
+人工退出将不可变 withdrawal（原 request_id、显示 revision、操作者及时间）与 `participation=abandoned` 同事务保存。当前参与与名额在事务内重核，至少保留一个参与候选；`stop_requested` 是独立 Runner 停止义务，人工退出不设置它。Task 终态仍可为已退出候选保存停止责任，原 withdrawal 保持。
 
-原生问题、反馈和 resume 由 Runner 公布资格、原问题/Attempt 和 revision。SteerLine 校验当前候选及 Runner 版本，再持久保存输入 outbox。中心重启将旧未发输入撤销或仅观察原请求，不能自动重授旧答案/反馈/resume。已接受与未知输入只对原请求查询。
+产品请求与 Runner 请求分别持久化，完整正文和映射不可变；同 ID 改正文冲突。外部调用前保存意图，保存失败零发送；外部成功而本地失败只核实并补保存原事实。原提交未知、迟到接受及终态后接受均沿原记录结算，不换候选或新请求重做。
 
-产品 Runtime 和 RunView 是只读 UI 投影，由 Task 图、service checkpoint 和公开 Runner facts 生成；不从旧执行表重建，不读取原生文本推断业务结果。Runtime 不保存旧 WorkflowRun/Execution/Attempt/Decision/Operation 集合，RunView 不承载旧工作区意图或人工停止确认；持久化只使用独立 ServiceCheckpoint，候选与停止事实仍来自 caller 记录和公开 Runner 投影。
-
-## 会话与事件
-
-公开 Runner 事件按候选绑定、事件 ID、游标和版本事务保存。完整 final 保留来源、原 session/turn/item/Attempt 与正文 hash；重复事件去重，冲突拒绝。缺 final 不推进业务，日志和模型总结不能代替来源核验。正文分页读取只读副本。
-
-Runner 状态使用[短目录规则](../integration/steerrunner.md)：Windows 为本地卷根 `slr/<128-bit base32 key>`，key 绑定规范绝对 home，同一 home 的项目共用一个 Runner 服务和 state-dir；候选保存准确 state-dir，业务库按项目隔离。旧 `run-dir/runner` 不迁移或兼容读取。整包重置须核对全部项目及相关 Run、检查和生成对象的结算，只清理该 home 的准确摘要目录，不用父进程死亡或窗口关闭代替停止。
+问题、反馈和恢复输入固定原目标及当前资格后保存控制 outbox。重启撤回未发授权，未知沿原请求观察，不自动重授；原生投递事实归 Runner。会话、事件和游标按绑定及版本同事务保存，正文引用与阅读规则归[会话设计](execution-observability.md#公开结果来源)。
 
 ## PR 与交付
 
-代理/用户给出的 URL 只是线索。Runner 核对固定 provider、仓库、base/head 与当前执行分支；Task 交付前通过 CLI 再刷新 PR。Task 版本、候选绑定、原 PR 归属和真实 merged/merge commit 在提交事务重核。
+Agent 或用户给出的 URL 只是线索。Runner 核验工作流发布；Task 交付前由 SteerLine 按候选冻结的 provider 直接查询平台原 PR，核对仓库、base/head、原绑定及真实 merged、merge commit 和时间，再在本地事务重核 Task、图和候选参与/版本。
 
-Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义务一次提交；失败全部回滚，重复读取和迟到事件不重复交付。不要求候选先到 pr_ready，也不因兄弟候选未知或材料过期阻塞正确已合并候选；交付校验使用所选候选原契约。
+唯一 TaskDelivery、Task 关闭、依赖释放及全部候选停止义务一次提交，失败回滚；重复原交付返回原事实，不重复事件或改变回执版本。不要求先到 pr_ready，不因兄弟查询未知、候选材料过期或新材料准备失败阻塞合法交付；使用所选候选原契约。
 
-作废同样固定原请求与任务版本；未知 PR/执行事实保持明确阻断。Task 终态保存每个候选的停止义务，迟到接受的原 Run 仍须撤销输入并停止。逻辑撤销、服务停服与原生停止分别取证；本次无中心 PR/分支/工作区删除状态机。
+作废也绑定原请求及任务版本；未知 PR/执行事实保持明确原因。Task 终态后停止其全部候选的 PR 查询并拒绝新业务输入，迟到接受仍须绑定并结算原停止义务。参与退出、逻辑取消、服务退出和资源停止分别记录；无调用方 PR/分支/工作区删除状态机。核验链路归[可靠性交付](../architecture/reliable-delivery-chain.md)。
+
+## 辅助业务记录
+
+| 业务 | 关键不变量 |
+| --- | --- |
+| 项目材料与测试生成 | 维护记录保存最新材料及生成来源；Generation 固定输入与结果，不创建 Task/Candidate，不写旁置安排文件。候选引用自己的完整测试快照及进度副本 |
+| 项目环境 | 活动与 Current 分开，绑定项目、环境身份、依据摘要、原 Run/request/input 和封存结果。项目写 ready/message/details，平台只核验信封与结算；依据变化持久撤销 Current，回退旧字节也不恢复资格 |
+| 项目测试入口 | version1 定位公共材料和正式测试清单；解析后的来源随生成与候选冻结。环境 manifest 与其独立，不把任务测试目录作为环境检测要求 |
+| Roadmap | 解析、确认和文档生成记录保存原来源、输入及请求；解析/确认不分配正式编号。发布先核实固定文档 PR 的实际合并，再通过 Task 批次事务入图 |
+
+Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补洞。编号、Task/Contract、依赖、来源/内部代号映射和原批次回执同事务提交或回滚；不同来源的同名 T1 互不混用，正式文档路径与原 Markdown 不回填编号。细节归[Roadmap 设计](roadmap-promotion.md)。
+
+候选中的环境免检标记只记录预留事实，由 writer 的可信策略确定，不能反过来授予免检资格；配置和策略规则归[开发者配置](execution-configuration.md#开发者配置与环境就绪阻塞)。辅助活动的停止和 reset 仍覆盖原未绑定未知请求，不因没有 Candidate 而遗漏。
 
 ## 当前格式来源
 
-| 格式/权威 | 当前值或归属 | 源码 |
-| --- | --- | --- |
-| Task SQLite | schema 41 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
-| 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
-| Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
-| TaskContract / DAG | 契约结构为 taskcontract 纯值；校验/DAG 归 task/model | [task/model](../../internal/task/model) |
-| 候选/outbox/公开投影 | caller 参与关系 | [runnerstate](../../internal/runnerstate) |
-| 单事务候选领取 | 图/任务版本 CAS | [runner_candidates.go](../../internal/storage/sqlite/runner_candidates.go) |
-| 交付与后继 | Task 自有事务 | [runner_result.go](../../internal/storage/sqlite/runner_result.go) |
-| 公开事件 | 游标和事件 ID 去重 | [runner_events.go](../../internal/storage/sqlite/runner_events.go) |
-| 执行 workflow / 原生格式 | Runner 独立 owner；ID/version 取所选构建公开目录 | [Runner 接入](../integration/steerrunner.md) |
+| 格式或事实 | 当前来源 |
+| --- | --- |
+| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 41`；数值只在此表定位，正文不保留旧版本副本 |
+| 项目契约配置 | [app/config.go](../../internal/app/config.go) 要求显式 `task_authority=native`、`workflow_protocol=worker-flow-v2`；后者不代表 Runner 当前 workflow 版本 |
+| 全局执行配置 | [executionconfig](../../internal/executionconfig/config.go) 的严格解码与版本校验；构建选择由 [app](../../internal/app/runner_config.go) 校验 |
+| TaskContract 与 DAG | [taskcontract](../../internal/taskcontract) 的结构及 [task/model](../../internal/task/model) 的规则 |
+| 候选、outbox 与公开投影 | [runnerstate](../../internal/runnerstate/candidate.go) |
+| 原子预留、交付及事件 | [候选事务](../../internal/storage/sqlite/runner_candidates.go) · [交付事务](../../internal/storage/sqlite/runner_result.go) · [公开事件](../../internal/storage/sqlite/runner_events.go) |
+| checkpoint 与宿主事实 | [hostcontract](../../internal/hostcontract) |
+| Runner 公开协议及执行格式 | [runnercontract](../../internal/runnercontract) 与所选固定构建的公开能力；workflow、CLI 和自身存储分别版本化 |
+| 进度、项目接口与结果 | [进度通道](../integration/runtime-progress.md) · [环境工作流](../../SteerlineFlow/spec/project-environment-workflow.spec.md)；各格式由原 owner 维护 |
 
-节点和异常规则见[生命周期](worker-lifecycle.md)，配置见[执行方案](execution-profiles.md)，实际通过/未验见[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)。历史 Spec 的迁出前源码链接固定在原 Git 提交，只作追溯。
-
-
-项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；只保留一次检测，manifest5 描述调用，version3 结果包含不可改绑身份、ready/message 和不复核的可选 details。资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 41 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-workflow.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
-
-## Roadmap 规划与入图
-
-`roadmaps` 保存来源字节/摘要、已有 Task/DAG 材料、确认及原 Runner 请求；`roadmap_requests` 固定原操作关联。业务结构为 [roadmap/model](../../internal/roadmap/model)，读取与内容调用为 [roadmap](../../internal/roadmap)；SQLite 不依赖 Runner 调用用例。解析和确认不创建 Task/Candidate、不分配正式编号。
-
-`task_number_sequences` 按仓库权威在 Task 批次事务内递增，扫描已存在的历史 Task 后取最大值之后的编号，不回收、不补洞。`roadmap_task_sources` 约束项目内来源/内部代号和正式 Task 的唯一映射；编号、Task/Contract、DAG、来源映射、原批次回执同事务提交或回滚。另一个草稿的 T1 有独立来源身份。正式文档路径及原 Markdown 不因编号而改写。schema 32 不迁移旧开发库。
-
-文档发布先核实原固定 PR 和实际合并，再进入 Task 事务。文档生成记录通过 purpose=documents、parent_id 关联原确认，冻结 commit/tree、规范和原请求，复用同一内容生命周期；2026-10-27 已完成真实 Runner 文档生成与隔离发布/入图验证。接口、恢复及当前边界见 [Roadmap 转正](roadmap-promotion.md)。
-
-环境结果 version3 保存项目/环境/活动/轮次/来源提交/依据摘要及稳定调用上下文，项目完成后写 completed/ready/message 与可选 details。平台只验证信封与原执行结算，不解释业务明细；已确认依据变化持久撤销 Current，递增 revision，回退字节也不恢复资格。
-
-项目入口 version1 只声明公共材料和正式测试清单；测试生成及候选快照冻结解析后的入口，持久化拒绝改绑。环境 manifest5 只声明固定入口、解释器和有限依赖，不依赖该任务入口或测试目录。项目要求和检测由项目自己维护；平台不设置 required_checks/gaps 或生成活动。
+历史数字、字段和旧验收结论按[原版本来源](../../SteerlineFlow/archive/design/runner-reliability-history.md#第四批整理来源)取证，不能据此读取旧库或回填运行。本文不证明安装版已部署或各原生路径已通过验收。
 
 ## 异步活动只读投影
 

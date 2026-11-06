@@ -1,6 +1,6 @@
 # Orca 保存连接配置验收
 
-普通配置调整，2026-10-13，关联[执行方案说明](../../../docs/product-design/execution-profiles.md)。本机和远端各自保存 v2 runtime pair，执行方案引用保存环境，不将认证放入仓库。
+普通配置调整，2026-10-13，关联[执行方案说明](../../../docs/product-design/execution-configuration.md)。本机和远端各自保存 v2 runtime pair，执行方案引用保存环境，不将认证放入仓库。
 
 | ID | 验收项 | 结果与证据 |
 | --- | --- | --- |

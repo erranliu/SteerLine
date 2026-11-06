@@ -1,6 +1,6 @@
 # 可靠性交付简化方案可行性审计
 
-审计对象为[可靠性交付链路的简化建议](../../../docs/architecture/reliable-delivery-chain.md#可以简化的流程)，基线为 SteerLine `9e02854e` 加当前未提交部署恢复修改，Runner 本地源码为 `8261310d`。本次检查源码、故障窗口与既有定向测试；未修改生产实现或原建议，也未使用安装环境。
+审计对象为[可靠性交付链路的简化建议](../../archive/design/reliability-simplification-analysis.md#可以简化的流程)，基线为 SteerLine `9e02854e` 加当前未提交部署恢复修改，Runner 本地源码为 `8261310d`。本次检查源码、故障窗口与既有定向测试；未修改生产实现或原建议，也未使用安装环境。
 
 结论：方向可行，但不能将全部建议作为已经具备实施条件的删减清单。八项中三项可先做，五项需补契约、明确排他边界或缩小首版范围。最应调整的是“省去逐命令 status”不能直接依赖响应后的身份检查；“直接离线证明”尚缺完整原项目集合的来源及证明有效范围。
 
@@ -23,7 +23,7 @@
 
 ### P1 省略预查询的替代校验必须发生在副作用前
 
-原建议位于[实例围栏与预查询](../../../docs/architecture/reliable-delivery-chain.md#用实际命令的实例围栏减少预查询)。当前 [ValidateInstance](../../../internal/runnerclient/binding.go) 同时检查 ready、instance、EXE SHA 和 resource digest；[Client.call](../../../internal/runnerclient/client.go) 传给实际命令的是 expected-instance-id，普通响应封套不包含统一的目标构建/资源身份。
+原建议位于[实例围栏与预查询](../../archive/design/reliability-simplification-analysis.md#用实际命令的实例围栏减少预查询)。当前 [ValidateInstance](../../../internal/runnerclient/binding.go) 同时检查 ready、instance、EXE SHA 和 resource digest；[Client.call](../../../internal/runnerclient/client.go) 传给实际命令的是 expected-instance-id，普通响应封套不包含统一的目标构建/资源身份。
 
 Runner `internal/host/server.go` 的 dispatch 入口核对协议、连接目标实例/token/目录及 expected instance。它没有接收调用方期望的 EXE/resource 参数；业务命令直接转给 engine，不能将 service status 的 ready 判定和完整绑定判定视为已经等价地搬到该入口。
 

@@ -18,7 +18,7 @@ Runner 契约与原生验收归属 `C:/Project/SteerRunner`。本轮固定其已
 
 SteerLine 不固定 MXC 参数、签发/注入凭据、解析 rollout/终端、判定原生权限通过或指挥 Runner 内部节点。Runner 不依赖 SteerLine Task/项目状态来运行检查，project ID 仅为不透明关联。两仓各自拥有 Spec/Plan/acceptance；本仓不再复制 Runner 状态/策略/原生测试矩阵。
 
-调查读取 `docs/spec/SpecGuide.md`（最后修改 `94e704300485b82d54e44991148074841ed66019`），SteerLine HEAD `6f40f2dd70c2226c38e1599f81546652f475d563`；本次编辑前有上一轮未提交文档，未把它们当作已合入实现。已读[生命周期](../../docs/product-design/worker-lifecycle.md)、[执行配置](../../docs/product-design/execution-profiles.md)、[测试入口](../../tests/e2e/README.md)。代码调查：`runner_config.go`/`runnerclient/catalog.go` 提供公开方案与 schema；`runnerclient/client.go` 只有现有 CLI 白名单；`runnerbridge` 绑定 Candidate，不能伪造候选复用；HTTP 项目认证/请求注册、SQLite 与 Query 可复用。
+调查读取 `docs/spec/SpecGuide.md`（最后修改 `94e704300485b82d54e44991148074841ed66019`），SteerLine HEAD `6f40f2dd70c2226c38e1599f81546652f475d563`；本次编辑前有上一轮未提交文档，未把它们当作已合入实现。已读[生命周期](../../docs/product-design/worker-lifecycle.md)、[执行配置](../../docs/product-design/execution-configuration.md)、[测试入口](../../tests/e2e/README.md)。代码调查：`runner_config.go`/`runnerclient/catalog.go` 提供公开方案与 schema；`runnerclient/client.go` 只有现有 CLI 白名单；`runnerbridge` 绑定 Candidate，不能伪造候选复用；HTTP 项目认证/请求注册、SQLite 与 Query 可复用。
 
 ## 2. 与沙箱认证工作的边界
 

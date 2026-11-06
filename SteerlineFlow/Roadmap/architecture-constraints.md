@@ -4,7 +4,7 @@
 
 ## 第一阶段平台范围
 
-第一阶段历史目标包含本地 Codex、本机 Orca 与远端路径交付；后续已纳入 Windows/amd64 本机 Orca 配置，具体组合见[执行方案](../../docs/product-design/execution-profiles.md)；迁出前本机编排已退役。实际能力、固定构建与验证范围按[Runner 接入](../../docs/integration/steerrunner.md)及其专属验收核对，历史目标不代表当前支持或已验收。
+第一阶段历史目标包含本地 Codex、本机 Orca 与远端路径交付；后续已纳入 Windows/amd64 本机 Orca 配置，具体组合见[执行方案](../../docs/product-design/execution-configuration.md)；迁出前本机编排已退役。实际能力、固定构建与验证范围按[Runner 接入](../../docs/integration/steerrunner.md)及其专属验收核对，历史目标不代表当前支持或已验收。
 
 ## 长期双执行路径
 
@@ -14,7 +14,7 @@
 
 SteerLine 负责任务领取、DAG、候选与公开 Run 的关联、原请求及授权输入转交、公开状态投影、PR 关联和真实合并后的唯一 TaskDelivery。工作区准备、workflow 步骤推进、LLM 调用、原生会话、反馈投递与执行资源管理归独立 SteerRunner。worker 按 Spec/Plan 实现、测试、修复、提交及创建 PR；Runner 管理所选 workflow，SteerLine 消费公开事实，不重建执行状态机。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
 
-规划任何涉及 LLM 的产品功能，均须遵循[LLM 执行边界](../../docs/architecture.md#llm-执行边界)，通过 Runner 的公开能力执行；SteerLine 的默认方案选择和 Runner 内部辅助操作的默认链路按[执行配置](../../docs/product-design/execution-profiles.md#两层默认链路)分别设计。能力不足时明确 Runner 契约的补齐与接入安排，不在 SteerLine 另接模型或原生代理。
+规划任何涉及 LLM 的产品功能，均须遵循[LLM 执行边界](../../docs/architecture.md#llm-执行边界)，通过 Runner 的公开能力执行；SteerLine 的默认方案选择和 Runner 内部辅助操作的默认链路按[执行配置](../../docs/product-design/execution-configuration.md#两层默认链路)分别设计。能力不足时明确 Runner 契约的补齐与接入安排，不在 SteerLine 另接模型或原生代理。
 
 中心停止监督与取消执行分开；本机路径的生命周期策略明确表达。
 

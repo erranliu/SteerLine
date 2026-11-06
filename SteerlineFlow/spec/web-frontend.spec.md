@@ -2,7 +2,7 @@
 
 > 本 Spec 保留 Web 首次实现时的原始交付范围；其中“保留 TUI”是当时条件，已由后续[TUI 退役任务](tui-retirement.spec.md)取代。当前只有 Web 是交互前端。
 
-用户于 2026-10-14 直接授权本聊天生成 Spec/Plan 并实现；普通开发，不分配 Task ID，不加入 roadmap。依据[已确认技术方案](../../docs/product-design/web-frontend.md)、[原型](../../docs/product-design/prototypes/planning-ui/README.md)及[现有 HTTP 契约](../../docs/product-design/local-client-protocol.md)。配套[Plan](../plans/web-frontend.plan.md)、[专属验收](../testing/acceptance/web-frontend.md)。
+用户于 2026-10-14 直接授权本聊天生成 Spec/Plan 并实现；普通开发，不分配 Task ID，不加入 roadmap。依据[已确认技术方案](../archive/design/architecture-web-history.md#web-首期技术方案)、[原型](../archive/design/prototypes/planning-ui/README.md)及[现有 HTTP 契约](../../docs/product-design/local-client-protocol.md)。配套[Plan](../plans/web-frontend.plan.md)、[专属验收](../testing/acceptance/web-frontend.md)。
 
 ## 目标与范围
 

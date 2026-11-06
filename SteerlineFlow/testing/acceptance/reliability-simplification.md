@@ -1,6 +1,6 @@
 # 可靠性交付简化实施验收
 
-依据[实施 Plan](../../plans/reliability-simplification.plan.md)和[经审计方案](../../../docs/architecture/reliable-delivery-chain.md)。本批完成判定/表达收口（阶段 A）、完整受理前绑定（B）和独立的同快照观察（F）。C/D 的原启动清单、安装租约、owned 启动上下文及离线续装，E 的产品命令承载合并尚未实施；不能据本批结果启用这些路径。
+依据[实施 Plan](../../plans/reliability-simplification.plan.md)和[经审计方案](../../archive/design/reliability-simplification-analysis.md)。本批完成判定/表达收口（阶段 A）、完整受理前绑定（B）和独立的同快照观察（F）。C/D 的原启动清单、安装租约、owned 启动上下文及离线续装，E 的产品命令承载合并尚未实施；不能据本批结果启用这些路径。
 
 ## 本批行为
 

@@ -1,6 +1,6 @@
 # Runner 执行展示与最近消息 Plan
 
-用户已确认后直接实施，不纳入 roadmap。[验收](../testing/acceptance/execution-observability.md)。遵循 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md) W11–W14/V04/V06 与 [Activity 契约](../../docs/product-design/activity.md)，本次不改变执行/恢复状态机。
+用户已确认后直接实施，不纳入 roadmap。[验收](../testing/acceptance/execution-observability.md)。遵循 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md) W11–W14/V04/V06 与 [Activity 契约](../../docs/product-design/execution-observability.md#流程与状态活动)，本次不改变执行/恢复状态机。
 
 ## 实施
 

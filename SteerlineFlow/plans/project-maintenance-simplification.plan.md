@@ -39,7 +39,7 @@
 
 8. **落实最小验证能力并执行登记。** 新增 TestPMS* 的纯规则、Git/DB/API 及交付反例，修改被本方案取代的 TestPM*/TestTM* 断言；用已有 owner 分区覆盖新用例，不复制到多个 L1 组。扩展既有 runtime.project-maintenance 与 web/tests/project-maintenance.spec.ts，连续准备三版 Plan、同版本两个候选、过期测试禁用和旧 PR 交付；Git/provider 异常留 L1。扩展既有 testing.management-local-codex，移除人工 apply，证明一次真实自动生成→候选原提示中的系统快照→实际程序报告→API/浏览器链，无需再跑两遍真实多版本矩阵。生成inline材料/候选提示快照、只允许绑定材料的引用校验在 runnerclient/model/SQL 消费者补齐；旧证据隔离规则保持。可执行后同一实现变更同步 manifest、E2E 可读清单、SteerlineFlow/testing/test-list.json、相关指南和 driver/reset；扩展原场景和断言，不把旧场景通过当作新行为证据。执行下表并在专属验收记录源码/构建、选择、失败与补验、证据和清理。
 
-步骤依赖为 1 → 2/3 → 4 → 5/6 → 7 → 8；2/3 的独立内部实现不要求拆成任务或调用子代理。Worker 差异统一维护在[生命周期矩阵](../../docs/product-design/worker-lifecycle.md#项目基线与材料维护2026-10-21)：W01 为候选级冻结，W08–W14 生成采用已确认自动策略，W17 保留过期交付，W18 保留原生成/全候选停止义务。
+步骤依赖为 1 → 2/3 → 4 → 5/6 → 7 → 8；2/3 的独立内部实现不要求拆成任务或调用子代理。Worker 差异统一维护在[生命周期矩阵](../../docs/product-design/worker-lifecycle.md#项目材料与辅助执行)：W01 为候选级冻结，W08–W14 生成采用已确认自动策略，W17 保留过期交付，W18 保留原生成/全候选停止义务。
 
 ## 测试计划
 

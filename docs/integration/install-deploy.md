@@ -1,97 +1,91 @@
 # 本机安装与一键部署
 
-当前安装目录为 `C:\SteerlineInstall`。双击该目录 `start.bat` 启动后端、独立 Web 和各项目的 Runner 常驻服务，并打开页面；`restart.bat` 用原固定 Runner 重启，保留原任务、Run、PR 和远端终端。`stop.bat` 仍报告原生资源是否完成结算。Web 地址为 `http://127.0.0.1:18742`。配置、数据库、Runner 状态和日志都归属该安装目录，业务 Git 仓库仍在原项目路径。
+日常安装 home 为 `C:\SteerlineInstall`。start.bat 启动共享后端、独立 Web 和同 home 的一个 Runner 服务；restart.bat 按原绑定核验重启，stop.bat 正常关闭并报告资源结算。Web 默认 `http://127.0.0.1:18742`，配置归 web.json，冲突明确失败。
+
+配置、项目数据库和应用日志归 home；Runner 状态/工作区/日志位于由 home 派生的短目录，默认卷根下 `C:\slr\<hash>`，同 home 多项目共享。业务 Git 仓库留在配置路径。身份与路径规则见[Runner 接入](steerrunner.md)，Web 单独构建、认证和启动见[Web 指南](../../web/README.md)，隔离验证使用[独立调试包](../runtime-install-debug.md)。
 
 ## 从源码更新
 
-需要同时构建 SteerLine、Web 和 Runner 时，双击根目录 `build-deploy-all.bat`。该入口复用 `build-deploy.bat` 并固定传入 `-UpdateRunner`，其余参数原样转交，默认完成构建、部署和启动。构建成功后脚本自动通过正式入口停止原安装，再核验原业务、原生资源和未完成控制已排空，通过后才替换文件；无需预先手动停服。服务退出不等于业务终态，未排空时保留原文件并报出具体原因，默认不自动恢复、取消 Run 或清库；显式放弃旧运行见下方说明；v8 与旧目录不兼容。
+| 入口 | Runner 选择 |
+| --- | --- |
+| build-deploy.bat | 已有安装复用 execution.json 固定的 EXE；首次空安装才从相邻 SteerRunner 源码构建 |
+| build-deploy-all.bat | 固定传入 -UpdateRunner，构建 SteerLine、Web 与 Runner |
+| build-deploy-discard-runs.bat | 固定传入 -UpdateRunner -DiscardRuns，明确放弃目标 home 全部旧执行，效果见下节 |
 
-双击 SteerLine 仓库根目录 `build-deploy.bat`。已有安装默认复用 `execution.json` 固定的 Runner EXE，只构建 SteerLine 和 Web；首次安装或显式 `-UpdateRunner` 才从相邻 `..\SteerRunner` 源码构建 Runner。构建成功后停止应用，校验停止或同构建重启资格，安装 EXE 并重新启动。每次记录保存在 `<home>\deployments\<时间-随机ID>\deployment.json`，最新记录为 `<home>\deployment.json`，包含源码版本和三个 EXE 的实际摘要。
-
-需要 Windows、PowerShell 5.1、Go、Git、Node/npm；使用本仓当前工作区，显式构建 Runner 时才读取其源码工作区，不自动 pull/rebase/checkout。构建检查 Web 依赖并执行前端构建，依赖未变时复用安装结果。运行已安装程序不需要 Go、Node 或 Python；实际任务仍需配置所引用的 Git、Codex、gh 和已有机器登录。构建源中允许未提交修改，部署记录标明 dirty；源码与构建依赖变更应先做必要验证。
+需要 Windows、PowerShell 5.1、Go、Git、Node/npm；使用当前工作区，不自动 pull/rebase/checkout。构建允许 dirty，但记录源码版本与 dirty。安装版运行不需要 Go、Node 或 Python，任务使用的 Git、Agent、PR 工具及登录仍须有效。
 
 ```powershell
-# 自动化调用，不等待按键
 .\build-deploy.bat -NoPause
-# 只更新，不启动
 .\build-deploy.bat -NoStart -NoPause
-# 显式构建 Runner；自动停服后校验排空，新候选须声明 v8 契约
-.\build-deploy-all.bat -NoPause
-# 显式放弃本安装全部旧运行，自动归档并重建任务后升级 Runner
-.\build-deploy-discard-runs.bat -NoPause
-# 覆盖源码位置或目标安装目录
-.\build-deploy.bat -RunnerRepo C:\Project\SteerRunner -InstallHome C:\SteerlineInstall -NoPause
-# 强制重新安装 Web 依赖；不改变 Runner 选择
-.\build-deploy.bat -ForceWebInstall -NoPause
-# 串行构建，用于诊断或与默认并行模式比较
-.\build-deploy-all.bat -SerialBuild -NoPause
+.\build-deploy-all.bat -RunnerRepo C:\Project\SteerRunner -InstallHome C:\SteerlineInstall -NoPause
+.\build-deploy.bat -ForceWebInstall -SerialBuild -NoPause
 ```
 
-默认并行执行前端依赖检查/安装及 `tsc + vite` 与 Go 流水线；Go 内仍按 Runner（如选择）、SteerLine、Web EXE 串行，Web EXE 必须等前端完成。任一分支失败均不进入部署，已启动的前端分支完成后才释放构建锁，避免后台继续改写输出。`build.ps1` 持有源码 `bin/.build.lock`，需要构建 Runner 时另持有其 `bin/.steerline-build.lock`；同一源码的重复调用直接报锁冲突。其他直接运行 npm、Go 或 Runner 自身脚本的入口不参与这些锁，仍须遵循[共享构建路径串行约束](../../SteerlineFlow/paths.md)。
+-NoPause 不等待按键；-NoStart 只安装，不证明服务已 ready。-RunnerRepo 仅在选择构建 Runner 时使用；-InstallHome 必须是明确独立目录，与源码、Runner 源码、旧安装保留目录和调试目录分离。
 
-依赖成功标记位于 `web/node_modules/.steerline-install.json`。只有 package/锁文件、Node/npm、平台、有效 npm 配置及 npmrc 内容一致，npm 的隐藏安装锁摘要、其中的包目录和构建工具仍存在时才复用。安装失败不留成功标记；缺失或失效时重新执行 `npm ci`。这不是逐文件完整性校验；手工改坏某个依赖文件时使用 `-ForceWebInstall`。首次使用该机制也会安装一次。npm 配置仅在内存中参与哈希，计时报告不保存配置值或凭据。
+默认前端依赖检查/构建与 Go 流水线并行，Go 内按 Runner（如选择）、SteerLine、Web 顺序构建；前端完成后才嵌入 Web。任一失败均不部署，后台构建结束后才释放锁。源码 `bin/.build.lock` 和 Runner 的 `bin/.steerline-build.lock` 阻止同源码重复构建；直接 npm/Go 入口不参与这些锁，仍须遵守[共享路径约束](../../SteerlineFlow/paths.md)。
 
-每个阶段打印执行/跳过、原因、耗时和失败状态；JSON 的总耗时是实际墙钟时间，并行阶段耗时不能直接相加。构建报告默认在源码 `bin/build-timings/<随机ID>.json`，部署报告在 `bin/deploy-timings/<随机ID>.json`；`-TimingPath <绝对路径>` 可指定当前入口的报告位置。部署包另保存 `build-timings.json` 和 `timings.json`，分别定位依赖检查/安装、前端、三个 Go 构建、升级预检、停机核验、安装、启动及 ready 等待。失败也写报告；早于构建锁或安装锁取得前的拒绝不保证生成报告。
+Web 依赖以 package/锁文件、工具版本、平台和有效 npm 配置等指纹复用成功安装，标记为 `web/node_modules/.steerline-install.json`。失效时 npm ci；这不校验每个依赖文件，手工破坏依赖后用 -ForceWebInstall。npm 配置只参与内存哈希，不将凭据写入报告。
 
-部署使用构建锁内生成的独立 `bin/deploy-builds/<随机ID>/` 快照，防止构建锁释放后另一调用改写源码 bin 中待部署的 EXE。这些目录只含构建产物，可在相关调用结束后手工清理。只验证构建而不部署时使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Web`；它同样支持 `-ForceWebInstall`、`-SerialBuild`、`-RunnerRepo` 和 `-TimingPath`，不会停止或更新安装版。增加 `-Release` 同时禁用两个产品 EXE 的[全局开发者配置](developer-config.md)能力。
+只构建不部署使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Web`；同样支持 ForceWebInstall、SerialBuild、RunnerRepo、TimingPath。-Release 禁用两个产品 EXE 的[开发者配置](../product-design/execution-configuration.md#开发者配置与环境就绪阻塞)。
 
-脚本只停止与更新显式目标安装目录，拒绝与源码、保留的旧安装目录 `C:\SteerlineRuntime` 或调试目录重叠。所需 EXE 全部准备成功后才停止服务；停止及同构建重启资格均无法核实，或仍有目标进程时不替换。Windows 短暂占用已停机的 EXE 时，仅对文件安装最多重试四次，每次前确认目标未重新运行；不重试任务操作。部署过程持有独占锁；失败保留构建包与错误，不宣称自动回滚。替换中途失败时先修复再重跑，不能仅凭某个 EXE 存在判断整包成功。默认启动后继续等候全部项目 ready，不能仅凭宿主启动成功报告完成。
+## 部署判定与记录
 
-已有 `execution.json` 必须为 v3，保留默认方案与全部 profiles，只更新 Runner 固定信息；首次空安装只生成本机 Luna medium 默认方案，项目配置需另行提供。默认模式不清空、搬运或升级数据库，不重复导入任务，不复制认证材料；显式 -DiscardRuns 的归档及任务重建流程见下文。可用以下命令查看状态：
+1. 在构建锁内冻结独立 `bin/deploy-builds/<随机ID>/` 包，校验三个 EXE、Runner 版本/摘要和执行配置。全部成功才停止目标安装。
+2. 通过一次 prepare-deployment 组织原应用停服与证明，核对本次调用 ID、home、完整暂存包和 Runner SHA；随后执行升级预检。核验失败不替换原文件，服务可能已停止。
+3. 确认目标进程退出后安装并核对全部文件摘要，再写配置/部署记录。Windows 短暂占用时仅文件安装最多额外重试四次，每次重新确认目标未运行；任务操作和启动不自动重试。
+4. 默认通过 Windows 进程管理接口执行正式 start，保留当前用户环境而不将其写盘，避免继承部署宿主 kill-on-close Job。结果绑定本次调用；全部项目须在 180 秒内 ready，创建进程或单个项目成功均不足。-NoStart 跳过这一步。
 
-```powershell
-$env:STEERLINE_HOME='C:\SteerlineInstall'
-& "$env:STEERLINE_HOME\bin\steerline.exe" status --json
-```
+Windows 安装根目录须向普通子目录传递当前用户的访问权限。价表保存只保护 `billing.json`，不修改安装根目录的 ACL。部署入口若发现安装根目录由当前用户所有、禁止继承且仅有当前用户一条不向下传递的 FullControl 规则，会在检查旧 EXE 前为该规则补上目录/文件继承；这会恢复依赖继承的 `bin`、`etc` 访问，受保护的私有生命周期记录保持原 ACL。其他权限形态不自动重写，也不要求通过管理员权限绕过；隔离复现和验证见[权限修复记录](../../SteerlineFlow/testing/acceptance/deployment-home-acl-20261106.md)。
 
-部署通过 Windows `Win32_Process.Create` 进程管理接口运行正式安装版 `start`，避免常驻服务继承部署宿主的 kill-on-close Job。启动代理显式保留调用者环境与目标 home、核对 Windows 用户，不将环境变量写入磁盘或命令行。部署包中的 `startup-<调用ID>.log/.json` 保存本次启动输出和退出码，启动返回成功后仍须全部项目 ready 才算部署完成；创建进程成功不等于部署成功。代理失败、超时或结果不匹配均失败，不自动重复启动。`-NoStart` 不创建启动代理。直接从其他自动化宿主调用 `start` 仍保留产品自身的生命周期检查。
+过程持有目标独占锁；中途替换失败保留错误和构建包，不承诺自动回滚或中断续装。不能凭某个 EXE 存在判断整包完成；修复原因后重新走正式入口。
+
+已有 execution.json 须为当前 v3，保留默认项和全部 profiles，仅更新 Runner 固定信息；空安装从示例生成 local-luna-medium，项目配置另行提供。普通更新不清库、不重复导入、不复制认证、不迁移旧 schema。出现 unsupported SQLite schema 时按当前格式准备新状态；不能修改 schema 编号冒充升级。
+
+| 记录 | 内容 |
+| --- | --- |
+| `<home>/deployments/<时间-随机ID>/deployment.json` | 源码版本/dirty、Runner 来源、三个 EXE 摘要；最新副本为 home/deployment.json |
+| 同包 shutdown-verification.json、runner-upgrade-preflight.json | 原停止、资源与候选离线能力证明，绑定本次部署；不是持续 writer lease |
+| 同包 startup-<调用ID>.log/.json | 本次正式启动输出和退出码 |
+| 同包 build-timings.json、timings.json | 构建与部署阶段状态、跳过原因、耗时和失败；并行总耗时为墙钟时间 |
+
+源码报告默认在 `bin/build-timings/`、`bin/deploy-timings/`，-TimingPath 可指定当前入口的绝对路径。早于取得锁的拒绝不保证有报告。已结束调用的独立构建快照可手工清理，不清理仍在使用的包。
 
 ## 同构建更新与重启
 
+**同一 Runner 构建**可保留原后台执行，核验原宿主/Web/Runner 服务退出、项目关闭/锁释放、checkpoint 归属和原 Run/input。匹配停机回执及 stopped 检查点允许加载已保存待重启配置，历史执行仍沿原信封。资源未知保留诊断；资源丢失由 Runner 返回 blocked/manual_intervention_required，显式 resume 只做有界原操作对账，不重建或自动补发。
+
+**换 Runner 构建**使用当前 state/v8 排空规则：原服务退出，原/候选公开离线查询核对同一 Run/input 集合，业务终态、原生资源与未完成控制全部核实。仅 pr_ready、仅服务停止或 stop_status 字段不足以升级；不支持活动 Run 跨构建接管，verify-takeover 已删除。普通预检不自动停止 Run、不迁移或清空数据，失败后按原诊断用原版本收尾再重跑。
+
+停止证明须绑定原资源身份与范围：confirmed 的 Orca 终端停止回执可证明原终端已停止，不扩展为后台进程或凭据已清理；accepted/unknown、身份或冻结范围不符仍须核实。本机 Orca 历史 PID 不可查询时，还需原构建停机结算及同范围 Run 已确认停止；发现进程存活或证据缺失则阻断。详细资格归[Runner 接入](steerrunner.md)。
+
+旧 pin 指向不同命名空间（含 v7 及更早）时，先由原版本收尾，改用全新且分离的 InstallHome；不复制旧执行状态，不删除 pin/数据库绕过检查。格式与执行契约兼容且已排空的 v8 构建可按正式核验复用目录，历史构建摘要仅表示来源。
+
+**宿主被中断**而停机回执缺失/陈旧时，普通部署可由 prepare-deployment 一次受控运行原安装、等全部项目 ready 后正常关闭，再重新核验。须证明原进程退出、锁可用、原三个 EXE、Runner pin、冻结配置/checkpoint、项目集合及 Run/input 一致。当前实例失败回执、活动服务、身份/文件变化、不兼容或未知创建继续阻断；不强杀、清库或循环重试，不放宽严格资源销毁路径。恢复保留原诊断与 resources_settled 事实。范围见[自动恢复验收](../../SteerlineFlow/testing/acceptance/deployment-interrupted-recovery.md)。
+
 ### 显式放弃旧运行后升级 Runner
 
-只有确认不再继续本安装的旧执行时，双击根目录 `build-deploy-discard-runs.bat`，或用 `build-deploy-discard-runs.bat -NoPause` 自动调用。该入口固定传入 `-UpdateRunner -DiscardRuns`，其余参数原样转发，保留退出码；也可继续使用 `build-deploy-all.bat -DiscardRuns`。`-DiscardRuns` 必须与 `-UpdateRunner` 一起使用，作用范围是所选 InstallHome 的全部项目，不是某一个 Run；不传此开关时保持原停止、排空与升级规则。
-
-此模式仍先完成构建及候选离线能力校验，再停止原应用，核对宿主/Web 退出、项目集合、原检查点归属及锁。已保存待重启的执行方案、默认方案和开发配置允许与原进程冻结摘要不同；原检查点继续保留原摘要，仓库路径/身份、remote、分支及固定 Runner 绑定必须一致，准备期间再次修改配置仍阻断。任务定义和依赖先在独立位置通过正式任务校验与创建入口构造好；原固定 Runner 从公开冷查询取得全部 Run/input，对允许停止的原 Run 持久保存 stop 信封，在 worker 启动前受理，沿原请求查询结果，再停止原服务并核实全部原生资源结算。未知停止、已停止但有未完成恢复授权、创建/输入归属不明、项目归属变化、缺失锁/证明仍会阻断，不强杀、不把“放弃”当作资源不存在。
-
-通过后自动把原项目 state、应用/Web 状态及原 Runner 目录移入 `<home>/maintenance/discard-runs-<调用ID>/`，将准备好的任务库切换到原位置，然后按原流程安装新程序。保留项目/Web 配置、执行方案及默认方案、任务编号/标题/类型/优先级/目标/完整固定契约和依赖，保留业务 Git 与远端 PR。**全部任务重新变为 open，所有项目设为 manual 且派发暂停**，旧领取、执行、交付、环境资格、测试生成、Roadmap 及控制历史只留在归档中，不恢复为新执行状态。已完成或已放弃的任务也会重新 open，恢复派发前应按实际业务选择任务。
-
-`-NoStart` 可以组合使用：任务库在安装前已准备好，不需要临时启动服务或手工导入任务。归档里的 `original-shutdown.json`、`discard.json` 保存原失败、原请求号、结算范围、任务数量和目录切换进度；部署包的 `shutdown-verification.json` 绑定本次调用及完整构建包。此流程使用当前 Runner 命名空间，不迁移旧版运行状态。schema 41 程序的显式放弃模式另允许只读检查 schema 40 的完整结构、任务及原运行归属，重建全新的 schema 41 任务库；旧库原样归档，不改版本号、不原地升级。正常启动、查询和写入仍只接受 schema 41，其他旧格式或定义不符继续阻断。
-
-原宿主中断且缺少 `application-api/shutdown.json` 时，放弃旧运行模式允许直接离线核验：必须确认原宿主与 Web 的精确进程退出、租约释放、全部项目数据库的原宿主检查点身份、仓库与固定 Runner 绑定及实际锁可用。检查点不要求已写入 stopped，但不接受其他宿主或不明归属。随后仍由原固定 Runner 停止原 Run 并证明全部资源结算，不临时重启项目宿主。缺失回执不会伪造成正常停机：`discard.json` 保存 `interrupted_host` 和原停止诊断，部署报告的 `stopped` 保存新核验事实；已有但损坏、过期或本地关闭未核实的回执仍阻断。
-
-归档切换开始后若中断，`<home>/deployment-discard.json` 会保留，正常 start/serve、后续部署和升级预检均拒绝继续，避免把半完成的切换当作空安装。检查该记录及对应归档后完成现场恢复；不自动重发未知 stop、不自动回滚或循环重试。开始切换前失败则原执行目录不移动，服务可能已停止，原请求和诊断保留在本次维护目录。
-
-同构建重启可保留原后台执行，核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、原 checkpoint 归属和 Run/input；资源未结算诊断保持。具有匹配停机回执和 stopped 检查点时，普通部署及重启同样允许已保存待重启的执行配置，原执行沿历史信封核验，新进程加载保存后的配置。缺少当前实例停机回执的中断恢复仍要求原冻结摘要与当前文件相同。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。原资源丢失时，Runner 返回 `blocked/manual_intervention_required`，由用户显式 resume 做有界原操作只读对账；不重建资源或自动重发输入。
-
-当前 Runner 使用 `steerrunner-state/v8`，已删除 `service verify-takeover --candidate`，不支持跨构建活动任务接管。部署先构建、校验版本和执行配置，再通过 `prepare-deployment` 停服及核验，随后在替换之前调用 `verify-runner-upgrade --home <InstallHome>`，核验候选公开的离线 capabilities；换构建还须核实原服务已退出、公开 verify-stopped 资源结算以及每个原 Run 的业务终态。`pr_ready`、仅停止服务或资源仍未知均不足以升级。排空校验失败时原服务可能已停止，原 EXE、配置和数据库保持；按原诊断使用原版本处理未完成业务后重跑。该校验不自动停止 Run、不迁移或清空数据，也不是持续持有的 writer lease。
-
-兼容同一 v8 状态目录的升级，由已校验的候选 Runner 通过公开 `service verify-stopped` 核对资源，再分别用原 EXE 和候选 EXE 的离线 inspect 核对同一 Run/input 集合及业务终态。已持久化、绑定原 runtime/worktree/terminal/incarnation 的 confirmed 停止回执可证明原 Orca 终端已停止，后续远端重启或工作区移除不撤销该事实。只存 `stop_status=stopped`、accepted/unknown 回执、资源身份或冻结范围不符仍不足；未确认停止仍须查询原资源。证明范围保持 `orca_terminal`，不扩展为脱离终端的后台进程或凭据已清理。
-
-本机 Orca Codex 的历史 PID 若无法查询，升级预检和换版后的首次启动会核对原构建的 Runner 停机结算回执，并要求受影响的 Run 在相同证据范围内有已确认的停止操作。仍须核对 Run/input、业务终态和未完成控制。发现原进程仍存活或停机证据缺失时阻断升级。
-
-共享短目录以规范化 home 和固定 v8 身份派生，同一 home 的项目仍共用一个 Runner。旧 `runner-build.json` 指向其他命名空间时明确阻断，并保留原 EXE、配置、数据库、任务和原目录。先用原安装版本处理、停止并核实全部旧资源，再部署到一个全新的、与原安装分离的 InstallHome，例如：
+只有决定不再继续所选 InstallHome **全部项目旧执行**时使用：
 
 ```powershell
-.\build-deploy-all.bat -InstallHome C:\SteerlineInstallV8 -NoPause
+.\build-deploy-discard-runs.bat -NoPause
+# 等价：.\build-deploy-all.bat -DiscardRuns -NoPause
 ```
 
-新 home 不复制旧执行状态；按正式项目/任务入口重新配置。不要删除 pin 或旧数据库来绕过检查。未来格式/执行契约兼容且已排空的构建可继续使用同一 v8 目录查询历史，历史 Run 的构建摘要仅用于来源记录，不作为逐 Run 操作权限门禁。本次代码适配不自动执行安装维护。
+-DiscardRuns 必须与 -UpdateRunner 组合，可加 -NoStart。构建及能力预检完成后，先在独立位置通过正式任务校验/创建入口准备任务定义与 DAG，再核对原应用/Web 退出、checkpoint、项目/仓库身份及锁。已保存待重启的 profile/default/开发设置可与原冻结摘要不同，仓库、remote、分支及 Runner 绑定须一致，准备期间再改配置会阻断。
 
-Runner 兼容不代表 SteerLine 自身数据库 schema 兼容。项目若报告 `unsupported SQLite schema`，按项目默认规则使用当前格式的新状态；脚本不会自动迁移或清空旧库。用户明确授权清理时，可归档旧状态，再通过正式任务 validate/create 入口在新库创建所需任务定义和依赖，不能直接改 schema 编号冒充升级。
+原固定 Runner 公开冷查询全部 Run/input，先持久保存原 stop 信封并在 worker 启动前受理，沿原号结算、停止服务并核实全部资源。未知停止、未完成恢复授权、输入/项目归属不明、锁或证明缺失均阻断，不把“放弃”当作资源已消失。
 
-系统重启或宿主被中断后，最新宿主可能没有停机回执，或 `shutdown.json` 仍属于上一实例。部署由 Go prepare-deployment 按 update 目标组织停止、verify-restart 及必要时一次受控恢复：核实原宿主/Web/Runner 已退出、启动身份、原安装三个 EXE 摘要、Runner pin、冻结配置/checkpoint/项目集合、实际锁及原 Run/input 的公开离线查询，再使用原安装运行至全部项目 ready，正常停服并重新执行完整 `verify-restart`。通常直接重跑部署即可，无须手工恢复原版本。
+通过后将原项目 state、应用/Web 状态及 Runner 命名空间归档到 `<home>/maintenance/discard-runs-<调用ID>/`，切换准备好的任务库，再安装新程序：
 
-恢复全过程持有启动协调锁；不强杀、清库、改写原 Run/输入/PR 或循环重试。匹配当前实例的失败回执、未知创建、活动服务、文件/配置/身份变化或不兼容仍阻断替换。`resources_settled=false` 保持原事实，旧宿主、旧回执及旧 Runner 诊断随新的 `shutdown-verification.json` 保存。仅允许重启的部署路径使用此恢复，严格资源销毁路径不放宽。实现与隔离验证见[自动恢复验收](../../SteerlineFlow/testing/acceptance/deployment-interrupted-recovery.md)；此前人工恢复的现场证据见[2026-10-21 维护记录](../../SteerlineFlow/testing/acceptance/install-shutdown-recovery-20261021.md)。
+- 保留配置/profiles/default、任务编号/内容/固定契约/DAG、业务 Git 和远端 PR。
+- **全部任务恢复 open（包括原已完成/放弃），所有项目 manual 且暂停派发。** 旧执行、交付、环境资格、生成、Roadmap 和控制历史仅供归档查证，不恢复为新执行状态。
+- -NoStart 不需要临时启动服务或人工导入；恢复派发前须按实际业务选定任务。
 
-## 历史迁移（2026-10-15）
+原宿主中断且缺停机回执时，可严格离线核验原进程退出、租约/锁、全部数据库 checkpoint 身份及原 Runner 绑定，再由原 Runner 停止资源，不临时重启项目宿主。只允许明确缺失回执；已有但损坏、过期或本地关闭未核实的回执仍阻断。discard.json 保留 interrupted_host 和原停止诊断。
 
-以下为当时迁移事实；2026-11-01 用户授权清理旧执行状态、不留备份并安装当前 Runner v8 的记录见[本次维护](../../SteerlineFlow/testing/acceptance/runner-v8-install-reset.md)。
+original-shutdown.json、discard.json 记录原请求、结算、任务数量和切换进度；shutdown-verification.json 绑定部署包。开始切换后中断会留下 `<home>/deployment-discard.json`，阻断 start/serve、后续部署及升级预检，须按该记录完成现场恢复；不自动重发未知 stop 或回滚。开始切换前失败不移动原执行目录，服务可能已停止。本功能使用当前 Runner 命名空间，不迁移旧运行状态。schema 41 程序的显式放弃模式允许只读核验 schema 40 的完整结构、任务和原运行归属，归档旧库并重建新 schema 41 任务库，不改版本号或原地升级；正常启动/查询/写入仍只接受 schema 41，其他旧格式或定义不符继续阻断。实际范围见[清理修复验收](../../SteerlineFlow/testing/acceptance/deployment-schema40-discard-20261106.md)。
 
-三份项目 `SteerLine`、`SteerlineTest`、`merge-h-308-code` 均迁入新目录；保留原 Git 路径、远端、目标分支、任务编号、Spec/Plan 固定引用和依赖。移除旧项目字段 `web_address`，Web 地址由 `web.json` 管理；原三份本机 Codex profiles 转为 v3，未保留已放弃的 Orca 路径。
+## 实现与历史证据
 
-经用户确认，只迁移任务定义和依赖：新任务全部为 `open`，调度保持 manual + paused。旧交付和执行状态不能作为真实 Runner Run 导入，因此在 `C:\SteerlineInstall\migration\20261015-task-definitions` 留档；旧目录完整保留，已停止。该目录含导入批次、原状态、历史交付证据、旧 Workflow/PR 引用和导入回执；完整旧执行日志仍在旧安装目录。
-
-恢复派发前先按历史处理已交付或等待合并的旧任务，避免重做既有工作。旧任务 101 已交付，任务 102/105 在导出时等待 PR 合并；新任务列表不会将这些历史伪装为 Runner 执行。迁移与部署验证见[验收记录](../../SteerlineFlow/testing/acceptance/install-cutover-20261015.md)。
-
-部署判定与脚本收口的当前增量见[简化验收](../../SteerlineFlow/testing/acceptance/reliability-simplification.md)：脚本只调用 prepare-deployment 一次，以本次随机调用 ID、完整暂存包摘要、home/目标及 Runner SHA 核对结果。原停止、候选兼容与资源事实保留在 shutdown-verification.json 中。该报告不是持续持有的 writer lease；直接离线替换和中断续装尚未启用。
+当前入口以[部署脚本](../../scripts/build-deploy.ps1)及[可靠性简化验收](../../SteerlineFlow/testing/acceptance/reliability-simplification.md)为准；文档整理不执行安装维护。[2026-10-15 迁移](../../SteerlineFlow/testing/acceptance/install-cutover-20261015.md)、[2026-11-01 v8 安装清理](../../SteerlineFlow/testing/acceptance/runner-v8-install-reset.md)及[原停机恢复现场](../../SteerlineFlow/testing/acceptance/install-shutdown-recovery-20261021.md)仅说明各自授权与原版本事实，不构成日常更新规则。原文及其他来源见[历史入口](../../SteerlineFlow/archive/design/runner-reliability-history.md#第五批整理来源)。

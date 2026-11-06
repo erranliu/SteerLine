@@ -163,7 +163,10 @@ func (s Store) change(expected string, update func(*File) error) (Snapshot, erro
 	if expected == "" {
 		return Snapshot{}, failure(428, "precondition_required", "conditional configuration write required")
 	}
-	if err := httpfs.EnsurePrivateDirectory(s.Home); err != nil {
+	// Home also contains installed executables and project configuration. A
+	// non-inheritable private directory ACL removes their inherited Windows
+	// access. Only the billing file needs the protected private snapshot ACL.
+	if err := os.MkdirAll(s.Home, 0700); err != nil {
 		return Snapshot{}, err
 	}
 	var out Snapshot

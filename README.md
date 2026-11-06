@@ -98,7 +98,7 @@ SteerLine 将文档作为开发流程的工作依据。不同层次回答不同�
 - **任务与执行：** 已有任务 DAG、依赖检查、独立执行候选、会话反馈和真实 PR 合并核验；核验交付后释放满足依赖条件的后继任务。
 - **Roadmap 转正：** 已接入 Markdown 读取与解析、任务关系确认、Spec/Plan/验收文档生成、文档发布和正式入图。真实 Runner、浏览器与 GitHub 文档 PR 主链已有验证，人工体验等未验范围见[专属验收](SteerlineFlow/testing/acceptance/roadmap-promotion.md)。
 - **流程材料与测试：** 已维护通用项目规范和 SteerLine 自身的分级测试、结构化清单、验收记录与按提交保存的测试历史。相关约定和工具已有落实，完整流程仍在持续建设。
-- **交互与执行接入：** Web 是当前交互前端；通过独立 SteerRunner 接入本地 Codex、本机 Orca 和远端 Orca 路径。各组合的可执行资格与已验范围，按[执行方案](docs/product-design/execution-profiles.md)及对应验收记录判断。
+- **交互与执行接入：** Web 是当前交互前端；通过独立 SteerRunner 接入本地 Codex、本机 Orca 和远端 Orca 路径。各组合的可执行资格与已验范围，按[执行方案](docs/product-design/execution-configuration.md)及对应验收记录判断。
 
 **面向用户的 SteerLine 主 Agent、贯穿完整项目周期的流程管理，以及授权范围内的有限自主推进，仍是后续产品方向。** 当前已有的解析、生成和执行能力，尚不构成完整的主 Agent 产品体验。验收记录中的固定版本、环境和范围决定了各项能力的实际验证边界。
 
@@ -111,7 +111,7 @@ SteerLine 将文档作为开发流程的工作依据。不同层次回答不同�
 | 了解项目规范与开发方法 | [认识 SteerLine](SteerlineProjectGuideDoc/README.md) · [受管理项目规范](SteerlineProjectGuideDoc/project-standards.md) |
 | 了解本仓库的规划与开发流程 | [流程入口](SteerlineFlow/README.md) · [RoadmapGuide](SteerlineFlow/Roadmap/RoadmapGuide.md) · [正式执行清单](SteerlineFlow/Roadmap/execution-map.md) |
 | 查找测试方法与实际验收结果 | [测试指南](SteerlineFlow/testing.md) · [验收记录](SteerlineFlow/testing/acceptance/README.md) |
-| 从源码构建、启动和调试 | [Web 构建与启动](web/README.md) · [安装与独立调试](docs/runtime-install-debug.md) |
-| 了解产品设计、架构与执行接入 | [文档入口](docs/README.md) · [代码架构](docs/architecture/current-code-architecture.md) · [Runner 接入](docs/integration/steerrunner.md) |
+| 从源码构建、启动和调试 | [Web 构建与启动](web/README.md) · [安装部署](docs/integration/install-deploy.md) · [独立调试](docs/runtime-install-debug.md) |
+| 了解产品设计、架构与执行接入 | [文档入口](docs/README.md) · [项目流程与 Runner 职责](docs/product-design/project-workflow.md) · [代码架构](docs/architecture/current-code-architecture.md) · [Runner 接入](docs/integration/steerrunner.md) |
 
 SteerLine 自身也采用这套开发方法：统一规范维护在 `SteerlineProjectGuideDoc/`，本项目流程材料维护在 `SteerlineFlow/`，产品设计与架构维护在 `docs/`。

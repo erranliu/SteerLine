@@ -46,7 +46,7 @@
 
 本节只记录本轮设计交付，不能据此标记 TR-A01–A07 或 TR-M01 通过。
 
-2026-10-21：已更新 [HTML](../../../docs/product-design/prototypes/planning-ui/index.html) 与 [README](../../../docs/product-design/prototypes/planning-ui/README.md)。在 Edge headless / Playwright 中打开本地静态 HTML，验证原始失败保留、显式完整链、部分/定义变化、环境/分支/日期筛选、无记录/无搜索命中、最新失败、只读入口、候选跳转及离线；桌面 1450×1100、窄屏 430×950 截图检查。浏览器零 JS 异常，不启动 SteerLine/Runner 或创建产品调试环境。
+2026-10-21：已更新 [HTML](../../archive/design/prototypes/planning-ui/index.html) 与 [README](../../archive/design/prototypes/planning-ui/README.md)。在 Edge headless / Playwright 中打开本地静态 HTML，验证原始失败保留、显式完整链、部分/定义变化、环境/分支/日期筛选、无记录/无搜索命中、最新失败、只读入口、候选跳转及离线；桌面 1450×1100、窄屏 430×950 截图检查。浏览器零 JS 异常，不启动 SteerLine/Runner 或创建产品调试环境。
 
 设计检查的文件摘要、检查范围和本地截图位置见[最小证据](evidence/test-records-prototype-20261021.json)。文档链接和空白检查结果在该证据中记录；该次设计检查时，产品场景 testing.records 尚未实现/运行；本轮产品结果见下文。原型未实现真实导入、分页、项目切换、分叉或真实证据读取。
 
