@@ -294,3 +294,11 @@ Web 已开放生成、独立请求历史/停止、代码提交/整体设计/调�
 功能提交在最新 `origin/main=27172ac3` 上 rebase，受测实现提交为 `0ebdaaadbd84a196a0cce5dd3aefd6d7936271c5`。仅 `docs/product-design/roadmap-promotion.md` 出现内容冲突，保留主分支的新章节与静态材料说明，并加入本次混合依赖段；业务代码、页面、测试及提示词与同步前已审核/受测版本一致。独立审核者 `/root/independent_review` 已只读复核同步后的差异并维持批准，提示词字节数及 SHA-256 不变。
 
 同步后对上述干净实现提交重新执行完整 L1/L2，均 passed=true，L2 cleanup_complete=true；证据分别为 `test-results/L1/20261106-pr-main-a/summary.json` 与 `test-results/L2/20261106-pr-main-a/summary.json`，仍位于本轮证据根。文档链接及 diff 格式检查通过。本段仅补记同步与验证，不改变受测实现；上文 go.roadmap、web.unit 及构建结果保留其原受测基线，不标成同步后的重新执行。
+
+### PR #471 合并冲突修复（2026-11-06）
+
+合入 `origin/main=79bc8bb7` 的 Roadmap 进度/历史改造，保留已发布分支历史。冲突仅在 `web/src/features/roadmaps/roadmaps.tsx` 与对应测试：保留主分支 workflow 步骤、当前流程/历史选择、只读限制及相关测试导入；保留正式编号/快照名称/DAG 链接组件及混合依赖测试，移除主分支已淘汰的旧 states 表。业务 Go、提示词正文及摘要均未改变，最终正文仍为 1495 字节、SHA-256 `426c10f34a883e9066d3060bc06723bcf2823989e5cc74d78c50a3a3882738bb`。
+
+独立只读审核者 `/root/independent_review` 复核合并提交 `a4cfe5244c4e9ff0f0808432c8ddb9edf914a0f7` 后维持批准，确认双方语义保留；仍为本地审核，不代表 GitHub 审批。
+
+合并后的 Roadmap 定向 20 项及 TypeScript/Vite 构建通过。对同一干净合并提交运行完整 L1、L2、web.unit，均 passed=true；L2 cleanup_complete=true，前端 344 项通过、0 failed/skip。证据根不变，报告分别为 `test-results/L1/20261106-conflict-a/summary.json`、`test-results/L2/20261106-conflict-a/summary.json`、`test-results/L4/20261106-conflict-web-a/summary.json`；静态检查为 711 文件、4402 本地链接、0 错误，diff 格式通过。本段只补记实际结果，先前后端专项及真实链证据保持原受测范围。
