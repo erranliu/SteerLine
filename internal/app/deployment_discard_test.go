@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
@@ -155,7 +156,7 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 }
 
 func testDiscardOfflineFlow(t *testing.T) {
-	for _, fault := range []string{"original", "saved-profile", "changed-during-preparation", "changed-runner"} {
+	for _, fault := range []string{"original", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown"} {
 		t.Run(fault, func(t *testing.T) { testDiscardOfflineConfiguration(t, fault) })
 	}
 }
@@ -195,6 +196,18 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	require(t, err)
 	process.Created = "previous-os-generation"
 	cp.Service.ProcessIdentity.Created = process.Created
+	interrupted := strings.HasPrefix(fault, "interrupted") || fault == "missing-shutdown"
+	if strings.HasPrefix(fault, "interrupted") {
+		cp.Service.Status, cp.Service.Ready = "ready", true
+	}
+	switch fault {
+	case "interrupted-wrong-host":
+		cp.Service.ProcessIdentity.Created = "foreign-host"
+	case "interrupted-wrong-repository":
+		cp.Repository.Branch = "foreign"
+	case "interrupted-wrong-runner":
+		cp.Service.RunnerBuild.ResourceDigest = "foreign"
+	}
 	_, err = store.SaveCheckpoint(ctx, cp)
 	require(t, err)
 	require(t, store.Close())
@@ -204,7 +217,20 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	backend, _ := components(HomeDir())
 	require(t, localservice.Write(backend.dir, "instance.json", id))
 	original := contract.Shutdown{Version: 2, Runner: d.runner.result(), Identity: id, Projects: d.ShutdownResults(), Clean: true}
-	require(t, localservice.Write(backend.dir, "shutdown.json", original))
+	if !interrupted {
+		if fault == "stale-shutdown" {
+			original.Identity.InstanceID = localservice.Token()
+		}
+		require(t, localservice.Write(backend.dir, "shutdown.json", original))
+		if fault == "corrupt-shutdown" {
+			require(t, os.WriteFile(filepath.Join(backend.dir, "shutdown.json"), []byte(`{`), 0600))
+		}
+	}
+	if fault == "interrupted-locked" {
+		lock, err := host.LockRepository(c.RunDir)
+		require(t, err)
+		defer lock.Close()
+	}
 	global.Profiles[0].Name = "Saved profile for the next host"
 	if fault != "original" {
 		if fault == "changed-runner" {
@@ -220,19 +246,28 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 		}
 		return nil
 	})
-	if fault == "changed-during-preparation" || fault == "changed-runner" {
+	blocked := fault == "changed-during-preparation" || fault == "changed-runner" || strings.HasPrefix(fault, "interrupted-") || fault == "corrupt-shutdown" || fault == "stale-shutdown"
+	if blocked {
 		if err == nil {
 			t.Fatal("discard accepted changed ownership or concurrent configuration", fault)
 		}
 		if _, err := os.Stat(filepath.Join(c.RunDir, "steerline.db")); err != nil {
 			t.Fatal("blocked discard moved original state", err)
 		}
-		if _, err := os.Stat(filepath.Join(backend.dir, "shutdown.json")); err != nil {
+		if _, err := os.Stat(filepath.Join(backend.dir, "instance.json")); err != nil {
 			t.Fatal("blocked discard moved original host", err)
 		}
 		return
 	}
 	require(t, err)
+	if interrupted {
+		if result.Discard.InterruptedHost == nil || *result.Discard.InterruptedHost != id || result.Stopped == nil || len(result.Stopped.Projects) != 1 || result.Stopped.Projects[0].InstanceID != cp.Service.InstanceID {
+			t.Fatal("missing interrupted host or checkpoint evidence", result)
+		}
+		if _, err := os.Stat(filepath.Join(result.Discard.Archive, "original-shutdown.json")); !os.IsNotExist(err) {
+			t.Fatal("interrupted discard fabricated a shutdown receipt", err)
+		}
+	}
 	after, err := os.ReadFile(GlobalExecutionConfigPath())
 	require(t, err)
 	if string(after) != string(saved) {

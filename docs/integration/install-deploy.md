@@ -58,6 +58,8 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 
 `-NoStart` 可以组合使用：任务库在安装前已准备好，不需要临时启动服务或手工导入任务。归档里的 `original-shutdown.json`、`discard.json` 保存原失败、原请求号、结算范围、任务数量和目录切换进度；部署包的 `shutdown-verification.json` 绑定本次调用及完整构建包。此流程只处理当前数据库格式和当前 Runner 命名空间，不迁移旧版状态。
 
+原宿主中断且缺少 `application-api/shutdown.json` 时，放弃旧运行模式允许直接离线核验：必须确认原宿主与 Web 的精确进程退出、租约释放、全部项目数据库的原宿主检查点身份、仓库与固定 Runner 绑定及实际锁可用。检查点不要求已写入 stopped，但不接受其他宿主或不明归属。随后仍由原固定 Runner 停止原 Run 并证明全部资源结算，不临时重启项目宿主。缺失回执不会伪造成正常停机：`discard.json` 保存 `interrupted_host` 和原停止诊断，部署报告的 `stopped` 保存新核验事实；已有但损坏、过期或本地关闭未核实的回执仍阻断。
+
 归档切换开始后若中断，`<home>/deployment-discard.json` 会保留，正常 start/serve、后续部署和升级预检均拒绝继续，避免把半完成的切换当作空安装。检查该记录及对应归档后完成现场恢复；不自动重发未知 stop、不自动回滚或循环重试。开始切换前失败则原执行目录不移动，服务可能已停止，原请求和诊断保留在本次维护目录。
 
 同构建重启可保留原后台执行，核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、原 checkpoint 归属和 Run/input；资源未结算诊断保持。具有匹配停机回执和 stopped 检查点时，普通部署及重启同样允许已保存待重启的执行配置，原执行沿历史信封核验，新进程加载保存后的配置。缺少当前实例停机回执的中断恢复仍要求原冻结摘要与当前文件相同。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。原资源丢失时，Runner 返回 `blocked/manual_intervention_required`，由用户显式 resume 做有界原操作只读对账；不重建资源或自动重发输入。

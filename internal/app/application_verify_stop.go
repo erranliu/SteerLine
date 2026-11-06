@@ -230,8 +230,8 @@ func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutd
 }
 
 // Discard preparation already holds the repository lock for the complete swap.
-func verifyDiscardProject(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, proof runnerclient.StoppedVerification) (ProjectStopVerification, error) {
-	return verifyProjectOfflineMode(ctx, c, p, id, proof, nil, false, true)
+func verifyDiscardProject(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, proof runnerclient.StoppedVerification, interrupted bool) (ProjectStopVerification, error) {
+	return verifyProjectOfflineMode(ctx, c, p, id, proof, nil, interrupted, true)
 }
 
 func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, interrupted bool, discardMode ...bool) (ProjectStopVerification, error) {
@@ -265,10 +265,16 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 		if snapshot.Checkpoint == nil || snapshot.Checkpoint.Service.InstanceID == "" {
 			return proof, errors.New("interrupted project checkpoint identity is missing")
 		}
-		p.InstanceID = snapshot.Checkpoint.Service.InstanceID
+		if p.InstanceID == "" {
+			p.InstanceID = snapshot.Checkpoint.Service.InstanceID
+		}
 		proof.InstanceID = p.InstanceID
 	}
-	if interrupted {
+	if discard {
+		if err = verifyDiscardCheckpoint(snapshot.Checkpoint, c, p, id, interrupted); err != nil {
+			return proof, err
+		}
+	} else if interrupted {
 		if err = verifyCheckpointHost(snapshot.Checkpoint, p, id); err != nil {
 			return proof, err
 		}
@@ -397,6 +403,26 @@ func verifyStoppedCheckpoint(cp *hostcontract.ServiceCheckpoint, c Config, p con
 	if err := verifyCheckpointHost(cp, p, id); err != nil {
 		return err
 	}
+	return verifyCheckpointBindings(cp, c)
+}
+
+// An exited interrupted host cannot publish a receipt. Discard proves local
+// closure through exact host exit and actual locks, retaining checkpoint
+// ownership and requiring independent native settlement before the swap.
+func verifyDiscardCheckpoint(cp *hostcontract.ServiceCheckpoint, c Config, p contract.ProjectShutdown, id contract.Identity, interrupted bool) error {
+	if !interrupted {
+		return verifyStoppedCheckpoint(cp, c, p, id)
+	}
+	if p.InstanceID == "" {
+		return errors.New("interrupted project checkpoint identity is missing")
+	}
+	if err := verifyCheckpointHost(cp, p, id); err != nil {
+		return err
+	}
+	return verifyCheckpointBindings(cp, c)
+}
+
+func verifyCheckpointBindings(cp *hostcontract.ServiceCheckpoint, c Config) error {
 	// Saved configuration belongs to the next host. The closed host is proved
 	// by its checkpoint/receipt identity, not by equality with editable files.
 	// Repository and Runner ownership must still describe the original runtime.
