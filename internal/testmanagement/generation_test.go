@@ -196,6 +196,58 @@ type slowGenerationCLI struct {
 	seen []string
 }
 
+type observationGenerations struct {
+	*memoryGenerations
+	diagnostic string
+	revision   uint64
+	contextErr error
+}
+
+type timeoutGenerationCLI struct{ GenerationRunner }
+
+func (f timeoutGenerationCLI) Inspect(ctx context.Context, _, _ string) (runnerclient.Inspection, error) {
+	<-ctx.Done()
+	return runnerclient.Inspection{}, ctx.Err()
+}
+
+func (m *observationGenerations) RecordSourceObservation(ctx context.Context, _, _, _ string, revision uint64, _ time.Time, diagnostic string) error {
+	m.diagnostic, m.revision, m.contextErr = diagnostic, revision, ctx.Err()
+	return nil
+}
+func TestTMGenerationTimeoutRecordsObservationWithoutChangingExecution(t *testing.T) {
+	s, store, _, input := generationFixture(t)
+	r, err := s.Generate(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := &observationGenerations{memoryGenerations: store}
+	s.Store = metadata
+	s.Runner = timeoutGenerationCLI{}
+	r.RunID = "run-a"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err = s.observe(ctx, r)
+	if !errors.Is(err, context.DeadlineExceeded) || metadata.diagnostic != context.DeadlineExceeded.Error() || metadata.revision != r.Revision || metadata.contextErr != nil {
+		t.Fatalf("timeout observation lost: %+v %v", metadata, err)
+	}
+}
+
+func TestTMGenerationObservationFailureDoesNotClaimUncommittedRevision(t *testing.T) {
+	s, store, cli, input := generationFixture(t)
+	r, err := s.Generate(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := &observationGenerations{memoryGenerations: store}
+	s.Store = metadata
+	cli.run.Revision++
+	store.fail = true
+	_, err = s.observe(context.Background(), r)
+	if err == nil || metadata.revision != r.Revision || metadata.diagnostic == "" {
+		t.Fatalf("failed commit published a future observation revision: %+v %v", metadata, err)
+	}
+}
+
 func (f *slowGenerationCLI) Inspect(ctx context.Context, _, id string) (runnerclient.Inspection, error) {
 	f.seen = append(f.seen, id)
 	if id == "run-a" {

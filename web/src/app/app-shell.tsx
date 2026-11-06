@@ -20,6 +20,7 @@ export function AppShell({
   footer,
   questions = 0,
   returnTo,
+  activities,
 }: {
   projectId?: string;
   switcher: ReactNode;
@@ -28,6 +29,7 @@ export function AppShell({
   footer?: ReactNode;
   questions?: number;
   returnTo?: string;
+  activities?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
@@ -143,6 +145,7 @@ export function AppShell({
                 {returnTo === "/projects" ? "选择项目" : "返回项目"}
               </NavLink>
             )}
+            {activities}
             {connection}
           </div>
         </header>

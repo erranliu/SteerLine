@@ -11,6 +11,7 @@
 | [可靠性交付链路](../architecture/reliable-delivery-chain.md) | 串联命令、原请求、PR 唯一交付、重启、停服、部署和 reset 的证明；区分必要核验与可简化协调，不另建 Worker 规则 |
 | [决策与反馈](decisions.md) | 问题、答案、投递事实、宿主阻断与人工恢复 |
 | [会话事件](conversation-events.md) | 来源、规范事件、完整正文、分页、采集与展示 |
+| [异步活动中心](async-activities.md) | 检测、测试准备、候选执行的统一只读进度；顶部入口、右侧抽屉及来源接入边界 |
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |
 | [已退役的执行控制台](../../SteerlineFlow/archive/design/execution-console.md) | TUI 的历史布局与操作记录；当前使用 Web |
 | [Runner 协作契约](../../SteerlineFlow/spec/runner-collaboration.spec.md) | 所选 Runner 构建的公开 workflow、执行预设/冻结及跨仓交接；迁出前 [PR 流程](../../SteerlineFlow/spec/worker-pr-flow.spec.md)保留历史追溯 |

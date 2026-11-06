@@ -69,6 +69,16 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
  await expect(page.getByRole("region",{name:"提交日志"})).toContainText("Source-only remote update");
  expect((await call("maintenance_generate_all",project)).status).toBe("applied");
  await ready();
+ // The current runtime requires a real environment qualification before
+ // candidate admission. Exercise the existing public command and peer result.
+ const options=await get("/environment/options");
+ const environment=options.profiles.find((p:any)=>p.id==="simulate");
+ expect(environment).toBeTruthy();
+ expect((await call("environment_start",project,{environment_key:environment.environment_key,profile_id:"simulate",expected_current_revision:environment.current_revision,round_timeout_seconds:90})).status).toBe("applied");
+ await expect.poll(async()=>{
+  const current=await get("/environment/options");
+  return current.profiles.find((p:any)=>p.id==="simulate")?.status;
+ },{timeout:90000}).toBe("ready");
  helper("control","--simulate","-config",config,"-action","resume_dispatch");
  const start=(action:string)=>helper("control","--simulate","-config",config,"-action",action,"-task-id","1","-profile","simulate");
  const runs=async()=>{const v=await get("/snapshot");return v.connection.snapshot.page.runs.filter((c:any)=>(c.domain_task_id||c.task_id)==="1")};

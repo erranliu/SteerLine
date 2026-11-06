@@ -98,6 +98,14 @@
     "env": "controlled"
   },
   {
+    "id": "runtime.async-activities",
+    "level": "L3",
+    "suite": "runtime",
+    "package": "./tests/e2e/suites/runtime",
+    "test": "TestAsyncActivities",
+    "env": "controlled"
+  },
+  {
     "id": "testing.management-local-codex",
     "level": "L4",
     "suite": "testing",
