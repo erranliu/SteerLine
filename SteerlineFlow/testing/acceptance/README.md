@@ -24,6 +24,8 @@
 
 部署显式放弃旧运行选项（2026-11-05）：[实现与隔离验证](deployment-discard-runs-option.md)，自动结算、归档并恢复任务，派发暂停，默认部署门禁保留。
 
+schema 40 放弃旧运行部署（2026-11-06）：[修复、隔离验证与实际部署](deployment-schema40-discard-20261106.md)。L1/L2、存储和部署专项通过；只读提取旧库并原样归档，20 个任务/完整契约和 8 条依赖逐项保留，新库 schema 41、任务 open、manual/paused，三个项目 ready，Web HTTP 200。
+
 放弃旧运行后的安装部署恢复（2026-11-05）：[用户授权归档、Runner 升级及任务恢复](deployment-discarded-runs-20261105.md)。
 
 历史本机 Orca PID 阻塞 Runner 升级（2026-11-05）：[修复与验证](deployment-historical-pid.md)。

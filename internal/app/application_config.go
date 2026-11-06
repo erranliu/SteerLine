@@ -15,9 +15,16 @@ func ValidateApplicationPaths(c Config) error {
 }
 
 func PreflightNativeStatePath(c Config) error {
+	return preflightNativeStatePathWithStore(c, nil)
+}
+
+func preflightNativeStatePathWithStore(c Config, validateStore func(context.Context, host.Config) error) error {
 	hostConfig, err := hostRuntimeConfig(context.Background(), c)
 	if err != nil {
 		return err
+	}
+	if validateStore != nil {
+		hostConfig.ValidateNativeStore = validateStore
 	}
 	if err := host.PreflightNativeStatePath(hostConfig); err != nil {
 		return err

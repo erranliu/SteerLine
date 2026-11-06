@@ -237,7 +237,11 @@ func verifyDiscardProject(ctx context.Context, c Config, p contract.ProjectShutd
 func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, interrupted bool, discardMode ...bool) (ProjectStopVerification, error) {
 	discard := len(discardMode) == 1 && discardMode[0]
 	proof := ProjectStopVerification{ConfigID: p.ConfigID, ProjectID: p.ProjectID, InstanceID: p.InstanceID}
-	reader, err := OpenNativeTaskReader(ctx, &c)
+	open := OpenNativeTaskReader
+	if discard {
+		open = openDiscardTaskReader
+	}
+	reader, err := open(ctx, &c)
 	if err != nil {
 		return proof, err
 	}
