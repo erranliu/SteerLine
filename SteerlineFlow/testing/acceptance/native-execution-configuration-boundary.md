@@ -169,3 +169,22 @@ path-order-repair 证据确认实际 Python 解析顺序，仅将本次唯一追
 用户随后授权Runner→SteerLine分别提交、推送和创建PR，暂不合并或部署。上游[Runner PR #122](https://github.com/erranliu/SteerRunner/pull/122)已先创建；Runner继续使用原独立worktree/分支。本仓分支为 `codex/native-execution-configuration-boundary`，PR正文与Runner双向回链，评审/未来合入顺序Runner在先。Runner不依赖本仓代码；本仓依赖其公开三操作/identity/native-catalog execution能力，缺能力阻断对应新操作，原冻结请求观察/停止保持。
 
 前述原生资格严格绑定原固定EXE SHA及原调查基线加dirty实现。Runner已同步其最新main并另建集成EXE，owner与公开接口补验记录在上游PR，不把旧EXE原生资格复制给新产物。SteerLine提交只封存实际修改，不将原dirty报告改写成在干净提交上重跑；当前main集成冲突/实际补验及其受测提交、产物另记。SQLite schema40/record format1不提供旧记录兼容，旧安装仍由原构建排空，后续安装或构建选择另行处理。
+
+两份PR已按顺序创建并互链：上游[Runner #122](https://github.com/erranliu/SteerRunner/pull/122)，下游[SteerLine #462](https://github.com/erranliu/SteerLine/pull/462)。本仓基于 `a54280510802c1208d9a1a3ff0ec473cad4ebd24` 重放为生产提交 `3cb5c0ddcdeb017fb4b10fd8f8c953668a8889c5`；保留main计费归属/显式材料准备/部署恢复行为。四处真实冲突分别保留两份文档双方说明、RunUsage同快照字段及新增Configuration能力、VerifyUsagePolicy授权核验及新增Configure/cache。其后目标main前进到 `3546eec95af22284da25cb61d7685bbd55fd2138`，刷新后merge-tree无内容冲突，未为无冲突的后续主干改写已验提交。
+
+独立只读代理 `final_cross_repo_audit` 定向复核冲突与自动合并的生成/资格/保存/用量授权调用链，发现两个上游新增测试尚未接新保存协议：Go encode缺Store参数导致编译失败，前端usage PUT mock仍读取raw config。提交 `5b760679601f6bcecb97b097a721800e48676d2e` 仅修复这两个测试文件，提取信封config并补saved_digest/空profile_edits/If-Match断言；原精确日志叶授权、待重启和取消旧读断言保留。原HTTP01编译失败保留，HTTP02另起复验。独立复核确认生产职责及维护worker冻结profile/derive接线完整，未改提示词或放宽测试。
+
+当前main集成补验统一存第5节base下 `publication-20261106`，受测源码为干净提交 `5b760679`，不是旧dirty基线；后续提交只补记录/文档：
+
+| 选择 | 独立报告目录 | 实际结果 |
+| --- | --- | --- |
+| L4 go.http | sl-http-02 | 七个owner全量通过，51.74秒；原压力窗口及计数不变，执行期间未与E2E/其他压力并行 |
+| L4 go.environment | sl-environment-01 | 四个owner及Windows31个App根全量通过，423.18秒 |
+| L4 web.unit | sl-web-unit-01 | 301/301、0skip，含新增usage共同保存协议和配置页23例 |
+| Web生产构建 | sl-web-build.json/log | npm --prefix web run build，exit0 |
+| 固定L1 | sl-L1-01 | passed，execution15.26秒 |
+| 固定L2 | sl-L2-01 | passed、cleanup_complete=true、exit0、0skip，95.29秒 |
+| L4 go.runner-contract | sl-runner-contract-01 | 五个公开根通过，24.01秒；固定Runner PR集成EXE SHA c279ca725c9486bd50a2d183ca8dcd71c026f5b455a4b45ab9f5a24f1442c5b5，含三操作、Web重验保存及原服务结算 |
+| 维护worker四根diagnostics | sl-maintenance-worker-01 | 四根通过，20.25秒；取消/慢读、持久超时、禁止候选隐式生成、冻结profile，原断言保留；不冒充完整Full |
+
+六项正式报告已通过原record入口导出到 [5b760679测试记录](../records/5b760679601f6bcecb97b097a721800e48676d2e.json)，保留各自定义/原始报告及真实受测SHA，不导出dirty旧报告。新集成EXE仅获得上述公开接口和受控/owner范围；此前本机/远端真实模型仍绑定原fee54d构建，不推定新构建原生资格。本轮未重跑完整go.full、真实模型或上游已知未通过的维护长浏览器专项；原历史边界保持。PR仅供评审，未合并、未部署。

@@ -68,7 +68,7 @@
 1. Web 读取既有 finite capability_catalog 和新编辑说明，生成产品范围交集。去掉虚构 model/helper 与枚举 effort 后试验 schema 的 project 算法；schema 继续校验真实返回输入。
 2. 新增 `/api/web/execution-config/compose`，只接逻辑字段和已保存 base ID/摘要；从服务器可信配置取原 execution，通过 nativequery 调固定 Runner。浏览器只见逻辑 view/完整草稿 execution 与安全状态，不用另一个程序授权摘要或文件检查响应来代替可信来源。
 3. read 为配置页面提供逻辑 view；discovery 从 view 核对 Agent/目标，再从服务器已保存 profile 传完整 execution 给 native-catalog，不再反解 settings 或丢弃自定义 Codex executable。browser discovery 入参仍只有 profile/选择器；缺扩展能力给具体诊断，不改投默认 Codex。非法/未支持 profile 原文只读且明确原因，不能静默重写；其它 profile 的读取与目录错误隔离。
-4. 同阶段修改 validate/save 的 HTTP handler、前端 API 和 Store 方法以消费 `{saved_digest,config,profile_edits}`，执行 Spec §4.3 的恰好一条 edit/可信 base/明确 unset/完整字节比较。原始 config 不是程序授权，compose 返回值也不是票据；每次重建后才保存。保留 If-Match（同时核对 body 摘要）、写权限、developer、pricing_policy、usage_policy、Runner EXE pin、最终原文件复读与显式重启规则；可信部署资产自身来源核验保留。
+4. 同阶段修改 validate/save 的 HTTP handler、前端 API 和 Store 方法以消费 `{saved_digest,config,profile_edits}`，执行 Spec §4.3 的恰好一条 edit/可信 base/明确 unset/完整字节比较。原始 config 不是程序授权，compose 返回值也不是票据；每次重建后才保存。保留 If-Match（同时核对 body 摘要）、写权限、developer、usage_policy及其远端授权核验、Runner EXE pin、最终原文件复读与显式重启规则；可信部署资产自身来源核验保留。同步当前main后价表沿既有billing.json独立owner，不恢复已退役的execution.json.pricing_policy。
 5. 前端新建/复制/模型/Agent/目标/workflow 切换使用逻辑草稿，累计保存 base_profile_id、selection 和 unset。保留当前切换审计 workflow 时的主模型初始建议、可编辑和用户保存确认；只禁止 Runner 自行补值。合并现有请求取消、草稿 generation、晚到响应围栏，配置已改时拒绝保存，不覆盖用户新选择。
 6. 删除 nativePrograms/programs/programsUnchanged/validHelper/helperStatus 的原生解释与已退役helper gate，并同步移除旧LocalHelper/页面状态；不替换为新helper检查协议。仍被Runner EXE/部署资产使用的普通文件核验按真实消费者保留。删除前端 values/changeModel 的原生路径构造及仅供旧路径使用的类型字段。
 
