@@ -254,6 +254,40 @@ export class Api {
             try {
               return await this.post(envelope, signal);
             } catch (error) {
+              if (
+                error instanceof ApiError &&
+                error.code === "request_receipt_persist_failed"
+              ) {
+                signal?.throwIfAborted();
+                this.check();
+                const pending: Receipt = {
+                  ...envelope,
+                  original: envelope,
+                  status: "outcome_unknown",
+                  code: error.code,
+                  diagnostic: "操作结果待核实，正在查询原请求，请勿重复操作。",
+                  sampled_at: new Date().toISOString(),
+                };
+                await recordResult(envelope.request_id, pending, String(error));
+                try {
+                  return await this.bounded(
+                    5000,
+                    (budget) => this.queryOriginal(envelope, budget),
+                    signal,
+                  );
+                } catch (verificationError) {
+                  signal?.throwIfAborted();
+                  this.check();
+                  await recordResult(
+                    envelope.request_id,
+                    undefined,
+                    String(error) +
+                      "\n原请求核实：" +
+                      String(verificationError),
+                  );
+                  return pending;
+                }
+              }
               if (this.active)
                 await recordResult(
                   envelope.request_id,
@@ -328,18 +362,12 @@ export class Api {
     )
       return stored.response;
     try {
-      const result = await this.get<Receipt>(
-        "/commands/" + envelope.request_id,
-        signal,
-      );
-      signal?.throwIfAborted();
-      if (!matches(result, envelope)) throw new Error("对账回执与原信封不匹配");
-      await recordResult(envelope.request_id, result);
-      return result;
+      return await this.queryOriginal(envelope, signal);
     } catch (error) {
       if (
         error instanceof ApiError &&
         error.code === "command_not_found" &&
+        !stored.response &&
         envelope.action !== "stop_candidate" &&
         !envelope.action.startsWith("maintenance_") &&
         !envelope.action.startsWith("environment_")
@@ -355,6 +383,16 @@ export class Api {
       await recordResult(envelope.request_id, undefined, String(error));
       throw error;
     }
+  }
+  private async queryOriginal(envelope: Envelope, signal?: AbortSignal) {
+    const result = await this.get<Receipt>(
+      "/commands/" + envelope.request_id,
+      signal,
+    );
+    signal?.throwIfAborted();
+    if (!matches(result, envelope)) throw new Error("对账回执与原信封不匹配");
+    await recordResult(envelope.request_id, result);
+    return result;
   }
   async final(
     run: { run_id: string; execution_id: string; attempt_id: string },

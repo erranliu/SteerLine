@@ -80,6 +80,8 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 
 Web 将完整原信封保存在现有 IndexedDB；服务端的原请求记录仍是跨动作仲裁。原生查看器的未知结果不得重放。
 
+POST 返回 `request_receipt_persist_failed` 时，表示 HTTP 回执摘要未能保存，不能据此判断业务启动失败。Web 保留原信封和错误诊断，立即在 5 秒预算内 GET 原 request ID，并严格核对项目、实例、目标、版本及完整原信封；已核实 applied 按生效结果显示，明确 rejected 仍显示拒绝。核实超时、读取失败、身份不符或暂时 command_not_found 时保留 outcome_unknown，启动界面显示“提交结果待核实”并继续原请求查询，不显示任务启动失败。已有 submitted/accepted/outcome_unknown 回执或上述回执保存错误的原请求，即使后续查询缺失也只读核实，不自动补发 POST；只有尚无任何回执的允许补交请求仍沿上一段规则执行。
+
 公开 stop_service action/capability 已退役，不映射为全局停机；旧原请求结果仍可只读查询。关闭浏览器不停止业务。
 
 本协议不提供 SSE、离线查询进程、完整原始过程阅读器或通用 artifact DTO。Roadmap 提供专用只读查询及沿原命令仲裁的转正动作，见 [Roadmap 转正](roadmap-promotion.md)。

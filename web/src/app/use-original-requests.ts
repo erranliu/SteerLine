@@ -117,7 +117,10 @@ export function useOriginalRequests(api: Api, online: boolean) {
       if (
         result.status === "rejected" ||
         (result.status === "outcome_unknown" &&
-          envelope.action !== "environment_start")
+          result.code !== "request_receipt_persist_failed" &&
+          !["environment_start", "start_task", "start_candidate"].includes(
+            envelope.action,
+          ))
       ) {
         setError(result.diagnostic || "操作结果待核实，请查询原请求");
         setErrorRequest(result.request_id);
@@ -152,7 +155,12 @@ export function useOriginalRequests(api: Api, online: boolean) {
     onSettled: () =>
       queries.invalidateQueries({ queryKey: [api.home, "local-requests"] }),
     onError: (error, row) => {
-      if (row.envelope.action === "environment_start") return;
+      if (
+        row.envelope.action === "environment_start" ||
+        row.response?.code === "request_receipt_persist_failed" ||
+        ["start_task", "start_candidate"].includes(row.envelope.action)
+      )
+        return;
       setError(String(error));
       setErrorRequest("");
     },

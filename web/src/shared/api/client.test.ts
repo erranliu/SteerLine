@@ -243,6 +243,166 @@ describe("immutable browser requests", () => {
     expect(fetch.mock.calls[1][1].method).toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(2);
   });
+  it.each(["applied", "submitted", "accepted", "rejected"] as const)(
+    "reconciles receipt persistence failure to %s with one POST",
+    async (status) => {
+      const result = receipt(
+        status,
+        status === "rejected"
+          ? { code: "stale_target", diagnostic: "task changed" }
+          : {},
+      );
+      const fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response(
+            {
+              code: "request_receipt_persist_failed",
+              reason: "rename: Access is denied",
+            },
+            503,
+          ),
+        )
+        .mockResolvedValueOnce(response(result));
+      vi.stubGlobal("fetch", fetch);
+      await expect(api.submit(envelope)).resolves.toEqual(result);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch.mock.calls[0][1].method).toBe("POST");
+      expect(fetch.mock.calls[1][0]).toBe(
+        api.path("/commands/" + envelope.request_id),
+      );
+      expect(fetch.mock.calls[1][1].method).toBeUndefined();
+      const saved = await journal.requestByID(envelope.request_id);
+      expect(saved?.response).toEqual(result);
+      expect(saved?.error).toBeUndefined();
+      expect(saved?.envelope).toEqual(envelope);
+    },
+  );
+  it.each(["unavailable", "absent", "mismatch", "timeout"])(
+    "keeps receipt persistence failure pending on %s and only queries until applied",
+    async (failure) => {
+      const fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response(
+            {
+              code: "request_receipt_persist_failed",
+              reason: "rename: Access is denied",
+            },
+            503,
+          ),
+        )
+        .mockImplementationOnce(async (_path, init) => {
+          if (failure === "timeout") {
+            return new Promise<Response>((_resolve, reject) => {
+              init.signal.addEventListener(
+                "abort",
+                () => reject(init.signal.reason),
+                { once: true },
+              );
+            });
+          }
+          if (failure === "mismatch")
+            return response(receipt("applied", { target_id: "other" }));
+          return response(
+            {
+              code:
+                failure === "absent"
+                  ? "command_not_found"
+                  : "backend_unavailable",
+              reason: "original query failed",
+            },
+            failure === "absent" ? 404 : 503,
+          );
+        });
+      vi.stubGlobal("fetch", fetch);
+      const sending = api.submit(envelope);
+      const pending = await sending;
+      expect(pending.status).toBe("outcome_unknown");
+      expect(pending.code).toBe("request_receipt_persist_failed");
+      expect(pending.diagnostic).toContain("待核实");
+      expect((await journal.requestByID(envelope.request_id))?.error).toContain(
+        "Access is denied",
+      );
+      expect(fetch).toHaveBeenCalledTimes(2);
+      fetch.mockResolvedValueOnce(
+        response(
+          { code: "command_not_found", reason: "temporarily absent" },
+          404,
+        ),
+      );
+      const reopened = new Api(identity, "csrf");
+      await expect(reopened.reconcile(envelope)).rejects.toThrow(
+        "temporarily absent",
+      );
+      expect(fetch).toHaveBeenCalledTimes(3);
+      fetch
+        .mockResolvedValueOnce(response(receipt("submitted")))
+        .mockResolvedValueOnce(
+          response({ code: "command_not_found", reason: "still absent" }, 404),
+        )
+        .mockResolvedValueOnce(response(receipt()));
+      await expect(reopened.reconcile(envelope)).resolves.toMatchObject({
+        status: "submitted",
+      });
+      await expect(reopened.submit(envelope)).rejects.toThrow("still absent");
+      await expect(reopened.reconcile(envelope)).resolves.toMatchObject({
+        status: "applied",
+      });
+      expect(fetch).toHaveBeenCalledTimes(6);
+      expect(fetch.mock.calls.slice(1).every(([, init]) => !init.method)).toBe(
+        true,
+      );
+      expect(
+        (await journal.requestByID(envelope.request_id))?.error,
+      ).toBeUndefined();
+    },
+    10000,
+  );
+  it.each([
+    "request_arbitration_failed",
+    "stale_target",
+    "request_record_unreadable",
+  ])("does not hide or reconcile an unrelated %s failure", async (code) => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(response({ code, reason: "original error" }, 503));
+    vi.stubGlobal("fetch", fetch);
+    await expect(api.submit(envelope)).rejects.toThrow("original error");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(
+      (await journal.requestByID(envelope.request_id))?.response,
+    ).toBeUndefined();
+  });
+  it("does not accept a late applied receipt after the project is deactivated", async () => {
+    const client = new Api(identity, "csrf");
+    let resolve!: (response: Response) => void;
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(
+          { code: "request_receipt_persist_failed", reason: "rename denied" },
+          503,
+        ),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((done) => {
+            resolve = done;
+          }),
+      );
+    vi.stubGlobal("fetch", fetch);
+    const sending = client.submit(envelope);
+    const rejected = expect(sending).rejects.toThrow();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    client.deactivate();
+    resolve(response(receipt()));
+    await rejected;
+    expect(
+      (await journal.requestByID(envelope.request_id))?.response?.status,
+    ).toBe("outcome_unknown");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
   it("never resends an unknown native operation", async () => {
     await journal.saveRequest(envelope);
     const fetch = vi

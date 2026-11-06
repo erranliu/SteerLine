@@ -221,7 +221,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit",
-      "check": "全部现有 src/**/*.test.ts/tsx 的 Vitest 原生文件/断言集合完整、非零、零跳过、断言通过；保留原生 JSON/stdout/stderr。",
+      "check": "全部现有 src/**/*.test.ts/tsx 的 Vitest 原生文件/断言集合完整、非零、零跳过、断言通过；覆盖回执保存失败后沿原请求核实生效/拒绝/未知、启动待核实提示及禁止重复POST；保留原生 JSON/stdout/stderr。",
       "note": "Node 24+、npm --prefix web ci；不运行构建或浏览器，无模型/远端副作用。复用 L1 的两份文件，不复制测试。"
     },
     {
