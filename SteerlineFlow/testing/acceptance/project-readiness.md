@@ -29,3 +29,16 @@
 最终 `npm run build` 通过，日志：`C:\SteerlineDebug\wt-a45c-project-readiness\diagnostics\build-adaacf5c2cc34236991bd5499e469dd9.log`。文档导航检查通过（697 个 Markdown、4284 个本地导航链接、零错误），`git diff --check` 通过。
 
 未执行真实模型、真实 PR 链或安装部署；本次 DOM/受控测试不代替完整浏览器现场验收，上一轮浏览器长场景的限制仍见[原准备验收](project-maintenance-preparation.md)。
+
+## PR 前主干同步补验
+
+2026-11-06，提交前同步 `origin/main` 的 `6d124832`，保留主干执行配置和启动回执修复。唯一冲突是验收索引，保留双方记录；代码自动合并。以下在源码干净的 `e0ade35c` 上执行，报告根沿上文；本节之后仅补充验证记录。
+
+| 范围 | 结果 / 报告相对路径 |
+| --- | --- |
+| L1 | 通过；`test-results/L1/pr-aaadda8a800c47c398f52cf13824226e/summary.json`。 |
+| L2 | 通过；`test-results/L2/pr-c904769f5a0a490892242dfe64bff2f7/summary.json`。 |
+| Web 全集 | 318 项全部通过；`test-results/L4/pr-web-a122a6c36e9947a0b66875bd619bd255/summary.json`；随后 `npm --prefix web run build` 通过。 |
+| 项目就绪 / 候选事务定向回归 | 通过；`diagnostics/pr-owner-c3250a2d36124ef8a84dc5b8358a371a/summary.json`。实际选择 `./internal/app ./internal/storage/sqlite -run 'TestProjectReadiness\|TestPMSCandidateSnapshotCASVersionsAndReplay\|TestMaintenanceCandidateAdmission' -count=1`。 |
+
+同步后文档导航检查通过（701 个 Markdown、4316 个本地导航链接，零错误），差异检查通过。此前 SQLite/HTTP 全集仍按上文原基线与报告追溯，不扩大本次补验范围。
