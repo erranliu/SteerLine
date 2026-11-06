@@ -181,7 +181,7 @@ test("roadmap.live: browser, native generate, external PR and atomic DAG admissi
   await expect(page.getByRole("link", { name: "arithmetic-roadmap.md / T1", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("admitted-dag.png"), fullPage: true });
   await page.getByRole("link", { name: "arithmetic-roadmap.md / T1", exact: true }).click();
-  await expect(page.getByRole("button", { name: "正式入 DAG · 分配编号", exact: true })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "查看正式任务 DAG", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "Narrow screen must not scroll the whole page horizontally").toBe(true);
   await page.screenshot({ path: info.outputPath("roadmap-mobile.png"), fullPage: true });
