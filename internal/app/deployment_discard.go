@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
+	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -28,14 +29,15 @@ const discardMarker = "deployment-discard.json"
 // Kept outside application-api, which itself is archived. An interrupted swap
 // must not be mistaken for an empty installation by start or another deployment.
 type DeploymentDiscard struct {
-	Archive        string                            `json:"archive"`
-	Phase          string                            `json:"phase"`
-	Stops          []runnercontract.PendingStop      `json:"stops"`
-	ServiceStop    *runnercontract.Request           `json:"service_stop,omitempty"`
-	Resources      *runnerclient.StoppedVerification `json:"resources,omitempty"`
-	Projects       []DiscardedProject                `json:"projects"`
-	Moves          []discardMove                     `json:"moves"`
-	StopDiagnostic string                            `json:"stop_diagnostic,omitempty"`
+	Archive         string                            `json:"archive"`
+	Phase           string                            `json:"phase"`
+	Stops           []runnercontract.PendingStop      `json:"stops"`
+	ServiceStop     *runnercontract.Request           `json:"service_stop,omitempty"`
+	Resources       *runnerclient.StoppedVerification `json:"resources,omitempty"`
+	Projects        []DiscardedProject                `json:"projects"`
+	Moves           []discardMove                     `json:"moves"`
+	StopDiagnostic  string                            `json:"stop_diagnostic,omitempty"`
+	InterruptedHost *contract.Identity                `json:"interrupted_host,omitempty"`
 }
 
 type DiscardedProject struct {
@@ -120,21 +122,25 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 		return fail(errors.Join(err, errors.New("original Web exit is unverified")))
 	}
 	var shutdown contract.Shutdown
-	if err := localservice.ReadPrivateJSON(filepath.Join(backend.dir, "shutdown.json"), &shutdown, 1<<20); err != nil {
+	err = localservice.ReadPrivateJSON(filepath.Join(backend.dir, "shutdown.json"), &shutdown, 1<<20)
+	interrupted := os.IsNotExist(err)
+	if err != nil && !interrupted {
 		return fail(err)
 	}
-	if err := recheckableShutdown(shutdown, *b.Identity); err != nil {
-		return fail(err)
-	}
-	if shutdown.Runner == nil || !runnerbinding.SamePath(shutdown.Runner.StateDir, pin.StateDir) ||
-		shutdown.Runner.ExecutableSHA256 != pin.SHA256 || shutdown.Runner.ResourceDigest != pin.ResourceDigest || shutdown.Runner.Version != pin.Version {
-		return fail(errors.New("original shutdown Runner differs from the home binding"))
+	if !interrupted {
+		if err := recheckableShutdown(shutdown, *b.Identity); err != nil {
+			return fail(err)
+		}
+		if shutdown.Runner == nil || !runnerbinding.SamePath(shutdown.Runner.StateDir, pin.StateDir) ||
+			shutdown.Runner.ExecutableSHA256 != pin.SHA256 || shutdown.Runner.ResourceDigest != pin.ResourceDigest || shutdown.Runner.Version != pin.Version {
+			return fail(errors.New("original shutdown Runner differs from the home binding"))
+		}
 	}
 	catalog := loadApplicationCatalog(result.Home)
 	if catalog.err != nil {
 		return fail(catalog.err)
 	}
-	if len(catalog.entries) != len(shutdown.Projects) {
+	if !interrupted && len(catalog.entries) != len(shutdown.Projects) {
 		return fail(errors.New("original project membership changed"))
 	}
 	byConfig := map[string]contract.ProjectShutdown{}
@@ -146,7 +152,7 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	stateNames := map[string]bool{}
 	for _, entry := range catalog.entries {
 		p, ok := byConfig[entry.view.ConfigID]
-		if !ok {
+		if !ok && !interrupted {
 			return fail(errors.New("original project membership changed"))
 		}
 		c, err := loadConfigSnapshot(entry.ref.ConfigPath, entry.data, catalog.global, nil, false)
@@ -155,6 +161,9 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 		}
 		if err := c.ResolveIdentity(ctx); err != nil {
 			return fail(err)
+		}
+		if interrupted {
+			p = contract.ProjectShutdown{ConfigID: entry.view.ConfigID, ProjectID: httpcontract.ProjectID(c.Identity())}
 		}
 		if !runnerbinding.SamePath(filepath.Dir(c.RunDir), stateRoot) {
 			return fail(errors.New("project state is outside this installation"))
@@ -182,9 +191,16 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 		if readErr != nil {
 			return fail(readErr)
 		}
-		if err := verifyStoppedCheckpoint(snapshot.Checkpoint, c, p, *b.Identity); err != nil {
+		if interrupted && snapshot.Checkpoint != nil {
+			p.InstanceID = snapshot.Checkpoint.Service.InstanceID
+		}
+		if err := verifyDiscardCheckpoint(snapshot.Checkpoint, c, p, *b.Identity, interrupted); err != nil {
 			return fail(fmt.Errorf("%s: %w", p.ConfigID, err))
 		}
+		if !runnerbinding.SameBuild(*snapshot.Checkpoint.Service.RunnerBuild, pin) {
+			return fail(errors.New("original project checkpoint Runner differs from the home binding"))
+		}
+		byConfig[p.ConfigID] = p
 		configs = append(configs, c)
 		stateNames[filepath.Base(c.RunDir)] = true
 	}
@@ -204,11 +220,16 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	}
 	journal := &DeploymentDiscard{Archive: archive, Phase: "preparing", Stops: []runnercontract.PendingStop{}, Projects: []DiscardedProject{}, Moves: []discardMove{}}
 	result.Discard = journal
+	if interrupted {
+		journal.InterruptedHost = b.Identity
+	}
 	if stopErr != nil {
 		journal.StopDiagnostic = stopErr.Error()
 	}
-	if err := localservice.WritePrivateFile(archive, "original-shutdown.json", shutdown); err != nil {
-		return fail(err)
+	if !interrupted {
+		if err := localservice.WritePrivateFile(archive, "original-shutdown.json", shutdown); err != nil {
+			return fail(err)
+		}
 	}
 	prepared := filepath.Join(archive, "prepared-state")
 	if err := os.Mkdir(prepared, 0700); err != nil {
@@ -228,11 +249,16 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	}
 	// Validate every caller-owned Run/input binding with the strict original
 	// resource proof. Only report/business completion is waived for discarded work.
+	proof := &ApplicationStopVerification{OriginalHost: *b.Identity, VerifierSHA256: hash, Runner: *journal.Resources, Projects: []ProjectStopVerification{}}
 	for i, c := range configs {
-		if _, err := verifyDiscardProject(ctx, c, byConfig[catalog.entries[i].view.ConfigID], *b.Identity, *journal.Resources); err != nil {
+		project, err := verifyDiscardProject(ctx, c, byConfig[catalog.entries[i].view.ConfigID], *b.Identity, *journal.Resources, interrupted)
+		if err != nil {
 			return fail(err)
 		}
+		proof.Projects = append(proof.Projects, project)
 	}
+	proof.VerifiedAt = time.Now().UTC()
+	result.Stopped = proof
 	if err := verifyPackage(); err != nil {
 		return fail(err)
 	}

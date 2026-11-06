@@ -284,7 +284,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.deployment",
-      "check": "isolated；各组串行，host普通owner全量、Windows下localservice普通owner全量、App固定Windows11/其他平台10根及全部子项、runnerclient升级排空原根精确选择。覆盖私有原子状态/进程基础、部署准备/中断回收/原回执/候选绑定/冻结与候选升级证明、部署丢弃及零项目未启动Runner停止核验；不执行真实安装或原生模型。源/标签/平台及正式定义漂移阻断；每个活动包非零、原始开始/终态唯一且完整，缺失/重复/额外/skip或任一失败整体不通过。保持count1/25m/p1/parallel1。",
+      "check": "isolated；各组串行，host普通owner全量、Windows下localservice普通owner全量、App固定Windows11/其他平台10根及全部子项、runnerclient升级排空原根精确选择。覆盖私有原子状态/进程基础、部署准备/中断回收/原回执/候选绑定/冻结与候选升级证明、部署丢弃及零项目未启动Runner停止核验；丢弃模式缺失停机回执时，以原宿主退出、检查点绑定、实际锁及原Runner资源结算证明放行，身份/仓库/Runner变化、锁占用、损坏或过期回执仍阻断；不执行真实安装或原生模型。源/标签/平台及正式定义漂移阻断；每个活动包非零、原始开始/终态唯一且完整，缺失/重复/额外/skip或任一失败整体不通过。保持count1/25m/p1/parallel1。",
       "note": "按影响选择；本专项不能代替go.full或原L3/live；源码Web构建与E2E/Full/压力任务安排串行，使用全新外部-out。实际组command与execution_parameters必须对应，原断言与期限不变。"
     },
     {
