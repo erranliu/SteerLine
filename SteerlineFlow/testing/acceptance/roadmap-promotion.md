@@ -302,3 +302,21 @@ Web 已开放生成、独立请求历史/停止、代码提交/整体设计/调�
 独立只读审核者 `/root/independent_review` 复核合并提交 `a4cfe5244c4e9ff0f0808432c8ddb9edf914a0f7` 后维持批准，确认双方语义保留；仍为本地审核，不代表 GitHub 审批。
 
 合并后的 Roadmap 定向 20 项及 TypeScript/Vite 构建通过。对同一干净合并提交运行完整 L1、L2、web.unit，均 passed=true；L2 cleanup_complete=true，前端 344 项通过、0 failed/skip。证据根不变，报告分别为 `test-results/L1/20261106-conflict-a/summary.json`、`test-results/L2/20261106-conflict-a/summary.json`、`test-results/L4/20261106-conflict-web-a/summary.json`；静态检查为 711 文件、4402 本地链接、0 错误，diff 格式通过。本段只补记实际结果，先前后端专项及真实链证据保持原受测范围。
+
+### PR #471 合入 Roadmap 活动中心（2026-11-06）
+
+继续合入 `origin/main=cf2f3ac8`。冲突仅为 `testing/l4.md` 与 `testing/test-list.json` 的 go.roadmap 覆盖说明，合并保留正式混合依赖、原/建议引用、别名去重、跨图环与正式前置入图，以及解析/文档/发布/入图活动、发布观察失败恢复的全部要求；测试选择和通过条件未放宽。其余自动合并，正式 #0 种子及三条混合依赖边断言与主分支八处活动状态断言同时保留。
+
+独立审核者 `/root/independent_review` 只读复核干净合并提交 `d45bb41c82ad478739aed11143fdb121aca0f9be` 后维持本地批准，确认活动导航及依赖名称/链接保留。提示词仍为 1495 字节，SHA-256 与上节一致，未修改正文或摘要。
+
+下列检查在该干净合并提交执行，证据仍位于本轮根目录；最后补记只修改本记录。未重跑真实模型、正式浏览器或外部发布链。
+
+| 验证 | 实际结果 | 证据根内路径 |
+| --- | --- | --- |
+| 完整 L1 | passed=true，执行 21.8s | `test-results/L1/20261106-conflict-activity-b/summary.json` |
+| 完整 L2 | passed=true，cleanup_complete=true | `test-results/L2/20261106-conflict-activity-b/summary.json` |
+| 完整 go.roadmap | passed=true，含正式前置与活动状态/恢复的组合链路及 CRLF | `test-results/L4/20261106-conflict-activity-roadmap-b/summary.json` |
+| 完整 go.storage | passed=true | `test-results/L4/20261106-conflict-activity-storage-b/summary.json` |
+| 活动 query/App 定向 | passed，非零且无跳过 | `diagnostics/20261106-conflict-activity-query-b/summary.json` |
+| 完整 web.unit | 351 项通过、0 failed/skip，其中 Roadmap 文件 23 项 | `test-results/L4/20261106-conflict-activity-web-b/summary.json` |
+| 构建/静态 | TypeScript/Vite 构建通过；711 文件、4402 链接、0 错误；diff 格式通过 | 本聊天实际命令输出 |
