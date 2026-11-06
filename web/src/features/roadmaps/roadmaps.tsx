@@ -122,8 +122,17 @@ export function Roadmaps() {
   const [profile, setProfile] = useState(""),
     [error, setError] = useState(""),
     [tab, setTab] = useState<"source" | "json">("source");
-  const [recordID, setRecordID] = useState(""),
-    [documentKey, setDocumentKey] = useState(""),
+  const recordID = params.get("record") || "";
+  const setRecordID = (id: string) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (id) {
+        next.set("record", id);
+        next.set("source", sourceID);
+      } else next.delete("record");
+      return next;
+    });
+  const [documentKey, setDocumentKey] = useState(""),
     [kind, setKind] = useState<"spec" | "plan" | "acceptance">("spec");
   const [editing, setEditing] = useState(false),
     [body, setBody] = useState("");
@@ -140,7 +149,7 @@ export function Roadmaps() {
     refetchInterval: online ? 5000 : false,
   });
   const value = list.data,
-    sourceID = params.get("source") || value?.sources[0]?.id || "";
+    sourceID = value?.records.find((r) => r.id === recordID)?.source.id || params.get("source") || value?.sources[0]?.id || "";
   const source = useQuery({
     queryKey: [
       ...key,
@@ -269,7 +278,6 @@ export function Roadmaps() {
               className={s.id === sourceID ? "active" : ""}
               onClick={() => {
                 setParams({ source: s.id });
-                setRecordID("");
                 setEditing(false);
                 setError("");
               }}

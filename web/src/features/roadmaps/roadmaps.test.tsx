@@ -1,5 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { WorkspaceContext, type Workspace } from "../../app/context";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
 import type {StoredRequest} from "../../shared/api/types";
@@ -85,6 +88,50 @@ function setup(state = "review", online = true, requests:StoredRequest[] = []) {
   mountFeature(<Roadmaps />, api, testClient(), online,{requests});
   return { api, get, submit, source, record, view };
 }
+it("opens the exact historical record from an activity link and keeps history selection usable", async () => {
+  const { api, get, view, record } = setup();
+  cleanup();
+  get.mockClear();
+  view.records.push({
+    ...record,
+    id: "e".repeat(32),
+    created_at: "2026-11-06T00:00:00Z",
+    purpose: "documents",
+  });
+  const client = testClient();
+  render(
+    <QueryClientProvider client={client}>
+      <WorkspaceContext.Provider
+        value={
+          {
+            api,
+            identity,
+            online: true,
+            busy: false,
+            requests: [],
+          } as unknown as Workspace
+        }
+      >
+        <MemoryRouter
+          initialEntries={[`/projects/project/roadmaps?record=${record.id}`]}
+        >
+          <Roadmaps />
+        </MemoryRouter>
+      </WorkspaceContext.Provider>
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(get).toHaveBeenCalledWith("/roadmaps/" + record.id),
+  );
+  expect(screen.getByLabelText("解析历史")).toHaveValue(record.id);
+  fireEvent.change(screen.getByLabelText("解析历史"), {
+    target: { value: "e".repeat(32) },
+  });
+  await waitFor(() =>
+    expect(get).toHaveBeenCalledWith("/roadmaps/" + "e".repeat(32)),
+  );
+  client.clear();
+});
 it("reads Markdown and shows original versus proposed dependencies without allocating or calling a model on mount", async () => {
   const { submit } = setup();
   expect(await screen.findByDisplayValue(/T1 候选控制/)).toHaveAttribute(

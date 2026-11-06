@@ -248,7 +248,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.storage",
-      "check": "固定 ./internal/storage/sqlite、./internal/pathguard 普通测试完整执行，隔离数据库/路径，非零用例、零跳过、断言通过；含全部未完成任务材料/生成资格在候选事务内重核、阻断原子回滚及已有候选原请求重放。",
+      "check": "固定 ./internal/storage/sqlite、./internal/pathguard 普通测试完整执行，隔离数据库/路径，非零用例、零跳过、断言通过；含全部未完成任务材料/生成资格在候选事务内重核、阻断原子回滚及已有候选原请求重放；Roadmap 解析/文档/发布/入图活动的筛选分页、原请求关联、当前发布/入图/恢复命令、跨实例、重开及大正文精简投影。",
       "note": "Go/Git；平台专属文件沿 Go 平台选择；不代表其他平台或 go.full 通过。"
     },
     {
@@ -302,7 +302,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.roadmap",
-      "check": "isolated；三组串行：internal/roadmap普通owner全量、App固定11根及全部子项、host状态重开守卫一根。覆盖静态初始化/原请求恢复/固定材料、真实本地Git与受控provider、LF/CRLF、文档发布/未知回执/原PR对账/准入原子性和目录拒绝。排除e2e标签live根，不调用真实模型或远端PR。源/标签/平台及正式定义漂移阻断，每包非零，缺失/重复/额外/skip或任何不完整终态整体不通过；count1/25m/p1/parallel1。",
+      "check": "isolated；三组串行：internal/roadmap普通owner全量、App固定11根及全部子项、host状态重开守卫一根。覆盖静态初始化/原请求恢复/固定材料、真实本地Git与受控provider、LF/CRLF、文档发布/未知回执/原PR对账/准入原子性和目录拒绝；沿原链验证解析/文档生成/发布/入图活动及发布观察失败后恢复。排除e2e标签live根，不调用真实模型或远端PR。源/标签/平台及正式定义漂移阻断，每包非零，缺失/重复/额外/skip或任何不完整终态整体不通过；count1/25m/p1/parallel1。",
       "note": "按影响选择；本专项不能代替go.full或原L3/live；源码Web构建与E2E/Full/压力任务安排串行，使用全新外部-out。实际组command与execution_parameters必须对应，原断言与期限不变。"
     },
     {

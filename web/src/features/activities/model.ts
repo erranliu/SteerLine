@@ -66,6 +66,10 @@ export const activityActions = new Set([
   "maintenance_retry",
   "start_task",
   "start_candidate",
+  "roadmap_parse",
+  "roadmap_generate_documents",
+  "roadmap_publish",
+  "roadmap_admit",
 ]);
 
 // Existing starts and journal rows are observations. This function cannot send
@@ -104,11 +108,19 @@ export function provisionalActivities(
       request_ids: [e.request_id],
       provisional: true,
       title:
-        e.action === "environment_start"
-          ? "提交环境检测"
-          : e.action.startsWith("maintenance_")
-            ? "提交项目准备操作"
-            : "启动任务候选",
+        e.action === "roadmap_parse"
+          ? "提交 Roadmap 草稿解析"
+          : e.action === "roadmap_generate_documents"
+            ? "提交 Spec / Plan / 验收文档生成"
+            : e.action === "roadmap_publish"
+              ? "提交 Roadmap 文档发布"
+              : e.action === "roadmap_admit"
+                ? "提交 Roadmap 入图"
+                : e.action === "environment_start"
+                  ? "提交环境检测"
+                  : e.action.startsWith("maintenance_")
+                    ? "提交项目准备操作"
+                    : "启动任务候选",
       state: rejected ? "failed" : "waiting",
       needs_attention: false,
       created_at: r.created_at,
@@ -123,11 +135,15 @@ export function provisionalActivities(
       observation: "unverified",
       details_ref: {
         kind:
-          e.action === "environment_start"
-            ? "environment-profile"
-            : e.action.startsWith("maintenance_")
-              ? "maintenance"
-              : "task",
+          e.action === "roadmap_parse"
+            ? "roadmap-source"
+            : e.action.startsWith("roadmap_")
+              ? "roadmap"
+              : e.action === "environment_start"
+                ? "environment-profile"
+                : e.action.startsWith("maintenance_")
+                  ? "maintenance"
+                  : "task",
         target:
           e.action === "environment_start"
             ? String(e.payload?.profile_id || "")
@@ -162,6 +178,10 @@ export function provisionalActivities(
 export function activityDestination(project: string, activity: Activity) {
   const root = `/projects/${encodeURIComponent(project)}`;
   const d = activity.details_ref;
+  if (d.kind === "roadmap")
+    return `${root}/roadmaps?record=${encodeURIComponent(d.target)}`;
+  if (d.kind === "roadmap-source")
+    return `${root}/roadmaps?source=${encodeURIComponent(d.target)}`;
   if (d.kind === "candidate")
     return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.target)}`;
   if (d.kind === "task")

@@ -500,7 +500,9 @@ func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record)
 	}
 	return p.observePublication(ctx, r)
 }
-func (p *roadmapPort) observePublication(ctx context.Context, r roadmap.Record) (roadmap.Record, error) {
+func (p *roadmapPort) observePublication(ctx context.Context, r roadmap.Record) (out roadmap.Record, err error) {
+	before := r
+	defer func() { p.recordPublicationObservation(ctx, before, out, err) }()
 	if r.Publication == nil {
 		return r, errors.New("没有原文档发布请求")
 	}
