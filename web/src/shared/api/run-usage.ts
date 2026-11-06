@@ -19,7 +19,12 @@ export interface RunUsageView {
     tokens: UsageTokens | null;
     finalized: boolean;
     counted_responses: number;
-    issues: string[];
+    issues: {
+      category: string;
+      code: string;
+      retryable: boolean;
+      source_ref?: string;
+    }[];
     access_cleanup_status: string;
     observed_at: string;
   };
@@ -29,11 +34,22 @@ export interface RunUsageView {
     pricing_policy: string;
     pricing_policy_version: string;
     pricing_policy_digest: string;
+    pricing_source: string;
+    matches: {
+      rule_id: string;
+      provider: string;
+      model: string;
+      records: number;
+      amount: string;
+    }[];
     currency: string;
     covered_estimated_amount: string | null;
     total_estimated_amount: string | null;
-    priced_responses: number;
-    unpriced_responses: number;
+    fully_priced_records: number;
+    partially_priced_records: number;
+    unpriced_records: number;
+    record_count: number;
+    settings_generation: number;
     assumptions: string[] | null;
     issues: string[] | null;
   };

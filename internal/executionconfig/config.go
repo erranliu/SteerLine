@@ -27,7 +27,6 @@ type File[P any] struct {
 	Runner                 P               `json:"runner"`
 	DefaultProfile         string          `json:"default_execution_profile"`
 	MaxGenerateConcurrency *int            `json:"max_generate_concurrency,omitempty"`
-	PricingPolicy          string          `json:"pricing_policy,omitempty"`
 	UsagePolicy            json.RawMessage `json:"usage_policy,omitempty"`
 	Profiles               []Profile       `json:"execution_profiles"`
 }

@@ -2,7 +2,15 @@ package runnercontract
 
 import "time"
 
-// Usage and cost are observations, independent of Run business revisions.
+type UsageAccessRequirement struct {
+	SourceRef   string    `json:"source_ref"`
+	Environment string    `json:"environment"`
+	HostID      string    `json:"host_id"`
+	SessionRoot string    `json:"session_root"`
+	ObservedAt  time.Time `json:"observed_at"`
+}
+
+// Usage facts are observations, independent of Run business revisions.
 type UsageTokens struct {
 	InputTotal    *int64 `json:"input_total"`
 	InputUncached *int64 `json:"input_uncached"`
@@ -16,15 +24,17 @@ type UsageIssue struct {
 	Category  string `json:"category"`
 	Code      string `json:"code"`
 	Retryable bool   `json:"retryable"`
+	SourceRef string `json:"source_ref,omitempty"`
 }
 type UsageSnapshot struct {
-	Schema   string       `json:"schema"`
-	RunID    string       `json:"run_id"`
-	Revision uint64       `json:"snapshot_revision"`
-	Status   string       `json:"status"`
-	Scope    string       `json:"scope"`
-	Tokens   *UsageTokens `json:"tokens"`
-	Coverage struct {
+	AccessRequirements []UsageAccessRequirement `json:"access_requirements"`
+	Schema             string                   `json:"schema"`
+	RunID              string                   `json:"run_id"`
+	Revision           uint64                   `json:"snapshot_revision"`
+	Status             string                   `json:"status"`
+	Scope              string                   `json:"scope"`
+	Tokens             *UsageTokens             `json:"tokens"`
+	Coverage           struct {
 		ExpectedSources  *int64 `json:"expected_sources"`
 		VerifiedSources  int64  `json:"verified_sources"`
 		CountedResponses int64  `json:"counted_responses"`
@@ -34,22 +44,22 @@ type UsageSnapshot struct {
 	AccessCleanupStatus string       `json:"access_cleanup_status"`
 	ObservedAt          time.Time    `json:"observed_at"`
 }
-type CostEstimate struct {
-	Schema        string   `json:"schema"`
-	RunID         string   `json:"run_id"`
-	Status        string   `json:"status"`
-	UsageRevision uint64   `json:"usage_revision"`
-	Scope         string   `json:"scope"`
-	UsageStatus   string   `json:"usage_status"`
-	PolicyID      string   `json:"pricing_policy"`
-	PolicyVersion string   `json:"pricing_policy_version"`
-	PolicyDigest  string   `json:"pricing_policy_digest"`
-	Currency      string   `json:"currency"`
-	Covered       *string  `json:"covered_estimated_amount"`
-	Total         *string  `json:"total_estimated_amount"`
-	Priced        int64    `json:"priced_responses"`
-	Unpriced      int64    `json:"unpriced_responses"`
-	Assumptions   []string `json:"assumptions"`
-	Issues        []string `json:"issues"`
-	Basis         string   `json:"basis"`
+type UsageEvent struct {
+	ID             string       `json:"event_id"`
+	SourceRef      string       `json:"source_ref"`
+	RunID          string       `json:"run_id"`
+	Decision       string       `json:"decision"`
+	Provider       *string      `json:"provider"`
+	Model          *string      `json:"model"`
+	MetadataBasis  string       `json:"metadata_basis"`
+	TimeBasis      string       `json:"time_basis"`
+	CallTime       *time.Time   `json:"call_time"`
+	Tokens         UsageTokens  `json:"tokens"`
+	MetadataIssues []UsageIssue `json:"metadata_issues"`
+}
+type UsagePage struct {
+	RunID      string       `json:"run_id"`
+	Revision   uint64       `json:"snapshot_revision"`
+	Events     []UsageEvent `json:"events"`
+	NextCursor string       `json:"next_cursor"`
 }

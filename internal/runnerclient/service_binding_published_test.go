@@ -39,6 +39,28 @@ func TestRunnerFullBindingPublicCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	c = c.WithCatalog(catalog)
+	if !c.RunUsageSupported || !c.RunUsageEventsSupported {
+		t.Fatal("built Runner did not publish immutable usage summary and event pages")
+	}
+	capResponse, err := c.Call(context.Background(), "capabilities", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rawCapabilities map[string]json.RawMessage
+	if json.Unmarshal(capResponse.Data, &rawCapabilities) != nil || rawCapabilities["run_cost"] != nil {
+		t.Fatal("Runner still owns cost capabilities")
+	}
+	for _, command := range []string{"run-usage", "run-usage-events"} {
+		args := []string{"--run-id", "absent-run"}
+		if command == "run-usage-events" {
+			args = append(args, "--snapshot-revision", "1", "--limit", "1")
+		}
+		if _, queryErr := c.Call(context.Background(), command, args, nil); queryErr == nil {
+			t.Fatal("absent Run acquired usage", command)
+		} else if failure, ok := queryErr.(*Failure); !ok || failure.Code != "run_not_found" || failure.Unknown {
+			t.Fatal("public usage query did not reach the bound read-only endpoint", command, queryErr)
+		}
+	}
 	if _, covered, err := c.fullBinding("capabilities"); !covered || err != nil {
 		t.Fatal("built Runner did not publish full binding", err)
 	}

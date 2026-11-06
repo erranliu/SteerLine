@@ -53,7 +53,7 @@ func (c *Client) RefreshIdentity(ctx context.Context) (contract.Identity, error)
 }
 func valid(route string) bool {
 	u, err := url.Parse(route)
-	return err == nil && !u.IsAbs() && u.Host == "" && u.RawPath == "" && (u.Path == "/projects" || strings.HasPrefix(u.Path, "/projects/")) && !strings.ContainsAny(u.Path, "\\%") && !strings.Contains(u.Path, "..") && !strings.Contains(u.Path, "//")
+	return err == nil && !u.IsAbs() && u.Host == "" && u.RawPath == "" && (u.Path == "/projects" || (u.Path == "/usage-collection" || u.Path == "/usage-collection/status") && u.RawQuery == "" || strings.HasPrefix(u.Path, "/projects/")) && !strings.ContainsAny(u.Path, "\\%") && !strings.Contains(u.Path, "..") && !strings.Contains(u.Path, "//")
 }
 
 func (c *Client) Get(ctx context.Context, path string, target any) error {

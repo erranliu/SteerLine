@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Api } from "../../shared/api/client";
 import { short } from "../../shared/ui/status";
 import { DeveloperSettings } from "./developer-settings";
+import { BillingSettings } from "./billing-settings";
+import { UsageSettings } from "./usage-settings";
 import { NavigationGuard } from "../../shared/ui/navigation-guard";
 import {
   GenerationSettings,
@@ -22,9 +24,11 @@ export function SettingsPage({
   const activeProject = api?.identity.project_id ?? projectId;
   const [generationDirty, setGenerationDirty] = useState(false);
   const [developerDirty, setDeveloperDirty] = useState(false);
+  const [billingDirty, setBillingDirty] = useState(false);
+  const [usageDirty, setUsageDirty] = useState(false);
   return (
     <>
-      <NavigationGuard dirty={generationDirty || developerDirty} />
+      <NavigationGuard dirty={generationDirty || developerDirty || billingDirty || usageDirty} />
       <div className="page-heading">
         <div>
           <div className="eyebrow">SETTINGS</div>
@@ -35,6 +39,8 @@ export function SettingsPage({
       <div className="configuration-panels">
         <GenerationSettings {...settings} onDirtyChange={setGenerationDirty} />
         <DeveloperSettings {...settings} onDirtyChange={setDeveloperDirty} />
+        <BillingSettings {...settings} onDirtyChange={setBillingDirty} />
+        <UsageSettings {...settings} onDirtyChange={setUsageDirty} />
         <section className="settings-panel" aria-label="项目运行环境">
           <h2>项目运行环境</h2>
           <p className="muted">

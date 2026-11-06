@@ -55,6 +55,8 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return true
 	}
 	switch owner {
+	case module + "/internal/product/api":
+		return dependency == module+"/internal/billing"
 	case module + "/internal/task/model", module + "/internal/projectmaintenance/model":
 		return dependency == module+"/internal/taskcontract"
 	case module + "/internal/projectmaintenance":
@@ -87,7 +89,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/billing", module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -178,6 +180,9 @@ func forbidden(pkg string) bool {
 }
 
 func httpConsumerForbidden(pkg string) bool {
+	if pkg == module+"/internal/billing" {
+		return false
+	} // Pure pricing result definitions, no storage or execution authority.
 	if strings.HasPrefix(strings.ToLower(pkg), "github.com/erranliu/steerrunner/") {
 		return true
 	}
@@ -200,7 +205,7 @@ func httpConsumerForbidden(pkg string) bool {
 
 func webConfigDependency(owner, dep string) bool {
 	web := owner == module+"/cmd/steerline-web" || owner == module+"/web/server" || strings.HasPrefix(owner, module+"/web/server/")
-	return web && (dep == module+"/internal/executionconfig" || dep == module+"/internal/runnercontract" || dep == module+"/internal/developerconfig")
+	return web && (dep == module+"/internal/executionconfig" || dep == module+"/internal/runnercontract" || dep == module+"/internal/developerconfig" || dep == module+"/internal/billingconfig" || dep == module+"/internal/billing")
 }
 func httpConsumerPackage(pkg string) bool {
 	if strings.HasPrefix(pkg, module+"/web/server/") {

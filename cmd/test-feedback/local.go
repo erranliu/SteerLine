@@ -14,6 +14,7 @@ import (
 // Fixed reusable sets are executable definitions, not user-supplied Go flags.
 type localSuite struct {
 	ID, Suite string
+	Live      bool
 	Groups    []localGroup
 	Tag       string
 	Required  []string
@@ -25,7 +26,15 @@ type localGroup struct {
 	Tests    []string
 }
 
+func (d localSuite) environment() string {
+	if d.Live {
+		return "live"
+	}
+	return "isolated"
+}
+
 var localSuites = []localSuite{
+	{ID: "usage.remote-codex", Suite: "usage", Live: true, Tag: "runneracceptance", Groups: []localGroup{{ID: "go-usage-remote", Packages: []string{"./internal/app"}, Tests: []string{"TestBillingRemoteUsagePublished"}}}, Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256", "STEERLINE_USAGE_LIVE_ROOT", "STEERLINE_USAGE_LIVE_INPUT"}},
 	{ID: "go.full", Suite: "go"},
 	{ID: "web.unit", Suite: "web"},
 	{ID: "go.http", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./web/server", "./internal/product/httpapi", "./internal/product/httpclient", "./internal/product/httpfs", "./web/server/executionconfig", "./web/server/discovery", "./web/server/nativequery"}}}},

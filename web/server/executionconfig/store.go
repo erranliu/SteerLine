@@ -50,7 +50,8 @@ type Store struct {
 	catalog    *catalog
 	catalogPin cfg.Pin
 	// Tests replace the offline metadata reader, never the consumer or a task.
-	ReadCatalog func(context.Context, cfg.Pin) (*catalog, error)
+	ReadCatalog       func(context.Context, cfg.Pin) (*catalog, error)
+	VerifyUsagePolicy func(context.Context, cfg.UsagePolicy) error
 }
 
 func New(home string) *Store { return &Store{Home: home} }
@@ -164,6 +165,18 @@ func (s *Store) validate(ctx context.Context, raw []byte) (Config, error) {
 	}
 	if err = cfg.Validate(proposed.Version, proposed.DefaultProfile, proposed.Profiles); err != nil {
 		return proposed, failure(400, "invalid_configuration", err.Error())
+	}
+	policy, policyErr := cfg.DecodeUsagePolicy(proposed.UsagePolicy)
+	if policyErr != nil {
+		return proposed, failure(400, "invalid_usage_policy", policyErr.Error())
+	}
+	if !sameValue(current.UsagePolicy, proposed.UsagePolicy) && len(policy.RemoteLogAccess.Grants) > 0 {
+		if s.VerifyUsagePolicy == nil {
+			return proposed, failure(409, "usage_requirements_unverified", "远端主机与日志叶目录尚未核实")
+		}
+		if err = s.VerifyUsagePolicy(ctx, policy); err != nil {
+			return proposed, failure(409, "usage_requirements_unverified", err.Error())
+		}
 	}
 	cat, err := s.contract(ctx, current.Runner)
 	if err != nil {
@@ -387,20 +400,28 @@ func (s *Store) Save(ctx context.Context, expected string, raw []byte) (Snapshot
 		if err != nil {
 			return Snapshot{}, failure(500, "save_failed", "configuration was not published")
 		}
-		_, latest, err := s.read()
-		if err != nil || !bytes.Equal(latest, old) {
-			return Snapshot{}, failure(412, "configuration_changed", "configuration changed before publication")
-		}
-		if err = ctx.Err(); err != nil {
+		var published []byte
+		err = privatefs.WithConfigurationLock(s.Home, func() error {
+			_, latest, err := s.read()
+			if err != nil || !bytes.Equal(latest, old) {
+				return failure(412, "configuration_changed", "configuration changed before publication")
+			}
+			if err = ctx.Err(); err != nil {
+				return err
+			}
+			if err = privatefs.ReplacePrivateFile(f.Name(), target); err != nil {
+				return failure(500, "save_unverified", "保存结果未核实，请重新读取配置")
+			}
+			_, published, err = s.read()
+			if err != nil || !bytes.Equal(published, body) {
+				return failure(500, "save_unverified", "保存结果未核实，请重新读取配置")
+			}
+			return nil
+		})
+		if err != nil {
 			return Snapshot{}, err
 		}
-		if err = privatefs.ReplacePrivateFile(f.Name(), target); err != nil {
-			return Snapshot{}, failure(500, "save_unverified", "保存结果未核实，请重新读取配置")
-		}
-		_, published, err := s.read()
-		if err != nil || !bytes.Equal(published, body) {
-			return Snapshot{}, failure(500, "save_unverified", "保存结果未核实，请重新读取配置")
-		}
+
 		digest = cfg.Digest(published)
 	}
 	return Snapshot{DeveloperAvailable: developerconfig.Available, Config: c, Environments: cfg.Environments(c.Profiles), SavedDigest: digest, Writable: true, Workflows: s.catalog.Workflows, Efforts: s.catalog.Efforts, Combinations: s.catalog.Combinations, LocalHelper: helperStatus(c)}, nil

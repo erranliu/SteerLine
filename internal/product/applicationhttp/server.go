@@ -66,6 +66,38 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if r.URL.Path == root+"/usage-collection/status" && r.Method == "GET" && r.URL.RawQuery == "" {
+		source, ok := s.Directory.(interface {
+			UsageCollectionStatus(context.Context) (any, error)
+		})
+		if !ok {
+			localservice.Error(w, 503, "usage_collection_unavailable", "usage collection status unavailable")
+			return
+		}
+		value, err := source.UsageCollectionStatus(r.Context())
+		if err != nil {
+			localservice.BackendError(w, err)
+		} else {
+			localservice.JSON(w, 200, value)
+		}
+		return
+	}
+	if r.URL.Path == root+"/usage-collection" && r.Method == "GET" && r.URL.RawQuery == "" {
+		source, ok := s.Directory.(interface {
+			UsageCollection(context.Context) (any, error)
+		})
+		if !ok {
+			localservice.Error(w, 503, "usage_collection_unavailable", "usage collection status unavailable")
+			return
+		}
+		value, err := source.UsageCollection(r.Context())
+		if err != nil {
+			localservice.BackendError(w, err)
+		} else {
+			localservice.JSON(w, 200, value)
+		}
+		return
+	}
 	path := strings.TrimPrefix(r.URL.Path, root+"/projects/")
 	id, route, ok := strings.Cut(path, "/")
 	route = "/" + route

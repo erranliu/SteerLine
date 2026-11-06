@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +21,7 @@ func usageFixture() runnercontract.UsageSnapshot {
 func TestRunUsageSnapshotAndCostBinding(t *testing.T) {
 	c := takeoverCLI(t)
 	c.InstanceID, c.BuildVersion, c.ResourceDigest = "original-instance", "fixture", strings.Repeat("a", 64)
-	c.FullBindingCommands = []string{"run-usage", "estimate-run-cost"}
+	c.FullBindingCommands = []string{"run-usage", "run-usage-events"}
 	u := usageFixture()
 	for _, change := range []string{"valid", "foreign-run", "revision", "scope", "status", "negative", "unknown-tokens"} {
 		v := u
@@ -47,33 +46,25 @@ func TestRunUsageSnapshotAndCostBinding(t *testing.T) {
 			t.Fatal(change, actual, err)
 		}
 	}
-	amount := "0.05327400"
-	cost := runnercontract.CostEstimate{Schema: "run-cost-estimate/v1", RunID: u.RunID, UsageRevision: u.Revision, Scope: u.Scope, UsageStatus: u.Status, Basis: "api_equivalent", Status: "estimated", Currency: "USD", Covered: &amount, Total: &amount, Priced: 1}
-	for _, change := range []string{"valid", "foreign-run", "revision", "basis", "not-finalized", "partial-total", "negative-price", "null-total", "zero"} {
-		v, snapshot := cost, u
+	page := runnercontract.UsagePage{RunID: u.RunID, Revision: u.Revision, Events: []runnercontract.UsageEvent{{ID: "event", RunID: u.RunID, Decision: "counted"}}}
+	for _, change := range []string{"valid", "foreign-run", "revision", "duplicate", "count-mismatch", "cursor-loop"} {
+		v := page
+		v.Events = append([]runnercontract.UsageEvent(nil), page.Events...)
 		switch change {
 		case "foreign-run":
 			v.RunID = "foreign"
 		case "revision":
-			v.UsageRevision++
-		case "basis":
-			v.Basis = "bill"
-		case "not-finalized":
-			snapshot.Coverage.Finalized = false
-		case "partial-total":
-			v.Status = "partial"
-		case "negative-price":
-			s := "-1"
-			v.Total = &s
-		case "null-total":
-			v.Total = nil
-		case "zero":
-			s := "0.00000000"
-			v.Covered, v.Total = &s, &s
+			v.Revision++
+		case "duplicate":
+			v.Events = append(v.Events, v.Events[0])
+		case "count-mismatch":
+			v.Events = nil
+		case "cursor-loop":
+			v.NextCursor = "same"
 		}
 		fixtureResponse(t, v)
-		_, err := c.EstimateRunCost(context.Background(), snapshot, filepath.Join(t.TempDir(), "price file.json"))
-		if (err == nil) != (change == "valid" || change == "zero") {
+		_, err := c.RunUsageEvents(context.Background(), u)
+		if (err == nil) != (change == "valid") {
 			t.Fatal(change, err)
 		}
 	}
@@ -81,7 +72,7 @@ func TestRunUsageSnapshotAndCostBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"estimate-run-cost\n", "--usage-revision\n7\n", "--expected-instance-id\noriginal-instance\n", "--expected-binding\n", "--stdin--\n"} {
+	for _, expected := range []string{"run-usage-events\n", "--snapshot-revision\n7\n", "--expected-instance-id\noriginal-instance\n", "--expected-binding\n", "--stdin--\n"} {
 		if !strings.Contains(string(wire), expected) {
 			t.Fatal("missing exact query/binding", expected, string(wire))
 		}
@@ -93,15 +84,15 @@ func TestRunUsageSnapshotAndCostBinding(t *testing.T) {
 
 func TestRunUsageCapabilityAndStartupPolicy(t *testing.T) {
 	var catalog Catalog
-	if err := json.Unmarshal([]byte(`{"run_usage":{"schema":"run-usage/v1","query_only":true},"run_cost":{"schema":"run-cost-estimate/v1","usage_contract":"run-usage/v1","query_only":true,"basis":"api_equivalent"}}`), &catalog.Capabilities); err != nil {
+	if err := json.Unmarshal([]byte(`{"run_usage":{"schema":"run-usage/v1","query_only":true,"same_snapshot":true,"events_schema":"run-usage-events/v1","max_events":500}}`), &catalog.Capabilities); err != nil {
 		t.Fatal(err)
 	}
 	c := takeoverCLI(t).WithCatalog(&catalog)
-	if !c.RunUsageSupported || !c.RunCostSupported {
+	if !c.RunUsageSupported || !c.RunUsageEventsSupported {
 		t.Fatal("public capability not consumed")
 	}
 	c = c.WithCatalog(&Catalog{})
-	if c.RunUsageSupported || c.RunCostSupported {
+	if c.RunUsageSupported || c.RunUsageEventsSupported {
 		t.Fatal("absent capability inherited")
 	}
 	c.UsagePolicy = json.RawMessage(`{"enabled":true,"remote_log_access":{"mode":"disabled","grants":[]}}`)

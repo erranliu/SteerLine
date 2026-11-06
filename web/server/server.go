@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
@@ -117,6 +118,16 @@ func Prepare(options Options) (*Server, error) {
 	s := &Server{options: options, listener: listener, endpoint: endpoint, stopped: make(chan struct{}), identity: identity, secret: secret, assets: assets, dev: dev,
 		cookie: "sl_web_" + identity.HomeID[:12] + "_" + strings.Split(options.Address, ":")[1], tickets: map[string]time.Time{}, sessions: map[string]session{}}
 	s.configuration = configrepo.New(options.Home)
+	s.configuration.VerifyUsagePolicy = func(ctx context.Context, policy cfg.UsagePolicy) error {
+		var current cfg.UsageCollection
+		if err := s.options.Client.Get(ctx, "/usage-collection", &current); err != nil {
+			return err
+		}
+		if current.Status != "ready" {
+			return errors.New("运行中用量授权需求不可核实")
+		}
+		return configrepo.VerifyUsageRequirements(policy, current)
+	}
 	s.discovery = discovery.New(s.configuration)
 	s.http = &http.Server{Handler: s, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 35 * time.Second, WriteTimeout: 125 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 
@@ -332,6 +343,19 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/web/execution-config" || strings.HasPrefix(r.URL.Path, "/api/web/execution-config/") {
 		s.executionConfig(w, r, session)
+		return
+	}
+	if r.URL.Path == "/api/web/billing-config" || strings.HasPrefix(r.URL.Path, "/api/web/billing-config/") {
+		s.billingConfig(w, r, session)
+		return
+	}
+	if (r.URL.Path == "/api/web/usage-collection" || r.URL.Path=="/api/web/usage-collection/status") && r.Method == "GET" && r.URL.RawQuery == "" {
+		var result cfg.UsageCollection
+		if err := s.options.Client.Get(r.Context(), strings.TrimPrefix(r.URL.Path,"/api/web"), &result); err != nil {
+			backendError(w, err)
+		} else {
+			writeJSON(w, 200, result)
+		}
 		return
 	}
 	prefix := "/api/v2/application"

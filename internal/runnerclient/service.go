@@ -11,16 +11,19 @@ import (
 )
 
 type ServiceInfo struct {
-	InstanceID       string           `json:"instance_id"`
-	PID              int              `json:"pid"`
-	ProcessCreated   string           `json:"process_created"`
-	StateDir         string           `json:"state_dir"`
-	Status           string           `json:"status"`
-	Version          string           `json:"version"`
-	Protocol         string           `json:"protocol"`
-	ResourceDigest   string           `json:"resource_digest"`
-	ExecutableSHA256 string           `json:"executable_sha256"`
-	LastShutdown     *ServiceShutdown `json:"last_shutdown,omitempty"`
+	UsagePolicy         json.RawMessage  `json:"usage_policy"`
+	UsagePolicyDigest   string           `json:"usage_policy_digest"`
+	UsagePolicyRevision string           `json:"usage_policy_revision"`
+	InstanceID          string           `json:"instance_id"`
+	PID                 int              `json:"pid"`
+	ProcessCreated      string           `json:"process_created"`
+	StateDir            string           `json:"state_dir"`
+	Status              string           `json:"status"`
+	Version             string           `json:"version"`
+	Protocol            string           `json:"protocol"`
+	ResourceDigest      string           `json:"resource_digest"`
+	ExecutableSHA256    string           `json:"executable_sha256"`
+	LastShutdown        *ServiceShutdown `json:"last_shutdown,omitempty"`
 }
 
 type ServiceShutdown struct {

@@ -60,3 +60,5 @@ git diff --check
 ```
 
 实际执行参数按每组execution_parameters与原始command核对，区分Go测试、冻结二进制、test2json转换及Web；顶层并发只聚合同一适用维度，不同为mixed、未执行/未识别为unknown、非Go为not_applicable。控制器GOMAXPROCS、Go包并发、测试并发及外层worker分别记录，不能相互替代，详见[报告约定](testing/reports.md)。
+
+远端用量新增精确L4 `usage.remote-codex`，命令、冻结输入、所需环境变量及单次真实模型/清理范围见正式JSON与L4列表；不纳入默认L1/L2，不得省略 `-env=live` 或改列isolated。

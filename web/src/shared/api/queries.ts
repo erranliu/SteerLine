@@ -64,6 +64,8 @@ export function projectQueries(api: Api) {
         | "workflow_stage"
         | "workflow_status"
       >,
+      pricingGeneration?: number,
+      usagePolicyRevision?: string,
     ) =>
       queryOptions({
         ...defaults,
@@ -76,6 +78,8 @@ export function projectQueries(api: Api) {
           run.current_turn_id,
           run.workflow_stage,
           run.workflow_status,
+          pricingGeneration,
+          usagePolicyRevision,
         ],
         queryFn: async ({ signal }) => {
           const view = await api.get<RunUsageView>(
@@ -92,6 +96,8 @@ export function projectQueries(api: Api) {
               view.cost.usage_revision !== view.usage?.snapshot_revision)
           )
             throw new Error("用量身份或快照已变化，请刷新执行详情");
+          if (view.cost && pricingGeneration !== undefined && view.cost.settings_generation !== pricingGeneration)
+            throw new Error("价表版本已变化，等待重新读取当前设置");
           return view;
         },
       }),

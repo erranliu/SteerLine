@@ -1,5 +1,7 @@
 # SteerRunner 依赖与运行
 
+计费职责调整见[Spec](../../SteerlineFlow/spec/billing-ownership.spec.md)、[实施 Plan](../../SteerlineFlow/plans/billing-ownership.plan.md)和[隔离验收](../../SteerlineFlow/testing/acceptance/billing-ownership.md)。Runner 只提供用量事实；SteerLine 管理价表、计算和展示估算。安装版尚未部署此次变更。
+
 ## 无服务原生目录查询
 
 2026-11-05 Web 已接入固定 EXE 的 `native-catalog --input - --json`，按离线 capabilities.native_catalog 的 `steerrunner-native-catalog/v1`、schema、构建 SHA256/resource_digest 判断资格。stdin 是查询对象，目录调用不带 state-dir/实例/Run 绑定，也不启动服务。支持登记环境、本机/远端 Orca Agent/模型、本机 Codex 模型目录；原生连接及精确元数据进程归 Runner，Web 保留产品支持判断、配置保存和在途合并。30 秒取数、1 MiB、五秒清理，失败旧结果明确过期。策略预检消费已有 model_input_contract.workflow.project_policies.slots。具体实现、固定构建、原生资格与独立审核见[验收](../../SteerlineFlow/testing/acceptance/runner-boundary-consolidation.md)。
@@ -21,9 +23,11 @@ SteerLine 校验固定 commit 的项目材料及接入条件，冻结候选与�
 2026-10-24：候选测试汇报改用 [progress-file 单文件通道](runtime-progress.md)，调用方冻结布尔字段、独立保存快照并解释展示。候选侧原 R2 收集、workspace-git 当前通过判定和自动转测试历史已移除；下文 2026-10-20 的 R2 接入只记录历史版本。独立标准报告与显式登记保留。安装及旧现场不自动迁移。
 
 
-执行页“用量与费用”消费 Runner 的 `run-usage` 和 `estimate-run-cost`，以同一用量快照估算候选累计主会话费用。页面不触发日志补采或执行输入；缺价表仍显示 Token，未知不显示零，部分费用标记“已计价部分”。采集范围以所用 Runner 的 `capabilities.run_usage.matrix` 为准。支持本机 `codex-app-server` 用量的 Runner 从原生通知读取 Token，并按原会话与回合归属及去重。该通知缺少逐响应的计价依据，因此费用保持未知。页面接入范围见[验收](../../SteerlineFlow/testing/acceptance/run-usage-cost-ui.md)。
+执行页“用量与费用”消费 Runner 的 `run-usage` 与固定 revision 的全部 `run-usage-events`，由 SteerLine 本地计算候选主会话费用。新 Runner 的 `run_usage` 明确发布 same_snapshot、events_schema 和 max_events；未发布足够明细能力时仍可显示 Token，费用明确不可用。Runner 已移除 estimate-run-cost、定价 schema 和 run_cost 能力。调用方保留原 Run/state-dir/实例绑定，不解析原生日志、不查私有数据库。
 
-`execution.json` 的可选顶层 `pricing_policy` 为 Runner 所在机器上的绝对 JSON 文件路径，例如 `"pricing_policy": "C:/MySteerLine/pricing-policy.json"`。价表使用所选 Runner 发布的 `run-pricing-policy/v1`，明确 ID、版本、来源、币种、生效区间和模型费率；不内置价格、不联网抓价。金额是 token 的 API 等价估算，不是实际扣费，排除订阅/credits 结算与工具/外部 API 附加费。价表在估价时由 Runner 独立读取，刷新可以按新策略重算，用量事实不变；设置或更换文件路径需保存配置并显式重启 SteerLine。
+全局 `<home>/billing.json` 由 `internal/billingconfig` 独占，保存不可变价表版本、active 和 generation；首次 create-only，之后 ETag 条件保存/切换。价格变更立即用于历史用量重算，无需重启。四类互斥 Token 按每百万单价以精确十进制计算，reasoning 已含输出；仅实际 provider/model 与请求时间匹配，不以完成时间代替。未配置、事实缺失、部分覆盖和真实零分别展示；金额是按手工固定费率估算，非实际扣费。执行配置不再接受 pricing_policy。
+
+远端采集授权仍独立保存在 execution.json.usage_policy。设置页只选择 Runner 公开 access_requirements 已核实的 environment、host_id 和 session 日期叶目录；Web 经应用查询端口取得有效策略和需求，不另建 Runner 客户端。保存只表示待正式重启，实际生效以服务 status 的 usage_policy/digest/revision 为准；不热更新或自动重启。Runner 在缺许可时只发现原绑定元数据并公开最小需求，不登记或读取日志。远端 Codex 的真实隔离验证已完成，原安装候选恢复仍需以后显式部署、授权并正式停启。
 
 本机采集沿 Runner 默认策略。远端采集需要在 `execution.json` 顶层显式配置 Runner 的 `usage_policy`，启动时原样传入原 `service start`；例如关闭远端新增目录登记的策略为 `{"enabled":true,"remote_log_access":{"mode":"disabled","grants":[]}}`。允许远端登记时使用 Runner 公开 schema 的 `temporary` 模式，并显式指定 environment、已核实的稳定 host_id 和受限 session_roots。不要使用账号 home 或凭据根作为授权范围；具体根资格由 Runner 验证。策略省略不扩权，页面读取不授权；更改须经正式停服/启动，冲突不热更新。Web 编辑执行 profile 时保留这两项部署字段。
 

@@ -13,6 +13,17 @@ import { SettingsPage } from "./settings";
 import { configSnapshot } from "../../test/execution-config";
 import type { ConfigSnapshot } from "../../shared/api/execution-configs";
 
+// These tests exercise developer/generation sibling reconciliation. New settings
+// have their own transport and component tests, so supply their independent reads.
+vi.mock("../../shared/api/billing", async () => {
+ const actual = await vi.importActual<typeof import("../../shared/api/billing")>("../../shared/api/billing");
+ return { ...actual, billingAPI: () => ({ read: async () => ({schema:"steerline-billing/v1",generation:0,active_policy_version:"",policies:[],saved_digest:"",configured:false}) }) };
+});
+vi.mock("../../shared/api/usage-collection", async () => {
+ const actual = await vi.importActual<typeof import("../../shared/api/usage-collection")>("../../shared/api/usage-collection");
+ return { ...actual, usageCollection: async () => ({status:"ready",instance_id:"i",usage_policy:actual.defaultUsagePolicy(),usage_policy_digest:"p",usage_policy_revision:"i",requirements:[]}) };
+});
+
 const clients: QueryClient[] = [];
 afterEach(() => {
   cleanup();

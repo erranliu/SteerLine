@@ -1,3 +1,4 @@
+import type { UsagePolicy } from "./usage-collection";
 import { ApiError, json } from "./client";
 export interface Settings {
   executable?: string;
@@ -36,8 +37,7 @@ export interface ExecutionConfig {
   default_execution_profile: string;
   execution_profiles: Profile[];
   max_generate_concurrency?: number;
-  pricing_policy?: string;
-  usage_policy?: Record<string, unknown>;
+  usage_policy?: UsagePolicy;
 }
 export interface Combination {
   host: string;
