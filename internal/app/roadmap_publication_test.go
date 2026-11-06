@@ -264,6 +264,7 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	}
 	parsed := promotionAction(t, port, "roadmap_parse", source.ID, strings.Repeat("a", 32), 1, roadmapservice.ParseInput{RequestID: strings.Repeat("a", 32), Path: sourcePath, Digest: source.Digest, Profile: "fixture"})
 	parsed = awaitPromotion(t, port, parsed, "review")
+	assertRoadmapActivityState(t, store, c.Identity(), parsed.ID, "succeeded", true, "current")
 	if live && !actualProject {
 		found := false
 		for _, task := range parsed.Analysis.Tasks {
@@ -312,12 +313,14 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 		}
 	}
 	parent := promotionAction(t, port, "roadmap_confirm", parsed.ID, strings.Repeat("1", 32), parsed.Revision, struct{}{})
+	assertRoadmapActivityState(t, store, c.Identity(), parent.ID, "succeeded", false, "current")
 	code = fixtureGit(t, c.Repository, "rev-parse", "HEAD")
 	if !actualProject {
 		require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
 	}
 	r := promotionAction(t, port, "roadmap_generate_documents", parent.ID, strings.Repeat("2", 32), parent.Revision, struct{}{})
 	r = awaitPromotion(t, port, r, "documents-review")
+	assertRoadmapActivityState(t, store, c.Identity(), r.ID, "succeeded", true, "current")
 	if r.CodeCommit != code || len(r.Documents) != expectedTasks || len(r.Mapping) != 0 || len(r.Investigation) == 0 {
 		t.Fatal("unverified document result", r)
 	}
@@ -343,17 +346,28 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if e == nil || pub.Publication.State != "pr_unknown" {
 		t.Fatal("missing PR receipt was treated as applied", pub, e)
 	}
+	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
+	wrong := pub
+	wrongPublication := *pub.Publication
+	wrongPublication.Commit = strings.Repeat("0", 40)
+	wrong.Publication = &wrongPublication
+	if _, err := port.observePublication(ctx, wrong); err == nil {
+		t.Fatal("wrong publication identity was accepted")
+	}
+	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "unavailable")
 	pub, e = port.observePublication(ctx, pub)
 	require(t, e)
 	if pub.State != "awaiting-merge" {
 		t.Fatal("original PR was not reconciled", pub)
 	}
+	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", false, "current")
 	// Explicit continuation keeps the original authorization and never creates another PR.
 	pub, e = port.resumePublication(ctx, pub)
 	require(t, e)
 	if pub.State != "awaiting-admission" || pub.Publication.MergedCommit == "" {
 		t.Fatal(pub)
 	}
+	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
 	graph, e := store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, e)
 	if len(graph.Tasks) != seedCount {
@@ -373,6 +387,7 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if admitted.State != "admitted" || len(admitted.Mapping) != expectedTasks {
 		t.Fatal(admitted)
 	}
+	assertRoadmapActivityState(t, store, c.Identity(), admitted.ID, "succeeded", false, "current")
 	graph, e = store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, e)
 	if len(graph.Tasks) != expectedTasks+seedCount || len(graph.Edges) != expectedEdges {

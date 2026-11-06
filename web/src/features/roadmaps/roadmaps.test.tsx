@@ -2,11 +2,14 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
+  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
-import { useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { WorkspaceContext, type Workspace } from "../../app/context";
 import { currentRoadmapRecord, roadmapProgress } from "./workflow";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
@@ -120,6 +123,154 @@ function setup(
   );
   return { api, get, submit, source, record, view };
 }
+it.each([false, true])(
+  "opens an activity record in its own draft and preserves current/history actions (historical=%s)",
+  async (historical) => {
+    const { api, get, view, record } = setup();
+    cleanup();
+    get.mockClear();
+    view.sources.unshift({
+      ...record.source,
+      id: "another",
+      path: "SteerlineFlow/Roadmap/drafts/another.md",
+      body: "# other draft",
+    });
+    if (historical)
+      view.records.push({
+        ...record,
+        id: "e".repeat(32),
+        parent_id: record.id,
+        purpose: "documents",
+        state: "documents-review",
+        created_at: "2026-11-06T00:00:00Z",
+      });
+    const client = testClient();
+    render(
+      <QueryClientProvider client={client}>
+        <WorkspaceContext.Provider
+          value={
+            {
+              api,
+              identity,
+              online: true,
+              busy: false,
+              requests: [],
+            } as unknown as Workspace
+          }
+        >
+          <MemoryRouter
+            initialEntries={[`/projects/project/roadmaps?record=${record.id}`]}
+          >
+            <Roadmaps />
+          </MemoryRouter>
+        </WorkspaceContext.Provider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith("/roadmaps/" + record.id),
+    );
+    expect(get).toHaveBeenCalledWith("/roadmaps/sources/" + record.source.id);
+    expect(screen.getByLabelText("查看历史记录")).toHaveValue(record.id);
+    if (historical) {
+      expect(
+        await screen.findByRole("button", { name: "返回当前流程" }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole("button", { name: "重新解析草稿" }),
+      ).toBeDisabled();
+      fireEvent.change(screen.getByLabelText("查看历史记录"), {
+        target: { value: "e".repeat(32) },
+      });
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("button", { name: "返回当前流程" }),
+        ).toBeNull(),
+      );
+    } else {
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "确认任务与依赖" }),
+        ).toBeEnabled(),
+      );
+      expect(screen.queryByRole("button", { name: "返回当前流程" })).toBeNull();
+    }
+    client.clear();
+  },
+);
+it("follows the current document generation after acting on a parse activity link", async () => {
+  const { api, view, record, submit, get } = setup();
+  cleanup();
+  view.documents_available = true;
+  get.mockImplementation(
+    async (route) =>
+      structuredClone(
+        route === "/roadmaps"
+          ? view
+          : route.includes("/sources/")
+            ? record.source
+            : view.records.find((r) => route.endsWith("/" + r.id)),
+      ) as never,
+  );
+  submit.mockImplementation(async (envelope) => {
+    if (envelope.action === "roadmap_confirm") {
+      record.state = "confirmed";
+      record.confirmed_digest = "confirmed";
+    } else if (envelope.action === "roadmap_generate_documents") {
+      view.records.push({
+        ...record,
+        id: "documents-from-activity",
+        parent_id: record.id,
+        purpose: "documents",
+        state: "queued",
+        created_at: "2026-11-06T00:00:00Z",
+      });
+    }
+    return { request_id: envelope.request_id, status: "applied" } as never;
+  });
+  const client = testClient();
+  render(
+    <QueryClientProvider client={client}>
+      <WorkspaceContext.Provider
+        value={
+          {
+            api,
+            identity,
+            online: true,
+            busy: false,
+            requests: [],
+            submit: api.submit.bind(api),
+            refresh: vi.fn(),
+          } as unknown as Workspace
+        }
+      >
+        <MemoryRouter
+          initialEntries={[`/projects/project/roadmaps?record=${record.id}`]}
+        >
+          <Roadmaps />
+          <LocationProbe />
+        </MemoryRouter>
+      </WorkspaceContext.Provider>
+    </QueryClientProvider>,
+  );
+  const confirm = await screen.findByRole("button", { name: "确认任务与依赖" });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
+  const generate = await screen.findByRole("button", {
+    name: "生成 Spec / Plan",
+  });
+  await waitFor(() => expect(generate).toBeEnabled());
+  expect(screen.getByTestId("location")).not.toHaveTextContent("record=");
+  expect(screen.getByTestId("location")).toHaveTextContent(
+    "source=" + record.source.id,
+  );
+  fireEvent.click(generate);
+  await waitFor(() =>
+    expect(screen.getByRole("status")).toHaveTextContent("生成文档中"),
+  );
+  expect(screen.queryByRole("button", { name: "返回当前流程" })).toBeNull();
+  expect(submit).toHaveBeenCalledTimes(2);
+  client.clear();
+});
 it("reads Markdown and shows original versus proposed dependencies without allocating or calling a model on mount", async () => {
   const { submit } = setup();
   expect(await screen.findByDisplayValue(/T1 候选控制/)).toHaveAttribute(

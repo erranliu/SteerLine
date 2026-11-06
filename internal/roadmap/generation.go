@@ -252,7 +252,10 @@ func (s *Service) Observe(ctx context.Context, id string) (model.Record, error) 
 	}
 	return s.observe(ctx, r)
 }
-func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, error) {
+func (s *Service) observe(ctx context.Context, r model.Record) (out model.Record, err error) {
+	observed := false
+	before := r
+	defer func() { s.recordObservation(ctx, before, out, observed, err) }()
 	if !runnerbinding.SamePath(r.Runner.StateDir, s.Build.StateDir) {
 		return r, errors.New("original Runner namespace differs")
 	}
@@ -270,6 +273,7 @@ func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, er
 	if err := runnerbinding.ValidateContent(binding, observation); err != nil {
 		return r, err
 	}
+	observed = true
 	r.RunID, r.InputDigest, r.Projection = run.RunID, run.InputDigest, run
 	r.Diagnostic = run.Diagnostic
 	if r.Cancelled {

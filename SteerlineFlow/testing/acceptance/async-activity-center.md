@@ -227,3 +227,46 @@ PR 发布前最终独立复核：`audit_activity_boundary_pr` 逐项核实最终
 本次新报告根仍为 `C:\SteerlineDebug\wt1369-activities\test-results`：`L1/merge-20261106-01`、`L2/merge-20261106-01`、`L4/web-merge-20261106-01` 全部通过；四包交叉定向 `diagnostics/merge-20261106-01` 与桥接 owner 全集 `diagnostics/message-merge-20261106-01` 通过，覆盖原 Run message、未知结果不重发、保存屏障、PR 冲突意图及活动 SQL 粗筛/资源预算契约。定向参数为 `-- ./internal/runnerbridge ./internal/taskrunner ./internal/product/query ./internal/storage/sqlite -run 'Test(AsyncActivity|Candidate|PRConflict|SteerRunner|.*Conflict)' -count=1`，桥接全集为 `-- ./internal/runnerbridge -count=1`；定向不代表这些包的全量专项。L2 清理完整。`npm --prefix web run build`、文档链接和 `git diff --check` 通过。
 
 仅更新原 PR 分支以解决冲突，不合并 PR、不部署；原验证与未验范围不反写。
+
+## Roadmap 异步来源补齐（2026-11-06）
+
+按用户要求补齐遗漏的草稿解析及 Spec / Plan / 验收文档生成，并核对后续发布、待合并、入图和恢复。基线 `01356834e4c791aba9c94064d5dfcb75f0d6b487` 加本工作区修改；本轮普通开发，用户已授权提交并创建独立 PR，不合并、不部署，不继承上文 PR 的发布授权。
+
+新增统一 `roadmap` 只读来源，读取原 Roadmap 记录、原请求关联、原命令状态与观察事实；App 使用查询层的统一来源清单。解析与文档生成按 purpose 显示不同标题；发布/入图/恢复中的当前实例 pending 命令显示执行中，原实例或结果未知留待核实。正常等待 PR 合并不提醒处理；当前解析/文档审阅、澄清及入图显示处理入口。取消与失败须等原资源结算；历史且已结算的澄清阻断退出进行中，不伪造成功或继续提醒。发布/入图没有权威完成时间时不借用生成结束时间。
+
+首次提交的 journal 占位覆盖解析、文档生成、发布和入图；原 request 关联出现后去重。详情通过 `record` 定位原记录；记录尚未进入列表时保留当前 source，历史选择仍可用。Runner 生成观察及原发布观察分别在原 owner 记录成功/失败元数据，失败不覆盖最近成功时间；活动 GET 不推进业务。SQL 只投影必要字段，不携带草稿正文、材料或生成文档；同来源当前记录用一次窗口排名，避免逐记录重复扫描大正文。
+
+已核对另外三个 Runner 提交入口：环境检测、测试安排生成和任务候选沿原来源覆盖。Roadmap 静态文件初始化、确认、编辑及查询/停止属于原本地命令或既有工作的控制，不另造执行任务。本轮未更改固定提示词、材料正文或组装参数，正文差异及字节变化均为 0。
+
+本轮证据根为 `C:\SteerlineDebug\wt-99ef-roadmap-activity`，表中目录均相对此根；每份正式报告以其 `summary.json` 为入口。
+
+| 验证 | 报告 / 日志 | 结果 |
+| --- | --- | --- |
+| 最终四包异步活动定向：`-- ./internal/product/query ./internal/storage/sqlite ./internal/roadmap ./internal/app -run 'TestAsyncActivity\|TestRoadmapObservation' -count=1` | `diagnostics/20261106T090240975Z-d6c0794a49b6473d8b7502bb62192747` | 通过；含公开 App 读取、不变业务状态、完整状态矩阵、历史阻断、原命令/实例及观察元数据 |
+| 最终 L1 | `test-results/L1/20261106T090331145Z-8dc7a4e50c244b44a77cd02b5eb89563` | 通过；执行 63.7 秒，超出 1 分钟目标，如实保留 |
+| 最终 L2 | `test-results/L2/20261106T090436164Z-6d906cbbf3324da08cd38b7627519f93` | 通过；执行 122.4 秒，`cleanup_complete=true` |
+| `go.storage` | `test-results/L4/20261106T085151777Z-ae981007e85a4331b67889ca9d73a20b` | 通过；SQLite 粗筛超集/分页/计数、请求关联、重开、大正文精简投影及发布/入图/恢复命令 |
+| `go.roadmap` | `test-results/L4/20261106T085359864Z-4d08a81eaf2942c689547cce88485a39` | 通过；原 owner、App 11 根与 host；真实本地 Git 的 LF/CRLF 链验证解析→文档→发布→入图及 PR 身份观察失败后恢复 |
+| `go.http` | `test-results/L4/20261106T085832634Z-32772f39f89c46eaa96cabb04276c09e` | 通过 |
+| `web.unit` | `test-results/L4/20261106T084356002Z-25ad3085218f4c17acb7fe508f85f149` | 通过；含新增四类提交占位、关联去重和原记录导航；后续仅收回无关格式变动 |
+| 前端生产构建 | `diagnostics/20261106T090018397Z-c1a78fdc719345b9bb7fa6a5bb438983/web-build.log` | TypeScript / Vite 通过 |
+| `runtime.async-activities` | `test-results/L3/20261106T090022315Z-8280a95c6e3b4412afe20bc147cfcbb5` | 通过，`cleanup_complete=true`；既有三类流程与抽屉回归，Roadmap 新链另由 App / 组件测试覆盖，不宣称浏览器实测 Roadmap 全链 |
+
+原失败保留：首次大正文矩阵暴露重复相关扫描触发来源预算，已改窗口排名并补测通过；L1 曾拒绝未登记的纯 helper 测试文件，已将 helper 放回既有活动测试文件并补测通过；首次 L3 因未生成 `web/server/dist` 构建阻断，前端构建后新目录补测通过。初次沙箱内 npm 安装及外部报告目录创建失败，后续使用获准的原生执行路径完成。没有覆盖原失败报告或把构建阻断记为执行通过。
+
+独立审核 `review_roadmap_activity` 已复核关闭正常发布/恢复误报、来源跳转、发布观察、未知 Runner 状态及历史阻断等问题，最终无新增确认问题。未运行 go.full、真实模型/远端 PR 或部署；人工体验仍未验。
+
+### 独立 PR 与最新 main 的集成验证
+
+用户随后授权提交并创建 PR。初始修复提交 `f3729118`；接入 main `79bc8bb7`（含 PR #470 的 Roadmap 进度/历史改动）时，解决两个 Roadmap TSX 文件的冲突。保留上游进度、当前流程选择和只读历史；活动链接按原 record 定位其草稿，当前 record 可直接处理，其他历史 record 保持只读。当前流程收到操作回执后解除旧 record 定位、保留 source，确认后继续生成文档不会自动落回旧解析的只读历史。新增当前/历史跨草稿链接及解析→确认→文档生成的组件回归，独立复审通过。
+
+以下均为合并后最终内容的新执行，输出仍相对本轮证据根；L2 `cleanup_complete=true`。初次集成检查结果保留，不替代最终跨阶段修复后的报告。
+
+| 验证 | 报告 / 日志 | 结果 |
+| --- | --- | --- |
+| TypeScript / Vite | `diagnostics/20261106T091505645Z-8d391016ac7e45b985a21b1e6740dfbe/web-build.log` | 通过 |
+| `web.unit` 全集 | `test-results/L4/20261106T091512236Z-c89bbe7e424848e58f509d78dee6fa36` | 通过 |
+| L1 | `test-results/L1/20261106T091543402Z-e8b7cffa07694f35ae35fcc3384cd6b1` | 通过 |
+| L2 | `test-results/L2/20261106T091616947Z-37769b4e4ea643abb28515658844b69e` | 通过，清理完整 |
+
+相对最新 main 的提示词正文、材料和组装参数差异仍为 0；文档链接与 `git diff --check` 通过。不合并 PR、不部署。

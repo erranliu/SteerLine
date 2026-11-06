@@ -165,7 +165,11 @@ export function Roadmaps() {
     refetchInterval: online ? 5000 : false,
   });
   const value = list.data,
-    sourceID = params.get("source") || value?.sources[0]?.id || "";
+    sourceID =
+      value?.records.find((r) => r.id === params.get("record"))?.source.id ||
+      params.get("source") ||
+      value?.sources[0]?.id ||
+      "";
   const source = useQuery({
     queryKey: [
       ...key,
@@ -183,7 +187,7 @@ export function Roadmaps() {
   const currentSummary = currentRoadmapRecord(history);
   const currentID = currentSummary?.id || "";
   const historicalID = params.get("record");
-  const viewingHistory = !!historicalID;
+  const viewingHistory = !!historicalID && historicalID !== currentID;
   const selectedID = historicalID || currentID;
   const currentDetail = useQuery({
     queryKey: [...key, "record", currentID],
@@ -256,6 +260,8 @@ export function Roadmaps() {
         throw new Error("未取得回执，请在原请求记录中查询，避免重复提交");
       if (result.status === "rejected" || result.status === "outcome_unknown")
         setError(result.diagnostic || "原操作待核实");
+      if (!viewingHistory && params.has("record"))
+        setParams({ source: sourceID }, { replace: true });
       await list.refetch();
       if (selectedID) await detail.refetch();
       if (currentID && selectedID !== currentID) await currentDetail.refetch();
