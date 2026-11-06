@@ -1,6 +1,6 @@
 # 待合并 PR 冲突解决验收记录
 
-2026-11-06。关联 [Spec](../../spec/pr-conflict-resolution.spec.md) 与 [Plan](../../plans/pr-conflict-resolution.plan.md)。普通开发，无任务编号。两仓已实现，自动验收与独立审核通过；用户已授权 Runner 独立 worktree/PR，不部署安装环境。PCR-M01 仅体验走查待安排。
+2026-11-06。关联 [Spec](../../spec/pr-conflict-resolution.spec.md) 与 [Plan](../../plans/pr-conflict-resolution.plan.md)。普通开发，无任务编号。两仓已实现，自动验收与独立审核通过；Runner 在独立 worktree/PR。实现阶段未部署，后续用户已授权再次审计、修复、合并部署，见文末。PCR-M01 仅体验走查待安排。
 
 ## 自动项
 
@@ -103,3 +103,13 @@ PR：{{.PR}}
 ### 两仓交付
 
 Runner 独立 worktree `C:/Users/lmas1/.codex/visualizations/2026/11/06/01a1af05-6e5e-7d63-b331-9209cbd4bcf7/SteerRunner`，分支 `codex/pr-ready-messages`，[PR 125](https://github.com/erranliu/SteerRunner/pull/125)。SteerLine 分支 `codex/pr-conflict-resolution`，配套提交独立交付；两侧均未部署安装环境。
+
+### 后续合并前审计
+
+用户新授权审计两个 PR，有问题直接修复，通过后合并部署。SteerLine [PR 464](https://github.com/erranliu/SteerLine/pull/464) 复核无新代码问题，`audit-owner-01/summary.json` 关键 owner 通过，远端 prompt-governance 已通过。独立审计在 Runner 发现 P2：message 已受理或已冻结但尚未提交原生输入时停止，会留下 pending/running 的原控制；消息内已保存答案也有此窗口。
+
+Runner 修复提交 `d37cadfadc01677de505989d0f7b7f864df395bd`：stop 受理事务只撤销未发送/明确拒绝的后续输入，原 in-flight/unknown 意图保留对账，completed 不降级，保留 pr_ready 历史游标。两种开发流程八个停止窗口及完整停止后重启查询原 request 均通过（`runner-stop-audit-final.log`，2.251 秒），独立复审通过；完整 L1 `runner-audit-L1-02/summary.json` 通过（885.3 秒，受测源码干净）。首轮 `runner-audit-L1-01` 在源码仍修订期间被框架生产输入摘要守卫拒绝，不计通过，原证据保留。
+
+固定审计构建 `bin/steerrunner-audit.exe`，来源该修复提交，SHA256 `ed531ccfbdd3682a5e0c0ffaab740ebf0ab285972239eff9103e9676cf2625a8`。真实复验 `live-08-audit` 独立宿主中途消失，没有最终报告，不计通过；公开核实其 Runner 已停止、零 Run，登记的自有 GitHub 隔离 base 分支已删除，原目录与中断证据保留。完整 L1 后以相同正式命令、同一固定 EXE、独立 OutDir `live-09-audit-serial` 串行复验，实际结果在本轮 PR 及报告登记，不继承中断结果。
+
+部署前公开升级预检曾被安装任务 101 的旧 Run/PR 775 阻塞；用户明确同意只停止该旧 Run，保留任务和 PR，不重置其他任务。等待期间重新查询已见原服务 confirmed stop，未另发停止；九条 Run 已结算，`audit-upgrade-preflight-02.json` 通过。另观察到安装 home 有并行维护：`maintenance/discard-runs-cf1dd61eb2b04177b5942a1d5fab6d7d/discard.json` 为 complete，归档并重建 20 个任务，非本聊天执行。后续部署使用正式锁核对当时现场，不恢复或覆盖这次外部维护的数据；PR 775 仍 open 且原 head 保持。

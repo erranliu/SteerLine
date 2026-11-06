@@ -1,6 +1,6 @@
 # 待合并 PR 冲突解决与原 Run 续作 Plan
 
-2026-11-06。对应 [Spec](../spec/pr-conflict-resolution.spec.md) 和[验收规划](../testing/acceptance/pr-conflict-resolution.md)。用户已授权审计修订后实施；Runner 在独立 worktree 修改并提 PR。不启动 roadmap，不部署安装环境。
+2026-11-06。对应 [Spec](../spec/pr-conflict-resolution.spec.md) 和[验收记录](../testing/acceptance/pr-conflict-resolution.md)。用户已授权审计修订后实施；Runner 在独立 worktree 修改并提 PR。不启动 roadmap。实现阶段未部署；后续用户已明确授权再次审计、修复、合并并按正式入口部署，不改变功能方案。
 
 ## 1. Runner：扩展已有 message
 
@@ -40,4 +40,4 @@ PCR-M01 在自动闭环后安排，参与人/窗口待定；只阻塞体验签�
 
 ## 4. 交付顺序
 
-Runner 公开契约与原 Run 执行 → SteerLine 消息接线和按钮 → 受控回归 → 固定构建真实联验 → 提示词独立审核及文档收尾。实现与证据按两仓分别提交，SteerLine 不导入 Runner 内部包；本次已授权实施和 Runner 提 PR，未授权安装部署。
+Runner 公开契约与原 Run 执行 → SteerLine 消息接线和按钮 → 受控回归 → 固定构建真实联验 → 提示词独立审核及文档收尾。实现与证据按两仓分别提交，SteerLine 不导入 Runner 内部包。后续按用户新授权完成合并前审计，修复复验通过后先合并 Runner，再合并 SteerLine，通过既有部署入口更新；停止原运行与升级排空遵循原规则，不因本功能绕过。
