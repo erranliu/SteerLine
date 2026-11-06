@@ -44,7 +44,7 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		created = "json_extract(CAST(a.payload AS TEXT),'$.created_at')"
 		finished = `MAX(COALESCE(json_extract(CAST(a.payload AS TEXT),'$.business_finished_at'),''),COALESCE((SELECT MAX(json_extract(CAST(g.payload AS TEXT),'$.report.updated_at')) FROM preparation_associations x JOIN test_generations g ON g.project_identity=x.project_identity AND g.generation_id=x.generation_id WHERE x.project_identity=a.project_identity AND x.batch_id=a.batch_id),''))`
 		related = `json_object('current',EXISTS(SELECT 1 FROM maintenance_settings s WHERE s.project_identity=a.project_identity AND s.generation_batch=a.batch_id),
-		'generations',json((SELECT COALESCE(json_group_array(json_object('id',x.generation_id,'inputs',x.inputs,'present',g.generation_id IS NOT NULL,'state',json_extract(CAST(g.payload AS TEXT),'$.state'),'submission',json_extract(CAST(g.payload AS TEXT),'$.submission'),'cancelled',json_extract(CAST(g.payload AS TEXT),'$.cancelled'),'run_id',json_extract(CAST(g.payload AS TEXT),'$.run_id'),'stop_status',json_extract(CAST(g.payload AS TEXT),'$.report.stop_status'),'updated_at',json_extract(CAST(g.payload AS TEXT),'$.report.updated_at'),'observed_at',NULLIF(o.last_success,''),'observation_diagnostic',COALESCE(o.diagnostic,''),'relevant',EXISTS(SELECT 1 FROM project_materials m WHERE m.project_identity=x.project_identity AND m.task_id=x.task_id AND json_extract(CAST(m.payload AS TEXT),'$.inputs')=x.inputs AND json_extract(CAST(m.payload AS TEXT),'$.generation_id')=x.generation_id))), '[]') FROM preparation_associations x LEFT JOIN test_generations g ON g.project_identity=x.project_identity AND g.generation_id=x.generation_id LEFT JOIN source_observations o ON o.project_identity=x.project_identity AND o.source='test_generation' AND o.source_id=x.generation_id WHERE x.project_identity=a.project_identity AND x.batch_id=a.batch_id)),
+		'generations',json((SELECT COALESCE(json_group_array(json_object('id',x.generation_id,'inputs',x.inputs,'present',g.generation_id IS NOT NULL,'state',json_extract(CAST(g.payload AS TEXT),'$.state'),'submission',json_extract(CAST(g.payload AS TEXT),'$.submission'),'cancelled',json_extract(CAST(g.payload AS TEXT),'$.cancelled'),'run_id',json_extract(CAST(g.payload AS TEXT),'$.run_id'),'stop_status',json_extract(CAST(g.payload AS TEXT),'$.report.stop_status'),'run_status',json_extract(CAST(g.payload AS TEXT),'$.report.status'),'run_phase',json_extract(CAST(g.payload AS TEXT),'$.report.phase'),'diagnostic',COALESCE(json_extract(CAST(g.payload AS TEXT),'$.diagnostic'),''),'updated_at',json_extract(CAST(g.payload AS TEXT),'$.report.updated_at'),'observed_at',NULLIF(o.last_success,''),'observation_diagnostic',COALESCE(o.diagnostic,''),'relevant',EXISTS(SELECT 1 FROM project_materials m WHERE m.project_identity=x.project_identity AND m.task_id=x.task_id AND json_extract(CAST(m.payload AS TEXT),'$.inputs')=x.inputs AND json_extract(CAST(m.payload AS TEXT),'$.generation_id')=x.generation_id))), '[]') FROM preparation_associations x LEFT JOIN test_generations g ON g.project_identity=x.project_identity AND g.generation_id=x.generation_id LEFT JOIN source_observations o ON o.project_identity=x.project_identity AND o.source='test_generation' AND o.source_id=x.generation_id WHERE x.project_identity=a.project_identity AND x.batch_id=a.batch_id)),
 		'requests',json((SELECT COALESCE(json_group_array(r.request_id),'[]') FROM maintenance_requests r WHERE r.project_identity=a.project_identity AND json_extract(CAST(r.result AS TEXT),'$.id')=a.batch_id)))`
 		request = `EXISTS(SELECT 1 FROM maintenance_requests r WHERE r.project_identity=a.project_identity AND json_extract(CAST(r.result AS TEXT),'$.id')=a.batch_id AND r.request_id IN (%s))`
 	case "task_candidate":
@@ -175,6 +175,8 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 					Present, Cancelled int
 					RunID              string `json:"run_id"`
 					StopStatus         string `json:"stop_status"`
+					RunStatus          string `json:"run_status"`
+					RunPhase           string `json:"run_phase"`
 				}
 			}
 			if err = json.Unmarshal(f.Related, &relationValues); err != nil {
@@ -183,10 +185,9 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 			if values, ok := relation["generations"].([]any); ok {
 				for i, g := range relationValues.Generations {
 					record := tm.Generation{State: g.State, Submission: g.Submission, Cancelled: g.Cancelled == 1, RunID: g.RunID}
-					if g.StopStatus != "" {
-						record.Projection = &runnercontract.Run{StopStatus: g.StopStatus}
-					}
+					record.Projection = &runnercontract.Run{Status: g.RunStatus, Phase: g.RunPhase, StopStatus: g.StopStatus}
 					values[i].(map[string]any)["settled"] = g.Present == 1 && record.Settled()
+					values[i].(map[string]any)["needs_attention"] = g.Present == 1 && record.NeedsAttention()
 				}
 			}
 		}

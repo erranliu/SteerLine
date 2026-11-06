@@ -119,6 +119,9 @@ func (m *projectMaintenance) batchProgress(ctx context.Context, batch pm.Generat
 			p.Queued++
 		case "accepted":
 			p.Running++
+			if g, err := m.store.Generation(ctx, m.config.Identity(), item.GenerationID); err == nil && g.Inputs == item.Inputs && g.NeedsAttention() {
+				p.Attention++
+			}
 		case "failed", "invalid", "rejected", "cancelled":
 			p.Failed++
 		default:

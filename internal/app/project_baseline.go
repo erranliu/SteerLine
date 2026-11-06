@@ -193,6 +193,22 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 	if local.Commit != remote.SHA {
 		localInfo = m.commitInfo(ctx, local.Commit, false)
 	}
+	type materialView struct {
+		pm.Material
+		NeedsAttention bool `json:"needs_attention"`
+		CanRetry       bool `json:"can_retry"`
+	}
+	tasks := make([]materialView, 0, len(materials))
+	for _, material := range materials {
+		task := materialView{Material: material, CanRetry: m.retryable(ctx, material)}
+		if g, err := m.store.Generation(ctx, m.config.Identity(), material.GenerationID); err == nil && g.Inputs == material.Inputs {
+			task.NeedsAttention = g.NeedsAttention()
+			if task.NeedsAttention {
+				task.Diagnostic = g.DiagnosticText()
+			}
+		}
+		tasks = append(tasks, task)
+	}
 	return struct {
 		Readiness   pm.Readiness          `json:"readiness"`
 		Observation pm.Observation        `json:"observation"`
@@ -200,11 +216,11 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 		RemoteName  string                `json:"remote_name"`
 		Remote      baselineCommit        `json:"remote"`
 		Local       localBaseline         `json:"local"`
-		Tasks       []pm.Material         `json:"tasks"`
+		Tasks       []materialView        `json:"tasks"`
 		Profiles    []profile             `json:"profiles"`
 		Profile     string                `json:"profile"`
 		Progress    pm.GenerationProgress `json:"generation_progress"`
-	}{state.Readiness, o, localInfo, m.config.Remote + "/" + m.config.Branch, remote, local, materials, profiles, store.MaterialProfile(ctx, m.config.Identity()), progress}, nil
+	}{state.Readiness, o, localInfo, m.config.Remote + "/" + m.config.Branch, remote, local, tasks, profiles, store.MaterialProfile(ctx, m.config.Identity()), progress}, nil
 }
 func (m *projectMaintenance) commitLog(ctx context.Context, page, scope string) (any, error) {
 	n, e := strconv.Atoi(page)

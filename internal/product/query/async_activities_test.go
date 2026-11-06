@@ -64,6 +64,33 @@ func TestAsyncActivityNormalPreparationIsNotAUserBlocker(t *testing.T) {
 	}
 }
 
+func TestAsyncActivityPreparationAttentionDoesNotHideOtherWorkOrReviveHistory(t *testing.T) {
+	for _, tc := range []struct {
+		name                       string
+		current, relevant, running int
+		state                      string
+		attention                  bool
+	}{
+		{"blocked", 1, 1, 0, "waiting", true},
+		{"other_work", 1, 1, 1, "running", true},
+		{"replaced_generation", 1, 0, 1, "running", false},
+		{"historical_batch", 0, 1, 0, "waiting", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, _ := json.Marshal(pm.GenerationBatch{ID: "batch", Status: "generating"})
+			generations := []map[string]any{{"id": "blocked", "needs_attention": true, "relevant": tc.relevant, "state": "accepted", "diagnostic": "original blocked"}}
+			if tc.running > 0 {
+				generations = append(generations, map[string]any{"id": "running", "relevant": 1, "state": "accepted"})
+			}
+			related, _ := json.Marshal(map[string]any{"current": tc.current, "generations": generations})
+			a, err := ProjectAsyncActivity("p", "i", ports.AsyncActivityFact{Source: "test_preparation", ID: "batch", Payload: raw, Related: related}, time.Now())
+			if err != nil || a.State != tc.state || a.NeedsAttention != tc.attention || a.FinishedAt != nil {
+				t.Fatalf("attention hid work or revived history: %+v %v", a, err)
+			}
+		})
+	}
+}
+
 func TestAsyncActivityPreparationFreshnessUsesEveryUnsettledGeneration(t *testing.T) {
 	now := time.Now().UTC()
 	old := now.Add(-2 * time.Minute)

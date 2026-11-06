@@ -37,6 +37,7 @@ type GenerationProgress struct {
 	Succeeded   int        `json:"succeeded"`
 	Queued      int        `json:"queued"`
 	Running     int        `json:"running"`
+	Attention   int        `json:"attention"` // Subset of Running; never changes batch completion.
 	Failed      int        `json:"failed"`
 	Blocked     int        `json:"blocked"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
