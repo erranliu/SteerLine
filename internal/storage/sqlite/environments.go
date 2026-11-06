@@ -23,7 +23,7 @@ func readEnvironment(ctx context.Context, db schemaQuery, project, id string) (e
 	if e = json.Unmarshal(b, &r); e != nil {
 		return r, e
 	}
-	if r.ID != id || r.Project != project || r.Revision != rev || rev == 0 || len(r.Requests) == 0 {
+	if r.FormatVersion != 1 || r.ID != id || r.Project != project || r.Revision != rev || rev == 0 || len(r.Requests) == 0 {
 		return r, errors.New("environment activity binding differs")
 	}
 	return r, nil
@@ -49,7 +49,7 @@ func (s *SQLiteStore) Environments(ctx context.Context, project string) ([]env.R
 		if e = json.Unmarshal(b, &r); e != nil {
 			return nil, e
 		}
-		if r.ID != id || r.Project != project || r.Revision != rev || rev == 0 {
+		if r.FormatVersion != 1 || r.ID != id || r.Project != project || r.Revision != rev || rev == 0 {
 			return nil, errors.New("environment row identity differs")
 		}
 		out = append(out, r)
@@ -72,10 +72,13 @@ func (s *SQLiteStore) SaveEnvironment(ctx context.Context, r env.Record, expecte
 }
 
 func saveEnvironmentTx(ctx context.Context, tx *sql.Tx, r env.Record, expected uint64) error {
-	if !env.IDPattern.MatchString(r.ID) || r.Project == "" || r.Revision != expected+1 || len(r.Requests) == 0 || r.Kind != "adaptation" || len(r.Rounds) > env.MaxRounds {
+	if r.FormatVersion != 1 || !env.IDPattern.MatchString(r.ID) || r.Project == "" || r.Revision != expected+1 || len(r.Requests) == 0 || r.Kind != "adaptation" || len(r.Rounds) > env.MaxRounds {
 		return errors.New("invalid environment activity")
 	}
 
+	if _, err := env.Key(r.Execution, r.Prepared.Identity); err != nil {
+		return err
+	}
 	old, e := readEnvironment(ctx, tx, r.Project, r.ID)
 	if expected == 0 {
 		if !errors.Is(e, env.ErrNotFound) {

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"io"
 	"strings"
 	"testing"
@@ -68,7 +69,7 @@ func testEnvironmentObserverSubmission(t *testing.T, shutdown bool) {
 	p.config.CommandTimeout = "30s"
 	peer := &slowEnvironmentSubmit{environmentWorkflowPeer: &environmentWorkflowPeer{}, started: make(chan time.Duration, 1), finished: make(chan struct{}), waitForShutdown: shutdown}
 	p.service.Runner = peer
-	key, _ := env.Key(c.RunnerExecution.Profiles[1].Execution)
+	key, _ := env.Key(c.RunnerExecution.Profiles[1].Execution, nativefixture.ExecutionIdentity(c.RunnerExecution.Profiles[1].Execution))
 	id := env.ID()
 	_, err := p.service.Start(context.Background(), id, json.RawMessage(`{}`), env.Start{EnvironmentKey: key, Profile: "remote", TimeoutSeconds: 60})
 	require(t, err)
@@ -230,7 +231,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.
 			}()
 			defer func() { cancel(); <-done }()
 			runtime := &runtimeProjectPort{actor: actor, config: c, store: store, instance: actor.InstanceID()}
-			key, _ := env.Key(c.RunnerExecution.Profiles[1].Execution)
+			key, _ := env.Key(c.RunnerExecution.Profiles[1].Execution, nativefixture.ExecutionIdentity(c.RunnerExecution.Profiles[1].Execution))
 			payload, _ := json.Marshal(env.Start{EnvironmentKey: key, Profile: "remote", TimeoutSeconds: 60})
 			request := httpcontract.CommandEnvelope{RequestID: env.ID(), ProjectID: httpcontract.ProjectID(c.Identity()), InstanceID: actor.InstanceID(), Action: "environment_start", TargetID: httpcontract.ProjectID(c.Identity()), ExpectedVersion: 1, Payload: payload}
 			for _, invalid := range []string{`{"profile_id":"remote","round_timeout_seconds":60}`, `{"profile_id":"remote","round_timeout_seconds":60,"expected_current_revision":null}`} {

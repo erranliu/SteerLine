@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"net/url"
 	"strings"
 	"testing"
@@ -13,7 +14,7 @@ import (
 
 func TestEnvironmentMaterialQueryDoesNotExposeExecutionSecrets(t *testing.T) {
 	p, c, _ := environmentFixture(t)
-	key, _ := model.Key(c.RunnerExecution.Profiles[0].Execution)
+	key, _ := model.Key(c.RunnerExecution.Profiles[0].Execution, nativefixture.ExecutionIdentity(c.RunnerExecution.Profiles[0].Execution))
 	value, e := p.materials(context.Background(), key)
 	require(t, e)
 	raw, _ := json.Marshal(value)
@@ -32,7 +33,7 @@ func TestEnvironmentMaterialQueryDoesNotExposeExecutionSecrets(t *testing.T) {
 func TestEnvironmentHistoryFiltersBeforeTwentyAndKeepsRemovedTarget(t *testing.T) {
 	p, c, store := environmentFixture(t)
 	ctx := context.Background()
-	key, _ := model.Key(c.RunnerExecution.Profiles[0].Execution)
+	key, _ := model.Key(c.RunnerExecution.Profiles[0].Execution, nativefixture.ExecutionIdentity(c.RunnerExecution.Profiles[0].Execution))
 	want := ""
 	wantCreatedAt := time.Time{}
 	for i := 0; i < 26; i++ {
@@ -40,7 +41,8 @@ func TestEnvironmentHistoryFiltersBeforeTwentyAndKeepsRemovedTarget(t *testing.T
 		if i == 0 {
 			profile = c.RunnerExecution.Profiles[0]
 		}
-		r := model.Record{ID: model.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Execution: profile.Execution, State: "failed", CreatedAt: time.Now().UTC(), Requests: []model.Request{{ID: model.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []model.Round{}}
+		r := model.Record{FormatVersion: 1, ID: model.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Execution: profile.Execution, State: "failed", CreatedAt: time.Now().UTC(), Requests: []model.Request{{ID: model.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []model.Round{}}
+		r.Prepared.Identity = nativefixture.ExecutionIdentity(r.Execution)
 		if i == 0 {
 			r.Rounds = []model.Round{{Number: 1, TimedOut: true, Settled: true}}
 		}

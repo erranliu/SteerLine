@@ -27,6 +27,13 @@ function setup(
 ) {
   const sha = "a".repeat(40);
   const view: MaintenanceView = {
+    readiness: {
+      status: "not_ready",
+      commit: sha,
+      total: 1,
+      ready: 1,
+      blockers: ["本地尚未与目标分支同步"],
+    },
     observation: { commit: sha, last_success: "2026-10-21T01:00:00Z" },
     remote_name: "origin/main",
     remote: {
@@ -370,4 +377,33 @@ it("GQ polling delay does not shorten the five-second notice or reset it on remo
   expect(screen.getByText("1/1 生成完毕")).toBeVisible();
   act(() => vi.advanceTimersByTime(1));
   expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("keeps a binary project status and follows the server verdict instead of individual rows", async () => {
+  const { view, api } = setup({
+    readiness: {
+      status: "ready",
+      commit: "base",
+      total: 1,
+      ready: 1,
+      blockers: [],
+    },
+  });
+  const toggle = await screen.findByRole("button", {
+    name: "项目维护 · 已就绪",
+  });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByText(/测试安排 1\/1 就绪/)).toBeVisible();
+  expect(api.submit).not.toHaveBeenCalled();
+  view.readiness = {
+    ...view.readiness,
+    status: "not_ready",
+    blockers: ["任务 #99 的材料与测试安排未就绪"],
+  };
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole("button", { name: "检查更新" }));
+  expect(
+    await screen.findByRole("button", { name: "项目维护 · 未就绪" }),
+  ).toBeVisible();
+  expect(screen.getByText("任务 #99 的材料与测试安排未就绪")).toBeVisible();
 });

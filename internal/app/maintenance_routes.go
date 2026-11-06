@@ -59,6 +59,10 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 				return e
 			}
 		}
+		switch in.Action {
+		case "maintenance_check", "maintenance_profile", "maintenance_retry", "maintenance_generate_all":
+			p.config.runtimeNative.RefreshFailures()
+		}
 		result, e := p.maintenanceAction(ctx, in)
 		out.Status = "applied"
 		if e != nil {
@@ -135,7 +139,7 @@ func (p *runtimeProjectPort) maintenanceAction(ctx context.Context, in httpcontr
 		if e != nil {
 			return nil, e
 		}
-		if _, e = generationProfile(profile); e != nil {
+		if _, e = m.config.deriveProfile(ctx, profile, "generate", "read_only"); e != nil {
 			return nil, e
 		}
 		store := m.store.(materialStore)
@@ -240,6 +244,9 @@ func (p *runtimeProjectPort) maintenanceRead(ctx context.Context, route, mode, p
 	m := p.config.runtimeMaintenance
 	if m == nil {
 		return nil, errors.New("maintenance unavailable")
+	}
+	if route == "/maintenance/readiness" {
+		return m.projectReadiness(ctx)
 	}
 	if strings.HasPrefix(route, "/maintenance/tasks/") {
 		return m.taskDocuments(ctx, strings.TrimPrefix(route, "/maintenance/tasks/"))

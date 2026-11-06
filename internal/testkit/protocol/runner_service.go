@@ -18,6 +18,9 @@ func RunRunnerServiceFixture() bool {
 	if version == "" || len(os.Args) < 2 {
 		return false
 	}
+	if RunExecutionConfigurationFixture(version) {
+		return true
+	}
 	args := os.Args[1:]
 	command := args[0]
 	if command == "service" && len(args) > 1 {
@@ -217,16 +220,17 @@ func RunRunnerServiceFixture() bool {
 func RunnerServiceCapabilities(version string) map[string]any {
 	digest := strings.Repeat("a", 64)
 	return map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
-		"model_input_contract":  json.RawMessage(`{"contract":"steerrunner-model-input/v1","workflow":{"project_policies":{"slots":[{"slot":"git","path":"SteerlineFlow/runner-policies/git.md"},{"slot":"command","path":"SteerlineFlow/runner-policies/command.md"},{"slot":"testing","path":"SteerlineFlow/runner-policies/testing.md"}]}}}`),
-		"recovery":              map[string]any{"state_format": "steerrunner-state/v8", "same_build_restart": true, "resource_rebuild": false, "upgrade": "drain original resources and controls"},
-		"execution_wait":        RunnerExecutionWaitCapability(),
-		"run_observation":       map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100},
-		"progress_file":         map[string]any{"contract": "steerrunner-progress-file/v1", "command": "progress-file --run-id R --json", "submit_property": "progress_file", "environment_variable": "STEERLINE_PROGRESS_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256"},
-		"progress_file_schema":  map[string]any{"$id": "steerrunner-progress-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-progress-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"type": "string"}}},
-		"result_file":           map[string]any{"contract": "steerrunner-result-file/v1", "command": "result-file --run-id R --json", "submit_property": "result_file", "environment_variable": "STEERLINE_RESULT_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256", "collection": "end_only", "query_reads_file": false, "supported": map[string]any{"adapters": []string{"codex-app-server"}, "target_kinds": []string{"local"}, "workflows": []string{"development/1", "development/2"}}},
-		"result_file_schema":    map[string]any{"$id": "steerrunner-result-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-result-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer", "minimum": 0, "maximum": 1}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"enum": []string{"disabled", "pending", "closed"}}}},
-		"native_session_viewer": map[string]any{"adapters": []string{"codex-app-server"}},
-		"instance_binding":      map[string]bool{"expected_instance_id": true},
+		"execution_configuration": ExecutionConfigurationCapability,
+		"model_input_contract":    json.RawMessage(`{"contract":"steerrunner-model-input/v1","workflow":{"project_policies":{"slots":[{"slot":"git","path":"SteerlineFlow/runner-policies/git.md"},{"slot":"command","path":"SteerlineFlow/runner-policies/command.md"},{"slot":"testing","path":"SteerlineFlow/runner-policies/testing.md"}]}}}`),
+		"recovery":                map[string]any{"state_format": "steerrunner-state/v8", "same_build_restart": true, "resource_rebuild": false, "upgrade": "drain original resources and controls"},
+		"execution_wait":          RunnerExecutionWaitCapability(),
+		"run_observation":         map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100},
+		"progress_file":           map[string]any{"contract": "steerrunner-progress-file/v1", "command": "progress-file --run-id R --json", "submit_property": "progress_file", "environment_variable": "STEERLINE_PROGRESS_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256"},
+		"progress_file_schema":    map[string]any{"$id": "steerrunner-progress-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-progress-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"type": "string"}}},
+		"result_file":             map[string]any{"contract": "steerrunner-result-file/v1", "command": "result-file --run-id R --json", "submit_property": "result_file", "environment_variable": "STEERLINE_RESULT_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256", "collection": "end_only", "query_reads_file": false, "supported": map[string]any{"adapters": []string{"codex-app-server"}, "target_kinds": []string{"local"}, "workflows": []string{"development/1", "development/2"}}},
+		"result_file_schema":      map[string]any{"$id": "steerrunner-result-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-result-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer", "minimum": 0, "maximum": 1}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"enum": []string{"disabled", "pending", "closed"}}}},
+		"native_session_viewer":   map[string]any{"adapters": []string{"codex-app-server"}},
+		"instance_binding":        map[string]bool{"expected_instance_id": true},
 		"workflows": []any{
 			map[string]any{"id": "development", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"implement.execute", "implement.report", "publish", "publish.report"}, "states": map[string]any{"implement.execute": map[string]any{"kind": "execute", "contract": "implementation", "prompt_key": "implement.execute", "prompt": "Fixture implementation instruction."}}},
 			map[string]any{"id": "development", "version": 2, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"prepare", "publish"}},

@@ -480,6 +480,24 @@ func ScanSource(root string) (Report, error) {
 			return nil
 		}
 		if !strings.HasSuffix(entry.Name(), ".go") {
+			if (strings.HasSuffix(entry.Name(), ".ts") || strings.HasSuffix(entry.Name(), ".tsx")) && !strings.Contains(entry.Name(), ".test.") {
+				relative, e := filepath.Rel(root, path)
+				if e != nil {
+					return e
+				}
+				relative = filepath.ToSlash(relative)
+				if strings.HasPrefix(relative, "web/src/features/execution-configs/") || relative == "web/src/shared/api/execution-configs.ts" {
+					body, e := os.ReadFile(path)
+					if e != nil {
+						return e
+					}
+					for _, field := range []string{"agent_launch", "runtime_executable", "runtime_sha256", "execution.settings."} {
+						if strings.Contains(string(body), field) {
+							report.Violations = append(report.Violations, "native configuration mapping outside Runner: "+relative+" -> "+field)
+						}
+					}
+				}
+			}
 			return nil
 		}
 		rel, err := filepath.Rel(root, filepath.Dir(path))
@@ -508,6 +526,7 @@ func ScanSource(root string) (Report, error) {
 			return err
 		}
 		if !strings.HasSuffix(entry.Name(), "_test.go") {
+			checkNativeConfigurationSource(&report, filepath.ToSlash(rel)+"/"+entry.Name(), parsed)
 			checkPromptSource(&report, filepath.ToSlash(rel)+"/"+entry.Name(), parsed)
 			checkDeveloperConfigSource(&report, filepath.ToSlash(rel)+"/"+entry.Name(), parsed)
 			for _, decl := range parsed.Decls {

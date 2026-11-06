@@ -24,10 +24,11 @@ type Action struct {
 // EnvironmentAdmission is the caller's immutable reservation evidence. The
 // environment owner qualifies it; storage checks all fields in its transaction.
 type EnvironmentAdmission struct {
-	Key        string `json:"environment_key"`
-	Revision   uint64 `json:"current_revision"`
-	ActivityID string `json:"activity_id"`
-	Basis      string `json:"basis"`
+	Identity   runnercontract.ExecutionIdentity `json:"execution_identity"`
+	Key        string                           `json:"environment_key"`
+	Revision   uint64                           `json:"current_revision"`
+	ActivityID string                           `json:"activity_id"`
+	Basis      string                           `json:"basis"`
 }
 
 type Candidate struct {

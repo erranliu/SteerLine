@@ -81,7 +81,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			return m.prepare(ctx, w, candidate, base.Resolve)
 		}
 		service.ReserveExecution = func(ctx context.Context, w taskmodel.FixedWork, c runnerbridge.Candidate, candidate bool) error {
-			return m.reserveBaseline(c.BaseRevision, func() error {
+			return m.reserveReadyExecution(ctx, c.BaseRevision, func() error {
 				return connection.ReserveRunnerCandidate(ctx, w, c, candidate)
 			})
 		}
@@ -121,7 +121,15 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			if err != nil {
 				return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 			}
-			candidate.Environment = &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
+			profile, profileErr := config.RunnerExecution.Profile(candidate.ProfileID, "")
+			if profileErr != nil {
+				return profileErr
+			}
+			description, descriptionErr := config.describeProfile(ctx, profile)
+			if descriptionErr != nil || description.Identity == nil {
+				return descriptionErr
+			}
+			candidate.Environment = &runnerstate.EnvironmentAdmission{Identity: *description.Identity, Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
 		}
 		target := executionconfig.Target(input.Execution)
 		a := config.runtimeEnvironmentAdmission

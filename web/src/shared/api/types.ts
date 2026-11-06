@@ -1,3 +1,11 @@
+export type ProjectReadiness = {
+  status: "ready" | "not_ready";
+  commit: string;
+  total: number;
+  ready: number;
+  blockers: string[];
+};
+
 export type Materials = {
   commit: string;
   status: string;

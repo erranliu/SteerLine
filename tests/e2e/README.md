@@ -79,6 +79,10 @@ Playwright `roadmap-live.spec.ts` 通过正式页面和 HTTP 原信封验证刷�
 
 ## 本机环境准备 L4
 
+远端环境驱动保留显式 `STEERLINE_L4_PROJECT_CONFIG` 中源目录的 basename，按 Runner 既有目录名合同和 URL 选择已登记的远端仓库，不按 displayName 或同 URL 任意 checkout 改投；Runner 最终仍独立拒绝同 basename 歧义。实际远端脚本报告依赖未就绪时保留 not_ready 与原停止/封存证据，不修复目标安装，也不算正向 L4 通过。
+
+Orca 环境检测的 Task 准入探针需要独立的本机 Codex 材料生成方案。显式设置 `STEERLINE_L4_GENERATION_PROFILE=<绝对 profile JSON>`，驱动将其冻结到同一新 home；ID 必须与受测方案不同。它只负责本机只读材料生成，默认方案、检测执行、准入探针及原 Run 绑定仍使用受测 Orca profile，不由驱动从 Orca settings 推导另一条执行链。
+
 `testing.project-environment-local` 复用相同的一次调用、最终结果绑定、准入探针及清理驱动。本机 Codex 与本机 Orca 是不同环境；所有目标均通过 Runner 公开结果通道取得封存报告。显式设置 `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS`、`STEERLINE_L4_LOCAL_PROFILE` 和固定 `STEERRUNNER_EXE`。必须支持 execute/1 与最终结果封存，受测提交包含 manifest5 文档、入口及依赖；不要求平台协议副本或测试目录。正式入口：
 
 ```powershell

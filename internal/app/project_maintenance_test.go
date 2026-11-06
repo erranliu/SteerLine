@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	progresstools "github.com/erranliu/SteerLine/tools"
@@ -253,6 +254,18 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	m.config.runtimeCatalog = cat
 	m.config.RunnerExecution.Profiles[0].Workflow = runnerclient.Workflow{ID: "development", Version: 2}
 	m.config.RunnerExecution.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access"}`)
+	m.config.runtimeNative = &runnerclient.ConfigurationSnapshot{Catalog: cat, Query: protocol.ExecutionConfigurationFixture}
+	service.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+		source, err := m.config.RunnerExecution.Profile(id, "")
+		if err != nil {
+			return runnercontract.ExecutionInput{}, nil, err
+		}
+		result, err := m.config.deriveProfile(ctx, source, "generate", "read_only")
+		if err != nil {
+			return runnercontract.ExecutionInput{}, nil, err
+		}
+		return *result.Execution, cat, nil
+	}
 	m.tests = &testManagementPort{service: service}
 	return m, store, cli
 }
@@ -770,4 +783,52 @@ func TestPMReservationRejectsPendingEnvironmentObservation(t *testing.T) {
 		t.Fatal("pending observation admitted an old preflight", err, reservations)
 	}
 	require(t, m.reserveBaseline(before.Commit, func() error { reservations++; return nil }))
+}
+
+func TestPMSNativeConfigurationPrecheckSnapshot(t *testing.T) {
+	ctx := context.Background()
+	m, store, cli := pmsFixture(t)
+	calls := 0
+	broken := true
+	m.config.runtimeNative = &runnerclient.ConfigurationSnapshot{Catalog: m.config.runtimeCatalog, Query: func(ctx context.Context, in runnercontract.ExecutionConfigurationRequest) (runnercontract.ExecutionConfigurationResult, error) {
+		calls++
+		if broken {
+			return runnercontract.ExecutionConfigurationResult{}, fmt.Errorf("fixed Runner derive unavailable")
+		}
+		return protocol.ExecutionConfigurationFixture(ctx, in)
+	}}
+	if _, err := m.check(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := m.refresh(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if cli.submits != 0 || calls != 1 || store.materials["101"].Status != "configuration_required" {
+		t.Fatal("failed precheck submitted or repeated CLI", cli.submits, calls, store.materials["101"])
+	}
+	broken = false
+	m.config.runtimeNative.RefreshFailures()
+	if err := m.refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if cli.submits != 1 || calls != 2 {
+		t.Fatal("precheck and real generation did not share the same facts", cli.submits, calls)
+	}
+	var input runnercontract.GenerateRunInput
+	require(t, json.Unmarshal(cli.request.Input, &input))
+	if input.Execution.Adapter != "codex-app-server" {
+		t.Fatal(input.Execution)
+	}
+	var permission struct {
+		AccessMode string `json:"access_mode"`
+	}
+	require(t, json.Unmarshal(input.Execution.Settings, &permission))
+	if permission.AccessMode != "read_only" {
+		t.Fatal("generation used source development permission")
+	}
 }

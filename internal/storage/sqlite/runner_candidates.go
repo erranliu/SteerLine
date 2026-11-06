@@ -226,7 +226,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if c.EnvironmentReadinessSkipped {
 			c.Environment = nil
 		} else {
-			if err := verifyCandidateEnvironment(ctx, tx.tx, c.Project, c.Environment, input.Execution); err != nil {
+			if err := s.verifyCandidateEnvironment(ctx, tx.tx, c.Project, c.Environment, input.Execution); err != nil {
 				return err
 			}
 		}
@@ -239,6 +239,11 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		}
 		if graph.Authority.DispatchPaused {
 			return nativeErr("dispatch_paused", "dispatch is paused")
+		}
+		if c.MaterialDigest != "" {
+			if err := tx.verifyProjectMaterials(c.Project, c.BaseRevision, graph.Tasks); err != nil {
+				return err
+			}
 		}
 		if !candidate && (c.Explicit && graph.Authority.DispatchMode != "manual" || !c.Explicit && graph.Authority.DispatchMode != "auto") {
 			return nativeErr("wrong_mode", "dispatch mode differs from the original start")

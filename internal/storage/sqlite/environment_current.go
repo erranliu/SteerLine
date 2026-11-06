@@ -60,7 +60,10 @@ func writeEnvironmentCurrent(ctx context.Context, tx *sql.Tx, current env.Curren
 
 // StartEnvironment is the only operation which selects a new adaptation.
 func (s *SQLiteStore) StartEnvironment(ctx context.Context, record env.Record, expected uint64) error {
-	key, err := env.Key(record.Execution)
+	if err := s.verifyExecutionIdentity(record.Execution, record.Prepared.Identity); err != nil {
+		return err
+	}
+	key, err := env.Key(record.Execution, record.Prepared.Identity)
 	if err != nil {
 		return err
 	}
@@ -121,11 +124,14 @@ func (s *SQLiteStore) InvalidateEnvironment(ctx context.Context, project, key, r
 	return err
 }
 
-func verifyCandidateEnvironment(ctx context.Context, tx *sql.Tx, project string, proof *runnerstate.EnvironmentAdmission, execution runnercontract.ExecutionInput) error {
+func (s *SQLiteStore) verifyCandidateEnvironment(ctx context.Context, tx *sql.Tx, project string, proof *runnerstate.EnvironmentAdmission, execution runnercontract.ExecutionInput) error {
 	if proof == nil {
 		return nativeErr("environment_not_ready", "项目环境尚未准备")
 	}
-	key, keyErr := env.Key(execution)
+	if err := s.verifyExecutionIdentity(execution, proof.Identity); err != nil {
+		return nativeErr("environment_not_ready", err.Error())
+	}
+	key, keyErr := env.Key(execution, proof.Identity)
 	if keyErr != nil || key != proof.Key {
 		return nativeErr("environment_not_ready", "候选执行环境与准备证明不符")
 	}

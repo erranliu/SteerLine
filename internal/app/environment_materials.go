@@ -7,11 +7,12 @@ import (
 )
 
 func (p *environmentPort) targetProfile(key string) (RunnerProfile, error) {
+	ctx := context.Background()
 	for _, profile := range p.config.RunnerExecution.Profiles {
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}
-		k, e := model.Key(profile.Execution)
+		k, e := p.config.profileEnvironmentKey(ctx, profile)
 		if e == nil && k == key {
 			return profile, nil
 		}

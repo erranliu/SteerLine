@@ -263,7 +263,7 @@ func exitCode(code string) int {
 		return 2
 	case "unsupported_protocol", "unsupported_schema", "unsupported_capability", "unsupported_platform":
 		return 3
-	case "workspace_unavailable", "artifact_unavailable", "service_unavailable", "service_start_failed", "detach_unsupported", "startup_unverified", "environment_unavailable":
+	case "execution_configuration_timeout", "workspace_unavailable", "artifact_unavailable", "service_unavailable", "service_start_failed", "detach_unsupported", "startup_unverified", "environment_unavailable":
 		return 4
 	case "request_conflict", "request_not_found", "command_not_found", "run_not_found", "check_not_found", "stale_instance", "directory_conflict", "stale_revision", "invalid_state", "stale_question", "resume_required", "operation_unverified", "answer_pending", "repository_conflict":
 		return 5

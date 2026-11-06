@@ -62,6 +62,7 @@ type Result struct {
 	Protocol          int           `json:"protocol,omitempty"`
 }
 type pending struct {
+	key         string
 	subscribers int
 	cancel      context.CancelFunc
 	done        chan struct{}
@@ -91,6 +92,7 @@ func (m *Manager) await(ctx context.Context, flight *pending) (Result, error) {
 		flight.subscribers--
 		if flight.subscribers == 0 {
 			flight.cancel()
+			m.removeFlight(flight)
 		}
 		m.mu.Unlock()
 	}()
@@ -99,6 +101,14 @@ func (m *Manager) await(ctx context.Context, flight *pending) (Result, error) {
 		return Result{}, ctx.Err()
 	case <-flight.done:
 		return flight.result, flight.err
+	}
+}
+
+// Called with mu held. A draining query must neither receive new subscribers
+// nor remove a replacement query when its native cleanup eventually finishes.
+func (m *Manager) removeFlight(flight *pending) {
+	if m.flights[flight.key] == flight {
+		delete(m.flights, flight.key)
 	}
 }
 func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
@@ -146,23 +156,17 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 			if profile.ID != q.ProfileID {
 				continue
 			}
-			var settings struct {
-				Executable string `json:"executable"`
-				Agent      string `json:"agent"`
+			view, describeErr := m.Store.DescribeProfile(ctx, config.Runner, profile)
+			if describeErr != nil {
+				return Result{}, describeErr
 			}
-			if err = json.Unmarshal(profile.Execution.Settings, &settings); err != nil {
-				return Result{}, err
-			}
-			if settings.Agent == "" || profile.Execution.Adapter == "codex-app-server" {
-				settings.Agent = "codex"
-			}
-			if q.Kind == "environments" || profile.Execution.Adapter != q.Adapter || profile.Execution.Target.Kind != q.Host || profile.Execution.Target.Environment != q.Environment || settings.Agent != q.Agent {
+			if q.Kind == "environments" || view.Adapter != q.Adapter || view.Target.Kind != q.Host || view.Target.Environment != q.Environment || q.Kind == "models" && view.Agent != q.Agent {
 				return Result{}, errors.New("discovery profile and target/agent differ")
 			}
 			found = true
-			if q.Kind == "models" && q.Adapter == "codex-app-server" {
-				input.Executable = settings.Executable
-			}
+			execution := profile.Execution
+			input.Execution = &execution
+
 			break
 		}
 		if !found {
@@ -192,7 +196,7 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 		return Result{State: "unavailable", Diagnostic: "能力探测正忙，请稍后重试", ContextUnverified: true}, nil
 	}
 	queryCtx, cancel := context.WithTimeout(m.ctx, 30*time.Second)
-	flight := &pending{done: make(chan struct{}), subscribers: 1, cancel: cancel}
+	flight := &pending{key: key, done: make(chan struct{}), subscribers: 1, cancel: cancel}
 	previous, hasPrevious := m.previous[key]
 	m.flights[key] = flight
 	m.wg.Add(1)
@@ -286,7 +290,7 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 			m.previous[key] = out
 		}
 		flight.result = out
-		delete(m.flights, key)
+		m.removeFlight(flight)
 		close(flight.done)
 		m.mu.Unlock()
 	}()

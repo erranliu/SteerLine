@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 )
 
 type invalidEnvironmentBasis struct{ error }
@@ -26,7 +25,7 @@ func (p *environmentPort) observeBasis(ctx context.Context, commit string) error
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}
-		key, err := env.Key(profile.Execution)
+		key, err := p.config.profileEnvironmentKey(ctx, profile)
 		if err != nil || seen[key] {
 			continue
 		}

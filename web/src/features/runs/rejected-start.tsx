@@ -1,11 +1,11 @@
 import type { CandidateStart } from "../../app/use-candidate-starts";
-import { useTestReadiness } from "../tasks/use-test-readiness";
+import { useProjectReadiness } from "../project-maintenance/use-readiness";
 
 export function RejectedStart({ start }: { start: CandidateStart }) {
-  const tests = useTestReadiness(start.taskID);
+  const tests = useProjectReadiness();
   return (
     <>
-      <div role="status" aria-label="当前测试安排">
+      <div role="status" aria-label="项目就绪状态">
         <p>{tests.text}</p>
         {tests.diagnostic && <p className="muted">{tests.diagnostic}</p>}
         {tests.ready && <p className="muted">可在任务详情重新选择方案启动。</p>}

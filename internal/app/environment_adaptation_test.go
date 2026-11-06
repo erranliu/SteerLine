@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/erranliu/SteerLine/internal/executionconfig"
+	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +54,10 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	store, e := OpenNativeTaskCommandStore(ctx, &c)
 	require(t, e)
 	t.Cleanup(func() { store.Close() })
+	c.runtimeNative = &runnerclient.ConfigurationSnapshot{Query: nativefixture.ExecutionConfigurationFixture}
+	for _, profile := range c.RunnerExecution.Profiles {
+		_, _ = c.describeProfile(ctx, profile)
+	}
 	c.runtimeEnvironmentAdmission = &environmentAdmission{}
 	c.runtimeEnvironmentAdmission.register(c)
 	port := newEnvironmentPort(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, nil)
@@ -64,7 +69,7 @@ func TestProjectEnvironmentAdmissionDeclaredBasisAndPersistentRevocation(t *test
 	ctx := context.Background()
 	prepared, e := p.prepare(ctx, "remote")
 	require(t, e)
-	r := envmodel.Record{ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Settled: true}}}
+	r := envmodel.Record{FormatVersion: 1, ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Settled: true}}}
 	require(t, store.StartEnvironment(ctx, r, 0))
 	if _, _, e = p.admission(ctx, "remote", "", false); e != nil {
 		t.Fatal(e)
@@ -92,7 +97,7 @@ func TestProjectEnvironmentAdmissionDeclaredBasisAndPersistentRevocation(t *test
 }
 func mustEnvironmentKey(t *testing.T, e runnercontract.ExecutionInput) string {
 	t.Helper()
-	key, err := envmodel.Key(e)
+	key, err := envmodel.Key(e, nativefixture.ExecutionIdentity(e))
 	require(t, err)
 	return key
 }
@@ -123,7 +128,7 @@ func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) 
 			defer wg.Done()
 			id := envmodel.ID()
 			err := c.runtimeEnvironmentAdmission.adapt(ctx, executionconfig.Target(prepared.Input.Execution), id, func() error {
-				return store.SaveEnvironment(ctx, envmodel.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, State: "running", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Submission: "pending"}}}, 0)
+				return store.SaveEnvironment(ctx, envmodel.Record{FormatVersion: 1, ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared, State: "running", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Submission: "pending"}}}, 0)
 			})
 			if err == nil {
 				mu.Lock()
@@ -162,7 +167,7 @@ func TestProjectEnvironmentAdmissionAcrossProjectsUsesPublicTarget(t *testing.T)
 	require(t, reader.Close())
 	p.config.runtimeEnvironmentAdmission.register(other)
 	id := envmodel.ID()
-	require(t, store.SaveEnvironment(ctx, envmodel.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: profile.Execution, State: "running", Requests: []envmodel.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Submission: "unknown"}}}, 0))
+	require(t, store.SaveEnvironment(ctx, envmodel.Record{FormatVersion: 1, ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: profile.Execution, Prepared: envmodel.Prepared{Identity: nativefixture.ExecutionIdentity(profile.Execution), DerivedExecution: profile.Execution, Input: runnercontract.RunInput{Execution: profile.Execution}}, State: "running", Requests: []envmodel.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Submission: "unknown"}}}, 0))
 	accepted := false
 	a := p.config.runtimeEnvironmentAdmission
 	if e = a.adapt(ctx, executionconfig.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }); e == nil || accepted {

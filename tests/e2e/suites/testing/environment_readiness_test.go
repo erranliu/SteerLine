@@ -29,7 +29,7 @@ func TestProjectEnvironmentReadiness(t *testing.T) {
 			profile[key] = value
 		}
 		profile["id"] = "controlled-orca"
-		profile["execution"] = map[string]any{"adapter": "orca-terminal", "target": map[string]string{"kind": "orca_environment", "environment": "controlled-peer"}, "settings": map[string]any{"access_mode": "full_access", "agent_launch": map[string]any{"executable": "codex"}}}
+		profile["execution"] = map[string]any{"adapter": "orca-terminal", "target": map[string]string{"kind": "orca_environment", "environment": "controlled-peer"}, "settings": map[string]any{"access_mode": "full_access", "agent": "codex"}}
 		config["execution_profiles"] = append(profiles, profile)
 		s.Must(controlled.Write(path, config))
 

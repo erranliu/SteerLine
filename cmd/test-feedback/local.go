@@ -47,7 +47,8 @@ var localSuites = []localSuite{
 	}},
 	{ID: "go.runner-contract", Suite: "go", Groups: []localGroup{
 		{ID: "go-runner-app", Packages: []string{"./internal/app"}, Tests: []string{"TestPublishedRunnerApplicationLifecycle"}},
-		{ID: "go-runner-client", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestLegacyCheckRetirementPublishedContract", "TestRunnerFullBindingPublicCLI"}},
+		{ID: "go-runner-client", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestLegacyCheckRetirementPublishedContract", "TestRunnerFullBindingPublicCLI", "TestExecutionConfigurationPublishedRunner"}},
+		{ID: "go-runner-web", Packages: []string{"./web/server/executionconfig"}, Tests: []string{"TestExecutionConfigurationPublishedStore"}},
 	}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256"}},
 	{ID: "go.runner-result", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./internal/runnerclient"}, Tests: []string{"TestProjectEnvironmentExecutionPublishedResultRoundTrip", "TestNative101PublishedArrangement"}}}, Tag: "runneracceptance", Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256", "STEERRUNNER_NATIVE_FIXTURE"}},
 }

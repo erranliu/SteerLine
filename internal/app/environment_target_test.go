@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"testing"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
@@ -39,7 +40,7 @@ func TestEnvironmentContextAndGlobalTargetBoundaries(t *testing.T) {
 		execution := codex
 		execution.Adapter = target.adapter
 		execution.Target = runnercontract.ExecutionTarget{Kind: target.kind, Environment: target.environment}
-		_, err := env.Context(execution)
+		_, err := env.Context(execution, nativefixture.ExecutionIdentity(execution))
 		if (err == nil) != target.valid || (executionconfig.Target(execution) != "") != target.valid {
 			t.Fatalf("context/global target acceptance changed for %+v: %v", target, err)
 		}

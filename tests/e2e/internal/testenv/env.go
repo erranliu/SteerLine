@@ -298,7 +298,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	}))
 	selection, err := driver.RunnerSelection(s.Run.Helper)
 	s.Must(err)
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]any{"executable": s.Run.Helper}}, "workflow": map[string]any{"id": "development", "version": 1}}}, "default_execution_profile": "controlled"}))
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]any{"executable": s.Run.Helper, "access_mode": "full_access"}}, "workflow": map[string]any{"id": "development", "version": 1}}}, "default_execution_profile": "controlled"}))
 	commandLogs := filepath.Join(s.Output, name+"-commands")
 	s.Must(os.MkdirAll(commandLogs, 0700))
 	p.Driver = driver.Client{Binary: p.Executable, Config: p.Config, Home: p.Home, StatePath: p.Provider, LogDir: commandLogs}

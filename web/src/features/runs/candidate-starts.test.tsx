@@ -74,9 +74,12 @@ function setup(existing = false, requests: StoredRequest[] = []) {
   client.setQueryData(options.task("1").queryKey, taskPage);
   client.setQueryData(options.tasks().queryKey, taskPage);
   client.setQueryData(options.presentation().queryKey, presentation);
-  client.setQueryData(options.taskReadiness("1").queryKey, {
+  client.setQueryData(options.projectReadiness().queryKey, {
     status: "ready",
     commit: "base",
+    total: 1,
+    ready: 1,
+    blockers: [],
   });
   let materialStatus = "ready";
   vi.spyOn(api, "get").mockImplementation(
@@ -91,8 +94,14 @@ function setup(existing = false, requests: StoredRequest[] = []) {
           }
         : path === "/presentation"
           ? presentation
-          : path === "/maintenance/tasks/1?view=status"
-            ? { status: materialStatus, commit: "base" }
+          : path === "/maintenance/readiness"
+            ? {
+                status: materialStatus === "ready" ? "ready" : "not_ready",
+                commit: "base",
+                total: 1,
+                ready: materialStatus === "ready" ? 1 : 0,
+                blockers: [],
+              }
             : path.includes("/activity?")
               ? {
                   page: {
@@ -179,9 +188,12 @@ function setup(existing = false, requests: StoredRequest[] = []) {
     confirm,
     setMaterials(status: string) {
       materialStatus = status;
-      client.setQueryData(options.taskReadiness("1").queryKey, {
-        status,
+      client.setQueryData(options.projectReadiness().queryKey, {
+        status: status === "ready" ? "ready" : "not_ready",
         commit: "base",
+        total: 1,
+        ready: status === "ready" ? 1 : 0,
+        blockers: [],
       });
     },
   };
@@ -319,7 +331,7 @@ it("keeps a rejected start as history while observing current preparation and pe
     calls[0].resolve({
       ...original,
       status: "rejected",
-      code: "materials_not_ready",
+      code: "project_not_ready",
       diagnostic,
       sampled_at: "now",
     });
@@ -332,15 +344,15 @@ it("keeps a rejected start as history while observing current preparation and pe
   expect(screen.getByRole("button", { name: "手动启动" })).toBeDisabled();
   const current = within(history.closest(".detail-section")!).getByRole(
     "status",
-    { name: "当前测试安排" },
+    { name: "项目就绪状态" },
   );
-  expect(current).toHaveTextContent("测试安排生成中");
+  expect(current).toHaveTextContent("项目未就绪");
   expect(current).not.toHaveTextContent(diagnostic);
 
   await act(async () => {
     setMaterials("ready");
   });
-  await waitFor(() => expect(current).toHaveTextContent("测试安排已就绪"));
+  await waitFor(() => expect(current).toHaveTextContent("项目已就绪"));
   expect(current).toHaveTextContent("可在任务详情重新选择方案启动");
   expect(current).not.toHaveTextContent(diagnostic);
   fireEvent.click(history);

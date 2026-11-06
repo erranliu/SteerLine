@@ -214,7 +214,7 @@ func (m *projectMaintenance) refreshMaterials(ctx context.Context, selected map[
 			}
 			p, err := m.config.RunnerExecution.Profile(selectedProfile, "")
 			if err == nil {
-				_, err = runnerclient.GenerationExecution(p.Execution)
+				_, err = m.config.deriveProfile(ctx, p, "generate", "read_only")
 			}
 			if err != nil || m.tests == nil {
 				material.Status = "configuration_required"
@@ -316,24 +316,24 @@ func (m *projectMaintenance) freshness(ctx context.Context, c runnerstate.Candid
 
 func (m *projectMaintenance) prepareLatest(ctx context.Context, w taskmodel.FixedWork, candidate bool, base func(context.Context, taskmodel.FixedWork, bool) (string, error)) (taskmodel.FixedWork, string, error) {
 	if _, e := m.check(ctx); e != nil {
-		return w, "", e
+		return w, "", &taskmodel.Error{Code: "project_not_ready", Message: "项目未就绪：远端检查失败：" + e.Error()}
 	}
-	store, ok := m.store.(materialStore)
-	if !ok {
-		return w, "", errors.New("project material store unavailable")
-	}
-	material, e := store.Material(ctx, m.config.Identity(), w.Record.TaskID)
-	if errors.Is(e, storageports.ErrNotFound) {
-		return w, "", &taskmodel.Error{Code: "materials_not_ready", Message: "请先前往项目维护准备材料与测试安排"}
-	}
+	state, e := m.readinessState(ctx)
 	if e != nil {
 		return w, "", e
 	}
-	if material.Commit != m.current().Commit {
-		return w, "", &taskmodel.Error{Code: "materials_not_ready", Message: "远端文档版本已变化，请前往项目维护重新准备材料与测试安排"}
+	if e = requireProjectReadiness(state.Readiness); e != nil {
+		return w, "", e
+	}
+	var material pmm.Material
+	for _, value := range state.Materials {
+		if value.TaskID == w.Record.TaskID {
+			material = value
+			break
+		}
 	}
 	if material.Status != "ready" {
-		return w, "", &taskmodel.Error{Code: "materials_not_ready", Message: "测试安排尚未就绪：" + material.Status + " " + material.Diagnostic}
+		return w, "", &taskmodel.Error{Code: "project_not_ready", Message: "项目未就绪：当前任务已变化，请重新核实"}
 	}
 	w.ConfirmedDigest = w.Contract.Digest
 	w.Contract = material.Contract

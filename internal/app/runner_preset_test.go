@@ -346,7 +346,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	// not evidence that preparation ran; the formal readiness L3 covers that.
 	prepared, err := r.config.runtimeEnvironment.materialAt(ctx, c.RunnerExecution.DefaultProfile, base)
 	require(t, err)
-	require(t, r.store.StartEnvironment(ctx, envmodel.Record{ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: c.RunnerExecution.DefaultProfile, Execution: prepared.Input.Execution, Build: r.runner.client.BuildPin(), Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{}}, 0))
+	require(t, r.store.StartEnvironment(ctx, envmodel.Record{FormatVersion: 1, ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: c.RunnerExecution.DefaultProfile, Execution: prepared.Input.Execution, Build: r.runner.client.BuildPin(), Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{}}, 0))
 	_, err = r.product.SubmitControl(ctx, api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.Repeat("7", 32), RequestedBy: "fixture"})
 	require(t, err)
 	wait, cancel := context.WithTimeout(ctx, 8*time.Second)

@@ -9,6 +9,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,6 +87,10 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	c, err := LoadConfig(path)
 	require(t, err)
 	require(t, c.ResolveIdentity(context.Background()))
+	c.runtimeNative = &runnerclient.ConfigurationSnapshot{Query: nativefixture.ExecutionConfigurationFixture}
+	for _, profile := range c.RunnerExecution.Profiles {
+		_, _ = c.describeProfile(context.Background(), profile)
+	}
 	home := HomeDir()
 	t.Cleanup(func() { require(t, runnerstatepath.RemoveStopped(home)) })
 	return c, fixtureGit(t, repo, "rev-parse", "HEAD")
@@ -99,7 +104,7 @@ func localGlobalExecutionFixture(t *testing.T) {
 	raw, err := os.ReadFile(exe)
 	require(t, err)
 	sum := sha256.Sum256(raw)
-	config := RunnerExecutionConfig{Version: 3, Runner: runnerclient.Selection{Executable: exe, Version: "unit-fixture", SHA256: hex.EncodeToString(sum[:])}, DefaultProfile: "fixture", Profiles: []RunnerProfile{{ID: "fixture", Name: "Fixture", Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"native-fixture"}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 1}}}}
+	config := RunnerExecutionConfig{Version: 3, Runner: runnerclient.Selection{Executable: exe, Version: "unit-fixture", SHA256: hex.EncodeToString(sum[:])}, DefaultProfile: "fixture", Profiles: []RunnerProfile{{ID: "fixture", Name: "Fixture", Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"native-fixture","access_mode":"full_access"}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 1}}}}
 	require(t, os.MkdirAll(HomeDir(), 0700))
 	body, err := json.Marshal(config)
 	require(t, err)

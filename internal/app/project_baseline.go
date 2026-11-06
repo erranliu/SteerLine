@@ -154,40 +154,19 @@ func (m *projectMaintenance) localBaseline(ctx context.Context) localBaseline {
 	return result
 }
 func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
-	o := m.current()
-	store, ok := m.store.(materialStore)
-	if !ok {
-		return nil, errors.New("material store unavailable")
-	}
-	graph, e := m.store.TaskGraphSnapshot(ctx, m.config.Identity())
+	state, e := m.readinessState(ctx)
 	if e != nil {
 		return nil, e
 	}
-	materials := []pm.Material{}
-	for _, task := range graph.Tasks {
-		value, e := store.Material(ctx, m.config.Identity(), task.TaskID)
-		if e == nil {
-			if value.Commit != o.Commit || o.Diagnostic != "" {
-				value.Status = "unknown"
-			}
-			materials = append(materials, value)
-		} else if errors.Is(e, storageports.ErrNotFound) && (task.Status == "open" || task.Status == "in_progress") {
-			contract, err := m.store.TaskContract(ctx, m.config.Identity(), task)
-			if err != nil {
-				return nil, err
-			}
-			materials = append(materials, pm.Material{TaskID: task.TaskID, Contract: contract, Status: "unprepared", Diagnostic: "请准备材料与测试安排"})
-		} else if !errors.Is(e, storageports.ErrNotFound) {
-			return nil, e
-		}
-	}
+	o, local, materials := state.Observation, state.Local, state.Materials
+	store := m.store.(materialStore)
 	type profile struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
 	profiles := []profile{}
 	for _, p := range m.config.RunnerExecution.Profiles {
-		if _, e := generationProfile(p); e == nil {
+		if _, e := m.config.deriveProfile(ctx, p, "generate", "read_only"); e == nil {
 			profiles = append(profiles, profile{p.ID, p.Name})
 		}
 	}
@@ -209,13 +188,13 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 			}
 		}
 	}
-	local := m.localBaseline(ctx)
 	remote := m.commitInfo(ctx, o.Commit, true)
 	localInfo := remote
 	if local.Commit != remote.SHA {
 		localInfo = m.commitInfo(ctx, local.Commit, false)
 	}
 	return struct {
+		Readiness   pm.Readiness          `json:"readiness"`
 		Observation pm.Observation        `json:"observation"`
 		LocalInfo   baselineCommit        `json:"local_info"`
 		RemoteName  string                `json:"remote_name"`
@@ -225,13 +204,7 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 		Profiles    []profile             `json:"profiles"`
 		Profile     string                `json:"profile"`
 		Progress    pm.GenerationProgress `json:"generation_progress"`
-	}{o, localInfo, m.config.Remote + "/" + m.config.Branch, remote, local, materials, profiles, store.MaterialProfile(ctx, m.config.Identity()), progress}, nil
-}
-func generationProfile(p RunnerProfile) (bool, error) {
-	if p.Execution.Adapter != "codex-app-server" || p.Execution.Target.Kind != "local" {
-		return false, errors.New("需要本机Codex方案")
-	}
-	return true, nil
+	}{state.Readiness, o, localInfo, m.config.Remote + "/" + m.config.Branch, remote, local, materials, profiles, store.MaterialProfile(ctx, m.config.Identity()), progress}, nil
 }
 func (m *projectMaintenance) commitLog(ctx context.Context, page, scope string) (any, error) {
 	n, e := strconv.Atoi(page)

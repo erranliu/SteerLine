@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -118,6 +119,11 @@ func (r *runner) ResultFile(context.Context, string) (runnercontract.ResultFile,
 func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time) {
 	t.Helper()
 	store, e := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "steerline.db"))
+	if e == nil {
+		store.BindExecutionIdentityLookup(func(execution runnercontract.ExecutionInput) (runnercontract.ExecutionIdentity, error) {
+			return nativefixture.ExecutionIdentity(execution), nil
+		})
+	}
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -125,7 +131,10 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
-		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 5, Script: envmodel.ScriptPath("ps1"), Interpreter: "powershell.exe", Dependencies: []string{}}, Input: runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
+		prepared := envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 5, Script: envmodel.ScriptPath("ps1"), Interpreter: "powershell.exe", Dependencies: []string{}}, Input: runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}}}
+		prepared.Identity = nativefixture.ExecutionIdentity(prepared.Input.Execution)
+		prepared.DerivedExecution = prepared.Input.Execution
+		return prepared, nil
 	}}
 	return service, remote, store, &now
 }
@@ -168,29 +177,29 @@ func observe(t *testing.T, s *env.Service) {
 	}
 }
 
-func TestProjectEnvironmentDetectionUsesNativeOrcaCodex(t *testing.T) {
+func TestProjectEnvironmentDetectionUsesFrozenRunnerExecution(t *testing.T) {
 	for _, tc := range []struct {
 		name, adapter, target, environment, settings, want string
 	}{
 		{
 			name: "default remote Codex", adapter: "orca-terminal", target: "orca_environment", environment: "remote",
-			settings: `{"access_mode":"full_access","transport":{"executable":"orca"},"agent_launch":{"executable":"custom-codex","args":["--search"],"model":"selected","reasoning_effort":"high"}}`,
+			settings: `{"access_mode":"full_access","transport":{"executable":"orca"},"agent_launch":{"model":"selected","reasoning_effort":"high"}}`,
 			want:     `{"access_mode":"full_access","transport":{"executable":"orca"},"agent_launch":{"model":"selected","reasoning_effort":"high"}}`,
 		},
 		{
 			name: "explicit local Codex", adapter: "orca-terminal", target: "local",
-			settings: `{"agent":"codex","agent_launch":{"runtime_executable":"managed-codex","runtime_sha256":"pinned"}}`,
-			want:     `{"agent":"codex"}`,
+			settings: `{"agent":"codex","access_mode":"full_access"}`,
+			want:     `{"agent":"codex","access_mode":"full_access"}`,
 		},
 		{
 			name: "local Pi", adapter: "orca-terminal", target: "local",
-			settings: `{"agent":"pi","agent_launch":{"executable":"custom-pi"}}`,
-			want:     `{"agent":"pi","agent_launch":{"executable":"custom-pi"}}`,
+			settings: `{"agent":"pi","access_mode":"full_access","agent_launch":{"model":"selected"}}`,
+			want:     `{"agent":"pi","access_mode":"full_access","agent_launch":{"model":"selected"}}`,
 		},
 		{
 			name: "Codex app server", adapter: "codex-app-server", target: "local",
-			settings: `{"executable":"custom-codex"}`,
-			want:     `{"executable":"custom-codex"}`,
+			settings: `{"executable":"custom-codex","access_mode":"full_access"}`,
+			want:     `{"executable":"custom-codex","access_mode":"full_access"}`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -204,9 +213,11 @@ func TestProjectEnvironmentDetectionUsesNativeOrcaCodex(t *testing.T) {
 			s.Prepare = func(ctx context.Context, profile string) (envmodel.Prepared, error) {
 				prepared, err := prepare(ctx, profile)
 				prepared.Input.Execution = execution
+				prepared.Identity = nativefixture.ExecutionIdentity(execution)
+				prepared.DerivedExecution = execution
 				return prepared, err
 			}
-			key, err := envmodel.Key(execution)
+			key, err := envmodel.Key(execution, nativefixture.ExecutionIdentity(execution))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -231,7 +242,7 @@ func TestProjectEnvironmentDetectionUsesNativeOrcaCodex(t *testing.T) {
 				t.Fatalf("submitted execution = %+v, settings = %s, want %s", submitted.Execution, got, want)
 			}
 			for _, original := range []runnercontract.ExecutionInput{record.Execution, record.Prepared.Input.Execution} {
-				if originalKey, err := envmodel.Key(original); err != nil || originalKey != key || string(original.Settings) != tc.settings {
+				if originalKey, err := envmodel.Key(original, nativefixture.ExecutionIdentity(original)); err != nil || originalKey != key || string(original.Settings) != tc.settings {
 					t.Fatalf("stored development execution changed: %s", original.Settings)
 				}
 			}
@@ -604,7 +615,7 @@ func TestProjectEnvironmentExecutionTimeoutAndCancelDuringPrepare(t *testing.T) 
 }
 
 func serviceEnvironmentKey() string {
-	key, _ := envmodel.Key(runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)})
+	key, _ := envmodel.Key(runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}, nativefixture.ExecutionIdentity(runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}))
 	return key
 }
 

@@ -27,7 +27,7 @@ func RunRemoteDiscovery(t *testing.T) {
 	s.Must(err)
 	selection, err := driver.RunnerSelection(s.Run.Runner)
 	s.Must(err)
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": "local-codex", "execution_profiles": []any{map[string]any{"id": "local-codex", "name": "Local catalog", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex}}, "workflow": map[string]any{"id": "development", "version": 2}}, s.Run.Remote.Profile}}))
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": "local-codex", "execution_profiles": []any{map[string]any{"id": "local-codex", "name": "Local catalog", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"access_mode": "full_access", "executable": codex}}, "workflow": map[string]any{"id": "development", "version": 2}}, s.Run.Remote.Profile}}))
 	// Keep the original discovery test's generated-package freeze boundary.
 	s.Must(controlled.Write(filepath.Join(p.Root, "manifest.json"), map[string]any{"version": 1, "source_commit": s.Run.SourceCommit, "execution_digest": s.Run.Remote.ExecutionDigest, "runner": selection}))
 	p.StartService()

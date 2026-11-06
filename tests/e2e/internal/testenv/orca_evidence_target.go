@@ -2,6 +2,7 @@ package testenv
 
 import (
 	"errors"
+	pathpkg "path"
 	"strings"
 )
 
@@ -19,7 +20,13 @@ func (r *orcaTarget) matchesRepository(path, remote, localRoot, expectedRemote s
 	if !strings.EqualFold(strings.TrimSuffix(remote, ".git"), strings.TrimSuffix(expectedRemote, ".git")) {
 		return false
 	}
-	return r.Environment != "" || sameOrcaPath(path, localRoot)
+	if r.Environment != "" {
+		basename := func(value string) string {
+			return pathpkg.Base(strings.TrimRight(strings.ReplaceAll(value, "\\", "/"), "/"))
+		}
+		return strings.EqualFold(basename(path), basename(localRoot))
+	}
+	return sameOrcaPath(path, localRoot)
 }
 
 func sameOrcaPath(a, b string) bool {

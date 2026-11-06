@@ -27,16 +27,17 @@ type RecoveryCapability struct {
 }
 
 type Capabilities struct {
-	ModelInputContract json.RawMessage           `json:"model_input_contract"`
-	Recovery           *RecoveryCapability       `json:"recovery,omitempty"`
-	OfflineInspect     *OfflineInspectCapability `json:"offline_inspect,omitempty"`
-	Generate           *GenerateCapability       `json:"generate,omitempty"`
-	ResultFile         *ResultCapability         `json:"result_file,omitempty"`
-	ResultFileSchema   json.RawMessage           `json:"result_file_schema,omitempty"`
-	ExecutionWait      *ExecutionWaitCapability  `json:"execution_wait,omitempty"`
-	ProgressFile       *ProgressCapability       `json:"progress_file,omitempty"`
-	ProgressFileSchema json.RawMessage           `json:"progress_file_schema,omitempty"`
-	RunUsage           *struct {
+	ExecutionConfiguration json.RawMessage           `json:"execution_configuration"`
+	ModelInputContract     json.RawMessage           `json:"model_input_contract"`
+	Recovery               *RecoveryCapability       `json:"recovery,omitempty"`
+	OfflineInspect         *OfflineInspectCapability `json:"offline_inspect,omitempty"`
+	Generate               *GenerateCapability       `json:"generate,omitempty"`
+	ResultFile             *ResultCapability         `json:"result_file,omitempty"`
+	ResultFileSchema       json.RawMessage           `json:"result_file_schema,omitempty"`
+	ExecutionWait          *ExecutionWaitCapability  `json:"execution_wait,omitempty"`
+	ProgressFile           *ProgressCapability       `json:"progress_file,omitempty"`
+	ProgressFileSchema     json.RawMessage           `json:"progress_file_schema,omitempty"`
+	RunUsage               *struct {
 		Schema       string `json:"schema"`
 		QueryOnly    bool   `json:"query_only"`
 		SameSnapshot bool   `json:"same_snapshot"`

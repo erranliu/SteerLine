@@ -141,15 +141,16 @@ func checkSealedEnvironment(read func(string, any) error, digest, fixture string
 }
 func checkEnvironmentResult(read func(string, any) error, digest, fixture string, want bool) error {
 	var proof struct {
-		ExecutionDigest string                    `json:"execution_digest"`
-		Source          string                    `json:"source_commit"`
-		Activity        string                    `json:"activity_id"`
-		Rounds          int                       `json:"rounds"`
-		Details         []env.Round               `json:"round_details"`
-		RunID           string                    `json:"run_id"`
-		Run             runnercontract.Run        `json:"run"`
-		Result          runnercontract.ResultFile `json:"result"`
-		Report          env.Report                `json:"report"`
+		ExecutionDigest string                           `json:"execution_digest"`
+		Identity        runnercontract.ExecutionIdentity `json:"execution_identity"`
+		Source          string                           `json:"source_commit"`
+		Activity        string                           `json:"activity_id"`
+		Rounds          int                              `json:"rounds"`
+		Details         []env.Round                      `json:"round_details"`
+		RunID           string                           `json:"run_id"`
+		Run             runnercontract.Run               `json:"run"`
+		Result          runnercontract.ResultFile        `json:"result"`
+		Report          env.Report                       `json:"report"`
 	}
 	if err := read("environment-proof.json", &proof); err != nil {
 		return err
@@ -176,7 +177,10 @@ func checkEnvironmentResult(read func(string, any) error, digest, fixture string
 	if seed.ActivityID != proof.Activity || seed.Commit != fixture || seed.Inputs == "" || a.Run.Correlation["environment_activity"] != proof.Activity || a.Run.Correlation["steerline_project"] != seed.Project || a.Run.Correlation["environment_round"] != "1" {
 		return errors.New("original environment result binding differs")
 	}
-	record := env.Record{ID: seed.ActivityID, Project: seed.Project, Execution: input.Execution, Prepared: env.Prepared{Commit: seed.Commit, Inputs: seed.Inputs}}
+	if err := runnercontract.ValidateExecutionIdentity(input.Execution, proof.Identity); err != nil {
+		return err
+	}
+	record := env.Record{ID: seed.ActivityID, Project: seed.Project, Execution: input.Execution, Prepared: env.Prepared{Commit: seed.Commit, Inputs: seed.Inputs, Identity: proof.Identity}}
 	raw, err := runnerclient.ValidateResultFile(proof.Result, proof.RunID)
 	if err != nil {
 		return err

@@ -578,6 +578,14 @@ function fixture(
     rounds: [round],
   };
   vi.spyOn(api, "get").mockImplementation(async (path) => {
+    if (path === "/maintenance/readiness")
+      return {
+        status: "ready",
+        commit: "base",
+        total: 1,
+        ready: 1,
+        blockers: [],
+      } as never;
     if (
       path === "/environment/options?configuration=true" &&
       configurationFailure

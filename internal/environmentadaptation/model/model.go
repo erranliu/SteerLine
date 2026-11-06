@@ -94,11 +94,13 @@ type CallContext struct {
 	Target  runnercontract.ExecutionTarget `json:"target"`
 }
 type Prepared struct {
-	Commit       string                  `json:"commit"`
-	Inputs       string                  `json:"inputs"`
-	ScriptDigest string                  `json:"script_digest"`
-	Manifest     Manifest                `json:"manifest"`
-	Input        runnercontract.RunInput `json:"input"`
+	Identity         runnercontract.ExecutionIdentity `json:"execution_identity"`
+	DerivedExecution runnercontract.ExecutionInput    `json:"derived_execution"`
+	Commit           string                           `json:"commit"`
+	Inputs           string                           `json:"inputs"`
+	ScriptDigest     string                           `json:"script_digest"`
+	Manifest         Manifest                         `json:"manifest"`
+	Input            runnercontract.RunInput          `json:"input"`
 }
 type Start struct {
 	EnvironmentKey          string `json:"environment_key"`
@@ -130,6 +132,7 @@ type Round struct {
 	TimedOut             bool                       `json:"timed_out"`
 }
 type Record struct {
+	FormatVersion  int                           `json:"format_version"`
 	ID             string                        `json:"id"`
 	Project        string                        `json:"project"`
 	Revision       uint64                        `json:"revision"`
@@ -196,7 +199,7 @@ type Report struct {
 }
 
 func InitialReport(r Record, n int) Report {
-	k, _ := Key(r.Execution)
+	k, _ := Key(r.Execution, r.Prepared.Identity)
 	return Report{Version: ReportVersion, Project: r.Project, EnvironmentKey: k, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, Inputs: r.Prepared.Inputs, Context: CallContext{r.Execution.Adapter, r.Execution.Target}}
 }
 func ParseReport(raw []byte, r Record, a Round) (*Report, error) {

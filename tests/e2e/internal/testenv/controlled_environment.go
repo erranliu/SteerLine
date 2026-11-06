@@ -144,14 +144,11 @@ func (p *Project) environmentProfiles() []executionconfig.Profile {
 	return file.Profiles
 }
 func (p *Project) environmentKey(id string) string {
-	profiles := p.environmentProfiles()
-	for _, profile := range profiles {
-		if profile.ID == id {
-			key, err := env.Key(profile.Execution)
-			p.Scenario.Must(err)
-			return key
+	for _, profile := range p.EnvironmentOptions() {
+		if profile.ID == id && profile.Key != "" {
+			return profile.Key
 		}
 	}
-	p.Scenario.t.Fatalf("environment profile unavailable: %s", id)
+	p.Scenario.t.Fatalf("environment profile has no public Runner identity: %s", id)
 	return ""
 }
