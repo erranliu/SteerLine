@@ -254,3 +254,9 @@ Web 已开放生成、独立请求历史/停止、代码提交/整体设计/调�
 | 正式 go.roadmap | passed=true，领域/App/host 全部通过，包含正式混合依赖和 CRLF 发布/入图 | `test-results/L4/20261106-roadmap-prompt-trim-a/summary.json` |
 
 本轮以独立语义审核和受控回归验证精简，未重跑真实模型、正式浏览器或外部发布；不由字节减少推断模型质量提升。
+
+### 提 PR 前同步主分支复核（2026-11-06）
+
+功能提交在最新 `origin/main=27172ac3` 上 rebase，受测实现提交为 `0ebdaaadbd84a196a0cce5dd3aefd6d7936271c5`。仅 `docs/product-design/roadmap-promotion.md` 出现内容冲突，保留主分支的新章节与静态材料说明，并加入本次混合依赖段；业务代码、页面、测试及提示词与同步前已审核/受测版本一致。独立审核者 `/root/independent_review` 已只读复核同步后的差异并维持批准，提示词字节数及 SHA-256 不变。
+
+同步后对上述干净实现提交重新执行完整 L1/L2，均 passed=true，L2 cleanup_complete=true；证据分别为 `test-results/L1/20261106-pr-main-a/summary.json` 与 `test-results/L2/20261106-pr-main-a/summary.json`，仍位于本轮证据根。文档链接及 diff 格式检查通过。本段仅补记同步与验证，不改变受测实现；上文 go.roadmap、web.unit 及构建结果保留其原受测基线，不标成同步后的重新执行。
