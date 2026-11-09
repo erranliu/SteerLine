@@ -33,6 +33,22 @@ func TestControlledDeploymentConfigurationValidation(t *testing.T) {
 }
 
 func TestDirectControlledHelperAdvertisesGeneration(t *testing.T) {
+	verifyHelperCapabilities(t)
+}
+
+func TestSeededControlledHelperAdvertisesExecutionDerivation(t *testing.T) {
+	caps := controlledCapabilities()
+	delete(caps, "execution_configuration")
+	seed := filepath.Join(t.TempDir(), "seed.json")
+	if err := Write(seed, caps); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STEERLINE_TEST_WEB_OFFLINE_CAPABILITIES", seed)
+	verifyHelperCapabilities(t)
+}
+
+func verifyHelperCapabilities(t *testing.T) {
+	t.Helper()
 	capture, err := os.CreateTemp(t.TempDir(), "capabilities-*.json")
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +79,9 @@ func TestDirectControlledHelperAdvertisesGeneration(t *testing.T) {
 	catalog, err := runnerclient.CompileCatalog(caps)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err = catalog.ConfigurationCapability("derive"); err != nil {
+		t.Fatal("helper did not advertise its implemented execution derivation", err)
 	}
 	if err = catalog.ValidateWorkflow(runnercontract.Workflow{ID: "development", Version: 1}); err != nil {
 		t.Fatal("controlled delivery capability lost", err)

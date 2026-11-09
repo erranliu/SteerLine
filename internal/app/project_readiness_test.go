@@ -144,7 +144,7 @@ func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(
 	require(t, err)
 	checkBlocked()
 	pmGit(t, m.config.Repository, "merge", "--ff-only", newCommit)
-	// Existing generation is reused for unchanged materials after explicit prep.
+	// Unchanged Git arrangements remain ready after the baseline advances.
 	require(t, m.refresh(ctx))
 	ready, err := m.projectReadiness(ctx)
 	require(t, err)

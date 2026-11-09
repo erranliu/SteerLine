@@ -108,7 +108,6 @@ type pmsStore struct {
 	contract   taskmodel.TaskContract
 	materials  map[string]pm.Material
 	receipts   map[string]json.RawMessage
-	profile    string
 	candidates map[string]runnerstate.Candidate
 }
 

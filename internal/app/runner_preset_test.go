@@ -308,6 +308,11 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	_, err = m.check(ctx)
 	require(t, err)
 	require(t, r.port.actor.Call(ctx, func(ctx context.Context) error { return m.refresh(ctx) }))
+	material, err := r.store.Material(ctx, c.Identity(), "1")
+	require(t, err)
+	if material.Status != "ready" {
+		t.Fatalf("stopped Run fixture materials: %s: %s", material.Status, material.Diagnostic)
+	}
 
 	// This lifecycle-only prerequisite supplies stored qualification with the
 	// actual material/build basis and no external preparation execution. It is

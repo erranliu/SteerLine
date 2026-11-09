@@ -29,9 +29,41 @@ func isRetryableMaterialRead(err error) bool {
 	return !errors.As(err, &missing) && !errors.As(err, &nonregular) && !errors.Is(err, errMismatchedTestWriter) && !errors.As(err, &invalid)
 }
 func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.TaskRecord, commit string) (pmm.Material, error) {
+	ctx = materialReads(ctx)
 	result := pmm.Material{TaskID: task.TaskID, Commit: commit, Status: "invalid"}
 	contract, err := m.store.TaskContract(ctx, m.config.Identity(), task)
 	if err != nil {
+		return result, err
+	}
+	result.Contract = contract
+	// Reuse the existing request cache and batch reader. Serial per-file Git
+	// processes can exhaust the finite assessment budget before parsing begins.
+	arrangement, err := testmodel.ArrangementPath(contract.PlanRef.Path)
+	if err != nil {
+		return result, err
+	}
+	paths := []string{testmodel.ProjectEntryPath, testmodel.ProtocolPath, testmodel.WriterPath, arrangement}
+	refs := append([]taskmodel.FileReference{contract.SpecRef, contract.PlanRef}, contract.CommonRefs...)
+	refs = append(refs, contract.AcceptanceRefs...)
+	for _, ref := range refs {
+		paths = append(paths, ref.Path)
+	}
+	reader := taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}
+	files, err := reader.readCommittedFiles(ctx, commit, paths)
+	if err != nil {
+		if isRetryableMaterialRead(err) {
+			result.Status = "unknown"
+		}
+		return result, err
+	}
+	entry, err := testmodel.ParseProjectEntry(files[testmodel.ProjectEntryPath])
+	if err != nil {
+		return result, err
+	}
+	if _, err = reader.readCommittedFiles(ctx, commit, entry.Paths()); err != nil {
+		if isRetryableMaterialRead(err) {
+			result.Status = "unknown"
+		}
 		return result, err
 	}
 	result.Contract, err = m.resolved(ctx, contract, commit)
@@ -49,7 +81,7 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 		return body, e
 	}
 	values := []string{}
-	refs := append([]taskmodel.FileReference{result.Contract.SpecRef, result.Contract.PlanRef}, result.Contract.CommonRefs...)
+	refs = append([]taskmodel.FileReference{result.Contract.SpecRef, result.Contract.PlanRef}, result.Contract.CommonRefs...)
 	refs = append(refs, result.Contract.AcceptanceRefs...)
 	for _, ref := range refs {
 		b, err := read(ref.Path)
