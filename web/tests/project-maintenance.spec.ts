@@ -24,12 +24,18 @@ test("runtime.project-maintenance: Git test arrangements, independent candidates
  await page.getByRole("combobox",{name:"当前项目"}).selectOption(project);
  const get=async(path:string)=>{const r=await page.request.get(new URL(prefix+path,page.url()).href);expect(r.ok(),await r.text()).toBeTruthy();return r.json()};
  const otherGet=async()=> (await page.request.get(new URL("/api/v2/application/projects/"+other.project_id+"/maintenance",page.url()).href)).json();
- const call=async(action:string,target:string,payload:object={},projectPrefix=prefix)=>page.evaluate(async({prefix,action,target,payload})=>{
+ const call=async(action:string,target:string,payload:object={},projectPrefix=prefix,expected:Record<string,number>={})=>page.evaluate(async({prefix,action,target,payload,expected})=>{
   const auth=await(await fetch("/auth/status")).json();
   const identity=await(await fetch(prefix+"/identity")).json();
-  const r=await fetch(prefix+"/commands",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":auth.csrf_token},body:JSON.stringify({request_id:crypto.randomUUID().replaceAll("-",""),project_id:identity.project_id,instance_id:identity.instance_id,action,target_id:target,expected_version:1,payload})});
+  const r=await fetch(prefix+"/commands",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":auth.csrf_token},body:JSON.stringify({request_id:crypto.randomUUID().replaceAll("-",""),project_id:identity.project_id,instance_id:identity.instance_id,action,target_id:target,expected_version:1,...expected,payload})});
   if(!r.ok)throw new Error(await r.text());return r.json();
- },{prefix:projectPrefix,action,target,payload});
+ },{prefix:projectPrefix,action,target,payload,expected});
+ const applied=async(receipt:any)=>{
+  await expect.poll(async()=>{
+   receipt=await get("/commands/"+receipt.request_id);
+   return receipt.status==="rejected"?"rejected: "+receipt.diagnostic:receipt.status;
+  },{timeout:60000}).toBe("applied");
+ };
  const section=page.getByRole("region",{name:"项目维护"});
  await section.getByRole("button",{name:/项目维护/}).click();
  await section.getByRole("button",{name:"检查更新",exact:true}).click();
@@ -96,14 +102,22 @@ test("runtime.project-maintenance: Git test arrangements, independent candidates
   const current=await get("/environment/options");
   return current.profiles.find((p:any)=>p.id==="simulate")?.status;
  },{timeout:90000}).toBe("ready");
- helper("control","--simulate","-config",config,"-action","resume_dispatch");
- const start=(action:string)=>helper("control","--simulate","-config",config,"-action",action,"-task-id","1","-profile","simulate");
+ const control=(await get("/snapshot")).connection.snapshot.page.control;
+ await applied(await call("resume_dispatch","dispatch",{},prefix,{expected_version:control.revision,expected_control_revision:control.revision}));
+ const start=async(action:string)=>{
+  const tasks=await get("/tasks"),snapshot=await get("/snapshot");
+  const task=tasks.tasks.find((t:any)=>t.task_id==="1");
+  await applied(await call(action,"1",{execution_profile_id:"simulate"},prefix,{
+   expected_version:task.version,expected_control_revision:snapshot.connection.snapshot.page.control.revision,
+   ...(action==="start_candidate"?{expected_graph_revision:tasks.graph_revision}:{}),
+  }));
+ };
  const runs=async()=>{const v=await get("/snapshot");return v.connection.snapshot.page.runs.filter((c:any)=>(c.domain_task_id||c.task_id)==="1")};
  const waitRun=async(count:number)=>{
   await expect.poll(async()=> (await runs()).filter((r:any)=>r.execution_id&&r.pr?.url).length,{timeout:60000}).toBe(count);
   return (await runs()).sort((a:any,b:any)=>a.candidate_number-b.candidate_number);
  };
- start("start_task");
+ await start("start_task");
  const first=(await waitRun(1))[0];
  const original=await get("/runs/"+first.run_id+"/tests");
  expect(original.total).toBe(1);expect(original.material_status).toBe("current");
@@ -120,9 +134,9 @@ test("runtime.project-maintenance: Git test arrangements, independent candidates
  expect(secondSnapshot.commit).toBe(secondMaterial.observation.commit);
  const expired=await get("/runs/"+first.run_id+"/tests");
  expect(expired.material_status).toBe("outdated");expect(expired.association_available).toBe(false);expect(expired.commit).toBe(latest);
- start("start_candidate");
+ await start("start_candidate");
  const second=(await waitRun(2))[1];
- start("start_candidate");
+ await start("start_candidate");
  const third=(await waitRun(3))[2];
  const secondTests=await get("/runs/"+second.run_id+"/tests"),thirdTests=await get("/runs/"+third.run_id+"/tests");
  expect(secondTests.commit).toBe(secondMaterial.observation.commit);
