@@ -1,5 +1,7 @@
 # 主 Agent：材料澄清与要求冲突
 
+> 目标边界已收敛：本页记录 PR475 的原实现方案；后续实施以[给定上下文中的提示词建议 Spec](../../SteerlineFlow/spec/main-agent-advisory.spec.md)及其 [Plan](../../SteerlineFlow/plans/main-agent-advisory.plan.md)为准。新目标在收到明确待处理状态后自动异步生成一段继续对话的提示词，并接入活动中心；采用、修改和执行属于外部行为，不保留原题投递或材料 PR 能力。当前代码尚未按新目标改造，原实现验收仍只证明其冻结范围。
+
 状态：首批已实现，未部署。范围为手动分析材料不明确和要求冲突；实现及实际核验范围见[验收记录](../../SteerlineFlow/testing/acceptance/main-agent-materials.md)。本稿具体化[项目流程的职责边界](project-workflow.md#4-steerline-与-runner-的职责边界)。
 
 ## 1. 首批范围的取舍
