@@ -53,7 +53,7 @@ func TestBillingUsagePublishedFixture(t *testing.T) {
 	catalog, err := cli.Catalog(ctx, version)
 	require(t, err)
 	cli = cli.WithCatalog(catalog)
-	if !cli.RunUsageSupported || !cli.RunUsageEventsSupported {
+	if !cli.RunUsageSupported || !cli.RunUsageEventsSupported || !cli.ConfiguredUsageSupported {
 		t.Fatal("usage facts contract missing")
 	}
 	home := filepath.Join(root, "home")
@@ -61,18 +61,14 @@ func TestBillingUsagePublishedFixture(t *testing.T) {
 	settings, err := (billingconfig.Store{Home: home}).Save("*", policy)
 	require(t, err)
 	for _, run := range []string{"priced", "completion"} {
-		view, readErr := readRunnerUsage(ctx, cli, "candidate-"+run, run, home)
+		view, readErr := readRunnerUsage(ctx, cli, "candidate-"+run, run, home, time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC))
 		require(t, readErr)
 		if view.Usage == nil || view.Usage.Tokens.Total == nil || *view.Usage.Tokens.Total != 120 || view.Cost == nil || view.Cost.Generation != settings.Generation {
 			t.Fatal("public facts lost", view)
 		}
-		if run == "priced" {
-			// 100 uncached input at 1 + 20 output at 2, per million.
-			if view.Cost.Status != "estimated" || view.Cost.Total == nil || *view.Cost.Total != "0.000140000000000000" {
-				t.Fatal("public fixture price mismatch", view.Cost)
-			}
-		} else if view.Cost.Status != "unavailable" || view.Cost.Total != nil || !containsString(view.Cost.Issues, "PRICE_PERIOD_UNKNOWN") {
-			t.Fatal("completion time became a request time", view.Cost)
+		// This Runner-owned historical fixture has only observed metadata, no frozen stage attribution.
+		if view.Cost.Status != "unavailable" || view.Cost.Total != nil || !containsString(view.Cost.Issues, "CONFIGURED_MODEL_UNASSIGNED") {
+			t.Fatal("observed model became configured attribution", view.Cost)
 		}
 		body, _ := json.MarshalIndent(view, "", "  ")
 		require(t, os.WriteFile(filepath.Join(root, run+"-view.json"), body, 0600))

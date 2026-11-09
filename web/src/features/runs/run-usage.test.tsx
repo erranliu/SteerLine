@@ -44,9 +44,12 @@ function view(): RunUsageView {
       pricing_policy_version: "2026-10-22",
       pricing_policy_digest: "digest",
       pricing_source: "独立合成测试价",
+      price_at: "2026-10-22T06:00:00Z",
       matches: [
         {
           rule_id: "r",
+          step_id: "implement.execute",
+          configured_reasoning_effort: "high",
           provider: "synthetic",
           model: "fixture",
           records: 10,
@@ -81,7 +84,7 @@ it("shows partial amount, nullable tokens and source time in a compact disclosur
   expect(screen.getByText("独立合成测试价")).toBeVisible();
   expect(screen.getByText(/synthetic \/ fixture/)).toBeVisible();
   expect(document.querySelector("time")?.dateTime).toBe("2026-10-22T06:32:08Z");
-  expect(screen.getByText(/按配置价表估算，非实际账单/)).toBeVisible();
+  expect(screen.getByText(/按约定配置模型估算，非实际账单/)).toBeVisible();
   client.clear();
 });
 it("keeps tokens without a price table; unknown and proven zero remain distinct", async () => {
@@ -118,6 +121,41 @@ it("keeps tokens without a price table; unknown and proven zero remain distinct"
   expect(await screen.findByText("费用估算 ≈ USD 0.0000")).toBeVisible();
   expect(screen.getByText("Token 0")).toBeVisible();
   mounted.unmount();
+  client.clear();
+});
+it("separates workflow stages and models while retaining unassigned usage", async () => {
+  const api = new Api(identity, "csrf", "home");
+  const client = testClient();
+  const sample = view();
+  const base = sample.cost!.matches[0];
+  sample.cost!.matches.push(
+    {
+      ...base,
+      step_id: "audit.code.execute",
+      rule_id: "review",
+      model: "reviewer",
+      amount: "0.1",
+    },
+    { ...base, step_id: "publish.execute", amount: "0.2" },
+  );
+  sample.cost!.issues = ["CONFIGURED_MODEL_UNASSIGNED"];
+  sample.cost!.covered_estimated_amount = "0.35327400";
+  vi.spyOn(api, "get").mockResolvedValue(sample);
+  mountFeature(<RunUsage run={run} />, api, client);
+  fireEvent.click(await screen.findByText("已计价部分 ≈ USD 0.3533"));
+  expect(
+    screen.getByText(/implement.execute · synthetic \/ fixture/),
+  ).toBeVisible();
+  expect(
+    screen.getByText(/audit.code.execute · synthetic \/ reviewer/),
+  ).toBeVisible();
+  expect(
+    screen.getByText(/publish.execute · synthetic \/ fixture/),
+  ).toBeVisible();
+  expect(
+    screen.getByText("部分用量未分配配置模型或阶段，未计价"),
+  ).toBeVisible();
+  expect(screen.getByText(/不含独立 parser、子 agent/)).toBeVisible();
   client.clear();
 });
 it("polls visible partial data, retains the last amount on failure, and stops after finalization", async () => {
