@@ -104,3 +104,19 @@ L3 使用本次受控报告中冻结的 Web 构建；随后仅补了环境失败
 ### 6.4 验收范围与未验事项
 
 组件与真实浏览器证据分别声明；Roadmap 生成/发布/入图成功反馈由组件夹具覆盖，浏览器只证明真实来源变化拒绝与提交交互，不声明真实模型或真实 PR 通过。四个正式测试 ID 的最后结果已齐全，AOF-A01–A08 自动验收通过；AOF-M01 的可理解性人工体验仍待用户安排，允许后置。既有共享侧栏在 320px 的横排溢出不在本任务修复范围，不声明全局页面已适配；本次验证的是反馈无新增溢出及反馈控件可达。本轮代码边界为当前聊天自查，未宣称独立子代理代码审核。最终静态检查：720 份 Markdown、4453 条本地链接、0 错误；4 个测试 ID 有序唯一且存在，三份文档的 9 个验收 ID 一致；diff/新增文件尾随空白检查通过。
+
+## 7. PR 集成提交与干净版本补验
+
+用户随后明确要求提 PR。第 6 节保留提 PR 前工作树验证及原失败证据；本节记录最新交付版本。功能分支为 `codex/async-operation-feedback`，合入 main `4fbfeaaa` 后的受测提交为 `84add0122a2fbaa44dc2223b9ffe7f09d1f2d0df`。冲突仅为两个索引和 Roadmap 确认按钮文案，保留已合入的依赖审阅与任务计数，复用本次 actionLabel 展示在途状态；未新增协调层或扩大业务范围。
+
+本轮全部正式运行均固定同一干净提交；记录目录自身的导出变更沿原规则排除。以下证据目录相对前述实际证据根，全部命令退出 0。
+
+| 检查 / 正式 ID | 结果 | 原始证据目录 |
+| --- | --- | --- |
+| `npm --prefix web run build` | TypeScript/Vite 通过；本轮 L3 使用同一构建，无后续产品代码变更 | `diagnostics/20261109T094157210Z-pr-build/build.log` |
+| `l1.minimum` | 固定 L1 passed=true | `test-results/L1/20261109T094157209Z-4b8b6bd5b31c49a697ae2138b0be84d4` |
+| `smoke.delivery` | 固定 L2 passed=true | `test-results/L2/20261109T094159306Z-048a33f404fe445e9ea5d095d047e7ca` |
+| `web.unit` | 380/380 通过，零失败/跳过，包含合入的依赖审阅测试 | `test-results/L4/20261109T094156329Z-678056b93c134f949336686a5f7f1c19` |
+| `runtime.async-activities` | passed=true、cleanup_complete=true；原观察零额外执行输入、两个反馈候选原 Run、五次首批发起与独立恢复派发各一次；两项目原 Runner 清理均 confirmed=true | `test-results/L3/20261109T094222568Z-ea7506cf8efd449cadc93f2e85ac6bdf` |
+
+四份正式报告已通过原 `test-feedback record -report-dir` 顺序导出到 [Git 测试历史](../records/84add0122a2fbaa44dc2223b9ffe7f09d1f2d0df.json)，与本记录另作纯文档/历史提交随 PR 交付。历史文件始终绑定原受测 SHA，不把后续文档提交冒充重新受测。人工项、真实模型/真实 PR 未验及既有窄屏侧栏限制沿第 6.4 节保留；未合并 PR 或部署。
