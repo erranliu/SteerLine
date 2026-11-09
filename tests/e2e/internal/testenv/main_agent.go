@@ -216,9 +216,23 @@ func MainAgentAdvisory(s *Scenario) {
 	write()
 	unknownID := find("unknown")
 	wait(unknownID, "unknown")
+	s.Wait("unknown receipt followed by failed original inspection", func() (bool, error) {
+		f := fixture()
+		for run, question := range f.AdvisoryQuestions {
+			if question == "unknown" && f.AdvisoryQueryFailures[run] > 0 {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
 	assertCount("unknown", 1)
+	unknownRun := bindings()["unknown"]
+	unknownQueries := fixture().AdvisoryQueryFailures[unknownRun]
 	p.RestartService()
 	wait(unknownID, "unknown")
+	s.Wait("restored unknown observes the same Run", func() (bool, error) {
+		return fixture().AdvisoryQueryFailures[unknownRun] > unknownQueries, nil
+	})
 	assertCount("unknown", 1)
 	response.State, response.Unavailable = "ready", false
 	script.Results["unknown"] = response
