@@ -72,8 +72,12 @@ func MainAgentAdvisory(s *Scenario) {
 	}
 	fixture := func() controlled.RunnerFixture {
 		var f controlled.RunnerFixture
-		raw, e := os.ReadFile(filepath.Join(runnerstatepath.Directory(p.Home), "caller-fixture.json"))
-		s.Must(e)
+		var raw []byte
+		s.Wait("public peer snapshot readable during atomic replacement", func() (bool, error) {
+			var err error
+			raw, err = os.ReadFile(filepath.Join(runnerstatepath.Directory(p.Home), "caller-fixture.json"))
+			return err == nil, err
+		})
 		s.Must(json.Unmarshal(raw, &f))
 		return f
 	}
