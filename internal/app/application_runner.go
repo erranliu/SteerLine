@@ -16,7 +16,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 // applicationRunner binds shutdown and settlement to the original selected daemon.
@@ -24,7 +23,7 @@ import (
 // repeat, with the same request ID; a failed final read can be read again.
 type applicationRunner struct {
 	native            *runnerclient.ConfigurationSnapshot
-	generations       *testmanagement.GenerationQueue
+	generations       *runnerbinding.ContentQueue
 	environments      *environmentAdmission
 	client            runnerclient.Client
 	info              runnerclient.ServiceInfo
@@ -44,7 +43,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 		return err
 	}
 	limit, _ := executionconfig.GenerateConcurrency(g.MaxGenerateConcurrency)
-	r.generations = testmanagement.NewGenerationQueue(limit)
+	r.generations = runnerbinding.NewContentQueue(limit)
 	r.environments = &environmentAdmission{projects: map[string]Config{}}
 	if err := runnerstatepath.Validate(home); err != nil {
 		return err

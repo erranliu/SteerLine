@@ -2,8 +2,9 @@ import {test,expect} from "@playwright/test";
 import {execFileSync} from "node:child_process";
 import {readFileSync,writeFileSync,appendFileSync} from "node:fs";
 import {dirname,resolve,join} from "node:path";
+import {randomUUID} from "node:crypto";
 
-test("runtime.project-maintenance: explicit material preparation, independent candidates and old PR delivery",async({page},info)=>{
+test("runtime.project-maintenance: Git test arrangements, independent candidates and old PR delivery",async({page},info)=>{
  test.setTimeout(300000);page.setDefaultTimeout(30000);
  const config=process.env.STEERLINE_WEB_CONFIG;
  if(!config)throw new Error("fresh debug configuration required");
@@ -16,20 +17,27 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
  const helper=(...args:string[])=>execFileSync(join(root,"bin","debug-helper.exe"),["debug",...args],{encoding:"utf8",timeout:60000});
  const opening=execFileSync(join(root,"bin","steerline-web.exe"),["open","-print-url"],{env:{...process.env,STEERLINE_HOME:join(root,"home")},encoding:"utf8",timeout:30000}).trim();
  await page.goto(opening);
+ const serviceURL=new URL(page.url()).origin;
  await expect(page.getByRole("combobox",{name:"当前项目"})).toBeVisible();
- const catalog=await(await page.request.get(new URL("/api/v2/application/projects",page.url()).href)).json();
+ const catalog=await(await page.request.get(new URL("/api/v2/application/projects",serviceURL).href)).json();
  const primary=catalog.projects.find((p:any)=>p.config_id==="SteerlineTest.json");
  const other=catalog.projects.find((p:any)=>p.project_id!==primary.project_id);
  const project=primary.project_id,prefix="/api/v2/application/projects/"+project;
  await page.getByRole("combobox",{name:"当前项目"}).selectOption(project);
- const get=async(path:string)=>{const r=await page.request.get(new URL(prefix+path,page.url()).href);expect(r.ok(),await r.text()).toBeTruthy();return r.json()};
- const otherGet=async()=> (await page.request.get(new URL("/api/v2/application/projects/"+other.project_id+"/maintenance",page.url()).href)).json();
- const call=async(action:string,target:string,payload:object={},projectPrefix=prefix)=>page.evaluate(async({prefix,action,target,payload})=>{
-  const auth=await(await fetch("/auth/status")).json();
-  const identity=await(await fetch(prefix+"/identity")).json();
-  const r=await fetch(prefix+"/commands",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":auth.csrf_token},body:JSON.stringify({request_id:crypto.randomUUID().replaceAll("-",""),project_id:identity.project_id,instance_id:identity.instance_id,action,target_id:target,expected_version:1,payload})});
-  if(!r.ok)throw new Error(await r.text());return r.json();
- },{prefix:projectPrefix,action,target,payload});
+ const get=async(path:string)=>{const r=await page.request.get(new URL(prefix+path,serviceURL).href);expect(r.ok(),await r.text()).toBeTruthy();return r.json()};
+ const otherGet=async()=> (await page.request.get(new URL("/api/v2/application/projects/"+other.project_id+"/maintenance",serviceURL).href)).json();
+ const call=async(action:string,target:string,payload:object={},projectPrefix=prefix,expected:Record<string,number>={})=>{
+  const auth=await(await page.request.get(new URL("/auth/status",serviceURL).href)).json();
+  const identity=await(await page.request.get(new URL(projectPrefix+"/identity",serviceURL).href)).json();
+  const r=await page.request.post(new URL(projectPrefix+"/commands",serviceURL).href,{headers:{"X-CSRF-Token":auth.csrf_token,Origin:serviceURL},data:{request_id:randomUUID().replaceAll("-",""),project_id:identity.project_id,instance_id:identity.instance_id,action,target_id:target,expected_version:1,...expected,payload}});
+  if(!r.ok())throw new Error(await r.text());return r.json();
+ };
+ const applied=async(receipt:any)=>{
+  await expect.poll(async()=>{
+   receipt=await get("/commands/"+receipt.request_id);
+   return receipt.status==="rejected"?"rejected: "+receipt.diagnostic:receipt.status;
+  },{timeout:60000}).toBe("applied");
+ };
  const section=page.getByRole("region",{name:"项目维护"});
  await section.getByRole("button",{name:/项目维护/}).click();
  await section.getByRole("button",{name:"检查更新",exact:true}).click();
@@ -37,17 +45,17 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
   await expect.poll(async()=>{const v=await get("/maintenance");return v.tasks.find((t:any)=>t.task_id==="1")?.status},{timeout:90000}).toBe("ready");
   return get("/maintenance");
  };
- await section.getByRole("button",{name:"准备材料与测试安排",exact:true}).click();
+ await expect(section.getByRole("button",{name:"准备材料与测试安排",exact:true})).toHaveCount(0);
  const initial=await ready();
  expect(initial.remote.sha).toBeTruthy();
  expect(initial.remote.time).toBeTruthy();
- expect(initial.tasks.find((t:any)=>t.task_id==="1").generation_id).toBeTruthy();
- expect((await call("maintenance_generate_all",other.project_id,{},"/api/v2/application/projects/"+other.project_id)).status).toBe("applied");
+ expect(initial.tasks.find((t:any)=>t.task_id==="1").test_plan).toBeTruthy();
+ expect((await call("maintenance_check",other.project_id,{},"/api/v2/application/projects/"+other.project_id)).status).toBe("applied");
  // Establish the other project's completed initial state before changing this
  // project. Task/material observations are asynchronous after task creation.
  await expect.poll(async()=>{
   const value=await otherGet();
-  return value.tasks.length===2&&value.tasks.every((t:any)=>t.status==="ready"&&t.generation_id);
+  return value.tasks.length===2&&value.tasks.every((t:any)=>t.status==="ready"&&t.test_plan);
  },{timeout:90000}).toBeTruthy();
  const originalOther=await otherGet();
  await expect(section.getByLabel("维护范围")).toHaveCount(0);
@@ -67,8 +75,11 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
  await expect.poll(()=>git("rev-parse","HEAD")).toBe(latest);
  await section.getByRole("button",{name:"查看提交日志",exact:true}).click();
  await expect(page.getByRole("region",{name:"提交日志"})).toContainText("Source-only remote update");
- expect((await call("maintenance_generate_all",project)).status).toBe("applied");
+ expect((await call("maintenance_check",project)).status).toBe("applied");
  await ready();
+ // Command-only checks use the same real authenticated endpoint without the
+ // maintenance panel's background polling. Reopen the original candidate below.
+ await page.goto("about:blank");
  // The current runtime requires a real environment qualification before
  // candidate admission. Exercise the existing public command and peer result.
  const options=await get("/environment/options");
@@ -79,14 +90,22 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
   const current=await get("/environment/options");
   return current.profiles.find((p:any)=>p.id==="simulate")?.status;
  },{timeout:90000}).toBe("ready");
- helper("control","--simulate","-config",config,"-action","resume_dispatch");
- const start=(action:string)=>helper("control","--simulate","-config",config,"-action",action,"-task-id","1","-profile","simulate");
+ const control=(await get("/snapshot")).connection.snapshot.page.control;
+ await applied(await call("resume_dispatch","dispatch",{},prefix,{expected_version:control.revision,expected_control_revision:control.revision}));
+ const start=async(action:string)=>{
+  const tasks=await get("/tasks"),snapshot=await get("/snapshot");
+  const task=tasks.tasks.find((t:any)=>t.task_id==="1");
+  await applied(await call(action,"1",{execution_profile_id:"simulate"},prefix,{
+   expected_version:task.version,expected_control_revision:snapshot.connection.snapshot.page.control.revision,
+   ...(action==="start_candidate"?{expected_graph_revision:tasks.graph_revision}:{}),
+  }));
+ };
  const runs=async()=>{const v=await get("/snapshot");return v.connection.snapshot.page.runs.filter((c:any)=>(c.domain_task_id||c.task_id)==="1")};
  const waitRun=async(count:number)=>{
   await expect.poll(async()=> (await runs()).filter((r:any)=>r.execution_id&&r.pr?.url).length,{timeout:60000}).toBe(count);
   return (await runs()).sort((a:any,b:any)=>a.candidate_number-b.candidate_number);
  };
- start("start_task");
+ await start("start_task");
  const first=(await waitRun(1))[0];
  const original=await get("/runs/"+first.run_id+"/tests");
  expect(original.total).toBe(1);expect(original.material_status).toBe("current");
@@ -95,17 +114,17 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
   git("checkout",manifest.base_branch);
   appendFileSync(join(repo,"SteerlineFlow", "plans", "task.plan.md"),"\n"+label+"\n");
   git("add","SteerlineFlow/plans/task.plan.md");git("commit","-qm",label);git("push",remote,"HEAD:refs/heads/"+manifest.base_branch);
-  expect((await call("maintenance_generate_all",project)).status).toBe("applied");
+  expect((await call("maintenance_check",project)).status).toBe("applied");
   return ready();
  };
  const secondMaterial=await changePlan("Plan version two");
- const secondGeneration=secondMaterial.tasks.find((t:any)=>t.task_id==="1").generation_id;
- expect(secondGeneration).not.toBe(initial.tasks.find((t:any)=>t.task_id==="1").generation_id);
+ const secondSnapshot=secondMaterial.tasks.find((t:any)=>t.task_id==="1").test_plan;
+ expect(secondSnapshot.commit).toBe(secondMaterial.observation.commit);
  const expired=await get("/runs/"+first.run_id+"/tests");
  expect(expired.material_status).toBe("outdated");expect(expired.association_available).toBe(false);expect(expired.commit).toBe(latest);
- start("start_candidate");
+ await start("start_candidate");
  const second=(await waitRun(2))[1];
- start("start_candidate");
+ await start("start_candidate");
  const third=(await waitRun(3))[2];
  const secondTests=await get("/runs/"+second.run_id+"/tests"),thirdTests=await get("/runs/"+third.run_id+"/tests");
  expect(secondTests.commit).toBe(secondMaterial.observation.commit);
@@ -114,12 +133,12 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
  expect(diff.files.find((f:any)=>f.path==="SteerlineFlow/plans/task.plan.md").after).toContain("Plan version two");
  expect(diff.files.find((f:any)=>f.path==="SteerlineFlow/plans/task.plan.md").before).not.toContain("Plan version two");
  const thirdMaterial=await changePlan("Plan version three");
- expect(thirdMaterial.tasks.find((t:any)=>t.task_id==="1").generation_id).not.toBe(secondGeneration);
+ expect(thirdMaterial.tasks.find((t:any)=>t.task_id==="1").test_plan.commit).not.toBe(secondSnapshot.commit);
  expect((await get("/runs/"+third.run_id+"/tests")).association_available).toBe(false);
  expect(readFileSync(arrangement,"utf8")).toBe(beforeArrangement);
  // The last prepared PR now belongs to an outdated candidate. Its real merge
  // remains sufficient for TaskDelivery, even without a candidate on version three.
- await page.goto(new URL("/projects/"+project+"/runs?task=1&run="+third.run_id,page.url()).href);
+ await page.goto(new URL("/projects/"+project+"/runs?task=1&run="+third.run_id,serviceURL).href);
  await expect(page.getByRole("region",{name:"计划测试"})).toContainText("当前测试关联不可用");
  await page.getByRole("button",{name:"执行文档 / 最新文档 / 查看差异"}).click();
  await expect(page.getByRole("region",{name:"候选文档"})).toContainText("已过期");
@@ -131,6 +150,6 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
  expect(delivered.delivery.workflow_run_id).toBe(third.run_id);
  const finalOther=await otherGet();
  expect(finalOther.observation.commit).toBe(originalOther.observation.commit);
- expect(finalOther.tasks.map((t:any)=>t.generation_id)).toEqual(originalOther.tasks.map((t:any)=>t.generation_id));
+ expect(finalOther.tasks.map((t:any)=>t.test_plan)).toEqual(originalOther.tasks.map((t:any)=>t.test_plan));
  writeFileSync(info.outputPath("facts.json"),JSON.stringify({project,first,second,third,initial,secondMaterial,thirdMaterial,original,expired,diff,delivered},null,2));
 });

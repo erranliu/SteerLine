@@ -15,7 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-var AsyncActivitySources = []string{"environment_detection", "baseline_check", "test_preparation", "task_candidate", "roadmap"}
+var AsyncActivitySources = []string{"environment_detection", "baseline_check", "task_candidate", "roadmap"}
 
 // Private read shapes contain only fields used by the observation projection.
 // Domain qualification/settlement is supplied by the read port, not recreated.
@@ -35,15 +35,6 @@ type activityEnvironment struct {
 			UpdatedAt time.Time `json:"updated_at"`
 		}
 	}
-}
-type activityProgress struct{ Total, Succeeded, Queued, Running, Failed, Blocked int }
-type activityBatch struct {
-	ID, Status, Diagnostic string
-	CreatedAt              time.Time         `json:"created_at"`
-	ObservedAt             *time.Time        `json:"observed_at"`
-	BusinessFinishedAt     *time.Time        `json:"business_finished_at"`
-	ResultSnapshot         *activityProgress `json:"result_snapshot"`
-	Items                  []struct{ Status string }
 }
 type activityTests struct {
 	ParsedVersion uint64 `json:"parsed_version"`
@@ -215,18 +206,6 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		Title            string         `json:"title"`
 		Winner           string         `json:"winner"`
 		Progress         *activityTests `json:"progress"`
-		Generations      []struct {
-			Settled                       bool   `json:"settled"`
-			NeedsAttention                bool   `json:"needs_attention"`
-			Diagnostic                    string `json:"diagnostic"`
-			ID, Inputs, State, Submission string
-			Present, Cancelled, Relevant  int
-			RunID                         string     `json:"run_id"`
-			StopStatus                    string     `json:"stop_status"`
-			UpdatedAt                     *time.Time `json:"updated_at"`
-			ObservedAt                    *time.Time `json:"observed_at"`
-			ObservationDiagnostic         string     `json:"observation_diagnostic"`
-		} `json:"generations"`
 	}
 	if json.Unmarshal(f.Related, &related) != nil {
 		return a, errors.New("invalid activity related facts")
@@ -337,126 +316,6 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 			a.FinishedAt = activityTime(r.UpdatedAt)
 		}
 		a.NeedsAttention = related.Current == 1 && (a.State == "failed" || a.State == "waiting" && r.Payload.Instance != instance)
-	case "test_preparation":
-		var b activityBatch
-		if e := json.Unmarshal(f.Payload, &b); e != nil {
-			return a, e
-		}
-		a.Kind = "test_preparation"
-		a.Title = "准备材料与测试安排"
-		a.CreatedAt = activityTime(b.CreatedAt)
-		a.ObservedAt = b.ObservedAt
-		a.BusinessFinishedAt = b.BusinessFinishedAt
-		a.Diagnostic = b.Diagnostic
-		a.RequestIDs = related.Requests
-		a.Details = api.AsyncActivityDetails{Kind: "preparation", Target: b.ID, Historical: related.Current != 1}
-		p := b.ResultSnapshot
-		if p == nil {
-			p = &activityProgress{Total: len(b.Items)}
-			for _, i := range b.Items {
-				switch i.Status {
-				case "ready":
-					p.Succeeded++
-				case "failed", "invalid", "rejected", "cancelled":
-					p.Failed++
-				default:
-					p.Blocked++
-				}
-			}
-		}
-		a.Progress = &api.AsyncActivityProgress{Label: "测试安排已就绪", Total: p.Total, Succeeded: p.Succeeded, Failed: p.Failed, Pending: p.Total - p.Succeeded - p.Failed}
-		switch b.Status {
-		case "queued":
-			a.State = "queued"
-			a.Phase = "测试准备排队中"
-		case "preparing":
-			a.State = "running"
-			a.Phase = "读取和校验材料"
-		case "generating":
-			a.State = "running"
-			a.Phase = "生成测试安排"
-		case "completed":
-			a.State = "succeeded"
-			a.Phase = "测试准备完成"
-		case "failed":
-			a.State = "failed"
-			a.Phase = "测试准备失败"
-		default:
-			a.Phase = "测试准备状态待核实"
-		}
-		settled := true
-		allTimes := true
-		finish := b.BusinessFinishedAt
-		relevantFailure := false
-		attention, running := 0, 0
-		var oldestObservation *time.Time
-		missingObservation := false
-		for _, g := range related.Generations {
-			ok := g.Settled
-			if !ok {
-				if g.NeedsAttention && g.Relevant == 1 {
-					attention++
-					if g.Diagnostic != "" {
-						if a.Diagnostic != "" {
-							a.Diagnostic += " · "
-						}
-						a.Diagnostic += "生成 " + g.ID + "：" + g.Diagnostic
-					}
-				} else if g.Relevant == 1 && g.State == "accepted" && g.Cancelled != 1 && !g.NeedsAttention {
-					running++
-				}
-				settled = false
-				if g.ObservedAt == nil {
-					missingObservation = true
-				} else if oldestObservation == nil || g.ObservedAt.Before(*oldestObservation) {
-					oldestObservation = g.ObservedAt
-				}
-				if g.ObservationDiagnostic != "" {
-					a.Observation = "unavailable"
-					a.Diagnostic = strings.TrimSpace(a.Diagnostic + " · 生成 " + g.ID + " 进度观察：" + g.ObservationDiagnostic)
-				}
-			}
-			if g.UpdatedAt == nil {
-				allTimes = false
-			} else {
-				finish = latestTime(finish, g.UpdatedAt)
-			}
-			if g.Relevant == 1 && (g.State == "failed" || g.State == "invalid" || g.State == "rejected") {
-				relevantFailure = true
-			}
-		}
-		// A local maintenance tick is not evidence that any linked Runner was
-		// inspected. All unsettled generations must have a successful sample.
-		if !settled {
-			a.ObservedAt = oldestObservation
-			if missingObservation {
-				a.ObservedAt = nil
-			}
-		}
-		businessEnded := activityTerminal(a.State)
-		if businessEnded && !settled {
-			a.Summary = a.Phase
-			a.State = "waiting"
-			a.Phase = "关联生成仍在运行或收尾待核实"
-		} else if businessEnded && allTimes {
-			a.FinishedAt = finish
-		}
-		if b.Status == "generating" && attention > 0 {
-			if running == 0 {
-				a.State, a.Phase = "waiting", "测试生成受阻，需人工处理"
-			} else {
-				a.Phase = fmt.Sprintf("生成测试安排，%d 项需处理", attention)
-			}
-		}
-		requiresAction := false
-		if b.Status == "generating" {
-			for _, item := range b.Items {
-				if item.Status == "configuration_required" || item.Status == "invalid" || item.Status == "blocked" {
-					requiresAction = true
-				}
-			}
-		}
-		a.NeedsAttention = (b.Status == "failed" && (related.Current == 1 || relevantFailure)) || (requiresAction || attention > 0) && related.Current == 1
 	case "task_candidate":
 		var c runnerstate.Candidate
 		if e := json.Unmarshal(f.Payload, &c); e != nil {

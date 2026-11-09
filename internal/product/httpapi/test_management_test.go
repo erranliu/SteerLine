@@ -60,8 +60,8 @@ func TestTMPlanTestsReadBoundary(t *testing.T) {
 	if !httpcontract.AllowedProjectRead("/runs/original-candidate/tests") {
 		t.Fatal("test query omitted from browser forwarding")
 	}
-	if !httpcontract.AllowedProjectRead("/tests/generations/" + strings.Repeat("a", 32)) {
-		t.Fatal("maintenance preview read omitted")
+	if httpcontract.AllowedProjectRead("/tests/generations/" + strings.Repeat("a", 32)) {
+		t.Fatal("retired generation read exposed")
 	}
 	for _, route := range []string{"/tests/generate", "/tests/stop-generation", "/tests/apply"} {
 		if httpcontract.AllowedProjectRead(route) {

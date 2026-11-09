@@ -189,13 +189,5 @@
     "test": "TestLocalProjectEnvironment",
     "env": "live",
     "chain": "local-environment"
-  },
-  {
-    "id": "testing.material-generation",
-    "level": "L3",
-    "suite": "testing",
-    "package": "./tests/e2e/suites/testing",
-    "test": "TestMaterialGeneration",
-    "env": "controlled"
   }
 ]

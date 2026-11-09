@@ -4,21 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"sync"
-	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 type testManagementStore interface {
-	testmanagement.GenerationStore
 	testmanagement.ProgressStore
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
@@ -26,7 +21,7 @@ type testManagementPort struct {
 	nextObservation int // auxiliary stages are serialized by the project actor
 	historyMu       sync.Mutex
 	history         *testmanagement.RecordSnapshot
-	service         *testmanagement.GenerationService
+	project         string
 	store           testManagementStore
 	progress        *testmanagement.ProgressService
 	maintenance     *projectMaintenance
@@ -35,57 +30,10 @@ type testManagementPort struct {
 
 func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error) *testManagementPort {
 	c = bindNativeConfiguration(c, cli)
-	s := &testmanagement.GenerationService{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Admit: admit, Queue: c.runtimeGenerations}
-	s.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		p, err := c.RunnerExecution.Profile(id, "")
-		if err != nil {
-			return runnercontract.ExecutionInput{}, nil, err
-		}
-		resolved, err := c.deriveProfile(ctx, p, "generate", "read_only")
-		if err != nil || resolved.Execution == nil {
-			return runnercontract.ExecutionInput{}, nil, err
-		}
-		return *resolved.Execution, c.runtimeNative.Catalog, nil
-	}
-	s.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
-		if c.runtimeMaintenance != nil {
-			return c.runtimeMaintenance.read(ctx, commit, path)
-		}
-		reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
-		return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
-	}
-	port := &testManagementPort{service: s, store: store, maintenance: c.runtimeMaintenance}
-	port.progress = &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}
-	if port.maintenance != nil {
-		port.maintenance.tests = port
-	}
-	return port
-}
-func publicGeneration(r testmanagement.Generation) api.TestGeneration {
-	v := api.TestGeneration{Plan: r.Command.Plan, Profile: r.Command.Profile, SourceCommit: r.Command.Commit, ID: r.ID, Revision: r.Revision, State: r.State, Target: r.Target, RunID: r.RunID, Diagnostic: r.Diagnostic, Result: r.Result}
-	v.Settled, v.NeedsAttention = r.Settled(), r.NeedsAttention()
-	if r.Projection != nil {
-		v.StopStatus = r.Projection.StopStatus
-	}
-	return v
-}
-func generationError(err error) error {
-	if errors.Is(err, testmanagement.ErrNotFound) {
-		return &api.Error{Kind: api.UnknownRecord, Message: err.Error()}
-	}
-	return err
-}
-func (p *testManagementPort) TestGeneration(ctx context.Context, id string) (api.TestGeneration, error) {
-	r, err := p.store.Generation(ctx, p.service.Project, id)
-	v := publicGeneration(r)
-	return v, generationError(err)
-}
-func (p *testManagementPort) StopTestGeneration(ctx context.Context, in api.TestStopGenerationRequest) (api.TestGeneration, error) {
-	r, err := p.service.Stop(ctx, in.GenerationID, in.RequestID)
-	return publicGeneration(r), generationError(err)
+	return &testManagementPort{project: c.Identity(), store: store, maintenance: c.runtimeMaintenance, progress: &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}}
 }
 func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.RawMessage, error) {
-	c, err := p.store.Candidate(ctx, p.service.Project, id)
+	c, err := p.store.Candidate(ctx, p.project, id)
 	if err != nil {
 		if errors.Is(err, storageports.ErrNotFound) {
 			return nil, &api.Error{Kind: api.UnknownRecord, Message: "candidate not found"}
@@ -117,7 +65,7 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 			AssociationAvailable bool   `json:"association_available"`
 		}{v, freshness, freshness == "current"})
 	}
-	progress, readErr := p.store.Progress(ctx, p.service.Project, id)
+	progress, readErr := p.store.Progress(ctx, p.project, id)
 	if readErr != nil && !errors.Is(readErr, testmanagement.ErrNotFound) {
 		return nil, readErr
 	}
@@ -128,12 +76,6 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 	}
 	v := testmanagement.ProgressView(s, progress)
 	return encode(v)
-}
-
-func (p *testManagementPort) close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return p.service.Close(ctx)
 }
 
 func (p *testManagementPort) observe(ctx context.Context) error {

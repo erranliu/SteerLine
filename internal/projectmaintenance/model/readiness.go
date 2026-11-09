@@ -16,7 +16,7 @@ type Readiness struct {
 func MaterialsReadiness(commit string, materials []Material) Readiness {
 	r := Readiness{Status: "ready", Commit: commit, Total: len(materials), Blockers: []string{}}
 	for _, material := range materials {
-		if material.Status == "ready" && material.Commit == commit && commit != "" && material.Digest != "" && material.Inputs != "" && material.GenerationID != "" && len(material.TestPlan) > 0 {
+		if material.Status == "ready" && material.Commit == commit && commit != "" && material.Digest != "" && len(material.TestPlan) > 0 {
 			r.Ready++
 		} else {
 			r.Blockers = append(r.Blockers, fmt.Sprintf("任务 #%s 的材料与测试安排未就绪", material.TaskID))

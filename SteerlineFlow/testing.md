@@ -51,7 +51,7 @@ go.http 的 Windows 跨进程快照压力保持原30秒窗口、1000次发布和
 
 修改测试内容时，同步实现、分级列表、JSON、[E2E 登记](../tests/e2e/suites.json)及执行器选择/证据校验。JSON 使用 `id/name/level/environment/command/check`，可选 `note`，不新增未支持的字段。ID 保持验证目的；改级后旧级别选择明确失败。
 
-系统自动测试安排读取固定版本的 Plan、本文与 JSON，不展开链接文档。因此必跑规则保留在本文，各 ID 的环境、入口、主要断言及执行约束必须在 JSON 中自足。Web 变更必须包含 web.unit；HTTP/存储/环境变更分别选择 go.http/go.storage/go.environment/go.deployment/go.roadmap，并按影响补功能场景。代码变更选择 L1、L2，再按影响补充 L3/L4；无需自动测试的 Plan 必须明确原因。实现 Plan 映射验收项、测试 ID、环境、命令、执行时点、通过条件及证据位置。
+材料生成阶段由模型读取固定版本的 Plan、本文与正式清单，按语义选择测试并生成同名 `.tests.json`，随文档审阅入 Git。运行时只校验该 JSON 的有序 ID，并从同提交正式清单展开完整定义，不调用模型或重选。必跑规则保留在本文，各 ID 的完整定义在正式清单中自足。Web 变更必须包含 web.unit；HTTP/存储/环境变更分别选择 go.http/go.storage/go.environment/go.deployment/go.roadmap，并按影响补功能场景。代码变更选择 L1、L2，再按影响补充 L3/L4；无需自动测试的 Plan 必须明确原因。实现 Plan 映射验收项和测试 ID，说明原因、时点、特殊准备和证据位置；已有完整命令/环境/断言引用清单，不重复抄写。
 
 ```powershell
 python scripts/check_doc_links.py

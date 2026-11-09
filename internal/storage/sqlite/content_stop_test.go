@@ -13,7 +13,6 @@ import (
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 type contentStopRace struct {
@@ -50,7 +49,7 @@ func (f *contentStopRace) Call(_ context.Context, command string, args []string,
 }
 
 func TestContentCloseReconcilesStopRaceThroughSQLite(t *testing.T) {
-	for _, owner := range []string{"roadmap", "test-generation"} {
+	for _, owner := range []string{"roadmap"} {
 		t.Run(owner, func(t *testing.T) {
 			s, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
 			require(t, err)
@@ -70,16 +69,6 @@ func TestContentCloseReconcilesStopRaceThroughSQLite(t *testing.T) {
 				if !got.Settled() {
 					t.Fatal("SQLite close did not settle", got)
 				}
-			} else {
-				r := testmanagement.Generation{ID: id, Project: "p", Revision: 1, State: "accepted", Submission: "started", Request: request, RunID: f.run.RunID, InputDigest: f.run.InputDigest}
-				require(t, s.SaveGeneration(ctx, r, 0))
-				service := &testmanagement.GenerationService{Project: "p", Store: s, Runner: f}
-				require(t, service.Close(ctx))
-				got, err := s.Generation(ctx, "p", id)
-				require(t, err)
-				if got.StopState != "accepted" || !got.Cancelled {
-					t.Fatal("SQLite close did not preserve cancellation", got)
-				}
 			}
 			if len(f.requests) != 2 {
 				t.Fatal("unexpected stop count", f.requests)
@@ -89,7 +78,7 @@ func TestContentCloseReconcilesStopRaceThroughSQLite(t *testing.T) {
 }
 
 func TestContentStopRetryRequiresDurableDefinitiveRejection(t *testing.T) {
-	for _, owner := range []string{"roadmap", "test-generation"} {
+	for _, owner := range []string{"roadmap"} {
 		t.Run(owner, func(t *testing.T) {
 			s, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
 			require(t, err)
@@ -107,18 +96,6 @@ func TestContentStopRetryRequiresDurableDefinitiveRejection(t *testing.T) {
 					r.StopState = state
 					r.StopRequest = request
 					err := s.SaveRoadmap(ctx, r, revision)
-					if err == nil {
-						revision++
-					}
-					return err
-				}
-			} else {
-				r := testmanagement.Generation{ID: id, Project: "p", State: "cancelled", Cancelled: true, StopID: stopID, Request: runnercontract.Request{RequestID: "original-submit", Input: json.RawMessage(`{}`)}}
-				save = func(state string, request *runnercontract.Request) error {
-					r.Revision = revision + 1
-					r.StopState = state
-					r.StopRequest = request
-					err := s.SaveGeneration(ctx, r, revision)
 					if err == nil {
 						revision++
 					}

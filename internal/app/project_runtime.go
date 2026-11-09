@@ -260,11 +260,6 @@ func (r *ProjectRuntime) close() {
 			}
 			cancel()
 		}
-		if r.tests != nil {
-			if err := r.tests.close(); err != nil && r.log != nil {
-				fmt.Fprintf(r.log, "test generation stop remains unverified: %v\n", err)
-			}
-		}
 		if r.environment != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			if err := r.environment.service.Close(ctx); err != nil && r.log != nil {
@@ -328,18 +323,7 @@ func (p *runtimeProjectPort) Task(ctx context.Context, method, route string, bod
 		return nil, err
 	}
 	defer p.users.RUnlock()
-	if strings.HasPrefix(route, "/tests/") {
-		if method == "GET" || p.actor == nil {
-			return p.testing(ctx, method, route, body)
-		}
-		var out any
-		e := p.actor.Call(ctx, func(ctx context.Context) error {
-			var err error
-			out, err = p.testing(ctx, method, route, body)
-			return err
-		})
-		return out, e
-	}
+
 	if method == "GET" {
 		kind, target, id := "create_task_batch", p.config.Identity(), strings.TrimPrefix(route, "/task-batches/")
 		if strings.HasPrefix(route, "/tasks/") {
@@ -441,7 +425,7 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		}
 		return p.config.runtimeMaintenance.candidateDocuments(ctx, strings.TrimSuffix(strings.TrimPrefix(route, "/runs/"), "/documents"))
 	}
-	if strings.HasPrefix(route, "/maintenance") || strings.HasPrefix(route, "/tests/generations/") {
+	if strings.HasPrefix(route, "/maintenance") {
 		if strings.HasPrefix(route, "/maintenance/tasks/") && len(values) > 0 {
 			if len(values) != 1 || len(values["view"]) != 1 || values.Get("view") != "status" {
 				return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unsupported or repeated maintenance query"}

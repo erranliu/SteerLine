@@ -40,8 +40,8 @@ func AsyncActivities(s *Scenario) {
 	for _, a := range append(ongoing.Items, recent.Items...) {
 		kinds[a.Kind] = true
 	}
-	if !kinds["detection"] || !kinds["test_preparation"] || !kinds["task_execution"] {
-		s.t.Fatalf("three activity kinds missing: %+v %+v", ongoing, recent)
+	if !kinds["detection"] || !kinds["task_execution"] || kinds["test_preparation"] {
+		s.t.Fatalf("current activity kinds differ: %+v %+v", ongoing, recent)
 	}
 	var originalID string
 	for _, a := range ongoing.Items {
@@ -123,6 +123,6 @@ func AsyncActivities(s *Scenario) {
 	p.WaitPhase("completed")
 	p.WaitStoppedCandidates()
 	p.StopService()
-	s.Must(controlled.Write(filepath.Join(s.Output, "activity-proof.json"), map[string]any{"passed": true, "original_activity_id": originalID, "three_kinds": kinds, "no_extra_execution_inputs": true, "restarted_original_run": true, "resources_settled": true}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "activity-proof.json"), map[string]any{"passed": true, "original_activity_id": originalID, "observed_kinds": kinds, "no_extra_execution_inputs": true, "restarted_original_run": true, "resources_settled": true}))
 	s.Must(s.FinishBody())
 }

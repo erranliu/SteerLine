@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"sort"
@@ -80,5 +81,49 @@ func (p *roadmapPort) publicationPreview(ctx context.Context, r roadmap.Record) 
 		}
 		out.Files = append(out.Files, change{key, string(old), files[key]})
 	}
+	current := p.config.runtimeMaintenance.current()
+	if current.Commit != "" && current.Commit != r.CodeCommit && current.Diagnostic == "" {
+		before, _, err := p.testCatalogueAt(ctx, r.CodeCommit)
+		if err != nil {
+			return nil, err
+		}
+		after, name, err := p.testCatalogueAt(ctx, current.Commit)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range r.Documents {
+			raw, err := roadmap.TestsJSON(d)
+			if err != nil {
+				return nil, err
+			}
+			old, err := testmodel.Select([]byte(raw), before)
+			if err != nil {
+				return nil, err
+			}
+			latest, err := testmodel.Select([]byte(raw), after)
+			if err != nil {
+				return nil, err
+			}
+			oldJSON, _ := json.MarshalIndent(old, "", "  ")
+			newJSON, _ := json.MarshalIndent(latest, "", "  ")
+			if string(oldJSON) != string(newJSON) {
+				out.Files = append(out.Files, change{Path: name + " · " + d.Key + " 所选定义", Before: string(oldJSON), After: string(newJSON)})
+			}
+		}
+	}
 	return out, nil
+}
+
+func (p *roadmapPort) testCatalogueAt(ctx context.Context, commit string) (testmodel.Catalogue, string, error) {
+	read := func(path string) ([]byte, error) { return p.config.runtimeMaintenance.read(ctx, commit, path) }
+	entry, err := testmodel.ReadProjectEntry(read)
+	if err != nil {
+		return testmodel.Catalogue{}, "", err
+	}
+	raw, err := read(entry.TestingCatalogue)
+	if err != nil {
+		return testmodel.Catalogue{}, entry.TestingCatalogue, err
+	}
+	catalogue, err := testmodel.ParseCatalogue(raw)
+	return catalogue, entry.TestingCatalogue, err
 }

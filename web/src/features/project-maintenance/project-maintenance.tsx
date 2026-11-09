@@ -3,10 +3,6 @@ import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { SafeLink } from "../../shared/ui/status";
-import {
-  GenerationProgress,
-  type GenerationProgressValue,
-} from "./generation-progress";
 import { testPreparationNames as names } from "../tasks/use-test-readiness";
 import type { ProjectReadiness } from "../../shared/api/types";
 
@@ -39,86 +35,10 @@ export type MaintenanceView = {
     contract: { plan_ref: { path: string } };
     status: string;
     diagnostic?: string;
-    generation_id: string;
-    needs_attention?: boolean;
-    can_retry?: boolean;
   }[];
-  profiles: { id: string; name: string }[];
-  profile: string;
-  generation_progress?: GenerationProgressValue;
 };
 const time = (value?: string) =>
   value ? new Date(value).toLocaleString() : "时间未知";
-
-function GenerationDetails({
-  id,
-  onStop,
-  busy,
-}: {
-  id: string;
-  onStop: () => void;
-  busy: boolean;
-}) {
-  const { api, online, identity } = useWorkspace();
-  const [open, setOpen] = useState(false);
-  const detail = useQuery({
-    queryKey: [
-      "maintenance-generation",
-      identity.project_id,
-      identity.instance_id,
-      id,
-    ],
-    queryFn: () =>
-      api.get<{
-        state: string;
-        run_id?: string;
-        diagnostic?: string;
-        stop_status?: string;
-        settled: boolean;
-        needs_attention: boolean;
-        result?: unknown;
-      }>("/tests/generations/" + id),
-    enabled: online && open,
-    retry: false,
-    refetchInterval: online && open ? 2000 : false,
-  });
-  return (
-    <div>
-      <button aria-expanded={open} onClick={() => setOpen(!open)}>
-        查看生成执行
-      </button>
-      {open && (
-        <div>
-          {detail.isFetching && !detail.data && <p>正在读取生成执行…</p>}
-          {detail.error && <p role="alert">{String(detail.error)}</p>}
-          {detail.data && (
-            <>
-              <p>
-                {detail.data.state === "cancelled" && !detail.data.settled
-                  ? "等待停止确认"
-                  : detail.data.needs_attention
-                    ? "生成受阻，需人工处理"
-                    : names[detail.data.state] || detail.data.state}
-              </p>
-              {detail.data.diagnostic && (
-                <p role="alert">{detail.data.diagnostic}</p>
-              )}
-              {detail.data.result != null && (
-                <pre>{JSON.stringify(detail.data.result, null, 2)}</pre>
-              )}
-              {detail.data.stop_status !== "stopped" &&
-                !["rejected", "cancelled"].includes(detail.data.state) && (
-                  <button disabled={!online || busy} onClick={onStop}>
-                    取消生成
-                  </button>
-                )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function CommitDetails({ commit }: { commit: Commit }) {
   const { api, online, identity } = useWorkspace();
@@ -176,8 +96,7 @@ export function ProjectMaintenance() {
     [error, setError] = useState("");
   const [logs, setLogs] = useState(false),
     [page, setPage] = useState(0),
-    [scope, setScope] = useState("history"),
-    [profile, setProfile] = useState("");
+    [scope, setScope] = useState("history");
   const location = useLocation();
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -242,16 +161,12 @@ export function ProjectMaintenance() {
           : l.status === "diverged"
             ? "已分叉 · 领先 " + l.ahead + " / 落后 " + l.behind + " 个提交"
             : "状态待核实";
-  const problems = v?.tasks.filter((t) => t.status !== "ready") || [];
   const pending =
     requests?.filter(
       (r) =>
         r.envelope.action.startsWith("maintenance_") &&
         !["applied", "rejected"].includes(r.response?.status || ""),
     ) || [];
-  const preparing = ["queued", "preparing", "generating"].includes(
-    v?.generation_progress?.status || "",
-  );
   return (
     <section
       ref={panel}
@@ -267,11 +182,6 @@ export function ProjectMaintenance() {
           {localLabel} · 测试安排 {v.readiness.ready}/{v.readiness.total} 就绪
         </p>
       )}
-      <GenerationProgress
-        value={v?.generation_progress}
-        online={online}
-        scope={identity.project_id}
-      />
       {v?.observation.last_success && (
         <small> · 最近成功检查 {time(v.observation.last_success)}</small>
       )}
@@ -364,100 +274,15 @@ export function ProjectMaintenance() {
               </button>
             </section>
           )}
-          <h4>准备材料与测试安排</h4>
-          <button
-            disabled={
-              !online || busy || preparing || view.isPending || view.isError
-            }
-            onClick={() =>
-              void action("maintenance_generate_all", identity.project_id)
-            }
-          >
-            {preparing ? "准备进行中" : "准备材料与测试安排"}
-          </button>
-          <p className="muted">
-            本地同步且所有未完成任务的材料与测试安排就绪后，才允许新执行。准备在后台执行；已有候选保留其执行版本。
-          </p>
-          {v?.generation_progress?.diagnostic && (
-            <p role="alert">{v.generation_progress.diagnostic}</p>
-          )}
+          <h4>Git 任务材料与测试安排</h4>
+          <p className="muted">检查更新后读取已提交的 Plan 和同名 .tests.json。材料错误通过正常 Git 修改处理。</p>
           {v?.tasks.map((t) => (
             <article key={t.task_id}>
-              <strong>
-                #{t.task_id} ·{" "}
-                {t.needs_attention
-                  ? "生成受阻，需人工处理"
-                  : names[t.status] || t.status}
-              </strong>
-              <p>{t.contract?.plan_ref?.path}</p>
-              {t.diagnostic && <p>{t.diagnostic}</p>}
-              {t.generation_id && (
-                <GenerationDetails
-                  id={t.generation_id}
-                  busy={busy}
-                  onStop={() =>
-                    void action(
-                      "maintenance_stop_generation",
-                      t.generation_id,
-                      { generation_id: t.generation_id },
-                    )
-                  }
-                />
-              )}
-              {["failed", "invalid", "rejected", "cancelled"].includes(
-                t.status,
-              ) && (
-                <button
-                  disabled={!online || busy || !t.can_retry}
-                  onClick={() =>
-                    void action("maintenance_retry", t.task_id, {
-                      task_id: t.task_id,
-                    })
-                  }
-                >
-                  重试生成
-                </button>
-              )}
-              {["failed", "invalid", "cancelled"].includes(t.status) &&
-                !t.can_retry && (
-                  <p className="muted">等待原生成停止并核实资源后重试</p>
-                )}
+              <p>任务 #{t.task_id} · {names[t.status] || t.status}</p>
+              <code>{t.contract.plan_ref.path.replace(/\.plan\.md$/, ".tests.json")}</code>
+              {t.diagnostic && <p role="alert">{t.diagnostic}</p>}
             </article>
           ))}
-          {(problems.some(
-            (t) =>
-              t.status === "configuration_required" ||
-              t.status === "unprepared",
-          ) ||
-            !v?.tasks.length) && (
-            <div>
-              <label>
-                测试生成方案{" "}
-                <select
-                  aria-label="测试生成方案"
-                  value={profile || v?.profile || ""}
-                  onChange={(e) => setProfile(e.target.value)}
-                >
-                  <option value="">选择本机 Codex 方案</option>
-                  {v?.profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                disabled={!online || busy || !(profile || v?.profile)}
-                onClick={() =>
-                  void action("maintenance_profile", identity.project_id, {
-                    profile: profile || v?.profile,
-                  })
-                }
-              >
-                保存测试生成方案
-              </button>
-            </div>
-          )}
           {pending.map((r) => (
             <p key={r.envelope.request_id}>
               有更新操作结果待核实。

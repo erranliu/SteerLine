@@ -1,6 +1,8 @@
 package testmanagement
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	m "github.com/erranliu/SteerLine/internal/testmanagement/model"
@@ -11,7 +13,13 @@ import (
 var recordID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var summarySHA = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-func NewRecordID() string { return randomID() }
+func NewRecordID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b[:])
+}
 
 func ParseReport(raw []byte) (Report, error) {
 	if len(raw) > m.MaxReportBytes {

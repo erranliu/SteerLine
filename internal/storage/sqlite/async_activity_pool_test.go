@@ -16,11 +16,12 @@ func TestAsyncActivityPoolIsReadOnlyAndIndependent(t *testing.T) {
 	defer s.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	require(t, s.RegisterPreparation(ctx, "p", "request", pm.GenerationBatch{ID: "batch", Status: "queued"}))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO commands VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, "p", "request", "project_maintenance", "p", 1, "request", "local", []byte(`{"action":"maintenance_check","instance_id":"i"}`), "pending", nil, time.Now().UTC().Format(time.RFC3339Nano), time.Now().UTC().Format(time.RFC3339Nano))
+	require(t, err)
 	// Hold the writer's sole connection. Activity reads must still complete.
 	tx, err := s.db.BeginTx(ctx, nil)
 	require(t, err)
-	rows, _, readErr := s.ReadAsyncActivityFacts(ctx, "p", ports.AsyncActivityRead{Source: "test_preparation", Filter: "ongoing", Limit: 50})
+	rows, _, readErr := s.ReadAsyncActivityFacts(ctx, "p", ports.AsyncActivityRead{Source: "baseline_check", Filter: "ongoing", Limit: 50})
 	require(t, tx.Rollback())
 	require(t, readErr)
 	if len(rows) != 1 {
@@ -46,9 +47,9 @@ func TestAsyncActivityPoolIsReadOnlyAndIndependent(t *testing.T) {
 		t.Fatal("mode=ro allowed a write")
 	}
 	// Saturating the read pool must not hold up domain persistence.
-	require(t, s.SaveMaterial(ctx, "p", pm.Material{TaskID: "1", Inputs: "input"}))
+	require(t, s.SaveMaterial(ctx, "p", pm.Material{TaskID: "1", Digest: "input"}))
 	queued, done := context.WithTimeout(ctx, 20*time.Millisecond)
-	_, _, err = s.ReadAsyncActivityFacts(queued, "p", ports.AsyncActivityRead{Source: "test_preparation", Limit: 50})
+	_, _, err = s.ReadAsyncActivityFacts(queued, "p", ports.AsyncActivityRead{Source: "baseline_check", Limit: 50})
 	done()
 	if err == nil {
 		t.Fatal("pool wait did not honor query context")
@@ -57,8 +58,8 @@ func TestAsyncActivityPoolIsReadOnlyAndIndependent(t *testing.T) {
 	require(t, second.Close())
 	// Fail the view's pool. Business saves still work; reads cannot fall back.
 	require(t, pool.Close())
-	require(t, s.SaveMaterial(ctx, "p", pm.Material{TaskID: "2", Inputs: "another"}))
-	if _, _, err = s.ReadAsyncActivityFacts(ctx, "p", ports.AsyncActivityRead{Source: "test_preparation", Limit: 50}); err == nil {
+	require(t, s.SaveMaterial(ctx, "p", pm.Material{TaskID: "2", Digest: "another"}))
+	if _, _, err = s.ReadAsyncActivityFacts(ctx, "p", ports.AsyncActivityRead{Source: "baseline_check", Limit: 50}); err == nil {
 		t.Fatal("observation fell back to writer pool")
 	}
 }

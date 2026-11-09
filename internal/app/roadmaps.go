@@ -20,6 +20,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 func (p *runtimeProjectPort) SubmitRoadmap(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
@@ -347,6 +348,12 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 					r.Documents[i].Plan.Body = input.Body
 				case "acceptance":
 					r.Documents[i].Acceptance[0].Body = input.Body
+				case "tests":
+					var selection tm.Arrangement
+					if err := tm.Decode([]byte(input.Body), &selection); err != nil {
+						return nil, err
+					}
+					r.Documents[i].Tests = selection.Tests
 				default:
 					return nil, errors.New("文档类型无效")
 				}
@@ -357,6 +364,13 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 			return nil, errors.New("内部任务代号不存在")
 		}
 		if e := roadmap.ValidateDocuments(r); e != nil {
+			return nil, e
+		}
+		catalogue, e := roadmapservice.TestCatalogue(r)
+		if e != nil {
+			return nil, e
+		}
+		if e = roadmapservice.ValidateTestIDs(r, catalogue); e != nil {
 			return nil, e
 		}
 		r.Review = ""

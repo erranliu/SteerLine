@@ -16,6 +16,8 @@ const CataloguePath = model.CataloguePath
 const RulesPath = model.RulesPath
 const MaxDocumentBytes = model.MaxDocumentBytes
 
+var ErrNotFound = model.ErrNotFound
+
 type Definition = model.Definition
 type Catalogue = model.Catalogue
 

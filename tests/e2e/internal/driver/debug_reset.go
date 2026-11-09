@@ -17,10 +17,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	storesqlite "github.com/erranliu/SteerLine/internal/storage/sqlite"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
-var debugHistory = []string{"test_generation_requests", "test_generations", "candidate_progress", "maintenance_requests", "project_materials", "task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
+var debugHistory = []string{"candidate_progress", "maintenance_requests", "project_materials", "task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
 
 func (d *debugRelease) reset(check bool) error {
 	scopes := []*debugRelease{d}
@@ -129,30 +128,6 @@ func (d *debugRelease) resetState(check bool, proof runnerclient.StoppedVerifica
 		byRun[r.RunID] = r
 	}
 
-	generations, err := tx.QueryContext(ctx, "SELECT payload FROM test_generations WHERE project_identity=?", project)
-	if err != nil {
-		return err
-	}
-	for generations.Next() {
-		var raw []byte
-		var g testmanagement.Generation
-		if err = generations.Scan(&raw); err == nil {
-			err = json.Unmarshal(raw, &g)
-		}
-		if err == nil {
-			err = generationResetSafety(g, project, stateDir, byRun)
-		}
-		if err != nil {
-			break
-		}
-	}
-	if err == nil {
-		err = generations.Err()
-	}
-	generations.Close()
-	if err != nil {
-		return err
-	}
 	rows, err := tx.QueryContext(ctx, "SELECT payload FROM runner_candidates WHERE project_identity=?", project)
 	if err != nil {
 		return err
@@ -299,20 +274,6 @@ func (d *debugRelease) resetState(check bool, proof runnerclient.StoppedVerifica
 		}
 	}
 	fmt.Println("DONE: SteerlineTest state reset without backup")
-	return nil
-}
-
-func generationResetSafety(g testmanagement.Generation, project, stateDir string, runs map[string]runnerclient.StoppedRun) error {
-	if g.Project != project || !strings.EqualFold(filepath.Clean(g.Runner.StateDir), filepath.Clean(stateDir)) {
-		return errors.New("test generation belongs to another project/Runner directory")
-	}
-	if g.State == "rejected" && g.RunID == "" {
-		return nil
-	}
-	r := runs[g.RunID]
-	if g.RunID == "" || g.InputDigest == "" || r.RunID != g.RunID || r.InputDigest != g.InputDigest || !r.ResourcesSettled {
-		return errors.New("original test generation is not proven stopped; preserve recovery state")
-	}
 	return nil
 }
 

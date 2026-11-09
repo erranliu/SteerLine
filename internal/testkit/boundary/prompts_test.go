@@ -12,12 +12,12 @@ func TestPromptGovernanceSourceBoundary(t *testing.T) {
 		name, file, code string
 		rejected         bool
 	}{
-		{"registered-render", "internal/testmanagement/generation.go", `package p;func Generate(){instruction,_:=prompts.TestingGenerate();_ = G{Instruction:instruction}}`, false},
-		{"direct-inline", "internal/testmanagement/generation.go", `package p;func Generate(){_ = G{Instruction:"new rule"}}`, true},
-		{"local-inline", "internal/testmanagement/generation.go", `package p;func Generate(){instruction:="new rule";_ = G{Instruction:instruction}}`, true},
-		{"direct-append", "internal/testmanagement/generation.go", `package p;func Generate(){_ = G{Instruction:prompts.TestingGenerate()+"extra"}}`, true},
-		{"transformed", "internal/testmanagement/generation.go", `package p;func Generate(){body:=strings.ReplaceAll(original,"a","b");_ = G{Instruction:body}}`, true},
-		{"append-assignment", "internal/testmanagement/generation.go", `package p;func Generate(){input.Instruction += "extra"}`, true},
+		{"registered-render", "internal/roadmap/generation.go", `package p;func Parse(){instruction,_:=prompts.RoadmapParse();_ = G{Instruction:instruction}}`, false},
+		{"direct-inline", "internal/roadmap/generation.go", `package p;func Parse(){_ = G{Instruction:"new rule"}}`, true},
+		{"local-inline", "internal/roadmap/generation.go", `package p;func Parse(){instruction:="new rule";_ = G{Instruction:instruction}}`, true},
+		{"direct-append", "internal/roadmap/generation.go", `package p;func Parse(){_ = G{Instruction:prompts.RoadmapParse()+"extra"}}`, true},
+		{"transformed", "internal/roadmap/generation.go", `package p;func Parse(){body:=strings.ReplaceAll(original,"a","b");_ = G{Instruction:body}}`, true},
+		{"append-assignment", "internal/roadmap/generation.go", `package p;func Parse(){input.Instruction += "extra"}`, true},
 		{"new-helper-inactive", "internal/helper/edge_plan9.go", "//go:build never_enabled\npackage p;func NewHelper(){_ = G{Instruction:body}}", true},
 		{"new-override", "internal/new/edge.go", `package p;func NewHelper(){input.Workflow.PromptOverrides["publish"] = body}`, true},
 		{"package-literal", "internal/new/edge.go", `package p;var input=G{Instruction:body}`, true},

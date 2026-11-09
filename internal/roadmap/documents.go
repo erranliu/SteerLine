@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/erranliu/SteerLine/internal/prompts"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"strings"
 	"time"
 
@@ -77,6 +78,10 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		Source: r.Source, Existing: r.Existing, GraphDigest: r.GraphDigest, Profile: r.Profile, CreatedAt: time.Now().UTC(),
 		State: "queued", Runner: s.Build, Submission: "pending", Analysis: r.Analysis, ConfirmedDigest: r.ConfirmedDigest,
 		CodeCommit: fixed.Commit, RepositoryTree: fixed.Tree, Materials: fixed.Materials, Documents: []model.Documents{}, Mapping: r.Mapping}
+	testCatalogue, err := TestCatalogue(r)
+	if err != nil {
+		return r, err
+	}
 	if len(model.PlannedDocuments(r)) == 0 {
 		return r, errors.New("没有尚未入图的新任务")
 	}
@@ -113,7 +118,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
 		Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
 		Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit},
-			Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(r)}}
+			Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(r, testIDs(testCatalogue))}}
 	if err = catalog.ValidateRepositoryGenerate(input); err != nil {
 		return r, err
 	}
@@ -134,4 +139,50 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 
 func sameRepositoryPath(a, b string) bool {
 	return strings.EqualFold(strings.TrimRight(strings.ReplaceAll(a, "\\", "/"), "/"), strings.TrimRight(strings.ReplaceAll(b, "\\", "/"), "/"))
+}
+
+// TestCatalogue reads only the already frozen document-generation materials.
+func TestCatalogue(r model.Record) (tm.Catalogue, error) {
+	read := func(path string) ([]byte, error) {
+		for _, m := range r.Materials {
+			if m.Path == path && m.Content != nil {
+				return []byte(*m.Content), nil
+			}
+		}
+		return nil, errors.New("固定测试材料缺失：" + path)
+	}
+	entry, err := tm.ReadProjectEntry(read)
+	if err != nil {
+		return tm.Catalogue{}, err
+	}
+	raw, err := read(entry.TestingCatalogue)
+	if err != nil {
+		return tm.Catalogue{}, err
+	}
+	return tm.ParseCatalogue(raw)
+}
+func ValidateTestIDs(r model.Record, catalogue tm.Catalogue) error {
+	for _, d := range r.Documents {
+		raw, err := model.TestsJSON(d)
+		if err != nil {
+			return err
+		}
+		definitions, err := tm.Select([]byte(raw), catalogue)
+		if err != nil {
+			return err
+		}
+		if len(definitions) == 0 && !tm.AllowsNoTests(d.Plan.Body) {
+			return errors.New("空测试安排需要 Plan 明确说明无需自动测试")
+		}
+
+	}
+	return nil
+}
+
+func testIDs(c tm.Catalogue) []string {
+	ids := []string{}
+	for _, d := range c.Tests {
+		ids = append(ids, d.ID)
+	}
+	return ids
 }

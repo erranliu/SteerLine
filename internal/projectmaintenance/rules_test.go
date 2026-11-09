@@ -3,90 +3,90 @@ package projectmaintenance
 import (
 	"errors"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
+	"reflect"
 	"testing"
 )
 
-func TestPMSMaterialInputsDoNotRequireArrangement(t *testing.T) {
-	rules := []byte("# Fixed protocol fixture\n")
-	files := map[string][]byte{"SteerlineFlow/environment-project.json": []byte(`{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`), "SteerlineFlow/testing/runtime-progress.md": rules, "SteerlineFlow/plans/task.plan.md": []byte("# Plan\nTest one\n"), tm.RulesPath: []byte("# Rules\n"), tm.CataloguePath: []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)}
+func arrangementFixture() (map[string][]byte, Reader, []byte) {
+	protocol := []byte("# Fixed protocol\n")
+	files := map[string][]byte{
+		tm.ProjectEntryPath: []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`),
+		"task.plan.md":      []byte("# Plan\nTest one\n"), "task.tests.json": []byte(`{"tests":["one"]}`),
+		"quality/policy.md": []byte("Run one\n"), tm.ProtocolPath: protocol,
+		"quality/cases.json": []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`),
+	}
 	read := func(path string) ([]byte, error) {
-		v, ok := files[path]
-		if !ok {
-			return nil, errors.New("missing")
+		if b, ok := files[path]; ok {
+			return b, nil
 		}
-		return v, nil
+		return nil, errors.New("missing " + path)
 	}
-	sources, e := GenerationSources("SteerlineFlow/plans/task.plan.md", read, []byte("# Fixed protocol fixture\n"))
-	if e != nil || len(sources) != 5 {
-		t.Fatal(sources, e)
+	return files, read, protocol
+}
+func TestPMSCommittedArrangementAndRelevantDefinitions(t *testing.T) {
+	files, read, protocol := arrangementFixture()
+	first, basis, err := Arrangement("task.plan.md", "first", read, protocol)
+	if err != nil {
+		t.Fatal(err)
 	}
-	before := sources[0].TextDigest
-	files["SteerlineFlow/plans/task.plan.md"] = []byte("# Plan\nchanged\n")
-	sources, e = GenerationSources("SteerlineFlow/plans/task.plan.md", read, []byte("# Fixed protocol fixture\n"))
-	if e != nil || sources[0].TextDigest == before {
-		t.Fatal("Plan update was ignored", e)
+	if first.Status != "ready" || len(first.Definitions) != 1 || first.Definitions[0].ID != "one" {
+		t.Fatal(first)
 	}
-	files[tm.CataloguePath] = []byte(`{"tests":[{"id":"unknown"}]}`)
-	if _, e = GenerationSources("SteerlineFlow/plans/task.plan.md", read, []byte("# Fixed protocol fixture\n")); e == nil {
-		t.Fatal("invalid catalogue accepted")
+	files["quality/cases.json"] = []byte(`{"tests":[{"id":"other","name":"Other","level":"L4","environment":"isolated","command":"other","check":"pass"},{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)
+	next, nextBasis, err := Arrangement("task.plan.md", "next", read, protocol)
+	if err != nil {
+		t.Fatal(err)
 	}
-	files[tm.RulesPath] = []byte{255}
-	if _, e = GenerationSources("SteerlineFlow/plans/task.plan.md", read, []byte("# Fixed protocol fixture\n")); e == nil {
-		t.Fatal("non UTF-8 accepted")
+	if !reflect.DeepEqual(basis, nextBasis) || first.Digest != next.Digest || next.Commit != "next" {
+		t.Fatal("unselected entry changed material", first, next)
 	}
-	if _, e = GenerationSources("../escape.plan.md", read, rules); e == nil {
-		t.Fatal("invalid path accepted")
+	files["task.tests.json"] = []byte(`{"tests":["other","one"]}`)
+	changed, _, err := Arrangement("task.plan.md", "next", read, protocol)
+	if err != nil || changed.Digest == first.Digest || changed.Definitions[0].ID != "other" {
+		t.Fatal("selection/order lost", changed, err)
 	}
 }
-
-func TestPMSDoesNotReadMaterialsFromLegacyDocs(t *testing.T) {
-	files := map[string][]byte{
-		"SteerlineFlow/plans/task.plan.md": []byte("# Plan\nTest one\n"),
-		"docs/testing.md":                  []byte("# Legacy rules\n"),
-		"docs/testing/test-list.json":      []byte(`{"tests":[]}`),
+func TestPMSInvalidArrangementsAndMissingFiles(t *testing.T) {
+	for _, raw := range []string{`{}`, `{"tests":null}`, `{"tests":["missing"]}`, `{"tests":["one","one"]}`, `{"tests":[],"extra":true}`, `{"tests":[],"tests":["one"]}`, `{"tests":[]}`} {
+		t.Run(raw, func(t *testing.T) {
+			files, read, protocol := arrangementFixture()
+			files["task.tests.json"] = []byte(raw)
+			if _, _, err := Arrangement("task.plan.md", "c", read, protocol); err == nil {
+				t.Fatal("invalid arrangement accepted")
+			}
+		})
 	}
-	var requested []string
-	read := func(path string) ([]byte, error) {
-		requested = append(requested, path)
-		if raw, ok := files[path]; ok {
-			return raw, nil
-		}
-		return nil, errors.New("missing")
+	files, read, protocol := arrangementFixture()
+	delete(files, "task.tests.json")
+	if _, _, err := Arrangement("task.plan.md", "c", read, protocol); err == nil {
+		t.Fatal("missing sidecar accepted")
 	}
-	if _, err := GenerationSources("SteerlineFlow/plans/task.plan.md", read, []byte("# Fixed protocol fixture\n")); err == nil {
-		t.Fatal("legacy-only materials accepted")
+	if _, _, err := Arrangement("../task.plan.md", "c", read, protocol); err == nil {
+		t.Fatal("invalid plan path accepted")
 	}
-	for _, path := range requested {
-		if path == "docs/testing.md" || path == "docs/testing/test-list.json" {
-			t.Fatalf("read legacy material %s", path)
-		}
+	files["task.tests.json"] = []byte(`{"tests":[]}`)
+	files["task.plan.md"] = []byte("# Plan\n无需自动测试：仅文档\n")
+	if got, _, err := Arrangement("task.plan.md", "c", read, protocol); err != nil || got.Status != "ready" || len(got.Definitions) != 0 {
+		t.Fatal(got, err)
 	}
 }
-
-func TestPMSFixedProtocolIsRequiredAndOnlyToleratesCheckoutLineEndings(t *testing.T) {
-	protocol := []byte("# Fixed protocol fixture\n")
-	files := map[string][]byte{
-		tm.ProjectEntryPath:  []byte(`{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`),
-		"task.plan.md":       []byte("# Plan\n"),
-		tm.ProtocolPath:      []byte("# Fixed protocol fixture\r\n"),
-		"quality/cases.json": []byte(`{"tests":[]}`),
+func TestPMSFixedProtocolAndProjectSources(t *testing.T) {
+	files, read, protocol := arrangementFixture()
+	files[tm.ProtocolPath] = []byte("# Fixed protocol\r\n")
+	if _, _, err := Arrangement("task.plan.md", "c", read, protocol); err != nil {
+		t.Fatal(err)
 	}
-	read := func(path string) ([]byte, error) {
-		if body, ok := files[path]; ok {
-			return body, nil
-		}
-		return nil, errors.New("missing")
-	}
-	if _, err := GenerationSources("task.plan.md", read, protocol); err != nil {
-		t.Fatal("checkout line endings rejected", err)
-	}
-	for _, expected := range [][]byte{nil, {}, []byte("# Other protocol\n"), []byte("# Fixed protocol fixture\n ")} {
-		if _, err := GenerationSources("task.plan.md", read, expected); err == nil {
-			t.Fatal("missing/different fixed protocol accepted", string(expected))
+	for _, expected := range [][]byte{nil, []byte("other"), []byte("# Fixed protocol\n ")} {
+		if _, _, err := Arrangement("task.plan.md", "c", read, expected); err == nil {
+			t.Fatal("different protocol accepted")
 		}
 	}
-	delete(files, tm.ProtocolPath)
-	if _, err := GenerationSources("task.plan.md", read, protocol); err == nil {
-		t.Fatal("missing committed protocol accepted")
+	files["quality/policy.md"] = []byte{255}
+	if _, _, err := Arrangement("task.plan.md", "c", read, protocol); err == nil {
+		t.Fatal("invalid UTF-8 accepted")
+	}
+	delete(files, tm.ProjectEntryPath)
+	if _, _, err := Arrangement("task.plan.md", "c", read, protocol); err == nil {
+		t.Fatal("missing project entry accepted")
 	}
 }

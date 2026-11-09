@@ -63,7 +63,7 @@ func PlannedDocuments(r Record) []Documents {
 			name = "task"
 		}
 		name = r.Source.ID[:12] + "/" + name + "-" + Digest([]byte(n.Key))[:8]
-		out = append(out, Documents{Key: n.Key,
+		out = append(out, Documents{Key: n.Key, Tests: []string{},
 			Spec:       Document{Path: "SteerlineFlow/spec/roadmaps/" + name + ".spec.md"},
 			Plan:       Document{Path: "SteerlineFlow/plans/roadmaps/" + name + ".plan.md"},
 			Acceptance: []Document{{Path: "SteerlineFlow/testing/acceptance/roadmaps/" + name + ".md"}}})
@@ -71,7 +71,7 @@ func PlannedDocuments(r Record) []Documents {
 	return out
 }
 
-func DocumentSchema(r Record) json.RawMessage {
+func DocumentSchema(r Record, ids []string) json.RawMessage {
 	str := map[string]any{"type": "string"}
 	object := func(properties map[string]any) map[string]any {
 		required := []string{}
@@ -88,7 +88,16 @@ func DocumentSchema(r Record) json.RawMessage {
 	for _, d := range PlannedDocuments(r) {
 		entries = append(entries, object(map[string]any{
 			"local_key": map[string]any{"const": d.Key}, "spec": file(d.Spec.Path), "plan": file(d.Plan.Path),
+			"tests":      map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}},
 			"acceptance": map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": []any{file(d.Acceptance[0].Path)}}}))
+	}
+	for _, v := range entries {
+		selection := v.(map[string]any)["properties"].(map[string]any)["tests"].(map[string]any)
+		if len(ids) > 0 {
+			selection["items"].(map[string]any)["enum"] = ids
+		} else {
+			selection["maxItems"] = 0
+		}
 	}
 	props := map[string]any{
 		"source_digest":    map[string]any{"const": r.Source.Digest},

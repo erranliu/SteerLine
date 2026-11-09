@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -11,12 +10,10 @@ import (
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	progresstools "github.com/erranliu/SteerLine/tools"
 	"net/http"
@@ -107,14 +104,11 @@ func TestPMRemoteSharesInflightObservation(t *testing.T) {
 }
 
 type pmsStore struct {
-	graph       storageports.TaskGraphSnapshot
-	contract    taskmodel.TaskContract
-	materials   map[string]pm.Material
-	generations map[string]testmanagement.Generation
-	receipts    map[string]json.RawMessage
-	batch       pm.GenerationBatch
-	profile     string
-	candidates  map[string]runnerstate.Candidate
+	graph      storageports.TaskGraphSnapshot
+	contract   taskmodel.TaskContract
+	materials  map[string]pm.Material
+	receipts   map[string]json.RawMessage
+	candidates map[string]runnerstate.Candidate
 }
 
 func (s *pmsStore) TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error) {
@@ -134,43 +128,6 @@ func (s *pmsStore) SaveMaterial(_ context.Context, p string, m pm.Material) erro
 	s.materials[m.TaskID] = m
 	return nil
 }
-func (s *pmsStore) MaterialProfile(context.Context, string) string { return s.profile }
-func (s *pmsStore) SetMaterialProfile(_ context.Context, p, v string) error {
-	s.profile = v
-	return nil
-}
-func (s *pmsStore) Generation(_ context.Context, p, id string) (testmanagement.Generation, error) {
-	g, ok := s.generations[id]
-	if !ok {
-		return g, testmanagement.ErrNotFound
-	}
-	return g, nil
-}
-func (s *pmsStore) Generations(context.Context, string) ([]testmanagement.Generation, error) {
-	out := []testmanagement.Generation{}
-	for _, g := range s.generations {
-		out = append(out, g)
-	}
-	return out, nil
-}
-func (s *pmsStore) SaveGeneration(_ context.Context, g testmanagement.Generation, rev uint64) error {
-	if s.generations[g.ID].Revision != rev {
-		return fmt.Errorf("revision mismatch")
-	}
-	s.generations[g.ID] = g
-	return nil
-}
-func (s *pmsStore) MaintenanceReceipt(_ context.Context, p, id string) (json.RawMessage, error) {
-	r, ok := s.receipts[id]
-	if !ok {
-		return nil, storageports.ErrNotFound
-	}
-	return r, nil
-}
-func (s *pmsStore) SaveMaintenanceOperation(_ context.Context, p, id string, b []byte) error {
-	s.receipts[id] = append(json.RawMessage(nil), b...)
-	return nil
-}
 func (s *pmsStore) Candidate(_ context.Context, p, id string) (runnerstate.Candidate, error) {
 	c, ok := s.candidates[id]
 	if !ok {
@@ -179,41 +136,18 @@ func (s *pmsStore) Candidate(_ context.Context, p, id string) (runnerstate.Candi
 	return c, nil
 }
 
-type pmsCLI struct {
-	submits int
-	request runnerclient.Request
-	run     runnerclient.Run
-	lost    bool
-	t       *testing.T
+func (s *pmsStore) MaintenanceReceipt(_ context.Context, project, id string) (json.RawMessage, error) {
+	if raw, ok := s.receipts[id]; ok {
+		return raw, nil
+	}
+	return nil, storageports.ErrNotFound
+}
+func (s *pmsStore) SaveMaintenanceOperation(_ context.Context, project, id string, raw []byte) error {
+	s.receipts[id] = append(json.RawMessage(nil), raw...)
+	return nil
 }
 
-func (f *pmsCLI) Submit(_ context.Context, r runnerclient.Request) (runnerclient.Receipt, error) {
-	f.submits++
-	f.request = r
-	var in runnercontract.GenerateRunInput
-	_ = json.Unmarshal(r.Input, &in)
-	f.run = runnerclient.Run{RunID: fmt.Sprint("generation-", f.submits), Revision: 1, Workflow: in.Workflow, Correlation: in.Correlation, InputDigest: fmt.Sprint("input-", f.submits)}
-	if in.Generate.Repository != nil {
-		f.run.RepositorySource = appRepositoryManifest(f.t, *in.Generate.Repository)
-	}
-	if f.lost {
-		return runnerclient.Receipt{}, &runnerclient.Failure{Unknown: true}
-	}
-	return runnerclient.Receipt{RunID: f.run.RunID, ReceiptStatus: "accepted"}, nil
-}
-func (f *pmsCLI) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
-	run := f.run
-	return runnerclient.Inspection{Run: &run, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &run.RunID}}, nil
-}
-func (f *pmsCLI) Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error) {
-	return runnerclient.Response{}, fmt.Errorf("unexpected call")
-}
-func (f *pmsCLI) finish() {
-	f.run.Revision++
-	f.run.StopStatus = "stopped"
-	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: json.RawMessage(`{"tests":["one"]}`), RepositorySource: f.run.RepositorySource, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", TurnID: "turn"}}
-}
-func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
+func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore) {
 	t.Helper()
 	root := t.TempDir()
 	repo := filepath.Join(root, "SteerlineTest")
@@ -222,7 +156,7 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	pmGit(t, root, "clone", remote, repo)
 	pmGit(t, repo, "config", "user.name", "PM test")
 	pmGit(t, repo, "config", "user.email", "pm@example.invalid")
-	files := map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, "task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "SteerlineFlow/testing.md": "# Testing\nRules\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
+	files := map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, "task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "task.tests.json": `{"tests":["one"]}`, "SteerlineFlow/testing.md": "# Testing\nRules\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
 	rules, err := prompts.TestingRules()
 	require(t, err)
 	files["SteerlineFlow/testing/runtime-progress.md"] = string(rules)
@@ -243,224 +177,96 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	c := taskmodel.TaskContract{ContractID: "contract", SpecRef: taskmodel.FileReference{Path: "task.spec.md", Commit: commit, SHA256: pm.Digest([]byte(files["task.spec.md"]))}, PlanRef: taskmodel.FileReference{Path: "task.plan.md", Commit: commit, SHA256: pm.Digest([]byte(files["task.plan.md"]))}}
 	c.Digest, _ = taskmodel.ContractDigest(c)
 	task := taskmodel.TaskRecord{TaskID: "101", Status: "open"}
-	store := &pmsStore{graph: storageports.TaskGraphSnapshot{Tasks: []taskmodel.TaskRecord{task}}, contract: c, materials: map[string]pm.Material{}, generations: map[string]testmanagement.Generation{}, receipts: map[string]json.RawMessage{}, candidates: map[string]runnerstate.Candidate{}}
+	store := &pmsStore{graph: storageports.TaskGraphSnapshot{Tasks: []taskmodel.TaskRecord{task}}, contract: c, materials: map[string]pm.Material{}, receipts: map[string]json.RawMessage{}, candidates: map[string]runnerstate.Candidate{}}
 	profile := RunnerProfile{ID: "local", Name: "Local", Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only"}`)}}
 	m := newProjectMaintenance(Config{Repository: repo, Remote: "origin", Branch: "main", Git: backend.Command{Executable: "git"}, ProcessHost: resourceprocess.New(time.Minute), RunnerExecution: RunnerExecutionConfig{DefaultProfile: "local", Profiles: []RunnerProfile{profile}}}, store)
-	cli := &pmsCLI{t: t}
 	cat := promotionCatalog(t)
-	service := &testmanagement.GenerationService{Project: m.config.Identity(), Repository: repo, Store: store, Runner: cli, ReadCommitted: m.read, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		return profile.Execution, cat, nil
-	}}
 	m.config.runtimeCatalog = cat
 	m.config.RunnerExecution.Profiles[0].Workflow = runnerclient.Workflow{ID: "development", Version: 2}
 	m.config.RunnerExecution.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access"}`)
 	m.config.runtimeNative = &runnerclient.ConfigurationSnapshot{Catalog: cat, Query: protocol.ExecutionConfigurationFixture}
-	service.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		source, err := m.config.RunnerExecution.Profile(id, "")
-		if err != nil {
-			return runnercontract.ExecutionInput{}, nil, err
-		}
-		result, err := m.config.deriveProfile(ctx, source, "generate", "read_only")
-		if err != nil {
-			return runnercontract.ExecutionInput{}, nil, err
-		}
-		return *result.Execution, cat, nil
-	}
-	m.tests = &testManagementPort{service: service}
-	return m, store, cli
+	return m, store
 }
-func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
+func TestPMSGitArrangementFreshnessAndCandidateVersions(t *testing.T) {
 	ctx := context.Background()
-	m, store, cli := pmsFixture(t)
-	if _, e := m.check(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if e := m.refresh(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if cli.submits != 1 {
-		t.Fatal("initial automatic generation missing")
-	}
-	if e := m.refresh(ctx); e != nil || cli.submits != 1 {
-		t.Fatal("duplicate auto generation", e)
-	}
-	cli.finish()
-	if e := m.tests.service.Observe(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if e := m.refresh(ctx); e != nil {
-		t.Fatal(e)
-	}
+	m, store := pmsFixture(t)
+	_, err := m.check(ctx)
+	require(t, err)
+	require(t, m.refresh(ctx))
 	first := store.materials["101"]
 	if first.Status != "ready" {
 		t.Fatal(first)
 	}
 	work := taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contract}
-	base := func(context.Context, taskmodel.FixedWork, bool) (string, error) { return m.current().Commit, nil }
-	fixed, b, e := m.prepare(ctx, work, false, base)
-	if e != nil || b != first.Commit || fixed.MaterialDigest != first.Digest {
-		t.Fatal("latest freeze", fixed, b, e)
-	}
-	run := runnerclient.RunInput{Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}
-	snapshot, e := m.config.prepareTestPlan(ctx, fixed, &run)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if len(snapshot) == 0 || len(run.Documents.References) != 0 || run.ResultFile == nil || !strings.HasSuffix(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot)) {
-		t.Fatal("compact system context not frozen")
-	}
-	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: b, TestPlan: snapshot}
+	fixed, base, err := m.prepare(ctx, work, false, func(context.Context, taskmodel.FixedWork, bool) (string, error) { return m.current().Commit, nil })
+	require(t, err)
+	run := callerTestRun()
+	snapshot, err := m.config.prepareTestPlan(ctx, fixed, &run)
+	require(t, err)
+	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: base, TestPlan: snapshot}
 	store.candidates[candidate.ID] = candidate
 	if m.freshness(ctx, candidate) != "current" {
-		t.Fatal("new candidate not current")
+		t.Fatal("Git arrangement required a generation", first)
 	}
-	// Source-only commits reuse generation and keep document eligibility.
-	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "source only")
-	pmGit(t, m.config.Repository, "push", "origin", "main")
-	if _, e = m.check(ctx); e != nil {
-		t.Fatal(e)
+	commit := func() {
+		pmGit(t, m.config.Repository, "add", ".")
+		pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "update")
+		pmGit(t, m.config.Repository, "push", "origin", "main")
+		_, err = m.check(ctx)
+		require(t, err)
+		require(t, m.refresh(ctx))
 	}
-	if e = m.refresh(ctx); e != nil {
-		t.Fatal(e)
+	commit()
+	if m.freshness(ctx, candidate) != "current" {
+		t.Fatal("code-only commit expired documents")
 	}
-	if cli.submits != 1 || m.freshness(ctx, candidate) != "current" {
-		t.Fatal("commit-only change invalidated material")
+	catalogue := `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"},{"id":"unrelated","name":"Unrelated","level":"L4","environment":"isolated","command":"other","check":"other"}]}`
+	path := filepath.Join(m.config.Repository, testmodel.CataloguePath)
+	require(t, os.WriteFile(path, []byte(catalogue), 0600))
+	commit()
+	if m.freshness(ctx, candidate) != "current" {
+		t.Fatal("unselected test expired candidate")
 	}
-	if e = os.WriteFile(filepath.Join(m.config.Repository, "task.plan.md"), []byte("# Plan\nChanged test requirements\n"), 0600); e != nil {
-		t.Fatal(e)
+	require(t, os.WriteFile(path, []byte(strings.Replace(catalogue, `"command":"test"`, `"command":"new-test"`, 1)), 0600))
+	commit()
+	if m.freshness(ctx, candidate) != "outdated" {
+		t.Fatal("selected definition change ignored")
 	}
-	pmGit(t, m.config.Repository, "add", ".")
-	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "-qm", "new Plan")
-	pmGit(t, m.config.Repository, "push", "origin", "main")
-	if _, e = m.check(ctx); e != nil {
-		t.Fatal(e)
+	require(t, os.WriteFile(filepath.Join(m.config.Repository, "task.tests.json"), []byte(`{"tests":["missing"]}`), 0600))
+	commit()
+	if store.materials["101"].Status != "invalid" {
+		t.Fatal("bad arrangement generated a replacement")
 	}
-	if e = m.refresh(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if cli.submits != 2 || m.freshness(ctx, candidate) != "outdated" {
-		t.Fatal("Plan change failed to generate/expire")
-	}
-	if _, _, e = m.prepare(ctx, work, true, base); e == nil {
-		t.Fatal("new candidate used unready generation")
-	}
-	cli.finish()
-	if e = m.tests.service.Observe(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if e = m.refresh(ctx); e != nil {
-		t.Fatal(e)
-	}
-	next, _, e := m.prepare(ctx, work, true, base)
-	if e != nil || next.Contract.PlanRef.Commit == fixed.Contract.PlanRef.Commit {
-		t.Fatal("later candidate retained Task first version", e)
-	}
-	if _, e = m.candidateDocuments(ctx, candidate.ID); e != nil {
-		t.Fatal(e)
-	}
-	if _, e := os.Stat(filepath.Join(m.config.Repository, "task.tests.json")); !os.IsNotExist(e) {
-		t.Fatal("generation wrote a repository sidecar", e)
-	}
-	m.mu.Lock()
-	m.observation.Diagnostic = "offline"
-	m.mu.Unlock()
-	if m.freshness(ctx, candidate) != "unknown" {
-		t.Fatal("offline claimed current eligibility")
+	if string(candidate.TestPlan) != string(snapshot) {
+		t.Fatal("old candidate changed")
 	}
 }
-
 func TestPMSRetriesTransientStaticMaterialReadsAtSameCommit(t *testing.T) {
 	for _, name := range []string{testmodel.WriterPath, "SteerlineFlow/runner-policies/git.md"} {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
-			m, store, cli := pmsFixture(t)
+			m, store := pmsFixture(t)
 			observation, err := m.check(ctx)
 			require(t, err)
 			host := m.config.ProcessHost
 			m.config.ProcessHost = failingDocumentHost{ManagedProcessHost: host, stage: name, cause: context.DeadlineExceeded}
 			require(t, m.refresh(ctx))
-			if got := store.materials["101"]; got.Status != "pending" || got.Commit != observation.Commit || cli.submits != 0 {
+			if got := store.materials["101"]; got.Status != "unknown" || got.Commit != observation.Commit {
 				t.Fatalf("failed pinned read should leave preparation pending: %+v", got)
 			}
 			m.config.ProcessHost = host
 			require(t, m.refresh(ctx))
-			cli.finish()
-			require(t, m.tests.service.Observe(ctx))
 			require(t, m.refresh(ctx))
-			if got := store.materials["101"]; got.Status != "ready" || got.Commit != observation.Commit || len(got.TestPlan) == 0 || cli.submits != 1 {
+			if got := store.materials["101"]; got.Status != "ready" || got.Commit != observation.Commit || len(got.TestPlan) == 0 {
 				t.Fatalf("same pinned commit did not recover once: %+v", got)
 			}
 		})
 	}
 }
 
-func TestNative101GeneratedArrangementStartsWithoutSidecar(t *testing.T) {
-	ctx := context.Background()
-	m, store, cli := pmsFixture(t)
-	repo := m.config.Repository
-	const planPath = "SteerlineFlow/plans/native-101.plan.md"
-	const expected = `{"tests":["N101-CONTENT","N101-SCOPE","demo.progress.roundtrip","demo.progress.retry","demo.progress.cleanup"]}`
-	if source := os.Getenv("STEERLINE_TASK101_REPOSITORY"); source != "" {
-		const fixed = "9d81d9c2652177faf6354d4e9f9f3aec79535d11"
-		pmGit(t, repo, "fetch", "--no-tags", "--", source, fixed)
-		pmGit(t, repo, "-c", "core.hooksPath=/dev/null", "checkout", "-B", "main", fixed)
-		store.contract.SpecRef.Path = "SteerlineFlow/spec/native-101.spec.md"
-	} else {
-		require(t, os.MkdirAll(filepath.Join(repo, filepath.Dir(planPath)), 0700))
-		pmGit(t, repo, "mv", "task.plan.md", planPath)
-		var selection testmodel.Arrangement
-		require(t, json.Unmarshal([]byte(expected), &selection))
-		catalogue := testmanagement.Catalogue{}
-		// Catalogue order differs from the generated execution order.
-		for i := len(selection.Tests) - 1; i >= 0; i-- {
-			id := selection.Tests[i]
-			catalogue.Tests = append(catalogue.Tests, testmanagement.Definition{ID: id, Name: id, Level: "L4", Environment: "isolated", Command: "sample test", Check: "passes"})
-		}
-		raw, err := json.Marshal(catalogue)
-		require(t, err)
-		require(t, os.WriteFile(filepath.Join(repo, testmodel.CataloguePath), raw, 0600))
-		pmGit(t, repo, "add", ".")
-		pmGit(t, repo, "-c", "commit.gpgsign=false", "commit", "-qm", "native 101 materials")
-	}
-	store.contract.PlanRef.Path = planPath
-	store.contract.Digest, _ = taskmodel.ContractDigest(store.contract)
-	pmGit(t, repo, "push", "--force", "origin", "main")
-	_, err := m.check(ctx)
-	require(t, err)
-	require(t, m.refresh(ctx))
-	cli.finish()
-	cli.run.ContentResult.JSON = json.RawMessage(expected)
-	require(t, m.tests.service.Observe(ctx))
-	require(t, m.refresh(ctx))
-	ready := store.materials["101"]
-	if got := ready.Status; got != "ready" {
-		t.Fatal("generation not ready", got)
-	}
-	work := taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contract}
-	fixed, commit, err := m.prepare(ctx, work, false, func(context.Context, taskmodel.FixedWork, bool) (string, error) {
-		return m.current().Commit, nil
-	})
-	require(t, err)
-	run := callerTestRun()
-	snapshot, err := m.config.prepareTestPlan(ctx, fixed, &run)
-	require(t, err)
-	if string(snapshot) != string(ready.TestPlan) || run.ResultFile == nil {
-		t.Fatal("start did not freeze the ready arrangement")
-	}
-	arrangement, err := base64.StdEncoding.DecodeString(run.ResultFile.InitialContentBase64)
-	require(t, err)
-	if string(arrangement) != expected {
-		t.Fatal("generated order changed", string(arrangement))
-	}
-	sidecar := "SteerlineFlow/plans/native-101.tests.json"
-	if pmGit(t, repo, "ls-tree", commit, "--", sidecar) != "" || strings.Contains(run.Workflow.PromptOverrides["implement.execute"], expected) {
-		t.Fatal("arrangement leaked into Git or the prompt")
-	}
-	t.Logf("101 ready/start: base=%s bytes=%d SHA-256=%s", commit, len(arrangement), testmanagement.ContentDigest(arrangement))
-}
 func TestPMSFastForwardAndOriginalUpdateReplay(t *testing.T) {
 	ctx := context.Background()
-	m, _, _ := pmsFixture(t)
+	m, _ := pmsFixture(t)
 	old := pmGit(t, m.config.Repository, "rev-parse", "HEAD")
 	remoteRepo := filepath.Join(t.TempDir(), "SteerlineTest")
 	pmGit(t, filepath.Dir(remoteRepo), "clone", filepath.Join(filepath.Dir(m.config.Repository), "origin.git"), remoteRepo)
@@ -542,41 +348,9 @@ func TestPMSFastForwardAndOriginalUpdateReplay(t *testing.T) {
 	}
 }
 
-func TestPMSGenerationUnknownDoesNotOfferAutomaticRetry(t *testing.T) {
-	ctx := context.Background()
-	m, store, cli := pmsFixture(t)
-	m.config.RunnerExecution.DefaultProfile = ""
-	if _, e := m.check(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if e := m.refresh(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if store.materials["101"].Status != "configuration_required" || cli.submits != 0 {
-		t.Fatal("missing profile started generation")
-	}
-	store.profile = "local"
-	cli.lost = true
-	if e := m.refresh(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if store.materials["101"].Status != "unknown" || cli.submits != 1 {
-		t.Fatal("unknown submit lost original state", store.materials["101"], cli.submits)
-	}
-	if e := m.refresh(ctx); e != nil || cli.submits != 1 {
-		t.Fatal("unknown auto-retried", e, cli.submits)
-	}
-	if e := m.tests.service.Observe(ctx); e != nil {
-		t.Fatal(e)
-	}
-	if e := m.refresh(ctx); e != nil || cli.submits != 1 {
-		t.Fatal("observation resubmitted", e)
-	}
-}
-
 func TestPMSBaselineComparisonAndBlockedUpdates(t *testing.T) {
 	ctx := context.Background()
-	m, _, _ := pmsFixture(t)
+	m, _ := pmsFixture(t)
 	original := pmGit(t, m.config.Repository, "rev-parse", "HEAD")
 	// A separate clone advances only the isolated bare remote.
 	repo := filepath.Join(t.TempDir(), "SteerlineTest")
@@ -717,50 +491,8 @@ func TestPMSMetadataHonorsConfiguredCommand(t *testing.T) {
 	}
 }
 
-func (s *pmsStore) GenerationBatch(context.Context, string) (pm.GenerationBatch, error) {
-	return s.batch, nil
-}
-func (s *pmsStore) SaveGenerationBatch(_ context.Context, _ string, b pm.GenerationBatch) error {
-	s.batch = b
-	return nil
-}
-
-func (s *pmsStore) RegisterPreparation(ctx context.Context, project, id string, batch pm.GenerationBatch) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	raw, _ := json.Marshal(batch)
-	s.receipts[id], s.batch = raw, batch
-	return nil
-}
-
-func TestPMSGenerationSharesPinnedReadCacheWithoutCrossRequestReuse(t *testing.T) {
-	m, _, _ := pmsFixture(t)
-	ctx := materialReads(context.Background())
-	commit := pmGit(t, m.config.Repository, "rev-parse", "HEAD")
-	path := "SteerlineFlow/testing.md"
-	expected, err := m.read(ctx, commit, path)
-	require(t, err)
-	c := m.config
-	c.runtimeMaintenance = m
-	c.Git.Executable = filepath.Join(t.TempDir(), "unavailable-git.exe")
-	m.config.Git = c.Git
-	port := newTestManagementPort(c, nil, runnerclient.Client{}, nil)
-	got, err := port.service.ReadCommitted(ctx, commit, path)
-	require(t, err)
-	if string(got) != string(expected) {
-		t.Fatal("generation reread or changed pinned policy")
-	}
-	if _, err := port.service.ReadCommitted(materialReads(context.Background()), commit, path); err == nil {
-		t.Fatal("immutable cache leaked into another request")
-	}
-	if _, err := port.service.ReadCommitted(ctx, strings.Repeat("f", 40), path); err == nil {
-		t.Fatal("cache replaced another source commit")
-	}
-}
-
 func TestPMReservationRejectsPendingEnvironmentObservation(t *testing.T) {
-	m, _, _ := pmsFixture(t)
+	m, _ := pmsFixture(t)
 	ctx := context.Background()
 	before, err := m.check(ctx)
 	require(t, err)
@@ -785,50 +517,22 @@ func TestPMReservationRejectsPendingEnvironmentObservation(t *testing.T) {
 	require(t, m.reserveBaseline(before.Commit, func() error { reservations++; return nil }))
 }
 
-func TestPMSNativeConfigurationPrecheckSnapshot(t *testing.T) {
+func TestPMSMaterialReadinessDoesNotDependOnGenerationProfiles(t *testing.T) {
 	ctx := context.Background()
-	m, store, cli := pmsFixture(t)
-	calls := 0
-	broken := true
-	m.config.runtimeNative = &runnerclient.ConfigurationSnapshot{Catalog: m.config.runtimeCatalog, Query: func(ctx context.Context, in runnercontract.ExecutionConfigurationRequest) (runnercontract.ExecutionConfigurationResult, error) {
-		calls++
-		if broken {
-			return runnercontract.ExecutionConfigurationResult{}, fmt.Errorf("fixed Runner derive unavailable")
-		}
-		return protocol.ExecutionConfigurationFixture(ctx, in)
-	}}
-	if _, err := m.check(ctx); err != nil {
-		t.Fatal(err)
+	m, store := pmsFixture(t)
+	_, err := m.check(ctx)
+	require(t, err)
+	m.config.RunnerExecution.Profiles = nil
+	require(t, m.refresh(ctx))
+	first := store.materials["101"]
+	if first.Status != "ready" {
+		t.Fatal("static Git material required a generation profile", first)
 	}
-	for i := 0; i < 3; i++ {
-		if err := m.refresh(ctx); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if cli.submits != 0 || calls != 1 || store.materials["101"].Status != "configuration_required" {
-		t.Fatal("failed precheck submitted or repeated CLI", cli.submits, calls, store.materials["101"])
-	}
-	broken = false
-	m.config.runtimeNative.RefreshFailures()
-	if err := m.refresh(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := m.refresh(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if cli.submits != 1 || calls != 2 {
-		t.Fatal("precheck and real generation did not share the same facts", cli.submits, calls)
-	}
-	var input runnercontract.GenerateRunInput
-	require(t, json.Unmarshal(cli.request.Input, &input))
-	if input.Execution.Adapter != "codex-app-server" {
-		t.Fatal(input.Execution)
-	}
-	var permission struct {
-		AccessMode string `json:"access_mode"`
-	}
-	require(t, json.Unmarshal(input.Execution.Settings, &permission))
-	if permission.AccessMode != "read_only" {
-		t.Fatal("generation used source development permission")
+	// The selected execution's capabilities remain a candidate-input requirement.
+	m.config.runtimeCatalog = nil
+	run := callerTestRun()
+	_, err = m.config.prepareTestPlan(ctx, taskmodel.FixedWork{Contract: first.Contract, FrozenTestPlan: first.TestPlan}, &run)
+	if err == nil {
+		t.Fatal("missing candidate capability accepted")
 	}
 }

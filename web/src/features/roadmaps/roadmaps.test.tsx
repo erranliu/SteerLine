@@ -383,8 +383,9 @@ it("shows code evidence, acceptance material and the complete publication target
   record.documents = [
     {
       local_key: "T1",
+      tests: ["arithmetic.unit"],
       spec: { path: "spec/control.md", body: "# 完整 Spec" },
-      plan: { path: "plans/control.md", body: "# 完整 Plan" },
+      plan: { path: "plans/control.plan.md", body: "# 完整 Plan" },
       acceptance: [{ path: "acceptance/control.md", body: "# 验收待执行" }],
     },
   ];
@@ -400,6 +401,9 @@ it("shows code evidence, acceptance material and the complete publication target
     ],
   };
   expect(await screen.findByText(/logic.go/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "测试安排 JSON" }));
+  expect(screen.getByText("plans/control.tests.json")).toBeVisible();
+  expect(screen.getByText(/"arithmetic.unit"/)).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "验收材料" }));
   expect(screen.getByText("# 验收待执行")).toBeVisible();
   fireEvent.click(screen.getByText("完整发布内容与目标"));

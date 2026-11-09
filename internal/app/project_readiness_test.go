@@ -16,12 +16,10 @@ import (
 
 func TestProjectReadinessGatesAllUnfinishedTasksAndNewCandidates(t *testing.T) {
 	ctx := context.Background()
-	m, store, cli := pmsFixture(t)
+	m, store := pmsFixture(t)
 	_, err := m.check(ctx)
 	require(t, err)
 	require(t, m.refresh(ctx))
-	cli.finish()
-	require(t, m.tests.service.Observe(ctx))
 	require(t, m.refresh(ctx))
 	first := store.materials["101"]
 	other := first
@@ -65,17 +63,33 @@ func TestProjectReadinessGatesAllUnfinishedTasksAndNewCandidates(t *testing.T) {
 		}
 	}
 	assert(true)
-	for _, status := range []string{"unprepared", "pending", "accepted", "failed", "unknown", "invalid", "cancelled", "configuration_required"} {
+	for _, status := range []string{"unprepared", "pending", "accepted", "failed", "invalid", "cancelled", "configuration_required"} {
 		other.Status = status
 		store.materials["102"] = other
 		assert(false)
 	}
 	delete(store.materials, "102")
-	assert(false)
+	// Missing observation is not ready until the finite Git reader reconstructs it.
+	projection, err := m.projectReadiness(ctx)
+	require(t, err)
+	if projection.Status != "not_ready" {
+		t.Fatal(projection)
+	}
+	require(t, m.refresh(ctx))
+	assert(true)
 	other = first
 	other.TaskID, other.Commit = "102", strings.Repeat("0", 40)
 	store.materials["102"] = other
-	assert(false)
+	projection, err = m.projectReadiness(ctx)
+	require(t, err)
+	if projection.Status != "not_ready" {
+		t.Fatal(projection)
+	}
+	require(t, m.refresh(ctx))
+	assert(true)
+	// A truly invalid unfinished sibling still blocks; closed ones are excluded.
+	other.Status = "invalid"
+	store.materials["102"] = other
 	// Closed tasks do not retain a project-wide blocker.
 	for _, status := range []string{"closed", "discarded"} {
 		store.graph.Tasks[1].Status = status
@@ -83,29 +97,17 @@ func TestProjectReadinessGatesAllUnfinishedTasksAndNewCandidates(t *testing.T) {
 	}
 	store.graph.Tasks[1].Status = "in_progress"
 	other.Commit = first.Commit
+	other.Status = "ready"
 	store.materials["102"] = other
 	assert(true)
-	// A cancelled generation invalidates even a not-yet-refreshed ready material.
-	g := store.generations[first.GenerationID]
-	g.Cancelled = true
-	store.generations[g.ID] = g
-	assert(false)
-	g.Cancelled = false
-	store.generations[g.ID] = g
-	assert(true)
-	if cli.submits != 1 {
-		t.Fatal("readiness or admission generated new tests", cli.submits)
-	}
 }
 
 func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(t *testing.T) {
 	ctx := context.Background()
-	m, store, cli := pmsFixture(t)
+	m, store := pmsFixture(t)
 	_, err := m.check(ctx)
 	require(t, err)
 	require(t, m.refresh(ctx))
-	cli.finish()
-	require(t, m.tests.service.Observe(ctx))
 	require(t, m.refresh(ctx))
 	commit := m.current().Commit
 	reserved := 0
@@ -142,12 +144,12 @@ func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(
 	require(t, err)
 	checkBlocked()
 	pmGit(t, m.config.Repository, "merge", "--ff-only", newCommit)
-	// Existing generation is reused for unchanged materials after explicit prep.
+	// Unchanged Git arrangements remain ready after the baseline advances.
 	require(t, m.refresh(ctx))
 	ready, err := m.projectReadiness(ctx)
 	require(t, err)
-	if ready.Status != "ready" || cli.submits != 1 {
-		t.Fatal(ready, cli.submits)
+	if ready.Status != "ready" {
+		t.Fatal(ready)
 	}
 	m.observation.Diagnostic = "remote unavailable"
 	checkBlocked()
@@ -156,4 +158,19 @@ func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(
 	material.Status = "failed"
 	store.materials["101"] = material
 	checkBlocked()
+}
+
+func TestMaintenanceCandidateAdmissionNeverGeneratesMaterials(t *testing.T) {
+	m, store := pmsFixture(t)
+	pmGit(t, m.config.Repository, "rm", "task.tests.json")
+	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "-qm", "missing arrangement")
+	pmGit(t, m.config.Repository, "push", "origin", "main")
+	_, _, err := m.prepareLatest(context.Background(), taskmodel.FixedWork{Record: store.graph.Tasks[0]}, false, func(context.Context, taskmodel.FixedWork, bool) (string, error) {
+		t.Fatal("invalid material reached base")
+		return "", nil
+	})
+	var rejected *taskmodel.Error
+	if !errors.As(err, &rejected) || rejected.Code != "project_not_ready" || store.materials["101"].Status != "invalid" {
+		t.Fatal(err, store.materials)
+	}
 }

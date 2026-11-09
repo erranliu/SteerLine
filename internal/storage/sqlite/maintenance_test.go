@@ -13,8 +13,10 @@ import (
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
@@ -44,16 +46,13 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 		c.Digest, e = task.ContractDigest(c)
 		require(t, e)
 		material := pm.Material{TaskID: record.TaskID, Commit: commit, Digest: strings.Repeat(string("abcdef0"[i]), 64), Status: "ready", Contract: c}
-		material.Inputs = material.Digest
-		material.GenerationID = "generation-" + commit
 		definition := testmanagement.Definition{ID: "one", Name: "One", Level: "L1", Environment: "isolated", Command: "test", Check: "pass"}
 		definitions := []testmanagement.Definition{definition}
-		require(t, s.SaveGeneration(ctx, testmanagement.Generation{ID: material.GenerationID, Project: project, ProjectEntry: testmodel.ProjectEntry{Version: 1, Requirements: []string{testmodel.RulesPath}, TestingCatalogue: testmodel.CataloguePath}, Revision: 1, Inputs: material.Inputs, State: "generated", Request: runnercontract.Request{RequestID: "request-" + commit}, Result: json.RawMessage(`{"tests":["one"]}`), Catalogue: testmanagement.Catalogue{Tests: definitions}}, 0))
 		work := task.FixedWork{Record: record, Contract: c, Authority: graph.TaskGraph().Authority, ConfirmedDigest: original.Digest, MaterialDigest: material.Digest}
 		input := runnerclient.RunInput{Title: record.Title, Repository: runnerclient.Repository{URL: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: commit}, Documents: runnerclient.Documents{Spec: runnerclient.Document{Path: c.SpecRef.Path}, Plan: runnerclient.Document{Path: c.PlanRef.Path}}, Publication: runnerclient.Publication{BaseBranch: c.Branch}}
 		raw, _ := json.Marshal(input)
 		candidate := runnerstate.Candidate{Project: project, TaskID: record.TaskID, ID: strings.Repeat(string("abcdef0"[i]), 32), Revision: 1, Explicit: true, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "test", ContractDigest: c.Digest, MaterialDigest: material.Digest, BaseRevision: commit, Participation: "active", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "submit-" + commit, Input: raw}}
-		candidate.TestPlan, _ = json.Marshal(testmanagement.Snapshot{Project: testmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Status: "ready", PlanPath: c.PlanRef.Path, Commit: commit, GenerationID: material.GenerationID, Inputs: material.Inputs, Definitions: definitions})
+		candidate.TestPlan, _ = json.Marshal(testmanagement.Snapshot{Project: testmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Status: "ready", PlanPath: c.PlanRef.Path, Commit: commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)})
 		material.TestPlan = candidate.TestPlan
 		require(t, s.SaveMaterial(ctx, project, material))
 		for _, sibling := range tasks[1:] {
@@ -79,14 +78,8 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 			if g.ByID[record.TaskID].Version != record.Version {
 				t.Fatal("project-wide rejection changed the chosen task")
 			}
-			// A sibling generation can be cancelled while its material still
-			// says ready; final admission reads the original generation too.
-			generation, err := s.Generation(ctx, project, material.GenerationID)
-			require(t, err)
-			generation.ID, generation.Cancelled = "sibling-"+commit, true
-			require(t, s.SaveGeneration(ctx, generation, 0))
-			bad = other
-			bad.GenerationID = generation.ID
+			// Repeated rejection keeps the original task version unchanged.
+
 			require(t, s.SaveMaterial(ctx, project, bad))
 			err = reserveFixtureCandidate(t, s, ctx, work, candidate, i > 0)
 			requireNativeAuditCode(t, err, "project_not_ready")
@@ -135,7 +128,29 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 	if saved.Contract.PlanRef.Commit != first.BaseRevision || saved.MaterialDigest != first.MaterialDigest || saved.Number != 1 {
 		t.Fatal("original replay upgraded candidate", saved)
 	}
-	if e = s.SetMaterialProfile(ctx, project, "local"); e != nil || s.MaterialProfile(ctx, project) != "local" {
-		t.Fatal("profile persistence", e)
+}
+
+func TestPMSMaterialObservationSurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	ctx := context.Background()
+	store, err := OpenSQLiteStore(path)
+	require(t, err)
+	original := pm.Observation{Commit: strings.Repeat("a", 40), CheckedAt: time.Now().UTC(), LastSuccess: time.Now().UTC(), Diagnostic: "original check failed"}
+	require(t, store.SaveMaterialObservation(ctx, "project", original))
+	require(t, store.Close())
+	store, err = OpenSQLiteStore(path)
+	require(t, err)
+	defer store.Close()
+	got, err := store.MaterialObservation(ctx, "project")
+	require(t, err)
+	if !reflect.DeepEqual(got, original) {
+		t.Fatal("observation lost across reopen", got, original)
+	}
+	original.Diagnostic = ""
+	require(t, store.SaveMaterialObservation(ctx, "project", original))
+	got, err = store.MaterialObservation(ctx, "project")
+	require(t, err)
+	if !reflect.DeepEqual(got, original) {
+		t.Fatal("observation upsert failed", got)
 	}
 }

@@ -39,16 +39,9 @@ func (m *projectMaintenance) readinessState(ctx context.Context) (maintenanceSta
 			if contractErr != nil {
 				return state, contractErr
 			}
-			material = pm.Material{TaskID: task.TaskID, Contract: contract, Status: "unprepared", Diagnostic: "请准备材料与测试安排"}
+			material = pm.Material{TaskID: task.TaskID, Contract: contract, Status: "unprepared", Diagnostic: "等待检查 Git 任务材料"}
 		} else if err != nil {
 			return state, err
-		}
-		if material.Status == "ready" {
-			generation, generationErr := m.store.Generation(ctx, m.config.Identity(), material.GenerationID)
-			if generationErr != nil || generation.State != "generated" || generation.Cancelled || generation.Inputs != material.Inputs {
-				material.Status = "unknown"
-				material.Diagnostic = "原测试安排生成结果无效或待核实"
-			}
 		}
 		if material.Commit != "" && (material.Commit != state.Observation.Commit || state.Observation.Diagnostic != "") {
 			material.Status = "unknown"

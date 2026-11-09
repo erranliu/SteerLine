@@ -10,7 +10,7 @@
 
 | 现有位置 | 本次处理 |
 | --- | --- |
-| [测试上下文](../../internal/testmanagement/model/documents.go)、[安排生成](../../internal/testmanagement/generation.go) | 迁出固定指令，保留完整安排及固定材料核验。 |
+| [测试上下文](../../internal/testmanagement/model/documents.go)、[安排生成](https://github.com/erranliu/SteerLine/blob/221812ec058ec7dd608e447f8aeaeafb8587e376/internal/testmanagement/generation.go) | 迁出固定指令，保留完整安排及固定材料核验。 |
 | [工作流追加](../../internal/runnerclient/prompt_context.go) | 保留 Runner 步骤选择，把固定上下文的组合集中到 prompts。 |
 | [候选存储](../../internal/storage/sqlite/runner_candidates.go) | `ReserveRunnerCandidate` 在创建/幂等预留时核验正文绑定；普通读取不渲染，`SaveCandidate` 已比较原请求与安排的不可变性。本次只适配迁出的渲染调用，不新建恢复解析协议。 |
 | [环境调用模板](../../internal/prompts/environment-invoke.md)、[调用接线](../../internal/environmentadaptation/service.go) | 环境新边界已由 project-environment-workflow.spec.md 取代旧生成/prepare/publish，固定短提示只调用项目自有入口一次。 |

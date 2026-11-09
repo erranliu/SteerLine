@@ -21,7 +21,7 @@ import (
 	"unicode/utf8"
 )
 
-// Static references come from pinned Git. The generated selection is frozen
+// Static references come from pinned Git. The committed selection is frozen
 // into the same Runner request as its progress seed.
 func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (snapshot json.RawMessage, preparationErr error) {
 	// These checks only read pinned materials, before candidate reservation or
@@ -105,7 +105,11 @@ func (c Config) testArrangement(ctx context.Context, contract taskmodel.TaskCont
 	if err != nil {
 		return plan, nil, err
 	}
-	arrangement, err := boundedTestArrangement(plan)
+	arrangementPath, err := testmodel.ArrangementPath(plan.PlanPath)
+	if err != nil {
+		return plan, nil, err
+	}
+	arrangement, err := read(arrangementPath)
 	if err != nil {
 		return plan, nil, err
 	}
@@ -126,7 +130,8 @@ func (c Config) testArrangement(ctx context.Context, contract taskmodel.TaskCont
 	if err = verifyTestWriter(read); err != nil {
 		return plan, nil, err
 	}
-	return plan, arrangement, nil
+	canonical, err := boundedTestArrangement(plan)
+	return plan, canonical, err
 }
 
 var errMismatchedTestWriter = errors.New("材料准备不足：固定提交缺少同源 writer，不支持内联兜底")
@@ -145,24 +150,7 @@ func verifyTestWriter(read func(string) ([]byte, error)) error {
 
 func boundedTestArrangement(plan testmodel.Snapshot) ([]byte, error) {
 	arrangement, err := testmodel.FrozenArrangement(plan)
-	if len(arrangement) > runnercontract.MaxProgressBytes {
-		return nil, errors.New("固定测试安排超过 Runner 文件上限")
-	}
 	return arrangement, err
-}
-
-func (c Config) testArrangementTargets() error {
-	if err := c.runtimeCatalog.ValidateProgress(); err != nil {
-		return err
-	}
-	for _, profile := range c.RunnerExecution.Profiles {
-		if profile.Workflow.ID == "development" || profile.Workflow.ID == "development-audited" {
-			if c.validateTestArrangementProfile(profile.Execution, profile.Workflow) == nil {
-				return nil
-			}
-		}
-	}
-	return errors.New("没有支持测试安排文件的开发执行方案")
 }
 
 func (c Config) validateTestArrangementProfile(execution runnerclient.ExecutionInput, workflow runnerclient.Workflow) error {
