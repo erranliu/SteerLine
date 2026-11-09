@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useActivityFeedback } from "../activities/feedback/feedback";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Play, Plus } from "lucide-react";
@@ -24,6 +25,8 @@ export function TaskDetail({
   allowCandidate?: boolean;
 }) {
   const { api, online, snapshot, candidateStarts } = useWorkspace();
+  const feedback = useActivityFeedback();
+  const confirmed = useRef(false);
   const navigate = useNavigate();
   const environment = useEnvironmentReadiness();
   const project = useProjectReadiness();
@@ -31,6 +34,7 @@ export function TaskDetail({
   const restored =
     params.get("task") === id ? params.get("start_profile") || "" : "";
   const [starting, setStarting] = useState(!!restored);
+  if (!starting) confirmed.current = false;
   const [profile, setProfile] = useState(restored);
   const detail = useQuery({
     ...projectQueries(api).task(id),
@@ -188,6 +192,11 @@ export function TaskDetail({
       </div>
       <div className="detail-section">
         <h3>交付与执行</h3>
+        {pendingStarts.length > 0 && (
+          <button type="button" onClick={feedback.open}>
+            查看活动
+          </button>
+        )}
         {!task.delivery && (
           <div role="status" aria-label="项目就绪状态">
             <p className="muted">{project.text}</p>
@@ -290,15 +299,26 @@ export function TaskDetail({
             <Button
               variant="default"
               disabled={!!reason || !candidateStarts}
-              onClick={() => {
-                if (!selected || !candidateStarts || reason) return;
+              onClick={(event) => {
+                if (
+                  !selected ||
+                  !candidateStarts ||
+                  reason ||
+                  confirmed.current
+                )
+                  return;
+                confirmed.current = true;
                 const requestID = candidateStarts.start(
                   task,
                   selected,
                   detail.data!.graph_revision,
                   page?.control.revision ?? 0,
                 );
-                if (!requestID) return;
+                if (!requestID) {
+                  confirmed.current = false;
+                  return;
+                }
+                feedback.notify("启动任务候选", event.currentTarget);
                 setStarting(false);
                 navigate(
                   `/projects/${api.identity.project_id}/runs?task=${encodeURIComponent(id)}&run=${requestID}`,

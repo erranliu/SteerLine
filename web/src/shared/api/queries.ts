@@ -287,6 +287,8 @@ export function invalidateCommand(
     predicate: ({ queryKey: key }) => {
       if (key[0] !== home) return false;
       if (key[1] === "local-requests") return true;
+      if (action.startsWith("roadmap_") && key[1] === "roadmaps")
+        return key[2] === project_id && key[3] === instance_id;
       if (
         key[1] !== project_id ||
         key[2] !== instance_id ||
@@ -294,6 +296,23 @@ export function invalidateCommand(
       )
         return false;
       const resource = String(key[3]);
+      if (
+        action === "maintenance_check" &&
+        ["maintenance", "project-readiness"].includes(resource)
+      )
+        return true;
+      if (
+        ["async-activities", "activity-links"].includes(resource) &&
+        ((action.startsWith("roadmap_") &&
+          action !== "roadmap_prepare_static") ||
+          [
+            "environment_start",
+            "maintenance_check",
+            "start_task",
+            "start_candidate",
+          ].includes(action))
+      )
+        return true;
       if (action.startsWith("environment_")) return resource === "environment";
       if (taskActions.has(action)) return taskResources.has(resource);
       if (affectsOutput && typeof runID === "string" && runID) {
