@@ -7,7 +7,7 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { RefreshCw } from "lucide-react";
+import { FolderOpen, RefreshCw } from "lucide-react";
 import {
   Activities,
   initialActivityUI,
@@ -128,14 +128,11 @@ export function Workspace({
       >
         <AppShell
           projectId={identity.project_id}
+          projectName={projectName}
           activities={
             <Activities control={activityControl} projectName={projectName} />
           }
-          switcher={
-            switcher ?? (
-              <div className="project-card">{identity.repository_identity}</div>
-            )
-          }
+          switcher={switcher}
           questions={counts.questions}
           footer={`${counts.runs} 个候选 · 业务状态由 Go 服务核验`}
           connection={
@@ -291,7 +288,6 @@ export function App({ initial }: { initial: BrowserSession }) {
     choose,
     returnTo,
   } = useApplicationProjects(initial);
-  const [search, setSearch] = useState("");
   const route = useLocation();
   const previousActivityHome = useRef(home);
   useEffect(() => {
@@ -316,85 +312,68 @@ export function App({ initial }: { initial: BrowserSession }) {
     !!savedStatus.data?.saved_digest &&
     !!catalog.data?.loaded_execution_digest &&
     savedStatus.data.saved_digest !== catalog.data.loaded_execution_digest;
+  const projectConnectionMessage =
+    selected && !selected.online
+      ? {
+          starting: "项目启动中…",
+          failed: "项目启动失败，请查看具体原因",
+          stopping: "项目停止中…",
+          stopped: "项目已停止，请从本机入口启动",
+          ready: "正在核验项目连接…",
+        }[selected.runtime_state ?? "stopped"]
+      : undefined;
   const switcher = (
     <div className="project-selector">
-      <label htmlFor="project-search">切换项目</label>
-      <input
-        id="project-search"
-        placeholder="搜索名称或位置"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-      <select
-        aria-label="当前项目"
-        value={selected ? id : ""}
-        onChange={(e) => {
-          if (e.target.value) choose(e.target.value);
-        }}
-      >
-        <option value="" disabled>
-          选择已配置项目
-        </option>
-        {projects
-          .filter(
-            (p) =>
-              p.project_id === id ||
-              [p.name, p.repository, p.config_id]
-                .join(" ")
-                .toLowerCase()
-                .includes(search.toLowerCase()),
-          )
-          .map((p) => (
+      <label htmlFor="project-select">切换项目</label>
+      <div className="project-select-control">
+        <FolderOpen
+          className="project-select-icon"
+          size={17}
+          aria-hidden="true"
+        />
+        <select
+          id="project-select"
+          aria-label="当前项目"
+          title={
+            selected
+              ? `切换项目：${selected.name} · ${selected.repository}`
+              : "切换项目"
+          }
+          value={selected ? id : ""}
+          onChange={(e) => {
+            if (e.target.value) choose(e.target.value);
+          }}
+        >
+          <option value="" disabled>
+            选择已配置项目
+          </option>
+          {projects.map((p) => (
             <option
               key={p.config_id}
               value={p.project_id ?? p.config_id}
               disabled={!p.project_id || !!p.conflict}
             >
-              {p.name} · {p.repository} ·{" "}
+              {p.name}
+              {projects.some(
+                (other) =>
+                  other.config_id !== p.config_id && other.name === p.name,
+              )
+                ? ` · ${p.repository}`
+                : ""}
               {p.conflict
-                ? "配置冲突"
+                ? " · 配置冲突"
                 : !p.project_id
-                  ? "配置错误"
-                  : p.online
-                    ? "在线"
-                    : {
-                        starting: "启动中",
-                        failed: "启动失败",
-                        stopping: "停止中",
-                        stopped: "已停止",
-                        ready: "在线",
-                      }[p.runtime_state ?? "stopped"]}
-              {(!p.project_id || p.conflict) && (p.diagnostic || p.conflict)
+                  ? " · 配置错误"
+                  : !p.online && p.runtime_state === "failed"
+                    ? " · 启动失败"
+                    : ""}
+              {p.diagnostic || p.conflict
                 ? " · " + (p.diagnostic || p.conflict)
                 : ""}
             </option>
           ))}
-      </select>
-      {selected && (
-        <div className="project-current">
-          <div>
-            <strong>{selected.name}</strong>
-            <small>
-              {selected.online
-                ? "在线"
-                : {
-                    starting: "启动中",
-                    failed: "启动失败",
-                    stopping: "停止中",
-                    stopped: "已停止",
-                    ready: "在线",
-                  }[selected.runtime_state ?? "stopped"]}
-            </small>
-          </div>
-          <span className="path" title={selected.repository}>
-            {selected.repository}
-          </span>
-        </div>
-      )}
-      <Button size="sm" variant="ghost" onClick={() => void catalog.refetch()}>
-        刷新项目目录
-      </Button>
-      {selected?.diagnostic && <p className="muted">{selected.diagnostic}</p>}
+        </select>
+      </div>
     </div>
   );
   if (
@@ -404,6 +383,7 @@ export function App({ initial }: { initial: BrowserSession }) {
     return (
       <AppShell
         projectId={selected?.project_id}
+        projectName={selected?.name}
         switcher={switcher}
         returnTo={returnTo}
         connection={
@@ -461,7 +441,9 @@ export function App({ initial }: { initial: BrowserSession }) {
           session.error ||
           catalog.error ||
           projectIdentity.error ||
-          session.data.diagnostic
+          session.data.diagnostic ||
+          selected.diagnostic ||
+          projectConnectionMessage
         }
         connected={
           sessionValid &&
@@ -485,14 +467,16 @@ export function App({ initial }: { initial: BrowserSession }) {
       ) : id ? (
         <p role="status">
           {selected
-            ? projectIdentity.error
-              ? "项目离线，当前不可提交业务操作"
-              : "正在核验项目连接…"
+            ? projectConnectionMessage ||
+              (projectIdentity.error
+                ? "项目离线，当前不可提交业务操作"
+                : "正在核验项目连接…")
             : "项目不可访问，请重新选择"}
         </p>
       ) : (
         <p>{projects.length ? "请选择当前项目" : "尚无已配置项目"}</p>
       )}
+      {selected?.diagnostic && <p role="alert">{selected.diagnostic}</p>}
       {catalog.error && <p role="alert">{String(catalog.error)}</p>}
       <p className="muted">
         项目目录来自当前应用 home 的 etc 配置。项目服务需通过本机入口启动。

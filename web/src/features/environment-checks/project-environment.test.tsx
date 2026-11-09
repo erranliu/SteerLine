@@ -658,6 +658,7 @@ it("shows every environment and shared scheme without switching, with initial at
     multipleEnvironments,
   );
   await loaded();
+  await within(overview()).findByText("远程工作站 · Orca → Codex");
   expect(
     overviewRows().map((row) => row.querySelector("strong")?.textContent),
   ).toEqual([
