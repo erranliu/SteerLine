@@ -118,16 +118,6 @@ func Prepare(options Options) (*Server, error) {
 	s := &Server{options: options, listener: listener, endpoint: endpoint, stopped: make(chan struct{}), identity: identity, secret: secret, assets: assets, dev: dev,
 		cookie: "sl_web_" + identity.HomeID[:12] + "_" + strings.Split(options.Address, ":")[1], tickets: map[string]time.Time{}, sessions: map[string]session{}}
 	s.configuration = configrepo.New(options.Home)
-	s.configuration.VerifyUsagePolicy = func(ctx context.Context, policy cfg.UsagePolicy) error {
-		var current cfg.UsageCollection
-		if err := s.options.Client.Get(ctx, "/usage-collection", &current); err != nil {
-			return err
-		}
-		if current.Status != "ready" {
-			return errors.New("运行中用量授权需求不可核实")
-		}
-		return configrepo.VerifyUsageRequirements(policy, current)
-	}
 	s.discovery = discovery.New(s.configuration)
 	s.http = &http.Server{Handler: s, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 35 * time.Second, WriteTimeout: 125 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 

@@ -26,6 +26,9 @@ func (g RunnerExecutionConfig) Validate() error {
 	if _, err := executionconfig.GenerateConcurrency(g.MaxGenerateConcurrency); err != nil {
 		return err
 	}
+	if _, err := executionconfig.DecodeUsagePolicy(g.UsagePolicy); err != nil {
+		return err
+	}
 	return executionconfig.Validate(g.Version, g.DefaultProfile, g.Profiles)
 }
 func (g RunnerExecutionConfig) Profile(id, digest string) (RunnerProfile, error) {

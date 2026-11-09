@@ -51,7 +51,6 @@ type Store struct {
 	catalogPin cfg.Pin
 	// Tests replace the offline metadata reader, never the consumer or a task.
 	ReadCatalog        func(context.Context, cfg.Pin) (*catalog, error)
-	VerifyUsagePolicy  func(context.Context, cfg.UsagePolicy) error
 	Configure          func(context.Context, cfg.Pin, runnercontract.ExecutionConfigurationRequest) (runnercontract.ExecutionConfigurationResult, error)
 	configurationCache map[string]configurationValue
 }
@@ -100,6 +99,9 @@ func (s *Store) read() (Config, []byte, error) {
 	}
 	if err = cfg.Validate(c.Version, c.DefaultProfile, c.Profiles); err != nil {
 		return c, nil, failure(400, "invalid_configuration", err.Error())
+	}
+	if _, err = cfg.DecodeUsagePolicy(c.UsagePolicy); err != nil {
+		return c, nil, failure(400, "invalid_usage_policy", err.Error())
 	}
 	return c, raw, nil
 }
@@ -175,17 +177,9 @@ func (s *Store) validate(ctx context.Context, raw []byte) (Config, error) {
 	if err = cfg.Validate(proposed.Version, proposed.DefaultProfile, proposed.Profiles); err != nil {
 		return proposed, failure(400, "invalid_configuration", err.Error())
 	}
-	policy, policyErr := cfg.DecodeUsagePolicy(proposed.UsagePolicy)
+	_, policyErr := cfg.DecodeUsagePolicy(proposed.UsagePolicy)
 	if policyErr != nil {
 		return proposed, failure(400, "invalid_usage_policy", policyErr.Error())
-	}
-	if !sameValue(current.UsagePolicy, proposed.UsagePolicy) && len(policy.RemoteLogAccess.Grants) > 0 {
-		if s.VerifyUsagePolicy == nil {
-			return proposed, failure(409, "usage_requirements_unverified", "远端主机与日志叶目录尚未核实")
-		}
-		if err = s.VerifyUsagePolicy(ctx, policy); err != nil {
-			return proposed, failure(409, "usage_requirements_unverified", err.Error())
-		}
 	}
 	cat, err := s.contract(ctx, current.Runner)
 	if err != nil {

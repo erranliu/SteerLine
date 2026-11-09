@@ -16,11 +16,9 @@ afterEach(() => {
   clients.splice(0).forEach((c) => c.clear());
   vi.unstubAllGlobals();
 });
-it("saves only the observed exact leaf and keeps actual remote authorization disabled until restart", async () => {
+it("defaults to automatic remote collection and saves the collection toggle until restart", async () => {
   let saved = structuredClone(configSnapshot);
   const writes: unknown[] = [];
-  const root = "C:/Users/fixture/.codex/sessions/2026/11/05";
-  const host = "sha256:" + "a".repeat(64);
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url, init) => {
@@ -32,16 +30,6 @@ it("saves only the observed exact leaf and keeps actual remote authorization dis
             usage_policy: defaultUsagePolicy(),
             usage_policy_revision: "old",
             usage_policy_digest: "old",
-            requirements: [
-              {
-                run_id: "r",
-                source_ref: "s",
-                environment: "env",
-                host_id: host,
-                session_root: root,
-                observed_at: "2026-11-05T00:00:00Z",
-              },
-            ],
           }),
         );
       if (init?.method === "PUT") {
@@ -68,27 +56,21 @@ it("saves only the observed exact leaf and keeps actual remote authorization dis
     </QueryClientProvider>,
   );
   await screen.findByText("运行中策略已生效");
+  expect(screen.getByLabelText("启用 Token 采集")).toBeChecked();
   expect(
-    screen.getByRole("button", { name: "授权此已核实日志叶目录" }),
-  ).toBeDisabled();
-  fireEvent.click(screen.getByLabelText("显式允许临时远端日志读取"));
-  fireEvent.click(
-    screen.getByRole("button", { name: "授权此已核实日志叶目录" }),
-  );
+    screen.getByText(/自动读取当前运行已核实的本机和远端会话日志/),
+  ).toBeVisible();
+  expect(screen.queryByText("显式允许临时远端日志读取")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "授权此已核实日志叶目录" }),
+  ).toBeNull();
+  fireEvent.click(screen.getByLabelText("启用 Token 采集"));
   fireEvent.click(screen.getByRole("button", { name: "保存采集设置" }));
   await screen.findByText("已保存，待正式重启");
   expect(writes).toEqual([
     {
       ...configSnapshot.config,
-      usage_policy: {
-        enabled: true,
-        remote_log_access: {
-          mode: "temporary",
-          grants: [
-            { environment: "env", host_id: host, session_roots: [root] },
-          ],
-        },
-      },
+      usage_policy: { enabled: false },
     },
   ]);
   expect(
@@ -111,7 +93,6 @@ it("does not let a pre-save read claim that changed collection settings are alre
             instance_id: "old",
             usage_policy: defaultUsagePolicy(),
             usage_policy_revision: "old",
-            requirements: [],
           }),
         );
       if (init?.method === "PUT") {
