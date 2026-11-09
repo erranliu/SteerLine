@@ -31,13 +31,13 @@ func (p *Project) CallerRequests() map[string]string {
 	return deliveryRequestBodies(s)
 }
 
-// Material generation and explicit environment adaptation are preparation, separate from the delivery Run's submit
-// and stop. Keep every unclassified request so it cannot hide an extra input.
+// Only explicit environment adaptation is separate from delivery inputs.
+// Unexpected generation and unclassified requests must remain observable.
 func deliveryRequestBodies(fixture controlled.RunnerFixture) map[string]string {
 	requests := map[string]string{}
 	for id, body := range fixture.Bodies {
 		command := fixture.Requests[id]
-		if command.RunID != nil && (fixture.Runs[*command.RunID].Workflow.ID == "generate" || fixture.Runs[*command.RunID].Correlation["environment_activity"] != "") {
+		if command.RunID != nil && fixture.Runs[*command.RunID].Correlation["environment_activity"] != "" {
 			continue
 		}
 		requests[id] = body

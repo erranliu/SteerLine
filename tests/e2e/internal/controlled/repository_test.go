@@ -3,18 +3,14 @@ package controlled
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
-func TestFixtureRepositoryPreservesCommittedBytes(t *testing.T) {
+func TestGitForwardingPreservesBatchInputAndCommittedBytes(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(root, "empty.gitconfig"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -41,34 +37,5 @@ func TestFixtureRepositoryPreservesCommittedBytes(t *testing.T) {
 	batch, err := gitBytes(context.Background(), root, strings.NewReader(oid+"\n"), "cat-file", "--batch")
 	if err != nil || !bytes.Equal(batch, append([]byte(oid+" blob 6\n"), append(files["binary.bin"], '\n')...)) {
 		t.Fatal("Git forwarding lost batch input or original bytes", batch, err)
-	}
-	for name := range files {
-		if err := os.WriteFile(filepath.Join(root, name), []byte("uncommitted replacement"), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	materials, source, err := fixtureRepository(runnercontract.GenerateRepository{LocalPath: root, Commit: commit})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if source.LocalPath != root || source.Commit != commit || source.Tree != git("rev-parse", commit+"^{tree}") || len(source.Files) != len(files) || len(materials) != len(files) {
-		t.Fatal("snapshot identity differs", source)
-	}
-	observed := map[string]bool{}
-	for _, file := range source.Files {
-		body, ok := files[file.Path]
-		sum := sha256.Sum256(body)
-		if !ok || observed[file.Path] || file.Blob != git("rev-parse", commit+":"+file.Path) || file.SizeBytes != len(body) || file.SHA256 != hex.EncodeToString(sum[:]) {
-			t.Fatal("original blob differs", file)
-		}
-		observed[file.Path] = true
-	}
-	for _, material := range materials {
-		if material.Content == nil || !bytes.Equal([]byte(*material.Content), files[material.Path]) {
-			t.Fatal("original bytes differ", material.Path)
-		}
-	}
-	if _, _, err := fixtureRepository(runnercontract.GenerateRepository{LocalPath: root, Commit: strings.Repeat("0", 40)}); err == nil {
-		t.Fatal("missing commit read from worktree")
 	}
 }

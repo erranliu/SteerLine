@@ -1,7 +1,6 @@
 package controlled
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -9,10 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -216,6 +213,9 @@ func RunnerCLI(args []string) (bool, error) {
 		if err := json.Unmarshal(request.Input, &input); err != nil {
 			return true, err
 		}
+		if input.Workflow.ID == "generate" {
+			return true, fmt.Errorf("controlled delivery peer does not supply generation results")
+		}
 		directory := input.Repository.LocalPath
 		if directory == "" {
 			directory = stateDir
@@ -233,65 +233,7 @@ func RunnerCLI(args []string) (bool, error) {
 		sum := sha256.Sum256(request.Input)
 		run := runnercontract.Run{Correlation: input.Correlation, RunID: runID, Revision: 1, Title: input.Title, InputDigest: hex.EncodeToString(sum[:]), Status: "running", Phase: "running", StopStatus: "active", NewInputsAllowed: true, Controls: runnercontract.Controls{CanStop: true}, UpdatedAt: time.Now().UTC(), Execution: runnercontract.Execution{AttemptID: "attempt-" + runID, Generation: "fixture", TurnID: "fixture-turn", SessionID: "session-" + runID, Workspace: input.Repository.LocalPath, Branch: "codex/fixture/" + request.RequestID}}
 		run.Workflow = input.Workflow
-		if input.Workflow.ID == "generate" {
-			var generation runnercontract.GenerateRunInput
-			if err := json.Unmarshal(request.Input, &generation); err != nil {
-				return true, err
-			}
-			// Scripted public result, not a native/model success claim.
-			selection := []string{}
-			noTests := false
-			materials := generation.Generate.Materials
-			if generation.Generate.Repository != nil {
-				var e error
-				materials, run.RepositorySource, e = fixtureRepository(*generation.Generate.Repository)
-				if e != nil {
-					return true, e
-				}
-			}
-			var entry testmodel.ProjectEntry
-			for _, material := range materials {
-				if material.Path == testmodel.ProjectEntryPath && material.Content != nil {
-					var e error
-					entry, e = testmodel.ParseProjectEntry([]byte(*material.Content))
-					if e != nil {
-						return true, e
-					}
-				}
-			}
-			for _, material := range materials {
-				if material.Content == nil {
-					continue
-				}
-				if strings.HasSuffix(material.Path, ".plan.md") && (strings.Contains(strings.ToLower(*material.Content), "no automated tests") || strings.Contains(*material.Content, "无需自动测试")) {
-					noTests = true
-				}
-				if material.Path == entry.TestingCatalogue {
-					var catalog struct {
-						Tests []struct {
-							ID string `json:"id"`
-						} `json:"tests"`
-					}
-					if e := json.Unmarshal([]byte(*material.Content), &catalog); e != nil {
-						return true, e
-					}
-					for _, d := range catalog.Tests {
-						selection = append(selection, d.ID)
-					}
-				}
-			}
-			if noTests {
-				selection = []string{}
-			}
-			result, _ := json.Marshal(map[string]any{"tests": selection})
 
-			source := runnercontract.Final{CommandID: "fixture-content-" + request.RequestID, TurnID: "fixture-turn", Verified: true, NativeOutcome: "succeeded", Source: "caller-fixture"}
-			run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: result, RepositorySource: run.RepositorySource, Source: source}
-			run.Status = "completed"
-			run.StopStatus = "stopped"
-			run.Final = &source
-			run.NewInputsAllowed = false
-		}
 		if input.ProgressFile != nil {
 			body, err := base64.StdEncoding.Strict().DecodeString(input.ProgressFile.InitialContentBase64)
 			if err != nil {
@@ -367,7 +309,11 @@ func RunnerCLI(args []string) (bool, error) {
 		}
 		if run.StopStatus != "stopped" && !provider.Hold {
 			if run.PR == nil {
-				pr, err := prepareFixturePR(providerPath, &provider, run.Execution.Workspace, run.Execution.Branch)
+				var original runnercontract.RunInput
+				if err := json.Unmarshal([]byte(s.Bodies[strings.TrimPrefix(run.RunID, "run-")]), &original); err != nil {
+					return true, err
+				}
+				pr, err := prepareFixturePR(providerPath, &provider, run.Execution.Workspace, run.Execution.Branch, original.Repository.BaseRevision)
 				if err != nil {
 					return true, err
 				}
@@ -507,19 +453,26 @@ func hasArgument(args []string, want string) bool {
 }
 
 // Fixture preparation is one Git/PR outcome, not a simulated development flow.
-func prepareFixturePR(path string, s *State, repo, branch string) (model.PRInfo, error) {
-	if existing, ok := s.PRs["https://github.com/"+s.RepositoryName()+"/pull/1"]; ok && existing.HeadBranch == branch {
-		return existing, nil
+func prepareFixturePR(path string, s *State, repo, branch, base string) (model.PRInfo, error) {
+	for _, existing := range s.PRs {
+		if existing.HeadBranch == branch {
+			return existing, nil
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	for _, args := range [][]string{{"checkout", "-B", branch}, {"commit", "--allow-empty", "-m", "Controlled Runner outcome"}, {"push", s.GitURL, "HEAD:refs/heads/" + branch}} {
-		if _, err := Git(ctx, repo, args...); err != nil {
-			return model.PRInfo{}, err
-		}
-	}
-	head, err := Git(ctx, repo, "rev-parse", "HEAD")
+	tree, err := Git(ctx, repo, "rev-parse", "--verify", base+"^{tree}")
 	if err != nil {
+		return model.PRInfo{}, err
+	}
+	// Publish one empty fixture commit from the frozen base without checking out
+	// a branch in the primary workspace that admission must keep synchronized.
+	commit, err := gitBytes(ctx, repo, strings.NewReader("Controlled Runner outcome\n"), "commit-tree", tree, "-p", base)
+	if err != nil {
+		return model.PRInfo{}, err
+	}
+	head := strings.TrimSpace(string(commit))
+	if _, err = Git(ctx, repo, "push", s.GitURL, head+":refs/heads/"+branch); err != nil {
 		return model.PRInfo{}, err
 	}
 	pr := model.PRInfo{URL: fmt.Sprintf("https://github.com/%s/pull/%d", s.RepositoryName(), len(s.PRs)+1), Repository: s.RepositoryName(), HeadRepository: s.RepositoryName(), BaseBranch: s.BranchName(), HeadBranch: branch, HeadRevision: head, State: "open"}
@@ -534,8 +487,8 @@ func prepareFixturePR(path string, s *State, repo, branch string) (model.PRInfo,
 	return pr, nil
 }
 
-// This peer already scripts generate results in submit/inspect. Advertise that
-// public capability even when the helper is built directly rather than packaged.
+// Shared generation schemas remain available for caller configuration tests.
+// The delivery peer does not provide a model result.
 func controlledCapabilities() map[string]any {
 	caps := protocol.RunnerServiceCapabilities("caller-fixture-v1")
 	caps["configuration_schemas"].(map[string]any)["adapters"].(map[string]any)["orca-terminal"] = map[string]string{"type": "object"}
@@ -582,85 +535,6 @@ func (s RunnerFixture) eventPage(run runnercontract.Run, after string) runnercon
 	return page
 }
 
-// Public repository snapshot behavior for this scripted caller peer only.
-func fixtureRepository(repo runnercontract.GenerateRepository) ([]runnercontract.Document, *runnercontract.RepositorySource, error) {
-	gitInput := func(input string, args ...string) ([]byte, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repo.LocalPath}, args...)...)
-		cmd.Stdin = strings.NewReader(input)
-		return cmd.Output()
-	}
-	tree, err := gitInput("", "rev-parse", repo.Commit+"^{tree}")
-	if err != nil {
-		return nil, nil, err
-	}
-	source := &runnercontract.RepositorySource{LocalPath: repo.LocalPath, Commit: repo.Commit, Tree: strings.TrimSpace(string(tree))}
-	entries, err := gitInput("", "ls-tree", "-r", "-z", repo.Commit)
-	if err != nil {
-		return nil, nil, err
-	}
-	selected := map[string]bool{}
-	for _, path := range repo.Paths {
-		selected[path] = true
-	}
-	type entry struct{ path, blob string }
-	objects := []entry{}
-	var batch strings.Builder
-	for _, raw := range bytes.Split(entries, []byte{0}) {
-		if len(raw) == 0 {
-			continue
-		}
-		meta, path, ok := strings.Cut(string(raw), "\t")
-		if repo.Paths != nil && !selected[path] {
-			continue
-		}
-		fields := strings.Fields(meta)
-		if !ok || len(fields) != 3 || fields[0] != "100644" && fields[0] != "100755" {
-			return nil, nil, fmt.Errorf("unsupported fixture source entry")
-		}
-		objects = append(objects, entry{path, fields[2]})
-		batch.WriteString(fields[2] + "\n")
-	}
-	if repo.Paths != nil && len(objects) != len(selected) {
-		return nil, nil, fmt.Errorf("selected fixture file is missing")
-	}
-	// Read all original objects in one process. Per-file Git processes held the
-	// shared fixture lock long enough for another project's CLI call to expire.
-	raw, err := gitInput(batch.String(), "cat-file", "--batch")
-	if err != nil {
-		return nil, nil, err
-	}
-	reader := bufio.NewReader(bytes.NewReader(raw))
-	materials := []runnercontract.Document{}
-	for _, object := range objects {
-		header, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, nil, err
-		}
-		fields := strings.Fields(header)
-		if len(fields) != 3 || fields[0] != object.blob || fields[1] != "blob" {
-			return nil, nil, fmt.Errorf("invalid fixture batch object")
-		}
-		size, err := strconv.Atoi(fields[2])
-		if err != nil || size < 0 || size > len(raw) {
-			return nil, nil, fmt.Errorf("invalid fixture batch size")
-		}
-		body := make([]byte, size)
-		if _, err = io.ReadFull(reader, body); err != nil {
-			return nil, nil, err
-		}
-		end, err := reader.ReadByte()
-		if err != nil || end != '\n' {
-			return nil, nil, fmt.Errorf("invalid fixture batch terminator")
-		}
-		hash := sha256.Sum256(body)
-		source.Files = append(source.Files, runnercontract.RepositoryFile{Path: object.path, Blob: object.blob, SHA256: hex.EncodeToString(hash[:]), SizeBytes: len(body)})
-		text := string(body)
-		materials = append(materials, runnercontract.Document{Path: object.path, Content: &text, Kind: "inline"})
-	}
-	return materials, source, nil
-}
 func advertiseRepository(caps map[string]any) {
 	caps["generate"] = map[string]any{"workflow": "generate/1", "result": "inspect/history: content_result.json", "source": "repository_source: commit/tree/files/blob/sha256/size_bytes", "max_result_utf8_bytes": 1048576, "output_schema": "caller_defined_json_schema_2020_12", "repository": map[string]any{"commit": "full_commit_object_id", "input_property": "generate.repository", "source": "existing_local_git_objects", "snapshot": "private_regular_files_without_git", "selection": "explicit_file_paths_or_whole_tree", "max_files": 4096, "max_bytes": 67108864, "max_manifest_bytes": 1048576}}
 }

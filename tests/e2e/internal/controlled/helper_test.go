@@ -1,6 +1,7 @@
 package controlled
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -13,6 +14,45 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
+
+func TestControlledPRPreservesPrimaryWorkspaceAndFrozenBase(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	repo, remote := filepath.Join(root, "repo"), filepath.Join(root, "remote.git")
+	git := func(dir string, args ...string) string {
+		t.Helper()
+		out, err := Git(ctx, dir, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	git(root, "init", "--initial-branch=main", repo)
+	git(repo, "config", "user.name", "Controlled fixture")
+	git(repo, "config", "user.email", "fixture@example.invalid")
+	git(repo, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "base")
+	base := git(repo, "rev-parse", "HEAD")
+	git(root, "clone", "--bare", repo, remote)
+	git(repo, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "new primary base")
+	current := git(repo, "rev-parse", "HEAD")
+	state := State{GitURL: remote, LocalRepository: repo}
+	for _, branch := range []string{"codex/fixture/first", "codex/fixture/second"} {
+		pr, err := prepareFixturePR(filepath.Join(root, "provider.json"), &state, repo, branch, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if git(repo, "symbolic-ref", "--short", "HEAD") != "main" || git(repo, "rev-parse", "HEAD") != current {
+			t.Fatal("fixture publication changed the primary workspace")
+		}
+		if git(repo, "rev-parse", pr.HeadRevision+"^") != base || git(remote, "rev-parse", "refs/heads/"+branch) != pr.HeadRevision {
+			t.Fatal("fixture PR lost its frozen original base", pr)
+		}
+		replayed, err := prepareFixturePR(filepath.Join(root, "provider.json"), &state, repo, branch, base)
+		if err != nil || replayed != pr {
+			t.Fatal("fixture PR replay changed its original outcome", replayed, err)
+		}
+	}
+}
 
 func TestControlledDeploymentConfigurationValidation(t *testing.T) {
 	valid := `{"execution":{"adapter":"codex-app-server","target":{"kind":"local"},"settings":{"access_mode":"read_only"}},"workflow":{"id":"development","version":2}}`
@@ -88,7 +128,7 @@ func verifyHelperCapabilities(t *testing.T) {
 	}
 	input := runnercontract.GenerateRunInput{Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only"}`)}}
 	if err = catalog.ValidateGenerate(input); err != nil {
-		t.Fatal("automatic fixture materials cannot use the advertised generation contract", err)
+		t.Fatal("shared generation configuration contract is unavailable", err)
 	}
 }
 
