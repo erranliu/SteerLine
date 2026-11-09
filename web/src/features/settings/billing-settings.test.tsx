@@ -76,7 +76,7 @@ it("creates a manual price version offline with explicit rates and a create-only
   fireEvent.click(screen.getByRole("button", { name: "添加模型费率" }));
   for (const [label, value] of [
     ["Provider 1", "fixture"],
-    ["实际模型 1", "model"],
+    ["配置模型 1", "model"],
     ["生效时间 1", "2026-11-01T00:00:00Z"],
     ["非缓存输入 1", "2"],
     ["缓存读取 1", "0.2"],

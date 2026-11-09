@@ -35,8 +35,11 @@ export interface RunUsageView {
     pricing_policy_version: string;
     pricing_policy_digest: string;
     pricing_source: string;
+    price_at: string;
     matches: {
       rule_id: string;
+      step_id: string;
+      configured_reasoning_effort: string;
       provider: string;
       model: string;
       records: number;

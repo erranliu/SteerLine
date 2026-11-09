@@ -2,6 +2,8 @@
 
 日期：2026-11-05。依据 [Spec](../spec/billing-ownership.spec.md)。状态：已按用户授权实施两仓变更，隔离验证和证据收尾中；不纳入 roadmap，不部署安装版。指定安装候选只读诊断与新隔离远端 Run 的验证分开登记。
 
+2026-11-09 配置模型简化：Runner #133 合入 `9243a79b`，消费 frozen_stage_input 能力和 step_id/configured_model/configured_reasoning_effort。当前实现不再以实际观测模型、provider 或逐响应请求时间作为计价门槛，删除未发布的 interval 计算分支；按冻结配置模型精确匹配价表、候选 CreatedAt 选择时段，供应商歧义未计价；匹配结果按阶段/模型/推理强度分组。此次验证计划与结果登记于[专属验收](../testing/acceptance/configured-model-billing.md)，下面原迁移过程及真实远端授权验收不重复执行。
+
 ## 1. 交付顺序与所有权
 
 | 步骤 | 交付内容 | 前置与完成条件 |
@@ -9,7 +11,7 @@
 | P1 Runner 公开契约交接 | 以现有run-usage/v1及run-usage-events为基线，核对Spec §3的事实/裁定/分页语义与必要增量、默认采集已核实远端会话及删除估价职责；固定正式CLI/schema/构建 | 不强制新建v2或重写既有分页；正式目标契约、commit、EXE SHA/version和矩阵交付前，不接目标真实链 |
 | P2 SteerLine 计算 owner | 新增 internal/billing 的中性输入模型、匹配、精确十进制计算、状态与原因；不依赖 runnerclient、存储、Web 或 execution 业务状态 | 依 Spec 可先开发；接口与 P1 最终事实模型对齐后定稿；BILL-A04 通过 |
 | P3 配置 owner | 建议新增 internal/billingconfig，承接 `<home>/billing.json` schema、版本、摘要、跨进程条件保存/原子替换和轻量 status | 独立于 Runner 和项目，复用既有 privatefs/pathguard；BILL-A03 的存储/并发/隔离通过 |
-| P4 Runner 客户端和候选查询 | runnercontract/runnerclient接入既有run-usage-events与正式必要增量，消费decision/metadata_issues；internal/app组合原候选校验、固定价表与完整快照，调用billing；更新API/客户端/HTTP | P1 正式构建与 P2/P3 完成；BILL-A02/A05，通过真实公开调用前核对 pin |
+| P4 Runner 客户端和候选查询 | runnercontract/runnerclient接入既有run-usage-events与正式必要增量，消费decision和冻结阶段配置归属；internal/app组合原候选校验、固定价表与完整快照，调用billing；更新API/客户端/HTTP | P1 正式构建与 P2/P3 完成；BILL-A02/A05，通过真实公开调用前核对 pin |
 | P5 Web 设置和展示 | 全局计费入口、版本/费率编辑和切换，更新候选用量费用 DTO、明细与价表变更失效机制 | P3/P4 DTO 固定；BILL-A06 自动通过，零项目/离线设置可用 |
 | P6 删除旧链与联验 | 删除旧价表路径/Runner估价依赖，更新配置/示例/文档，完成固定Runner联验和回归 | P1–P5及P7/P8集成完成，全部自动项闭合后才可报告实现完成 |
 | P7 远端采集设置与诊断 | 原executionconfig owner提供usage_policy编辑与条件保存；usage_policy只保留采集开关；Runner根据原绑定自动核实主机/会话叶目录；应用查询端口投影有效/待重启状态 | P1默认读取和范围校验先交付；不把采集开关放billing.json、不热更新；BILL-A09通过 |
@@ -19,12 +21,12 @@
 
 ## 2. 接线落点
 
-1. **Runner 交接包**：先逐字段核对现有run-usage-events；保留event_id/source_ref、decision、metadata_basis/time_basis、metadata_issues和--after分页，不另建语义相同接口。只对interval/计数等事实缺项安排必要增量。要求正式schema、同revision样例/过期错误、来源去重和修正证据；确认哪些adapter只支持Token、哪些能完整计价。记录Runner删除估价职责的实际差异。
-2. **纯计价**：使用固定合成费率验证算术，不引用合成费率作为真实供应商报价。规则精确匹配 provider/model 和有效区间；时间跨界/未知、字段不全和明细契约错误分开。12 位单价精度、整型计数范围、精确金额及响应边界统一定义，不引入浮点路径。
+1. **Runner 交接包**：核对正式 frozen_stage_input 能力和配置归属字段，保留 event_id/source_ref、decision、同 revision 与 --after 分页。实际观测信息不作为配置估价门槛；缺能力仅停止费用计算，保留 Token。
+2. **纯计价**：使用固定合成费率验证多阶段、多模型分账及算术，不引用合成费率作为供应商报价。按配置模型和候选创建时点匹配唯一规则；配置归属缺失、价格缺失/歧义和分类未知分别报告。保留精确十进制，不引入浮点或旧计价回退。
 3. **配置**：以 billingconfig 为唯一 schema 与文件访问 owner，Web 和应用 reader 共用它。第一版直接采用 billing.json 新格式。首次保存 create-only，后续 If-Match 条件写；版本保留、active 切换与 generation 在同一文件原子提交。执行配置保存不写 billing.json，也不再保留 pricing_policy 字段。
 4. **设置传输**：沿既有全局配置模式，在 Web 侧拟定 `GET /api/web/billing-config`（返回 ETag/当前版本）、`POST /api/web/billing-config/validate`、`PUT /api/web/billing-config`（条件保存新版本）、`POST /api/web/billing-config/activate`（条件切换已有版本）、`GET /api/web/billing-config/status`（轻量摘要/generation）。创建使用 If-None-Match: *，更新/切换使用 If-Match，缺失前置拒绝；写操作沿会话/Origin/CSRF。实际路径/schema 在 P3/P5 接线前固定；这些接口只调用 billingconfig，不启动应用/项目/Runner。应用候选查询从同一 owner 读不可变版本，不依赖 Web 进程在线。
 5. **候选查询**：沿现有 `GET /runs/:candidate/usage?execution_id=:runnerRun`，继续核对项目/候选/原 Run/state-dir/实例。开头固定设置版本，再读快照及全页；取得完整用量集合再计算，不边到页边回总额。页级错误保留有效 summary，单列费用查询失败。Runner 不可用时不创建目录或自启服务。
-6. **结果与缓存**：SteerLine 费用 DTO 使用完整/部分/未计价 record 数，不延用 priced_responses 计量 interval。携带 policy/version/digest、generation、计算规则版本、usage revision、scope、金额/原因/假设和聚合匹配信息。前后端核对请求身份和版本，价表变更失效后即使 Token 轮询已停止仍重算；跨标签页用 status 检查，固定预算并避免与候选轮询各维护一套用量采集。
+6. **结果与缓存**：费用 DTO 携带三类记录数、price_at、policy/version/digest、generation、计算规则版本、usage revision、scope、金额/原因/假设和按阶段/配置模型分组的匹配信息。保持前后端身份、价表变更失效、跨标签页状态检查及取消/迟到隔离。
 7. **展示**：全局设置默认给可填写空表，不预填现价；执行页原摘要和 details 上最小增量展示。仅候选主会话，不增加汇总页、其他 Run 入口或新执行按钮。配置未保存、切换冲突、价格缺失、旧结果刷新失败与真实零各有明确状态；覆盖内容以 Spec §6 为准。
 8. **旧链清理**：删除 internal/executionconfig.PricingPolicy、runnerclient.RunCostSupported/EstimateRunCost、runnercontract.CostEstimate 及直接映射；清理绑定命令白名单/catalog 的旧能力、前后端配置字段/fixture/测试/示例；保留 usage_policy 和原服务启动授权。旧配置明确拒绝，不能自动导入旧 Runner 价表。更新 docs/integration/steerrunner.md、源码索引、配置导航、路径清单和相关当前说明；旧验收保持原版本结果。
 9. **远端默认采集（2026-11-09 用户修订）**：移除逐目录远端授权配置和授权需求查询；usage_policy仅保留默认开启的enabled。Runner自动按原Run/主机/会话确定最小日志叶目录，保留来源/链接验证、采集许可和临时访问回收。Web只提供采集开关，配置保存/待重启及按实例失效语义保持。两仓更改与回归分别取证，旧字段拒绝，不修改安装现场。详见[本轮验收](../testing/acceptance/remote-usage-default.md)。
@@ -43,7 +45,7 @@
 | BILL-A04 | 定向诊断 / isolated | P2 实现后 `go run ./cmd/test-feedback -out <新diagnostics目录> -- ./internal/billing -count=1` | 专属验收的纯函数矩阵及独立人工可算期望值正确，确定性和溢出/精度边界成立 |
 | BILL-A05 | 定向诊断 / isolated | P4/P6 后 `go run ./cmd/test-feedback -out <新diagnostics目录> -- ./internal/app ./internal/product/httpapi ./internal/product/applicationhttp ./internal/executionconfig -count=1` | 候选绑定/协议、价表原子选择、故障保 Token、配置变化不改执行、删除旧链与 usage_policy 保留 |
 | BILL-A06 | `web.unit` / isolated；Web HTTP owner | P5 后 `go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit -out <新L4目录>`，并执行下一行 go.http；浏览器扩展既有 `web/tests/smoke.spec.ts`，在新 simulate 包设置独立 home/config/evidence 后执行 `npm --prefix web run test:e2e -- smoke.spec.ts -g web.smoke.billing`，finally 停止并核实清理 | 设置保存/切换、零项目、显示/部分/未知/零/精度、缓存/取消/跨标签页、宽窄屏与键盘可达性自动断言；构建成功不能替代浏览器 |
-| BILL-A07 | `go.runner-contract` / isolated，固定独立 EXE | P6 扩展既有 runneracceptance 公开契约测试后执行 `go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.runner-contract -out <新L4目录>` | 明确 STEERRUNNER_EXE/VERSION/SHA256；用量契约与受控账本 fixture 分层验证，经真实 CLI 固定快照/明细，调用方 fixture 得到预期费用；真实原生样本缺请求时间须保持未知；不支持/未知/停止清理有证据 |
+| BILL-A07 | `go.runner-contract` / isolated，固定独立 EXE | P6 扩展既有 runneracceptance 公开契约测试后执行 `go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.runner-contract -out <新L4目录>` | 明确 STEERRUNNER_EXE/VERSION/SHA256；用量契约与受控账本 fixture 分层验证，经真实 CLI 固定快照/明细，调用方 fixture 得到预期费用；观测元数据缺失不阻断配置估价，配置归属缺失仍保持未计价；不支持/未知/停止清理有证据 |
 | BILL-A08 | `l1.minimum`、`smoke.delivery`、`go.http`、`web.unit` / 清单原环境 | 集成后与提交前：固定 `go run ./cmd/test-feedback -level=L1 -out <新L1目录>`、`go run ./cmd/test-feedback -level=L2 -out <新L2目录>`；`go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.http -out <新L4目录>`；web.unit 复用 A06 同源码结果 | 完整回归非零/无skip，旧费用链消失、采集默认启用且执行控制不变；生产前端/Go 构建和文档检查通过 |
 | BILL-A09 | 定向诊断 + go.http/web.unit / isolated | P7后 `go run ./cmd/test-feedback -out <新diagnostics目录> -- ./web/server/executionconfig ./internal/app ./internal/product/applicationhttp -count=1`；复用A06/A08同源码Web/HTTP报告 | 默认开启且无需目录授权、已核实最小根/主机校验、跨进程条件保存、待重启/有效策略、实例/策略变化/迟到缓存、访问回收状态均按Spec §3.4验证；读取查询零自动停服/执行输入 |
 | BILL-A10 | `usage.remote-codex` / L4 live，已登记 | `go run ./cmd/test-feedback -level=L4 -suite=usage -env=live -scenario usage.remote-codex -out <新目录>`；显式 STEERRUNNER_EXE/VERSION/SHA256、STEERLINE_USAGE_LIVE_INPUT（冻结 execute/1 原文）和 STEERLINE_USAGE_LIVE_ROOT（不得存在）；新 home/固定 EXE/明确远端环境 | 默认自动采集同原绑定Token并正确展示，正式停启保留绑定，关闭采集保留历史，明细/summary同revision且重读不重复；回收/资源清理核实。现场缺日志等事实失败不能改称通过 |

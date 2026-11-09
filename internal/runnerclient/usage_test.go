@@ -84,15 +84,15 @@ func TestRunUsageSnapshotAndCostBinding(t *testing.T) {
 
 func TestRunUsageCapabilityAndStartupPolicy(t *testing.T) {
 	var catalog Catalog
-	if err := json.Unmarshal([]byte(`{"run_usage":{"schema":"run-usage/v1","query_only":true,"same_snapshot":true,"events_schema":"run-usage-events/v1","max_events":500}}`), &catalog.Capabilities); err != nil {
+	if err := json.Unmarshal([]byte(`{"run_usage":{"schema":"run-usage/v1","query_only":true,"same_snapshot":true,"events_schema":"run-usage-events/v1","max_events":500,"configured_model_attribution":"frozen_stage_input","observed_model_field":"model"}}`), &catalog.Capabilities); err != nil {
 		t.Fatal(err)
 	}
 	c := takeoverCLI(t).WithCatalog(&catalog)
-	if !c.RunUsageSupported || !c.RunUsageEventsSupported {
+	if !c.RunUsageSupported || !c.RunUsageEventsSupported || !c.ConfiguredUsageSupported {
 		t.Fatal("public capability not consumed")
 	}
 	c = c.WithCatalog(&Catalog{})
-	if c.RunUsageSupported || c.RunUsageEventsSupported {
+	if c.RunUsageSupported || c.RunUsageEventsSupported || c.ConfiguredUsageSupported {
 		t.Fatal("absent capability inherited")
 	}
 	c.UsagePolicy = json.RawMessage(`{"enabled":true}`)

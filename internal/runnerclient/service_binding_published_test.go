@@ -39,8 +39,8 @@ func TestRunnerFullBindingPublicCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	c = c.WithCatalog(catalog)
-	if !c.RunUsageSupported || !c.RunUsageEventsSupported {
-		t.Fatal("built Runner did not publish immutable usage summary and event pages")
+	if !c.RunUsageSupported || !c.RunUsageEventsSupported || !c.ConfiguredUsageSupported {
+		t.Fatal("built Runner did not publish immutable usage and frozen stage model attribution")
 	}
 	capResponse, err := c.Call(context.Background(), "capabilities", nil, nil)
 	if err != nil {

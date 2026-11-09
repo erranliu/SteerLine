@@ -63,6 +63,7 @@ func TestRunUsageCompletePagesAndSummaryTruth(t *testing.T) {
 	first := runnercontract.UsageEvent{ID: "first", RunID: u.RunID, Decision: "counted", Tokens: runnercontract.UsageTokens{InputTotal: &one, InputUncached: &one, CacheRead: &zero, CacheWrite: &zero, Output: &zero, Total: &one}}
 	second := first
 	second.ID = "second"
+	second.StepID, second.ConfiguredModel, second.ConfiguredReasoningEffort = "audit.code.execute", "configured-reviewer", "high"
 	for _, mode := range []string{"complete", "sum-disagrees", "unknown-promoted", "snapshot-expired"} {
 		t.Run(mode, func(t *testing.T) {
 			summary := u
@@ -90,7 +91,7 @@ func TestRunUsageCompletePagesAndSummaryTruth(t *testing.T) {
 			_ = os.Remove(os.Getenv("STEERLINE_RUNNER_CLI_CALL"))
 			events, err := c.RunUsageEvents(context.Background(), summary)
 			if mode == "complete" {
-				if err != nil || len(events) != 2 || events[1].ID != "second" {
+				if err != nil || len(events) != 2 || events[1].ID != "second" || events[1].StepID != second.StepID || events[1].ConfiguredModel != second.ConfiguredModel || events[1].ConfiguredReasoningEffort != "high" {
 					t.Fatal(events, err)
 				}
 			} else if err == nil || events != nil {
