@@ -38,11 +38,13 @@ type Capabilities struct {
 	ProgressFile           *ProgressCapability       `json:"progress_file,omitempty"`
 	ProgressFileSchema     json.RawMessage           `json:"progress_file_schema,omitempty"`
 	RunUsage               *struct {
-		Schema       string `json:"schema"`
-		QueryOnly    bool   `json:"query_only"`
-		SameSnapshot bool   `json:"same_snapshot"`
-		EventsSchema string `json:"events_schema"`
-		MaxEvents    int    `json:"max_events"`
+		ConfiguredModelAttribution string `json:"configured_model_attribution"`
+		ObservedModelField         string `json:"observed_model_field"`
+		Schema                     string `json:"schema"`
+		QueryOnly                  bool   `json:"query_only"`
+		SameSnapshot               bool   `json:"same_snapshot"`
+		EventsSchema               string `json:"events_schema"`
+		MaxEvents                  int    `json:"max_events"`
 	} `json:"run_usage,omitempty"`
 	RunObservation *struct {
 		Contract     string `json:"contract"`

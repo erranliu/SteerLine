@@ -36,17 +36,20 @@ type UsageSnapshot struct {
 	ObservedAt          time.Time    `json:"observed_at"`
 }
 type UsageEvent struct {
-	ID             string       `json:"event_id"`
-	SourceRef      string       `json:"source_ref"`
-	RunID          string       `json:"run_id"`
-	Decision       string       `json:"decision"`
-	Provider       *string      `json:"provider"`
-	Model          *string      `json:"model"`
-	MetadataBasis  string       `json:"metadata_basis"`
-	TimeBasis      string       `json:"time_basis"`
-	CallTime       *time.Time   `json:"call_time"`
-	Tokens         UsageTokens  `json:"tokens"`
-	MetadataIssues []UsageIssue `json:"metadata_issues"`
+	StepID                    string       `json:"step_id"`
+	ConfiguredModel           string       `json:"configured_model"`
+	ConfiguredReasoningEffort string       `json:"configured_reasoning_effort"`
+	ID                        string       `json:"event_id"`
+	SourceRef                 string       `json:"source_ref"`
+	RunID                     string       `json:"run_id"`
+	Decision                  string       `json:"decision"`
+	Provider                  *string      `json:"provider"`
+	Model                     *string      `json:"model"`
+	MetadataBasis             string       `json:"metadata_basis"`
+	TimeBasis                 string       `json:"time_basis"`
+	CallTime                  *time.Time   `json:"call_time"`
+	Tokens                    UsageTokens  `json:"tokens"`
+	MetadataIssues            []UsageIssue `json:"metadata_issues"`
 }
 type UsagePage struct {
 	RunID      string       `json:"run_id"`

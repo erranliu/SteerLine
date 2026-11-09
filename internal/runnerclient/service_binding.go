@@ -37,6 +37,7 @@ func (c Client) WithCatalog(catalog *Catalog) Client {
 	u := catalog.Capabilities.RunUsage
 	c.RunUsageSupported = u != nil && u.Schema == "run-usage/v1" && u.QueryOnly
 	c.RunUsageEventsSupported = c.RunUsageSupported && u.SameSnapshot && u.EventsSchema == "run-usage-events/v1" && u.MaxEvents >= 200
+	c.ConfiguredUsageSupported = c.RunUsageEventsSupported && u.ConfiguredModelAttribution == "frozen_stage_input" && u.ObservedModelField == "model"
 	c.RunObservation = catalog.Capabilities.RunObservation != nil && catalog.Capabilities.RunObservation.Contract == RunObservationContract && catalog.Capabilities.RunObservation.SameSnapshot && catalog.Capabilities.RunObservation.MaxEvents >= 100
 	c.FullBindingCommands = nil
 	if cap := catalog.Capabilities.InstanceBinding.FullBinding; cap != nil && cap.Contract == ServiceBindingContract && cap.BeforeEffects && cap.NoImplicitStart {

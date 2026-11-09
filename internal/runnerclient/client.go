@@ -44,19 +44,20 @@ type Failure struct {
 func (f *Failure) Error() string { return f.Code + ": " + f.Message }
 
 type Client struct {
-	executionWaitSchema     *jsonschema.Schema
-	InstanceID              string
-	BuildVersion            string
-	ResourceDigest          string
-	NativeSessionAdapters   []string
-	FullBindingCommands     []string
-	RunObservation          bool
-	RunUsageSupported       bool
-	RunUsageEventsSupported bool
-	UsagePolicy             json.RawMessage
-	Executable              string
-	StateDir                string
-	Timeout                 time.Duration
+	executionWaitSchema      *jsonschema.Schema
+	InstanceID               string
+	BuildVersion             string
+	ResourceDigest           string
+	NativeSessionAdapters    []string
+	FullBindingCommands      []string
+	RunObservation           bool
+	RunUsageSupported        bool
+	RunUsageEventsSupported  bool
+	ConfiguredUsageSupported bool
+	UsagePolicy              json.RawMessage
+	Executable               string
+	StateDir                 string
+	Timeout                  time.Duration
 	// SHA256 binds every invocation to the selected release, including queries.
 	SHA256 string
 }

@@ -10,7 +10,7 @@ func ptr[T any](v T) *T { return &v }
 func fixture() (Usage, Policy) {
 	at := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
 	p := Policy{ID: "fixture", Version: "one", CreatedAt: at, Source: "synthetic arithmetic, not vendor prices", Currency: "USD", Basis: Basis, Rules: []Rule{{ID: "r", Provider: "provider", Model: "model", From: at.Add(-time.Hour), Rates: Rates{Input: "2", Read: "0.2", Write: "3", Output: "4"}}}}
-	u := Usage{RunID: "run", Revision: 7, Scope: "main_session", Status: "available", Finalized: true, CoverageComplete: true, Records: []Record{{ID: "response", Provider: ptr("provider"), Model: ptr("model"), MetadataBasis: "observed", TimeBasis: "request", CallTime: &at, Tokens: Tokens{InputUncached: ptr(int64(1000000)), CacheRead: ptr(int64(100000)), CacheWrite: ptr(int64(0)), Output: ptr(int64(500000)), Reasoning: ptr(int64(200000))}}}}
+	u := Usage{RunID: "run", Revision: 7, Scope: "main_session", Status: "available", Finalized: true, CoverageComplete: true, PriceAt: at, Records: []Record{{ID: "response", StepID: "implement.execute", Model: "model", Tokens: Tokens{InputUncached: ptr(int64(1000000)), CacheRead: ptr(int64(100000)), CacheWrite: ptr(int64(0)), Output: ptr(int64(500000)), Reasoning: ptr(int64(200000))}}}}
 	return u, p
 }
 func TestCalculateCoverageAndExactAmounts(t *testing.T) {
@@ -21,10 +21,10 @@ func TestCalculateCoverageAndExactAmounts(t *testing.T) {
 		{"full", "estimated", "4.020000000000000000", func(*Usage, *Policy) {}},
 		{"active", "partial", "4.020000000000000000", func(u *Usage, _ *Policy) { u.Finalized = false }},
 		{"unknown output", "partial", "2.020000000000000000", func(u *Usage, _ *Policy) { u.Records[0].Tokens.Output = nil }},
-		{"missing model", "unavailable", "", func(u *Usage, _ *Policy) { u.Records[0].Model = nil }},
-		{"conflict", "unavailable", "", func(u *Usage, _ *Policy) { u.Records[0].MetadataConflict = true }},
-		{"completion", "unavailable", "", func(u *Usage, _ *Policy) { u.Records[0].TimeBasis = "completion" }},
-		{"provider isolation", "unavailable", "", func(u *Usage, _ *Policy) { u.Records[0].Provider = ptr("other") }},
+		{"missing model", "unavailable", "", func(u *Usage, _ *Policy) { u.Records[0].Model = "" }},
+		{"missing stage", "unavailable", "", func(u *Usage, _ *Policy) { u.Records[0].StepID = "" }},
+		{"missing price time", "unavailable", "", func(u *Usage, _ *Policy) { u.PriceAt = time.Time{} }},
+		{"missing price", "unavailable", "", func(_ *Usage, p *Policy) { p.Rules = nil }},
 		{"zero rates", "estimated", "0.000000000000000000", func(_ *Usage, p *Policy) { p.Rules[0].Rates = Rates{"0", "0", "0", "0"} }},
 		{"tiny precise", "estimated", "0.000000000000000001", func(u *Usage, p *Policy) {
 			u.Records[0].Tokens = Tokens{InputUncached: ptr(int64(1)), CacheRead: ptr(int64(0)), CacheWrite: ptr(int64(0)), Output: ptr(int64(0))}
@@ -58,9 +58,9 @@ func TestCalculateCoverageAndExactAmounts(t *testing.T) {
 		})
 	}
 }
-func TestCalculatePeriodBoundaryAndIntervals(t *testing.T) {
+func TestCalculateCandidatePricePeriodAndAmbiguity(t *testing.T) {
 	u, p := fixture()
-	boundary := *u.Records[0].CallTime
+	boundary := u.PriceAt
 	p.Rules[0].Until = &boundary
 	next := p.Rules[0]
 	next.ID = "next"
@@ -72,17 +72,42 @@ func TestCalculatePeriodBoundaryAndIntervals(t *testing.T) {
 	if err != nil || e.Covered == nil || *e.Covered != "7.020000000000000000" {
 		t.Fatal(e, err)
 	}
-	u.Records[0].Granularity = "interval"
-	u.Records[0].IntervalStart = ptr(boundary.Add(-time.Minute))
-	u.Records[0].IntervalEnd = ptr(boundary.Add(time.Minute))
+	u.PriceAt = boundary.Add(-time.Nanosecond)
 	e, err = Calculate(u, p)
-	if err != nil || e.Status != "unavailable" {
+	if err != nil || e.Total == nil || *e.Total != "4.020000000000000000" {
 		t.Fatal(e, err)
 	}
-	u.Records[0].IntervalEnd = &boundary
+	other := p.Rules[0]
+	other.ID, other.Provider = "other", "other-provider"
+	p.Rules = append(p.Rules, other)
 	e, err = Calculate(u, p)
-	if err != nil || e.Covered == nil || *e.Covered != "4.020000000000000000" {
+	if err != nil || e.Status != "unavailable" || len(e.Issues) != 1 || e.Issues[0] != "PRICE_AMBIGUOUS" {
 		t.Fatal(e, err)
+	}
+}
+
+func TestCalculateWorkflowModelsAndUnassignedUsage(t *testing.T) {
+	u, p := fixture()
+	for _, step := range []struct{ id, model, effort string }{
+		{"audit.code.execute", "reviewer", "high"},
+		{"publish.execute", "model", "medium"},
+		{"publish.execute", "model", "medium"},
+		{"initialize", "", ""},
+	} {
+		r := u.Records[0]
+		r.ID, r.StepID, r.Model, r.ReasoningEffort = step.id+string(rune('0'+len(u.Records))), step.id, step.model, step.effort
+		u.Records = append(u.Records, r)
+	}
+	price := p.Rules[0]
+	price.ID, price.Model, price.Rates.Input = "review", "reviewer", "5"
+	p.Rules = append(p.Rules, price)
+	e, err := Calculate(u, p)
+	// Writer 4.02 + reviewer 7.02 + publisher 2*4.02. Initialization is unassigned.
+	if err != nil || e.Status != "partial" || e.Total != nil || e.Covered == nil || *e.Covered != "19.080000000000000000" || e.Unpriced != 1 || e.FullyPriced != 4 || len(e.Matches) != 3 {
+		t.Fatal(e, err)
+	}
+	if e.Matches[0].StepID != "implement.execute" || e.Matches[1].Model != "reviewer" || e.Matches[1].ReasoningEffort != "high" || e.Matches[2].StepID != "publish.execute" || e.Matches[2].Records != 2 || e.Matches[2].Amount != "8.040000000000000000" || e.Issues[0] != "CONFIGURED_MODEL_UNASSIGNED" {
+		t.Fatal("workflow grouping lost", e)
 	}
 }
 func TestRejectAmbiguousOrInvalidPolicyAndFacts(t *testing.T) {
