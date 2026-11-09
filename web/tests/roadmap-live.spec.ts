@@ -98,8 +98,8 @@ test("roadmap.live: browser, native generate, external PR and atomic DAG admissi
   expect(parsed.analysis.tasks.find((t: any) => t.local_key === "T2").proposed_dependencies.local).toContain("T1");
   expect(parsed.formal_mapping || {}).toEqual({});
   expect(commands.filter(c => c.action === "roadmap_parse")).toHaveLength(1);
-  await expect(page.getByRole("button", { name: "确认任务与依赖", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "确认任务与依赖", exact: true }).click();
+  await expect(page.getByRole("button", { name: /确认本次任务与依赖/, exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: /确认本次任务与依赖/, exact: true }).click();
   await waitRecord(parseID, "confirmed");
   expect((await get("/tasks")).tasks).toHaveLength(0);
   stage("Parsed and confirmed local keys and T2 -> T1 dependency; zero formal tasks");
