@@ -19,9 +19,11 @@ import (
 
 const MaxRounds = 1
 const ReportVersion = 3
+const ManifestVersion = 6
 
 var ErrNotFound = errors.New("environment activity not found")
 var IDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+var requirementName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 
 func ID() string {
 	var b [16]byte
@@ -50,10 +52,11 @@ func ExecutionDigest(e runnercontract.ExecutionInput) string {
 }
 
 type Manifest struct {
-	Version      int      `json:"version"`
-	Script       string   `json:"script"`
-	Interpreter  string   `json:"interpreter"`
-	Dependencies []string `json:"dependencies"`
+	Version      int               `json:"version"`
+	Script       string            `json:"script"`
+	Interpreter  string            `json:"interpreter"`
+	Dependencies []string          `json:"dependencies"`
+	Requirements map[string]string `json:"requirements"`
 }
 
 func ParseManifest(document []byte) (Manifest, error) {
@@ -64,19 +67,27 @@ func ParseManifest(document []byte) (Manifest, error) {
 	document = bytes.ReplaceAll(document, []byte("\r\n"), []byte("\n"))
 	marker := []byte("```steerline-environment\n")
 	start := bytes.Index(document, marker)
-	if start < 0 || bytes.Count(document, []byte("```steerline-environment")) != 1 {
+	if start < 0 || start > 0 && document[start-1] != '\n' || bytes.Count(document, []byte("```steerline-environment")) != 1 {
 		return m, errors.New("environment.md requires one steerline-environment JSON block")
 	}
 	b := document[start+len(marker):]
 	end := bytes.Index(b, []byte("\n```"))
-	if end < 0 {
+	if end < 0 || end+4 < len(b) && b[end+4] != '\n' {
 		return m, errors.New("invalid environment metadata block")
 	}
 	if e := Decode(b[:end], &m); e != nil {
 		return m, e
 	}
-	if m.Version != 5 || m.Dependencies == nil || (m.Script != ScriptPath("ps1") && m.Script != ScriptPath("sh")) || (strings.HasSuffix(m.Script, ".ps1") && m.Interpreter != "powershell.exe") || (strings.HasSuffix(m.Script, ".sh") && m.Interpreter != "bash") {
+	if m.Version != ManifestVersion || m.Dependencies == nil || m.Requirements == nil || (m.Script != ScriptPath("ps1") && m.Script != ScriptPath("sh")) || (strings.HasSuffix(m.Script, ".ps1") && m.Interpreter != "powershell.exe") || (strings.HasSuffix(m.Script, ".sh") && m.Interpreter != "bash") {
 		return m, errors.New("invalid environment invocation interface")
+	}
+	if len(m.Requirements) > 64 {
+		return m, errors.New("environment requirements exceed bounds")
+	}
+	for name, value := range m.Requirements {
+		if len(name) > 64 || !requirementName.MatchString(name) || len(value) > 256 || strings.TrimSpace(value) == "" || strings.ContainsAny(value, "\r\n\x00") {
+			return m, errors.New("requirements require short named non-secret values")
+		}
 	}
 	seen := map[string]bool{}
 	for _, p := range m.Dependencies {
@@ -98,7 +109,7 @@ type Prepared struct {
 	DerivedExecution runnercontract.ExecutionInput    `json:"derived_execution"`
 	Commit           string                           `json:"commit"`
 	Inputs           string                           `json:"inputs"`
-	ScriptDigest     string                           `json:"script_digest"`
+	Files            map[string]string                `json:"files"`
 	Manifest         Manifest                         `json:"manifest"`
 	Input            runnercontract.RunInput          `json:"input"`
 }

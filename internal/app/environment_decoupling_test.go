@@ -7,6 +7,7 @@ import (
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func TestEnvironmentDetectionNeedsNoProjectCatalogueOrPlatformCopies(t *testing.
 	}
 }
 func TestEnvironmentStableBasisExcludesUnrelatedCommitAndModel(t *testing.T) {
-	p, c, _ := environmentFixture(t)
+	p, c, store := environmentFixture(t)
 	before, e := p.prepare(context.Background(), "remote")
 	require(t, e)
 	require(t, os.WriteFile(filepath.Join(c.Repository, "unrelated.md"), []byte("notes"), 0600))
@@ -59,6 +60,78 @@ func TestEnvironmentStableBasisExcludesUnrelatedCommitAndModel(t *testing.T) {
 	if before.Commit == after.Commit || before.Inputs != after.Inputs {
 		t.Fatal("ephemeral commit/model entered basis", before.Inputs, after.Inputs)
 	}
+	t.Run("effective-project-requirements", func(t *testing.T) {
+		document, err := os.ReadFile("../../SteerlineFlow/environment.md")
+		require(t, err)
+		manifest, err := envmodel.ParseManifest(document)
+		require(t, err)
+		module, err := os.ReadFile("../../go.mod")
+		require(t, err)
+		goVersion := regexp.MustCompile(`(?m)^go\s+(\d+\.\d+(?:\.\d+)?)\s*$`).FindSubmatch(module)
+		if len(goVersion) != 2 || manifest.Requirements["go"] != string(goVersion[1]) || len(manifest.Dependencies) != 0 {
+			t.Fatal("project requirements drifted from Go minimum or bind unrelated dependencies", manifest)
+		}
+		path := filepath.Join(c.Repository, filepath.FromSlash(envmodel.DocumentPath()))
+		require(t, os.WriteFile(path, document, 0600))
+		commitEnvironmentMaterials(t, c)
+		r := seedDetectedEnvironment(t, p, "remote")
+		// Prose, JSON formatting/order, CRLF and ordinary module dependency changes
+		// must preserve the successful basis and its original source identity.
+		body, err := json.MarshalIndent(map[string]any{"requirements": manifest.Requirements, "dependencies": manifest.Dependencies, "script": manifest.Script, "version": manifest.Version, "interpreter": manifest.Interpreter}, "", "    ")
+		require(t, err)
+		reformatted := strings.ReplaceAll("# New explanatory prose\n```steerline-environment\n"+string(body)+"\n```\nNew help link.\n", "\n", "\r\n")
+		require(t, os.WriteFile(path, []byte(reformatted), 0600))
+		require(t, os.WriteFile(filepath.Join(c.Repository, "go.mod"), []byte("module fixture\n\ngo "+manifest.Requirements["go"]+"\n\nrequire example.invalid/library v1.2.3\n"), 0600))
+		commit := commitEnvironmentMaterials(t, c)
+		require(t, p.observeBasis(context.Background(), commit))
+		proof, record, err := p.admission(context.Background(), "remote", r.Prepared.Commit, false)
+		require(t, err)
+		if proof.Basis != r.Prepared.Inputs || record.Prepared.Commit != r.Prepared.Commit {
+			t.Fatal("cosmetic/module changes altered original qualification", proof, record.Prepared)
+		}
+		changed := strings.Replace(reformatted, `"go": "`+manifest.Requirements["go"]+`"`, `"go": "99.0"`, 1)
+		require(t, os.WriteFile(path, []byte(changed), 0600))
+		commit = commitEnvironmentMaterials(t, c)
+		options, err := p.readinessOptions(context.Background())
+		require(t, err)
+		want := "环境要求 go：" + manifest.Requirements["go"] + " → 99.0；须重新检测"
+		found := false
+		for _, item := range options.(environmentOptions).Environments {
+			if item.Key == mustEnvironmentKey(t, r.Execution) {
+				found = true
+				if item.Stage != "stale" || item.Reason != want {
+					t.Fatal("query lost specific requirement change", item)
+				}
+			}
+		}
+		current, _, err := p.current(context.Background(), "remote")
+		require(t, err)
+		if !found || current.Invalidated {
+			t.Fatal("read-only query wrote revocation or omitted target", current)
+		}
+		if _, _, err := p.admission(context.Background(), "remote", "", false); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatal("admission lost requirement change", err)
+		}
+		require(t, p.observeBasis(context.Background(), commit))
+		current, _, err = p.current(context.Background(), "remote")
+		require(t, err)
+		if !current.Invalidated || current.Reason != want {
+			t.Fatal("durable revocation lost requirement change", current)
+		}
+		// A newly passed current basis cannot admit an older candidate. Rechecking
+		// that same current basis would not resolve the candidate source mismatch.
+		replacement := r
+		replacement.ID = envmodel.ID()
+		replacement.Prepared, err = p.materialAt(context.Background(), "remote", commit)
+		require(t, err)
+		replacement.Requests = []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}
+		require(t, store.StartEnvironment(context.Background(), replacement, current.Revision))
+		if _, _, err := p.admission(context.Background(), "remote", r.Prepared.Commit, false); err == nil || !strings.Contains(err.Error(), strings.TrimSuffix(want, "；须重新检测")) || !strings.Contains(err.Error(), "请更新候选来源") || strings.Contains(err.Error(), "须重新检测") {
+			t.Fatal("candidate mismatch gave an ineffective recheck action or reversed the change", err)
+		}
+		_, _, err = p.admission(context.Background(), "remote", "", false)
+		require(t, err)
+	})
 }
 func TestEnvironmentQualificationIgnoresProjectTestsAndBusinessDocuments(t *testing.T) {
 	p, c, store := environmentFixture(t)
@@ -109,6 +182,47 @@ func TestEnvironmentRuntimeDependenciesBindBasisWithoutExpandingReadingReference
 	if _, e := p.prepare(context.Background(), "remote"); e == nil {
 		t.Fatal("missing declared dependency ignored")
 	}
+	t.Run("dependency-order-is-not-a-change", func(t *testing.T) {
+		for _, name := range []string{"a.json", "b.json"} {
+			require(t, os.WriteFile(filepath.Join(c.Repository, name), []byte("{}"), 0600))
+		}
+		path := filepath.Join(c.Repository, filepath.FromSlash(envmodel.DocumentPath()))
+		require(t, os.WriteFile(path, []byte(environmentFixtureDocument("ps1", []string{"a.json", "b.json"})), 0600))
+		commitEnvironmentMaterials(t, c)
+		first, err := p.prepare(context.Background(), "remote")
+		require(t, err)
+		require(t, os.WriteFile(path, []byte(environmentFixtureDocument("ps1", []string{"b.json", "a.json"})), 0600))
+		commitEnvironmentMaterials(t, c)
+		second, err := p.prepare(context.Background(), "remote")
+		require(t, err)
+		if first.Inputs != second.Inputs {
+			t.Fatal("dependency list order invalidated qualification")
+		}
+	})
+	t.Run("specific-reason-fields", func(t *testing.T) {
+		for _, tc := range []struct {
+			name   string
+			change func(*envmodel.Prepared)
+			want   string
+		}{
+			{"version", func(p *envmodel.Prepared) { p.Manifest.Version++ }, "环境接口版本变化"},
+			{"interpreter", func(p *envmodel.Prepared) { p.Manifest.Interpreter = "bash" }, "解释器：powershell.exe → bash"},
+			{"script", func(p *envmodel.Prepared) { p.Manifest.Script = envmodel.ScriptPath("sh") }, "检测入口：" + envmodel.ScriptPath("ps1") + " → " + envmodel.ScriptPath("sh")},
+			{"added-dependency", func(p *envmodel.Prepared) { p.Manifest.Dependencies = []string{"go.mod", "tools/check.ps1"} }, "新增检测依赖：tools/check.ps1"},
+			{"removed-dependency", func(p *envmodel.Prepared) { p.Manifest.Dependencies = []string{} }, "移除检测依赖：go.mod"},
+			{"removed-requirement", func(p *envmodel.Prepared) { p.Manifest.Requirements = map[string]string{} }, "移除环境要求 go（原值 1.26.0）"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				first := before
+				first.Manifest.Requirements = map[string]string{"go": "1.26.0"}
+				next := first
+				tc.change(&next)
+				if reason := environmentBasisChange(first, next); !strings.Contains(reason, tc.want) {
+					t.Fatal(reason, tc.want)
+				}
+			})
+		}
+	})
 }
 func TestEnvironmentReadFailureDoesNotPersistRevocation(t *testing.T) {
 	p, _, store := environmentFixture(t)

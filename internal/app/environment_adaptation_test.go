@@ -185,6 +185,6 @@ func environmentFixtureDocument(extension string, deps []string) string {
 	if extension == "sh" {
 		interpreter = "bash"
 	}
-	body, _ := json.Marshal(envmodel.Manifest{Version: 5, Script: envmodel.ScriptPath(extension), Interpreter: interpreter, Dependencies: deps})
+	body, _ := json.Marshal(envmodel.Manifest{Version: 6, Requirements: map[string]string{}, Script: envmodel.ScriptPath(extension), Interpreter: interpreter, Dependencies: deps})
 	return "# Environment\n```steerline-environment\n" + string(body) + "\n```\n"
 }

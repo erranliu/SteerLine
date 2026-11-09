@@ -27,7 +27,7 @@ func (p *Project) WriteControlledEnvironment() string {
 		s.t.Fatal("controlled environment helper cannot prepare a live project")
 	}
 	script := env.ScriptPath("ps1")
-	manifest, err := json.Marshal(env.Manifest{Version: 5, Script: script, Interpreter: "powershell.exe", Dependencies: []string{}})
+	manifest, err := json.Marshal(env.Manifest{Version: 6, Requirements: map[string]string{}, Script: script, Interpreter: "powershell.exe", Dependencies: []string{}})
 	s.Must(err)
 	files := map[string][]byte{
 		env.DocumentPath(): []byte("# Controlled environment\n```steerline-environment\n" + string(manifest) + "\n```\n"),

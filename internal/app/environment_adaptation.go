@@ -128,7 +128,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if e != nil {
 		return out, e
 	}
-	files := map[string]string{envmodel.DocumentPath(): envmodel.Digest(document), manifest.Script: envmodel.Digest(script)}
+	files := map[string]string{manifest.Script: envmodel.Digest(script)}
 	total := len(document) + len(script)
 	reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
 	dependencies, e := reader.readCommittedFiles(ctx, commit, manifest.Dependencies)
@@ -157,11 +157,12 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 		Context envmodel.CallContext
 	}{c.Identity(), key, envmodel.CallContext{Adapter: profile.Execution.Adapter, Target: profile.Execution.Target}}
 	basis, e := json.Marshal(struct {
+		Manifest  envmodel.Manifest
 		Files     map[string]string
 		Execution runnercontract.ExecutionInput
 		Call      any
 		Version   int
-	}{files, execution, call, envmodel.ReportVersion})
+	}{manifest, files, execution, call, envmodel.ReportVersion})
 	if e != nil {
 		return out, e
 	}
@@ -174,7 +175,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if e != nil || derived.Execution == nil {
 		return out, e
 	}
-	out = envmodel.Prepared{Identity: *description.Identity, DerivedExecution: *derived.Execution, Commit: commit, Inputs: envmodel.Digest(basis), ScriptDigest: envmodel.Digest(script), Manifest: manifest, Input: input}
+	out = envmodel.Prepared{Identity: *description.Identity, DerivedExecution: *derived.Execution, Commit: commit, Inputs: envmodel.Digest(basis), Files: files, Manifest: manifest, Input: input}
 	return out, nil
 }
 
@@ -190,7 +191,7 @@ func (p *environmentPort) invocationAt(ctx context.Context, commit string) ([]by
 	}
 	manifest, e := envmodel.ParseManifest(document)
 	if e != nil {
-		return document, envmodel.Manifest{}, nil, &invalidEnvironmentBasis{e}
+		return document, envmodel.Manifest{}, nil, &invalidEnvironmentBasis{fmt.Errorf("环境调用描述无效（%s）：%w", envmodel.DocumentPath(), e)}
 	}
 	script, e := p.read(ctx, commit, manifest.Script)
 	if e != nil {
@@ -278,15 +279,21 @@ func (p *environmentPort) admission(ctx context.Context, id, candidateCommit str
 	if err != nil {
 		return envmodel.Admission{}, record, err
 	}
+	proof, err := envmodel.Qualify(current, record, prepared.Inputs)
+	if err != nil {
+		if record.Prepared.Inputs != prepared.Inputs {
+			err = errors.New("环境未就绪：" + environmentBasisChange(record.Prepared, prepared) + "；须重新检测")
+		}
+		return envmodel.Admission{}, record, err
+	}
 	if candidateCommit != "" && candidateCommit != commit {
 		candidate, err := p.materialAt(ctx, id, candidateCommit)
 		if err != nil {
 			return envmodel.Admission{}, record, err
 		}
 		if candidate.Inputs != prepared.Inputs {
-			return envmodel.Admission{}, record, errors.New("环境未就绪：候选固定提交的环境材料与当前依据不同")
+			return envmodel.Admission{}, record, errors.New("环境未就绪：候选固定提交与当前依据不同（候选 → 当前）；" + environmentBasisChange(candidate, prepared) + "；请更新候选来源")
 		}
 	}
-	proof, err := envmodel.Qualify(current, record, prepared.Inputs)
-	return proof, record, err
+	return proof, record, nil
 }
