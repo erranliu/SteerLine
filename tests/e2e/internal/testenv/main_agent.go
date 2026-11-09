@@ -173,7 +173,7 @@ func MainAgentAdvisory(s *Scenario) {
 	assertCount("ready", 1)
 	web := startAdvisoryWeb(s, p)
 	browser := func(mode, id, activityID, prompt string) {
-		before := p.CallerRequests()
+		before := deliveryRequestBodies(fixture())
 		node, e := exec.LookPath("node")
 		s.Must(e)
 		output := filepath.Join(s.Output, "browser-"+mode)
@@ -183,7 +183,7 @@ func MainAgentAdvisory(s *Scenario) {
 		command.Env = append(command.Env, "STEERLINE_ADVISORY_WEB="+web, "STEERLINE_ADVISORY_HOME="+p.Home, "STEERLINE_ADVISORY_PROJECT="+public, "STEERLINE_ADVISORY_CANDIDATE="+candidate.ID, "STEERLINE_ADVISORY_TASK="+candidate.TaskID, "STEERLINE_ADVISORY_ID="+id, "STEERLINE_ADVISORY_ACTIVITY="+activityID, "STEERLINE_ADVISORY_PROMPT="+prompt, "STEERLINE_ADVISORY_MODE="+mode, "STEERLINE_WEB_EVIDENCE="+output)
 		_, e = s.RunCommand(command, "advisory-browser-"+mode)
 		s.Must(e)
-		if !reflect.DeepEqual(before, p.CallerRequests()) {
+		if !reflect.DeepEqual(before, deliveryRequestBodies(fixture())) {
 			s.t.Fatal("browser sent a Runner execution input")
 		}
 	}
