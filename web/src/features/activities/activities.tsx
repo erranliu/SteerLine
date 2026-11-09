@@ -18,6 +18,7 @@ import {
   type ActivityLinks,
 } from "./model";
 import "./activities.css";
+import { useActivityFeedback } from "./feedback/feedback";
 
 export type ActivityUI = {
   open: boolean;
@@ -53,6 +54,7 @@ export function Activities({
   control?: ActivityControl;
   projectName?: string;
 }) {
+  const feedback = useActivityFeedback();
   const {
     api,
     identity,
@@ -336,7 +338,7 @@ export function Activities({
   return (
     <>
       <button
-        ref={opener}
+        ref={(node) => { opener.current = node; if (feedback.entry) feedback.entry.current = node; }}
         type="button"
         className="button button-ghost activity-entry"
         aria-label={`活动 · ${count("ongoing")} 项进行中 · 需处理 ${count("attention")}${pending ? ` · ${pending} 项提交待确认` : ""}`}

@@ -11,6 +11,10 @@ import {
   type Environment,
 } from "./use-readiness";
 import { DetectionID, EnvironmentCard } from "./environment-card";
+import {
+  SubmissionStatus,
+  useActivityFeedback,
+} from "../activities/feedback/feedback";
 
 type Record = {
   id: string;
@@ -71,7 +75,9 @@ export function ProjectEnvironment() {
   );
 }
 function EnvironmentWorkspace() {
-  const { api, identity, online, busy, send, requests } = useWorkspace();
+  const { api, identity, online, send, submit, requests, pendingRequests } =
+    useWorkspace();
+  const feedback = useActivityFeedback();
   const visible = usePageVisible();
   const scope = [
     api.home,
@@ -191,11 +197,33 @@ function EnvironmentWorkspace() {
   });
   const pending = useRef(false);
   const [submitting, setSubmitting] = useState(false);
-  const [startingEnvironment, setStartingEnvironment] = useState("");
+  const startRows = (requests || []).filter(
+    ({ envelope }) =>
+      envelope.project_id === identity.project_id &&
+      envelope.instance_id === identity.instance_id &&
+      envelope.action === "environment_start" &&
+      envelope.payload.environment_key === environmentKey,
+  );
+  const latestStart = [...startRows].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  )[0];
+  const startSending = () =>
+    (pendingRequests?.() || []).some(
+      (e) =>
+        e.action === "environment_start" &&
+        e.payload.environment_key === environmentKey,
+    );
+  const receivedID = (
+    latestStart?.response?.environment as { id?: string } | undefined
+  )?.id;
   const confirmingStart =
     !!environmentKey &&
-    (startingEnvironment === environmentKey ||
-      requests?.some(
+    (startSending() ||
+      (!!receivedID &&
+        receivedID !== activityID &&
+        (environment?.current_revision || 0) <=
+          Number(latestStart?.envelope.payload.expected_current_revision)) ||
+      startRows.some(
         ({ envelope, response }) =>
           envelope.action === "environment_start" &&
           envelope.project_id === identity.project_id &&
@@ -221,26 +249,26 @@ function EnvironmentWorkspace() {
     version: number,
     payload: { [key: string]: unknown },
   ) => {
+    if (!online) return;
+    if (action === "environment_start") {
+      if (startSending() || confirmingStart) return;
+      if (typeof payload.profile_id === "string")
+        remember({ key: environmentKey, profile: payload.profile_id });
+      const operation = submit(api.envelope(action, target, version, payload));
+      feedback.notify("环境检测", document.activeElement as HTMLElement);
+      await operation;
+      await refresh();
+      return;
+    }
     if (pending.current) return;
     pending.current = true;
     setSubmitting(true);
-    if (action === "environment_start") {
-      setStartingEnvironment(environmentKey);
-      if (typeof payload.profile_id === "string") {
-        remember({ key: environmentKey, profile: payload.profile_id });
-      }
-    }
     try {
       await send(action, target, version, payload);
-      await refresh(
-        action === "environment_start"
-          ? () => setStartingEnvironment("")
-          : undefined,
-      );
+      await refresh();
     } finally {
       pending.current = false;
       setSubmitting(false);
-      setStartingEnvironment("");
     }
   };
   useEffect(() => {
@@ -335,6 +363,21 @@ function EnvironmentWorkspace() {
       )}
       {environment && (
         <section aria-label="当前运行环境">
+          <SubmissionStatus
+            label={
+              startSending()
+                ? "正在提交检测…"
+                : confirmingStart
+                  ? latestStart?.response?.status === "applied"
+                    ? "已受理，正在读取工作信息"
+                    : "提交结果待核实 · 请查看原请求"
+                  : environment.activity_id
+                    ? "检测进度可在活动中心查看"
+                    : ""
+            }
+            busy={startSending()}
+            showActivity={!!latestStart || !!environment.activity_id}
+          />
           <EnvironmentCard
             key={`${environmentKey}:${profile}`}
             environment={environment}
@@ -345,9 +388,10 @@ function EnvironmentWorkspace() {
               remember({ key: environmentKey, profile })
             }
             confirmingStart={!!confirmingStart}
+            submittingStart={startSending()}
             statusVerified={options.verified && !activity.isError}
-            disabled={!options.verified || busy || submitting}
-            stopDisabled={!online || activity.isError || busy || submitting}
+            disabled={!options.verified || submitting}
+            stopDisabled={!online || activity.isError || submitting}
             activity={activity.data}
             command={command}
           />
@@ -420,7 +464,7 @@ function EnvironmentWorkspace() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={!online || busy || submitting}
+                  disabled={!online || submitting}
                   onClick={() =>
                     void command("environment_stop", r.id, r.revision, {})
                   }

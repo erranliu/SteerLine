@@ -10,6 +10,53 @@ import {
 import type { Receipt } from "./types";
 import { identity, run, tasks, testClient } from "../../test/workspace";
 
+it.each([
+  "roadmap_parse",
+  "roadmap_resume",
+  "roadmap_stop",
+  "roadmap_observe",
+  "roadmap_confirm",
+  "roadmap_edit_documents",
+  "maintenance_check",
+  "environment_start",
+  "start_candidate",
+])(
+  "refreshes %s activities in the original scope, including differently ordered roadmap keys",
+  async (action) => {
+    const api = new Api(identity, "csrf", "home");
+    const client = testClient();
+    const keys = [
+      ["home", "project", "instance", "async-activities", "ongoing"],
+      ["home", "project", "instance", "activity-links", "request"],
+      ["home", "roadmaps", "project", "instance"],
+      ["home", "project", "instance", "maintenance"],
+      ["home", "project", "old", "async-activities", "ongoing"],
+      ["other", "project", "instance", "activity-links", "request"],
+      ["home", "roadmaps", "other", "instance"],
+    ];
+    keys.forEach((key) => client.setQueryData(key, {}));
+    await invalidateCommand(
+      client,
+      "home",
+      api.envelope(action, "target", 1, {}),
+    );
+    expect(client.getQueryState(keys[0])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(keys[1])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(keys[2])?.isInvalidated).toBe(
+      action.startsWith("roadmap_"),
+    );
+    expect(client.getQueryState(keys[3])?.isInvalidated).toBe(
+      action === "maintenance_check",
+    );
+    keys
+      .slice(4)
+      .forEach((key) =>
+        expect(client.getQueryState(key)?.isInvalidated).toBe(false),
+      );
+    client.clear();
+  },
+);
+
 afterEach(() => vi.useRealTimers());
 
 it("retains an in-flight bootstrap read when the old page observer unmounts before the next subscribes", async () => {

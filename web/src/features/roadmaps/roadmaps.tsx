@@ -3,6 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { SafeLink } from "../../shared/ui/status";
+import type { Envelope } from "../../shared/api/types";
+import {
+  SubmissionStatus,
+  useActivityFeedback,
+} from "../activities/feedback/feedback";
 import {
   contentPending,
   currentRoadmapRecord,
@@ -143,14 +148,17 @@ function DependenciesView({
 }
 
 export function Roadmaps() {
-  const { api, identity, online, submit, busy, refresh, requests } =
+  const { api, identity, online, submit, requests, pendingRequests } =
     useWorkspace();
+  const feedback = useActivityFeedback();
   const [params, setParams] = useSearchParams();
   const [profile, setProfile] = useState(""),
     [error, setError] = useState(""),
     [tab, setTab] = useState<"source" | "json">("source");
   const [documentKey, setDocumentKey] = useState(""),
-    [kind, setKind] = useState<"spec" | "plan" | "tests" | "acceptance">("spec");
+    [kind, setKind] = useState<"spec" | "plan" | "tests" | "acceptance">(
+      "spec",
+    );
   const [editing, setEditing] = useState(false),
     [body, setBody] = useState("");
   const key = roadmapQueryKey(
@@ -210,8 +218,73 @@ export function Roadmaps() {
       : undefined
     : currentDetail.data;
   const analysis = record?.analysis;
+  const belongs = (e: Envelope) =>
+    e.project_id === identity.project_id &&
+    e.instance_id === identity.instance_id &&
+    (e.action === "roadmap_parse"
+      ? e.target_id === sourceID
+      : history.some((r) => r.id === e.target_id));
+  const inFlight = () =>
+    (pendingRequests?.() || []).filter(
+      (e) =>
+        belongs(e) ||
+        (e.action === "roadmap_prepare_static" &&
+          e.target_id === identity.project_id),
+    );
+  const advancing = (e: Envelope) =>
+    !["roadmap_observe", "roadmap_stop"].includes(e.action);
+  const titles: Record<string, string> = {
+    roadmap_parse: "正在提交解析…",
+    roadmap_generate_documents: "正在提交文档生成…",
+    roadmap_publish: "正在提交文档发布…",
+    roadmap_admit: "正在提交入图…",
+    roadmap_resume: "正在继续原操作…",
+    roadmap_confirm: "正在确认任务与依赖…",
+    roadmap_edit_documents: "正在保存文档…",
+    roadmap_prepare_static: "正在初始化静态材料…",
+    roadmap_observe: "正在查询原操作…",
+    roadmap_stop: "正在提交停止请求…",
+  };
+  const sending = inFlight();
+  const originalRows = (requests || []).filter((r) => belongs(r.envelope));
+  const unresolved = originalRows.find(
+    (r) =>
+      advancing(r.envelope) &&
+      !["applied", "rejected"].includes(r.response?.status || ""),
+  );
+  const awaiting = originalRows.some((r) => {
+    if (r.response?.status !== "applied" || !advancing(r.envelope))
+      return false;
+    const received = r.response.roadmap as RoadmapRecord | undefined;
+    if (!received?.id) return false;
+    const saved =
+      received.id === current?.id
+        ? current
+        : history.find((item) => item.id === received.id);
+    return !saved || saved.revision < received.revision;
+  });
+  const awaitingStatic =
+    !!value &&
+    (requests || []).some(
+      (r) =>
+        r.envelope.project_id === identity.project_id &&
+        r.envelope.instance_id === identity.instance_id &&
+        r.envelope.action === "roadmap_prepare_static" &&
+        r.response?.status === "applied" &&
+        r.envelope.payload.commit === value?.preparation.commit &&
+        !value.preparation.local_ready,
+    );
+  const flowReason = sending.some(advancing)
+    ? titles[sending.find(advancing)!.action]
+    : unresolved
+      ? "提交结果待核实 · 请查看原请求"
+      : awaiting || awaitingStatic
+        ? "已受理，正在读取工作信息"
+        : "";
+  const actionLabel = (name: string, original: string) =>
+    sending.some((e) => e.action === name) ? titles[name] : original;
   const locked =
-    busy ||
+    !!flowReason ||
     !online ||
     viewingHistory ||
     !!detail.error ||
@@ -237,7 +310,11 @@ export function Roadmaps() {
     record?.documents?.[0];
   const file =
     kind === "tests"
-      ? currentDocument && {path: currentDocument.plan.path.replace(/\.plan\.md$/, ".tests.json"), body: JSON.stringify({tests:currentDocument.tests},null,2)+"\n"}
+      ? currentDocument && {
+          path: currentDocument.plan.path.replace(/\.plan\.md$/, ".tests.json"),
+          body:
+            JSON.stringify({ tests: currentDocument.tests }, null, 2) + "\n",
+        }
       : kind === "acceptance"
         ? currentDocument?.acceptance[0]
         : currentDocument?.[kind];
@@ -253,22 +330,44 @@ export function Roadmaps() {
     version: number,
     payload: Record<string, unknown> = {},
   ) {
+    if (
+      !online ||
+      viewingHistory ||
+      inFlight().some(
+        (e) =>
+          (advancing(e) && advancing({ action: name } as Envelope)) ||
+          (e.action === name && e.target_id === target),
+      )
+    )
+      return;
     setError("");
     try {
       const envelope = api.envelope(name, target, version, payload);
       if (name === "roadmap_parse")
         envelope.payload.request_id = envelope.request_id;
-      const result = await submit(envelope);
-      if (!result)
-        throw new Error("未取得回执，请在原请求记录中查询，避免重复提交");
-      if (result.status === "rejected" || result.status === "outcome_unknown")
+      const operation = submit(envelope);
+      if (
+        [
+          "roadmap_parse",
+          "roadmap_generate_documents",
+          "roadmap_publish",
+          "roadmap_admit",
+          "roadmap_resume",
+        ].includes(name)
+      )
+        feedback.notify(
+          titles[name].replace(/^正在(?:提交)?/, "").replace(/…$/, ""),
+          document.activeElement as HTMLElement,
+        );
+      const result = await operation;
+      if (result?.status === "rejected")
         setError(result.diagnostic || "原操作待核实");
       if (!viewingHistory && params.has("record"))
         setParams({ source: sourceID }, { replace: true });
-      await list.refetch();
-      if (selectedID) await detail.refetch();
-      if (currentID && selectedID !== currentID) await currentDetail.refetch();
-      refresh();
+      await Promise.all([
+        list.refetch({ cancelRefetch: false }),
+        ...(currentID ? [currentDetail.refetch({ cancelRefetch: false })] : []),
+      ]);
     } catch (e) {
       setError(String(e));
     }
@@ -276,6 +375,7 @@ export function Roadmaps() {
   const preparationPending = requests?.some(
     (r) =>
       r.envelope.project_id === identity.project_id &&
+      r.envelope.instance_id === identity.instance_id &&
       r.envelope.action === "roadmap_prepare_static" &&
       !["applied", "rejected"].includes(r.response?.status || ""),
   );
@@ -350,7 +450,7 @@ export function Roadmaps() {
           </p>
         </div>
         <button
-          disabled={busy || !online}
+          disabled={!online}
           onClick={() => {
             void list.refetch();
             void source.refetch();
@@ -415,21 +515,21 @@ export function Roadmaps() {
               })
             }
           >
-            初始化静态材料
+            {actionLabel("roadmap_prepare_static", "初始化静态材料")}
           </button>
         </section>
       )}
       <section
         className="roadmaps-progress"
         aria-label="当前草稿转正进度"
-        aria-busy={!!current && contentPending(current)}
+        aria-busy={sending.length > 0 || (!!current && contentPending(current))}
       >
         <div className="roadmaps-progress-heading">
           <h2>
             {source.data?.path.split("/").at(-1) || "选择草稿"} · 当前流程
           </h2>
           <strong role="status">
-            {list.isPending ? "读取进度中" : progress.label}
+            {flowReason || (list.isPending ? "读取进度中" : progress.label)}
           </strong>
         </div>
         <ol aria-label="转正阶段" className="roadmaps-steps">
@@ -453,6 +553,21 @@ export function Roadmaps() {
           ))}
         </ol>
         <p>{guidance}</p>
+        <SubmissionStatus
+          announce={false}
+          label={
+            sending.length && !flowReason
+              ? titles[sending[0].action]
+              : flowReason
+          }
+          busy={sending.length > 0}
+          showActivity={!!originalRows.length || !!current}
+        />
+        {!flowReason && !sending.length && current && (
+          <button type="button" onClick={feedback.open}>
+            查看活动
+          </button>
+        )}
         {current?.diagnostic && (
           <details className="roadmaps-diagnostic">
             <summary>当前流程问题</summary>
@@ -475,7 +590,10 @@ export function Roadmaps() {
                 disabled={parseDisabled}
                 onClick={() => void parse()}
               >
-                Runner generate · 解析任务与依赖
+                {actionLabel(
+                  "roadmap_parse",
+                  "Runner generate · 解析任务与依赖",
+                )}
               </button>
             )}
             {mainAction === "confirm" && (
@@ -493,7 +611,7 @@ export function Roadmaps() {
                   void action("roadmap_confirm", record.id, record.revision)
                 }
               >
-                确认任务与依赖
+                {actionLabel("roadmap_confirm", "确认任务与依赖")}
               </button>
             )}
             {mainAction === "generate" && (
@@ -509,7 +627,7 @@ export function Roadmaps() {
                   )
                 }
               >
-                生成 Spec / Plan
+                {actionLabel("roadmap_generate_documents", "生成 Spec / Plan")}
               </button>
             )}
             {mainAction === "wait" && (
@@ -520,24 +638,34 @@ export function Roadmaps() {
             {mainAction === "observe" && (
               <button
                 className="roadmaps-primary"
-                disabled={locked || !record}
+                disabled={
+                  !online ||
+                  viewingHistory ||
+                  !record ||
+                  sending.some((e) => e.action === "roadmap_observe")
+                }
                 onClick={() =>
                   record && void action("roadmap_observe", record.id, 1)
                 }
               >
-                查询原操作结果
+                {actionLabel("roadmap_observe", "查询原操作结果")}
               </button>
             )}
             {mainAction === "resume" && (
               <button
                 className="roadmaps-primary"
-                disabled={locked || !record}
+                disabled={
+                  !online ||
+                  viewingHistory ||
+                  !record ||
+                  sending.some(advancing)
+                }
                 onClick={() =>
                   record &&
                   void action("roadmap_resume", record.id, record.revision)
                 }
               >
-                继续原发布 / 入图请求
+                {actionLabel("roadmap_resume", "继续原发布 / 入图请求")}
               </button>
             )}
             {mainAction === "publish" && (
@@ -552,7 +680,7 @@ export function Roadmaps() {
                   })
                 }
               >
-                确认发布并合并文档
+                {actionLabel("roadmap_publish", "确认发布并合并文档")}
               </button>
             )}
             {mainAction === "admit" && (
@@ -564,7 +692,7 @@ export function Roadmaps() {
                   void action("roadmap_admit", record.id, record.revision)
                 }
               >
-                正式入 DAG · 分配编号
+                {actionLabel("roadmap_admit", "正式入 DAG · 分配编号")}
               </button>
             )}
             {mainAction === "dag" && (
@@ -577,18 +705,26 @@ export function Roadmaps() {
             )}
             {record && mainAction !== "observe" && mainAction !== "dag" && (
               <button
-                disabled={locked}
+                disabled={
+                  !online ||
+                  viewingHistory ||
+                  sending.some((e) => e.action === "roadmap_observe")
+                }
                 onClick={() => void action("roadmap_observe", record.id, 1)}
               >
-                查询原操作结果
+                {actionLabel("roadmap_observe", "查询原操作结果")}
               </button>
             )}
             {record && contentPending(record) && (
               <button
-                disabled={locked}
+                disabled={
+                  !online ||
+                  viewingHistory ||
+                  sending.some((e) => e.action === "roadmap_stop")
+                }
                 onClick={() => void action("roadmap_stop", record.id, 1)}
               >
-                停止当前内容请求
+                {actionLabel("roadmap_stop", "停止当前内容请求")}
               </button>
             )}
             {analysis && <a href="#roadmap-dependencies">查看任务与依赖</a>}
@@ -746,7 +882,7 @@ export function Roadmaps() {
               重新解析会开始新一轮规划，已有记录保留。正式编号仅在入图时分配。
             </p>
             <button disabled={parseDisabled} onClick={() => void parse()}>
-              重新解析草稿
+              {actionLabel("roadmap_parse", "重新解析草稿")}
             </button>
           </details>
           {viewingHistory && (
@@ -884,7 +1020,14 @@ export function Roadmaps() {
                 Plan
               </button>
             </div>
-            <button onClick={() => {setKind("tests");setEditing(false);}}>测试安排 JSON</button>
+            <button
+              onClick={() => {
+                setKind("tests");
+                setEditing(false);
+              }}
+            >
+              测试安排 JSON
+            </button>
             <button
               onClick={() => {
                 setKind("acceptance");
@@ -914,7 +1057,7 @@ export function Roadmaps() {
                     setEditing(false);
                   }}
                 >
-                  保存并重新核对
+                  {actionLabel("roadmap_edit_documents", "保存并重新核对")}
                 </button>
                 <button onClick={() => setEditing(false)}>取消</button>
               </>

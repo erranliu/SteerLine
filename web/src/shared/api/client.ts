@@ -217,6 +217,12 @@ export class Api {
   async submit(envelope: Envelope) {
     envelope = structuredClone(envelope);
     this.validate(envelope);
+    // environment_start targets the project in the public envelope, but its
+    // actual conflict identity is the environment (including profile aliases).
+    const environmentKey =
+      envelope.action === "environment_start"
+        ? String(envelope.payload.environment_key || "")
+        : "";
     const send = async (signal?: AbortSignal) => {
       const submit = () =>
         this.locked(
@@ -235,6 +241,9 @@ export class Api {
                   row.envelope.instance_id === envelope.instance_id &&
                   row.envelope.action === envelope.action &&
                   row.envelope.target_id === envelope.target_id &&
+                  (!environmentKey ||
+                    !row.envelope.payload.environment_key ||
+                    row.envelope.payload.environment_key === environmentKey) &&
                   (!row.response ||
                     !["applied", "rejected"].includes(row.response.status)),
               );
@@ -308,7 +317,8 @@ export class Api {
           "/" +
           envelope.action +
           "/" +
-          envelope.target_id,
+          envelope.target_id +
+          (environmentKey ? "/" + environmentKey : ""),
         submit,
         signal,
       );

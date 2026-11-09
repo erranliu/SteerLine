@@ -26,6 +26,9 @@ func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
 	if e2ePackageGoTimeout([]e2eScenario{{ID: "configuration.execution-profiles", Env: "controlled"}}) != "12m" {
 		t.Fatal("configuration parent clips its existing 10m body and cleanup")
 	}
+	if e2ePackageGoTimeout([]e2eScenario{{ID: "runtime.async-activities", Env: "controlled"}}) != "12m" {
+		t.Fatal("activity parent clips the two-project body or its cleanup")
+	}
 }
 
 func TestE2EParallelismOnlyAllowsIndependentRuntimeScenes(t *testing.T) {

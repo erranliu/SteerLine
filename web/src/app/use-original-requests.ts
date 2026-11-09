@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import {
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Api } from "../shared/api/client";
 import { invalidateCommand, receiptChanged } from "../shared/api/queries";
 import { listRequests, requestByID } from "../shared/api/journal";
@@ -8,10 +13,52 @@ import type { StoredRequest, Envelope } from "../shared/api/types";
 export function useOriginalRequests(api: Api, online: boolean) {
   const queries = useQueryClient();
   const { identity, home } = api;
+  const current = useRef(api);
+  current.current = api;
   const [error, setError] = useState("");
   const [errorRequest, setErrorRequest] = useState("");
+  const mutationKey = [
+    home,
+    identity.project_id,
+    identity.instance_id,
+    "original-command",
+  ];
+  const observations = useMutationState({
+    filters: { mutationKey, exact: true },
+    select: (item) => ({
+      envelope: item.state.variables as Envelope,
+      response: item.state.data as
+        Awaited<ReturnType<Api["submit"]>> | undefined,
+      status: item.state.status,
+      at: item.state.submittedAt,
+      error: item.state.error as (Error & { requestUnsent?: boolean }) | null,
+    }),
+  });
+  // Read the actual mutation cache so a second activation before React renders
+  // sees the first submission. This does not acquire locks or infer conflicts.
+  const pendingRequests = () =>
+    queries
+      .getMutationCache()
+      .findAll({ mutationKey, exact: true, status: "pending" })
+      .map((item) => item.state.variables as Envelope);
   const mutation = useMutation({
-    mutationFn: (envelope: ReturnType<Api["envelope"]>) => api.submit(envelope),
+    mutationKey,
+    mutationFn: async (envelope: ReturnType<Api["envelope"]>) => {
+      try {
+        return await api.submit(envelope);
+      } catch (error) {
+        let requestUnsent = false;
+        try {
+          requestUnsent = !(await requestByID(envelope.request_id));
+        } catch {
+          /* Unknown is not unsent. */
+        }
+        throw Object.assign(
+          error instanceof Error ? error : new Error(String(error)),
+          { requestUnsent },
+        );
+      }
+    },
     onMutate: (envelope) => {
       if (envelope.action === "environment_start") {
         setError("");
@@ -19,19 +66,37 @@ export function useOriginalRequests(api: Api, online: boolean) {
       }
     },
     onError: async (e, envelope) => {
+      if (current.current !== api) return;
       if (
         envelope.action === "environment_start" &&
         (await requestByID(envelope.request_id).catch(() => undefined))
       )
         return;
+      if (current.current !== api) return;
       setError(String(e));
       setErrorRequest(envelope.request_id);
     },
     onSuccess: () => {
+      if (current.current !== api) return;
       setError("");
       setErrorRequest("");
     },
-    onSettled: (_result, _error, envelope) => {
+    onSettled: async (_result, _error, envelope) => {
+      // Hand the saved original row to the existing journal query before the
+      // mutation leaves pending. A failed read never erases its known receipt.
+      const saved = await requestByID(envelope.request_id).catch(
+        () => undefined,
+      );
+      if (saved)
+        queries.setQueryData<StoredRequest[]>(
+          [home, "local-requests"],
+          (rows = []) => [
+            ...rows.filter(
+              (row) => row.envelope.request_id !== envelope.request_id,
+            ),
+            saved,
+          ],
+        );
       void invalidateCommand(queries, api.home, envelope);
     },
   });
@@ -40,6 +105,31 @@ export function useOriginalRequests(api: Api, online: boolean) {
     queryFn: listRequests,
     refetchInterval: 2000,
   });
+  const observedRequests = new Map(
+    (requests.data || []).map((row) => [row.envelope.request_id, row]),
+  );
+  for (const item of observations) {
+    if (
+      !item.envelope ||
+      (item.status !== "pending" &&
+        !item.response &&
+        (!item.error || item.error.requestUnsent))
+    )
+      continue;
+    const previous = observedRequests.get(item.envelope.request_id);
+    if (
+      previous &&
+      ["applied", "rejected"].includes(previous.response?.status || "")
+    )
+      continue;
+    observedRequests.set(item.envelope.request_id, {
+      ...previous,
+      envelope: item.envelope,
+      created_at: previous?.created_at || new Date(item.at).toISOString(),
+      response: item.response || previous?.response,
+      error: previous?.error || (item.error ? String(item.error) : undefined),
+    });
+  }
   useEffect(() => {
     if (
       errorRequest &&
@@ -114,6 +204,7 @@ export function useOriginalRequests(api: Api, online: boolean) {
     if (!online) throw new Error("当前连接不能变更业务状态");
     try {
       const result = await mutation.mutateAsync(envelope);
+      if (current.current !== api) return result;
       if (
         result.status === "rejected" ||
         (result.status === "outcome_unknown" &&
@@ -155,6 +246,7 @@ export function useOriginalRequests(api: Api, online: boolean) {
     onSettled: () =>
       queries.invalidateQueries({ queryKey: [api.home, "local-requests"] }),
     onError: (error, row) => {
+      if (current.current !== api) return;
       if (
         row.envelope.action === "environment_start" ||
         row.response?.code === "request_receipt_persist_failed" ||
@@ -167,6 +259,8 @@ export function useOriginalRequests(api: Api, online: boolean) {
   });
   return {
     requests,
+    observedRequests: [...observedRequests.values()],
+    pendingRequests,
     error,
     clearError: () => setError(""),
     send,

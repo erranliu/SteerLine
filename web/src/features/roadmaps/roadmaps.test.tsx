@@ -10,6 +10,8 @@ import {
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { WorkspaceContext, type Workspace } from "../../app/context";
+import { useWorkspace } from "../../app/context";
+import { useOriginalRequests } from "../../app/use-original-requests";
 import { currentRoadmapRecord, roadmapProgress } from "./workflow";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
@@ -28,6 +30,7 @@ function setup(
   online = true,
   requests: StoredRequest[] = [],
   configure?: (view: RoadmapView, record: RoadmapRecord) => void,
+  observed = false,
 ) {
   const source = {
     id: "b".repeat(32),
@@ -111,18 +114,161 @@ function setup(
       }) as never,
   );
   configure?.(view, record);
+  const client = testClient();
+  function ObservedRoadmaps() {
+    const workspace = useWorkspace();
+    const original = useOriginalRequests(api, online);
+    return (
+      <WorkspaceContext.Provider
+        value={{
+          ...workspace,
+          submit: original.submit,
+          requests: original.observedRequests,
+          pendingRequests: original.pendingRequests,
+        }}
+      >
+        <Roadmaps />
+      </WorkspaceContext.Provider>
+    );
+  }
   mountFeature(
     <>
-      <Roadmaps />
+      {observed ? <ObservedRoadmaps /> : <Roadmaps />}
       <LocationProbe />
     </>,
     api,
-    testClient(),
+    client,
     online,
     { requests },
   );
-  return { api, get, submit, source, record, view };
+  return { api, get, submit, source, record, view, client };
 }
+
+it("keeps static initialization blocked until the acknowledged material state is read", async () => {
+  const { submit, view } = setup(
+    "review",
+    true,
+    [],
+    (view) => {
+      view.preparation.ready = false;
+      view.preparation.local_ready = false;
+    },
+    true,
+  );
+  const initialize = await screen.findByRole("button", {
+    name: "初始化静态材料",
+  });
+  await waitFor(() => expect(initialize).toBeEnabled());
+  fireEvent.click(initialize);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  await screen.findAllByText("已受理，正在读取工作信息");
+  expect(screen.getByRole("button", { name: "初始化静态材料" })).toBeDisabled();
+  view.preparation.local_ready = true;
+  fireEvent.click(screen.getByRole("button", { name: "刷新 Markdown 与观察" }));
+  await waitFor(() =>
+    expect(screen.queryByText("已受理，正在读取工作信息")).toBeNull(),
+  );
+  expect(submit).toHaveBeenCalledTimes(1);
+});
+
+it("does not block another draft while the first draft is submitting", async () => {
+  const { submit } = setup(
+    "review",
+    true,
+    [],
+    (view, record) => {
+      view.sources.push({
+        ...record.source,
+        id: "other",
+        path: "SteerlineFlow/Roadmap/drafts/other.md",
+      });
+    },
+    true,
+  );
+  submit.mockImplementation(() => new Promise(() => {}) as never);
+  const first = await screen.findByRole("button", { name: "重新解析草稿" });
+  await waitFor(() => expect(first).toBeEnabled());
+  fireEvent.click(first);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: /other\.md/ }));
+  const second = await screen.findByRole("button", {
+    name: "Runner generate · 解析任务与依赖",
+  });
+  await waitFor(() => expect(second).toBeEnabled());
+  fireEvent.click(second);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+  expect(submit.mock.calls[1][0].target_id).toBe("other");
+});
+it("blocks duplicate parses synchronously and keeps the accepted handoff locked until its own record is read", async () => {
+  const { submit, view, source, record, get } = setup(
+    "review",
+    true,
+    [],
+    undefined,
+    true,
+  );
+  let finish!: (value: unknown) => void;
+  submit.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }) as never,
+  );
+  const button = await screen.findByRole("button", { name: "重新解析草稿" });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  await screen.findAllByText("正在提交解析…");
+  expect(button).toBeDisabled();
+  const envelope = submit.mock.calls[0][0];
+  const next = {
+    ...record,
+    id: envelope.request_id,
+    state: "queued",
+    revision: 1,
+    created_at: new Date().toISOString(),
+  };
+  finish({ ...envelope, status: "applied", roadmap: next });
+  await screen.findAllByText("已受理，正在读取工作信息");
+  expect(screen.getByRole("button", { name: "重新解析草稿" })).toBeDisabled();
+  view.records.push(next);
+  fireEvent.click(screen.getByRole("button", { name: "刷新 Markdown 与观察" }));
+  await screen.findByText("解析草稿中", { selector: "strong" });
+  expect(screen.queryByText("已受理，正在读取工作信息")).toBeNull();
+  expect(submit).toHaveBeenCalledTimes(1);
+  expect(get).toHaveBeenCalledWith("/roadmaps/sources/" + source.id);
+});
+
+it("keeps observe and stop available for an unknown parse, without trusting activity queries", async () => {
+  const { api, record, submit } = setup("unknown");
+  cleanup();
+  const envelope = api.envelope("roadmap_parse", record.source.id, 1, {});
+  mountFeature(<Roadmaps />, api, testClient(), true, {
+    busy: true,
+    requests: [
+      {
+        envelope,
+        created_at: new Date().toISOString(),
+        response: {
+          ...envelope,
+          status: "outcome_unknown",
+          sampled_at: new Date().toISOString(),
+        },
+      },
+    ],
+  });
+  expect(
+    await screen.findByRole("button", { name: "查询原操作结果" }),
+  ).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: "停止当前内容请求" }),
+  ).toBeEnabled();
+  expect(screen.getByRole("button", { name: "重新解析草稿" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "查询原操作结果" }));
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  expect(submit.mock.calls[0][0].action).toBe("roadmap_observe");
+});
 it.each([false, true])(
   "opens an activity record in its own draft and preserves current/history actions (historical=%s)",
   async (historical) => {
@@ -259,7 +405,9 @@ it("follows the current document generation after acting on a parse activity lin
     name: "生成 Spec / Plan",
   });
   await waitFor(() => expect(generate).toBeEnabled());
-  expect(screen.getByTestId("location")).not.toHaveTextContent("record=");
+  await waitFor(() =>
+    expect(screen.getByTestId("location")).not.toHaveTextContent("record="),
+  );
   expect(screen.getByTestId("location")).toHaveTextContent(
     "source=" + record.source.id,
   );
