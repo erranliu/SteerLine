@@ -6,6 +6,7 @@
     "go.storage",
     "go.deployment",
     "web.unit",
-    "runtime.main-agent-advisory"
+    "runtime.main-agent-advisory",
+    "runtime.async-activities"
   ]
 }
