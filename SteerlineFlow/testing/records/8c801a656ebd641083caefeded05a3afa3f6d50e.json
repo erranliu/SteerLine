@@ -1,0 +1,37 @@
+{
+  "runs": [
+    {
+      "at": "2026-11-09T09:14:06.4749701Z",
+      "results": [
+        {
+          "test_id": "go.storage",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-09T09:14:55.6867589Z",
+      "results": [
+        {
+          "test_id": "l1.minimum",
+          "level": "L1",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-09T09:17:44.9323027Z",
+      "results": [
+        {
+          "test_id": "smoke.delivery",
+          "level": "L2",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

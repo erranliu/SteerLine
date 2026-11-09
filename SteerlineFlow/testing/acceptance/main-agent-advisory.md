@@ -19,7 +19,7 @@
 | A09 | 同包固定材料、缺失失败、实际全文 diff/字节/hash/golden/发送守卫 | 独立静态审核通过，最终证据已独立复核通过 |
 | A10 | advisory-v1 固定，不接受未知协议/能力或旧动作产物 | 定向通过 |
 | A11 | 原 owner 持久当前 Question/Attempt/CanReply 自动登记，不依赖诊断文案或虚构原因码 | 真实 SQLite 候选保存→后台→生成→活动→重启去重集成通过；原生问题由公开 fixture 提供，未跑完整真实开发任务 |
-| A12 | 单一正式活动来源、原请求/精确导航、attention、纯读与有界正文剥离 | 集成与投影定向通过，SQLite 全集待本轮最终登记 |
+| A12 | 单一正式活动来源、原请求/精确导航、attention、纯读与有界正文剥离 | 集成与投影定向通过，SQLite 全集串行复核通过（本轮） |
 | A13 | 不打开页面亦推进、跨候选隔离、来源解除不改历史、重启不重投 | 集成与定向通过；真实浏览器手工体验未验 |
 
 ## 定向及真实链证据
@@ -60,6 +60,24 @@
 
 ## 完整回归与剩余边界
 
-本轮 HTTP 全集54.0秒通过；固定提交649068ef的部署全集707.4秒、Web全集352/352（33.6秒）、生产构建通过。合并main后owner定向65.9秒通过。存储在合并前首次全集163.8秒通过；最新基线与部署并行时全集127.3秒失败，仍是原 TestAsyncActivityPaginationAndRequestLookup 的 association lookup depended on page，未确证原因、未改断言或预算，待部署结束后串行复核。L1/L2、存储串行复核及最终文档检查待登记；不继承初始草稿的全集通过。最终受测提交固定后导出正式 Git 测试历史。人工浏览器可读性、复制及导航未验；没有合并、部署、真实开发/PR执行，亦不声明严格零工具能力。
+本轮 HTTP 全集54.0秒通过；固定提交649068ef的部署全集707.4秒、Web全集352/352（33.6秒）、生产构建通过。合并main后owner定向65.9秒通过。存储在合并前首次全集163.8秒通过；最新基线与部署并行时全集127.3秒失败，仍是原 TestAsyncActivityPaginationAndRequestLookup 的 association lookup depended on page，未确证原因、未改断言或预算，部署结束后在8c801a65串行全集复核101.2秒通过。最终L1 18.1秒、L2 106.2秒通过，L2清理完成；最终文档检查如下登记；不继承初始草稿的全集通过。最终受测提交已固定，并导出正式 Git 测试历史。人工浏览器可读性、复制及导航未验；没有合并、部署、真实开发/PR执行，亦不声明严格零工具能力。
 
 补充状态修复：同一待答问题短暂退出又恢复时只恢复 SourceActive，不重开 ready/failed/cancelled/cancelling，不替换原 Source、请求、输入、结果或停止身份。已补 bridge 四态断言与真实 SQLite 来源恢复后的 attention 集成断言。部署/Web通过及存储失败的固定提交结果已导出[649068ef 正式历史](../records/649068efe0d5eada0b92b82e5da06a867647c7e9.json)，后续结果按实际 SHA 分别登记。
+
+## 最终固定提交与发布前检查
+
+来源恢复修复提交 `8c801a656ebd641083caefeded05a3afa3f6d50e` 在前后干净、源码未变的状态下通过：
+
+| 正式检查 | 系统临时目录 | 结果 |
+| --- | --- | --- |
+| go.storage 串行完整复核 | `steerline-advisory-generate-storage-serial` | 通过，101.2秒；原分页断言与来源预算未改 |
+| l1.minimum | `steerline-advisory-generate-L1-final` | 通过，18.1秒 |
+| smoke.delivery（L2） | `steerline-advisory-generate-L2-final` | 通过，106.2秒；cleanup_complete=true |
+
+[8c801a65 正式历史](../records/8c801a656ebd641083caefeded05a3afa3f6d50e.json)与前述649068ef历史分别保留实际受测版本；后续仅追加本验收及记录，不冒认新文档提交已受测。来源恢复定向 `steerline-advisory-source-return-final` 6项通过（39.95秒），独立复核确认只更新 SourceActive、不重开生成。
+
+本轮 HTTP/SQLite/部署/Web完整集及生产构建均已验证，60项owner定向、真实模型与对应失败/补测分别留原报告。全量 Roadmap 未重跑：本轮没有改 Roadmap 实现、提示词或资源身份；复用其 ContentQueue 不改变其流程。人工浏览器体验仍未验，不声称完整真实开发任务或严格工具隔离。独立最终文档/证据复核已通过，提示词diff仍与当前资产/守卫逐字一致。
+
+正式测试选择全部为现有有效ID、无重复；仓库完整PR diff空白检查通过。文档本地导航检查最终结果随本段收尾复核，不改源码/提示词。未合并、未部署。
+
+最终导航复核：724个Markdown、4468条本地链接、0错误；完整PR diff空白检查通过。最终收尾只改Spec状态、验收说明及正式测试历史，运行代码和提示词保持受测版本。
