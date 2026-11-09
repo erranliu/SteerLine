@@ -406,7 +406,11 @@ it("stops the exact current activity even outside the history window and never s
   await updateOptions(client, (options) => {
     options.environments[0].activity_settled = false;
     options.environments[0].stage = "stale";
+    options.environments[0].reason = "环境要求 go：1.26.0 → 1.27.0；须重新检测";
   });
+  expect(
+    await screen.findByText("环境要求 go：1.26.0 → 1.27.0；须重新检测"),
+  ).toBeVisible();
   const stop = await screen.findByRole("button", { name: "停止检测" });
   await waitFor(() => expect(stop).toBeEnabled());
   expect(

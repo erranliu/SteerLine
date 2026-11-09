@@ -29,14 +29,31 @@ func TestProjectEnvironmentScriptReportsToolsWithoutChainChecks(t *testing.T) {
 	}
 	require(t, os.WriteFile(filepath.Join(tools, "npm.cmd"), []byte("@echo off\r\necho 10.0.0\r\n"), 0600))
 	var previousDetails any
-	for _, mode := range []string{"codex", "orca", "missing", "low", "error", "timeout", "requirements"} {
+	for _, mode := range []string{"codex", "orca", "missing", "low", "error", "timeout", "requirements", "invalid-minimum", "changed-minimum", "crlf", "close-at-eof", "inline-fence", "closing-suffix"} {
 		t.Run(mode, func(t *testing.T) {
 			work := t.TempDir()
-			module := "module fixture\n\ngo 1.26.0\n"
+			document := "```steerline-environment\n" + `{"version":6,"requirements":{"go":"1.26.0","node":"24.0","python":"3.0"}}` + "\n```\n"
 			if mode == "requirements" {
-				module = "invalid go requirement"
+				document = "invalid requirements"
 			}
-			require(t, os.WriteFile(filepath.Join(work, "go.mod"), []byte(module), 0600))
+			if mode == "invalid-minimum" {
+				document = strings.Replace(document, `"go":"1.26.0"`, `"go":""`, 1)
+			}
+			if mode == "changed-minimum" {
+				document = strings.Replace(document, `"go":"1.26.0"`, `"go":"99.0"`, 1)
+			}
+			switch mode {
+			case "crlf":
+				document = strings.ReplaceAll(document, "\n", "\r\n")
+			case "close-at-eof":
+				document = strings.TrimSuffix(document, "\n")
+			case "inline-fence":
+				document = "inline " + document
+			case "closing-suffix":
+				document = strings.TrimSuffix(document, "\n") + "suffix\n"
+			}
+			require(t, os.MkdirAll(filepath.Join(work, "SteerlineFlow"), 0700))
+			require(t, os.WriteFile(filepath.Join(work, "SteerlineFlow", "environment.md"), []byte(document), 0600))
 			initial := map[string]any{"version": float64(3), "project_identity": "project-测试", "environment_key": mode, "activity_id": "activity", "round": float64(1), "call_context": map[string]any{"adapter": mode, "target": map[string]any{"kind": "local", "environment": ""}}, "source_commit": "commit", "inputs_digest": "basis", "completed": false, "ready": false, "message": ""}
 			raw, err := json.Marshal(initial)
 			require(t, err)
@@ -67,11 +84,11 @@ func TestProjectEnvironmentScriptReportsToolsWithoutChainChecks(t *testing.T) {
 					t.Fatal("script rewrote invocation identity", key, value, final[key])
 				}
 			}
-			wantReady := mode == "codex" || mode == "orca"
+			wantReady := mode == "codex" || mode == "orca" || mode == "crlf" || mode == "close-at-eof"
 			if final["completed"] != true || final["ready"] != wantReady || final["message"] == "" || strings.Contains(string(raw), "untrusted tool output") {
 				t.Fatal(string(raw))
 			}
-			for failure, reason := range map[string]string{"missing": "missing from PATH", "low": "below required", "error": "query failed", "timeout": "timed out", "requirements": "Cannot read"} {
+			for failure, reason := range map[string]string{"missing": "missing from PATH", "low": "below required", "error": "query failed", "timeout": "timed out", "requirements": "Cannot read", "invalid-minimum": "Cannot read", "changed-minimum": "below required 99.0", "inline-fence": "Cannot read", "closing-suffix": "Cannot read"} {
 				if mode == failure && !strings.Contains(string(raw), reason) {
 					t.Fatal("lost diagnostic reason", string(raw))
 				}

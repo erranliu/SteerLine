@@ -17,6 +17,7 @@ import {
   roadmapSteps,
 } from "./workflow";
 import "./roadmaps.css";
+import { DependencyReview } from "./dependency-review";
 
 export type RoadmapSource = {
   id: string;
@@ -27,8 +28,8 @@ export type RoadmapSource = {
   modified: boolean;
   diagnostic?: string;
 };
-type Dependencies = { local: string[]; formal: string[] };
-type Node = {
+export type Dependencies = { local: string[]; formal: string[] };
+export type RoadmapTask = {
   local_key: string;
   key_origin: "markdown" | "suggested";
   title: string;
@@ -75,7 +76,7 @@ export type RoadmapRecord = {
   existing?: { id: string; title: string; status?: string }[];
   diagnostic?: string;
   run_id?: string;
-  analysis?: { tasks: Node[]; questions: string[]; overlap: string };
+  analysis?: { tasks: RoadmapTask[]; questions: string[]; overlap: string };
   confirmed_digest?: string;
   documents: Documents[];
   formal_mapping: Record<string, string>;
@@ -110,43 +111,6 @@ export const roadmapQueryKey = (
   project: string,
   instance: string,
 ) => [home, "roadmaps", project, instance];
-function DependenciesView({
-  value,
-  existing,
-  dag,
-}: {
-  value: Dependencies;
-  existing: RoadmapRecord["existing"];
-  dag: (id: string) => string;
-}) {
-  const entries = [
-    ...value.local.map((key) => (
-      <span key={"local:" + key}>本 Roadmap {key}</span>
-    )),
-    ...value.formal.map((id) => {
-      const task = existing?.find((task) => task.id === id);
-      return (
-        <Link key={"formal:" + id} to={dag(id)}>
-          正式 #{id}
-          {task ? " · " + task.title : ""}
-        </Link>
-      );
-    }),
-  ];
-  return entries.length ? (
-    <>
-      {entries.map((entry, i) => (
-        <span key={entry.key}>
-          {i > 0 && "、"}
-          {entry}
-        </span>
-      ))}
-    </>
-  ) : (
-    <>无</>
-  );
-}
-
 export function Roadmaps() {
   const { api, identity, online, submit, requests, pendingRequests } =
     useWorkspace();
@@ -611,7 +575,10 @@ export function Roadmaps() {
                   void action("roadmap_confirm", record.id, record.revision)
                 }
               >
-                {actionLabel("roadmap_confirm", "确认任务与依赖")}
+                {actionLabel(
+                  "roadmap_confirm",
+                  `确认本次任务与依赖（${analysis?.tasks.length ?? 0} 项）`,
+                )}
               </button>
             )}
             {mainAction === "generate" && (
@@ -901,71 +868,42 @@ export function Roadmaps() {
       </div>
       {analysis && (
         <section className="roadmaps-section" id="roadmap-dependencies">
-          <h2>{viewingHistory ? "历史 · " : ""}草稿原有依赖与 Runner 建议</h2>
-          <p>{analysis.overlap}</p>
+          <h2>任务与依赖</h2>
+          <p>
+            {viewingHistory
+              ? "历史规划快照"
+              : record?.state === "admitted"
+                ? "入图前规划快照"
+                : "局部依赖预览，尚未正式入图"}
+            {stale && " · 草稿已修改，以下保留原解析快照"}
+          </p>
           {analysis.questions.map((q, i) => (
             <p key={i} className="notice amber">
               {q}
             </p>
           ))}
-          <div className="roadmaps-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>内部代号 / 任务</th>
-                  <th>草稿原有依赖</th>
-                  <th>核对后的拟议依赖</th>
-                  <th>变化依据</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analysis.tasks.map((t) => (
-                  <tr key={t.local_key}>
-                    <td>
-                      <strong>
-                        {t.local_key} · {t.title}
-                      </strong>
-                      <p>
-                        {t.key_origin === "markdown"
-                          ? "沿用原代号"
-                          : "建议临时代号"}
-                      </p>
-                      <p>{t.goal}</p>
-                      <details>
-                        <summary>范围、约束与原文依据</summary>
-                        <p>{t.scope}</p>
-                        <p>{t.constraints}</p>
-                        <p>通过条件：{t.acceptance}</p>
-                        <blockquote>{t.evidence}</blockquote>
-                      </details>
-                    </td>
-                    <td>
-                      <DependenciesView
-                        value={t.original_dependencies}
-                        existing={record?.existing}
-                        dag={dag}
-                      />
-                    </td>
-                    <td>
-                      <DependenciesView
-                        value={t.proposed_dependencies}
-                        existing={record?.existing}
-                        dag={dag}
-                      />
-                      {t.existing_task_id && (
-                        <p>
-                          <Link to={dag(t.existing_task_id)}>
-                            关联已有 #{t.existing_task_id}
-                          </Link>
-                        </p>
-                      )}
-                    </td>
-                    <td>{t.reason}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {record && (
+            <DependencyReview
+              key={JSON.stringify([
+                api.home,
+                identity.project_id,
+                identity.instance_id,
+                sourceID,
+                record.id,
+                record.revision,
+              ])}
+              analysis={analysis}
+              existing={record.existing}
+              dag={dag}
+            />
+          )}
+          <details className="roadmaps-review-basis">
+            <summary>重叠检查与解析依据</summary>
+            <p>{analysis.overlap}</p>
+            <p>来源：{record?.source.path}</p>
+            <p>来源提交：{record?.source.head}</p>
+            <p>原文摘要：{record?.source.digest}</p>
+          </details>
         </section>
       )}
       <section className="roadmaps-section" id="roadmap-documents">
