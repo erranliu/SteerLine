@@ -114,3 +114,15 @@ T6 使用独立 Runner `C:\Project\SteerRunner\bin\steerrunner.exe`，版本 `0.
 受控维护包装器实际生成的隔离包位于 `C:\SteerlineDebug\dev-20261109-*`；精确目录、manifest、浏览器 trace、原 stopped/resources_settled 与重置证据由各 scenario、`debug-package.txt` 和 `proof.json` 定位。首轮预检失败不冒充清理完整；后续所有维护业务轮均保留自己的停止/结算证明，最终通过轮 cleanup_complete=true。原始现场和报告保留，不清理安装环境。
 
 补充只读观察 `diagnostics/owned-package-observation-20261109a/observation.json`：七个本任务调试包各自目录内的可执行进程均为零。该进程范围观察不替换原 Runner 结算，也不把首轮预检失败或任一失败场景改成通过。
+
+
+## PR476 后续主干冲突处理（2026-11-09）
+
+合入 main `2b2d1728c0fd9e9c37240c5360c7ec46fb6246dd`，合并提交为 `51b8fd2f5f21ae74f05feb1bfab6cd9b9a510ca5`。唯一冲突在验收索引：保留 Git 测试安排和 workflow 配置模型计费两条入口。上游计费代码原样保留；本次未改固定提示词、资产或测试断言，原字节审核结论不变。
+
+在该干净合并提交串行运行原入口，均退出 0：
+
+- `go run ./cmd/test-feedback -level=L1 -out C:\SteerlineDebug\wt-5cba-git-arrangements\test-results\L1\pr476-merge-20261109T071244273Z`：passed/complete，准备 0.3 秒、执行 27.3 秒，原始入口为该目录 `summary.json`。
+- `go run ./cmd/test-feedback -level=L2 -out C:\SteerlineDebug\wt-5cba-git-arrangements\test-results\L2\pr476-merge-20261109T071244273Z`：full-L2 通过，零跳过、cleanup_complete=true；准备 7.4 秒、执行 96.1 秒，原始入口为该目录 `summary.json`。
+
+控制台日志保留于 `C:\SteerlineDebug\wt-5cba-git-arrangements\diagnostics\pr476-merge-20261109T071244273Z\`。两份报告的 source_commit 均为上述合并提交，worktree_status 均为 clean。导航检查为 717 个 Markdown、4429 个本地链接、零错误，`git diff --check` 通过。后续仅补本段验收记录；此前完整专项继续按各自原受测版本追溯，不写成本次重跑。
