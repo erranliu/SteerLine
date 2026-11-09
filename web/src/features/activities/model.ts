@@ -62,8 +62,6 @@ export const matchesActivity = (a: Activity, filter: ActivityFilter) =>
 export const activityActions = new Set([
   "environment_start",
   "maintenance_check",
-  "maintenance_generate_all",
-  "maintenance_retry",
   "start_task",
   "start_candidate",
   "roadmap_parse",

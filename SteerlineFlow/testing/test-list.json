@@ -6,7 +6,7 @@
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.async-activities",
-      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测、准备与候选可发现，PR-ready保持等待；跨路由、320px模态、键盘焦点、观察断连保留、刷新及同构建重启原活动/Run不变，零新增执行输入，最终唯一交付及资源结算。",
+      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测与候选可发现，已移除的测试准备活动不再出现，PR-ready保持等待；跨路由、320px模态、键盘焦点、观察断连保留、刷新及同构建重启原活动/Run不变，零新增执行输入，最终唯一交付及资源结算。",
       "note": "Windows/Go/Git、Node/npm/Edge；先 npm --prefix web ci 和 npm --prefix web run build，场景只读共享资产/依赖，Web EXE由本次构建冻结；home/repo/DB/provider/端口/浏览器/证据独立，不依赖其他场景产物。总并发最多二；受控不证明真实模型/PR。"
     },
     {
@@ -114,7 +114,7 @@
       "level": "L4",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario runtime.project-maintenance",
-      "check": "新独立调试包中真实 Go/Web/Edge 验证快进、三版显式材料准备、独立候选、过期测试禁用、旧PR交付与跨项目隔离；模拟 Runner，停止与清理完整。",
+      "check": "新独立调试包中真实 Go/Web/Edge 验证快进、三版 Git 材料与测试安排、独立候选、过期测试禁用、旧PR交付与跨项目隔离；零补安排模型调用；模拟 Runner，停止与清理完整。",
       "note": "共享源码 web/node_modules 与构建输出，必须串行；需要 Windows、Node/npm、Edge；E2E 入口自建公开 Runner 夹具。"
     },
     {
@@ -150,7 +150,7 @@
       "level": "L4",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario testing.management-local-codex",
-      "check": "真实自动生成保存系统安排，原干净 Run 实际执行先通过再失败的测试程序，经 Runner progress-file、API 和浏览器核对通过/重跑未完成进度、独立版本及原绑定，原报告独立保存；停止和资源清理完整。",
+      "check": "读取已提交同名 JSON 并冻结安排，原干净 Run 实际执行先通过再失败的测试程序，经 Runner progress-file、API 和浏览器核对通过/重跑未完成进度、独立版本及原绑定，原报告独立保存；停止和资源清理完整。",
       "note": "共享源码 Web 构建目录，必须串行；需要固定 Runner、本机 Codex 登录、PowerShell 7、Node/npm/Edge，消耗真实模型；隔离包不发布 PR。"
     },
     {
@@ -248,7 +248,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.storage",
-      "check": "固定 ./internal/storage/sqlite、./internal/pathguard 普通测试完整执行，隔离数据库/路径，非零用例、零跳过、断言通过；含全部未完成任务材料/生成资格在候选事务内重核、阻断原子回滚及已有候选原请求重放；Roadmap 解析/文档/发布/入图活动的筛选分页、原请求关联、当前发布/入图/恢复命令、跨实例、重开及大正文精简投影。",
+      "check": "固定 ./internal/storage/sqlite、./internal/pathguard 普通测试完整执行，隔离数据库/路径，非零用例、零跳过、断言通过；含全部未完成任务Git 材料/测试快照资格在候选事务内重核、阻断原子回滚及已有候选原请求重放；Roadmap 解析/文档/发布/入图活动的筛选分页、原请求关联、当前发布/入图/恢复命令、跨实例、重开及大正文精简投影。",
       "note": "Go/Git；平台专属文件沿 Go 平台选择；不代表其他平台或 go.full 通过。"
     },
     {
@@ -257,7 +257,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.environment",
-      "check": "两组串行：environmentadaptation、environmentadaptation/model、testkit/remotetest、internal/executionconfig四owner全部普通Go测试；App固定八个environment*_test.go全部24声明根及TestPMReservationRejectsPendingEnvironmentObservation、TestDeveloperConfigurationOptions、TestDeveloperConfigurationLoad、TestDeveloperReadinessService、TestSharedEnvironmentMaterialsAndIndependentQualifications、TestPMSGenerationFreshnessAndCandidateVersions、TestPMSNativeConfigurationPrecheckSnapshot，共31声明根/全部子项；Windows执行31根，其他平台执行30根，仅TestProjectEnvironmentScriptReportsToolsWithoutChainChecks按明确windows属性排除，所有平台仍解析八个源文件检查漂移，不以skip通过。按(package,root)核对唯一开始/终态，包/根缺失、额外根、重复、skip、零匹配或一组失败均不通过。",
+      "check": "两组串行：environmentadaptation、environmentadaptation/model、testkit/remotetest、internal/executionconfig四owner全部普通Go测试；App固定八个environment*_test.go全部24声明根及TestPMReservationRejectsPendingEnvironmentObservation、TestDeveloperConfigurationOptions、TestDeveloperConfigurationLoad、TestDeveloperReadinessService、TestSharedEnvironmentMaterialsAndIndependentQualifications、TestPMSGitArrangementFreshnessAndCandidateVersions、TestPMSMaterialReadinessDoesNotDependOnGenerationProfiles，共31声明根/全部子项；Windows执行31根，其他平台执行30根，仅TestProjectEnvironmentScriptReportsToolsWithoutChainChecks按明确windows属性排除，所有平台仍解析八个源文件检查漂移，不以skip通过。按(package,root)核对唯一开始/终态，包/根缺失、额外根、重复、skip、零匹配或一组失败均不通过。",
       "note": "isolated；原环境准入/依据/分组/撤销/占用/材料/公开调用/重启结算与中性目标边界保留。App源文件/明确根名由固定Go定义和源清单守卫核对，新增/改名漂移阻断；其他App根继续在go.full，无真实环境成功承诺。"
     },
     {
@@ -277,15 +277,6 @@
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.runner-result",
       "check": "runneracceptance 标签下精确执行 TestProjectEnvironmentExecutionPublishedResultRoundTrip，原始结果来源、封存及资源清理断言通过。",
       "note": "显式 STEERRUNNER_EXE、STEERRUNNER_VERSION、STEERRUNNER_SHA256、STEERRUNNER_NATIVE_FIXTURE（Runner 提供的原生协议 fixture）；不证明真实模型或 PR。缺输入阻断。"
-    },
-    {
-      "id": "testing.material-generation",
-      "name": "项目维护材料准备与测试安排",
-      "level": "L3",
-      "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -env=controlled -scenario testing.material-generation",
-      "check": "公开任务创建后由项目维护显式登记异步准备，使已提交 Spec/Plan 与生成测试安排组成的材料闭环 ready；核对引用摘要、原提交/生成绑定与结果停止；重复准备及原请求重放复用有效结果，不新增 Runner 请求或业务候选，停止清理完整。",
-      "note": "Windows/Go/Git；独立 home/repo/DB/provider/端口/证据；允许准备 generate Run，无真实模型或外部 PR。可与配置等独立场景跨包并行，总并发二；不覆盖完整生成失败矩阵。"
     },
     {
       "id": "go.deployment",

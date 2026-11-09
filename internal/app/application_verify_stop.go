@@ -288,18 +288,11 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	} else if err = verifyStoppedCheckpoint(snapshot.Checkpoint, c, p, id); err != nil {
 		return proof, err
 	}
-	generations, err := reader.Generations(ctx, c.Identity())
-	if err != nil {
-		return proof, err
-	}
 	roadmaps, err := reader.Roadmaps(ctx, c.Identity())
 	if err != nil {
 		return proof, err
 	}
-	contents := make([]runnerbinding.Content, 0, len(generations)+len(roadmaps))
-	for _, g := range generations {
-		contents = append(contents, generationContent(g))
-	}
+	contents := make([]runnerbinding.Content, 0, len(roadmaps))
 	for _, r := range roadmaps {
 		contents = append(contents, roadmapContent(r))
 	}

@@ -1,16 +1,12 @@
-// Package model owns immutable test definitions and generation records.
+// Package model owns immutable test definitions and arrangement snapshots.
 // It has no Runner client, storage implementation or application dependencies.
 package model
 
 import (
-	"encoding/json"
 	"errors"
-
-	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"time"
 )
 
-var ErrNotFound = errors.New("test generation not found")
+var ErrNotFound = errors.New("test record not found")
 
 type Definition struct {
 	ID          string `json:"id"`
@@ -27,73 +23,11 @@ type Catalogue struct {
 
 // Snapshot is the complete frozen arrangement; prompt views never replace it.
 type Snapshot struct {
-	Project      ProjectEntry `json:"project"`
-	GenerationID string       `json:"generation_id,omitempty"`
-	Inputs       string       `json:"inputs,omitempty"`
-	Status       string       `json:"status"`
-	Diagnostic   string       `json:"diagnostic,omitempty"`
-	PlanPath     string       `json:"plan_path"`
-	Commit       string       `json:"commit"`
-	Definitions  []Definition `json:"definitions"`
-	Digest       string       `json:"digest,omitempty"`
-}
-type GenerateCommand struct {
-	RequestID string `json:"request_id"`
-	Plan      string `json:"plan"`
-	Profile   string `json:"profile"`
-	Commit    string `json:"commit,omitempty"`
-}
-type Source struct {
-	Path       string `json:"path"`
-	Digest     string `json:"digest"`
-	TextDigest string `json:"text_digest"`
-}
-type Generation struct {
-	ProjectEntry         ProjectEntry            `json:"project_entry"`
-	Inputs               string                  `json:"inputs"`
-	PlanText             string                  `json:"plan_text"`
-	ID                   string                  `json:"id"`
-	Project              string                  `json:"project"`
-	Revision             uint64                  `json:"revision"`
-	Command              GenerateCommand         `json:"command"`
-	CreatedAt            time.Time               `json:"created_at"`
-	Runner               runnercontract.BuildPin `json:"runner"`
-	Request              runnercontract.Request  `json:"runner_request"`
-	Sources              []Source                `json:"sources"`
-	Target               string                  `json:"target"`
-	Catalogue            Catalogue               `json:"catalogue"`
-	RunID                string                  `json:"run_id,omitempty"`
-	InputDigest          string                  `json:"input_digest,omitempty"`
-	Projection           *runnercontract.Run     `json:"report,omitempty"`
-	State                string                  `json:"state"`
-	Submission           string                  `json:"submission,omitempty"`
-	Diagnostic           string                  `json:"diagnostic,omitempty"`
-	SubmissionDiagnostic string                  `json:"submission_diagnostic,omitempty"`
-	Result               json.RawMessage         `json:"result,omitempty"`
-	Cancelled            bool                    `json:"cancelled"`
-	StopID               string                  `json:"stop_id,omitempty"`
-	StopRequest          *runnercontract.Request `json:"stop_request,omitempty"`
-	StopState            string                  `json:"stop_state,omitempty"`
-}
-
-// Pending is a durable outbox that has never entered Runner.Submit.
-func (g Generation) Unsubmitted() bool { return g.Submission == "pending" }
-
-// Retain the submission cause independently from the latest lookup failure.
-// Once the original Run is verified, normal current diagnostics take priority.
-func (g Generation) DiagnosticText() string {
-	if g.State == "unknown" && (g.RunID == "" || g.InputDigest == "") && g.SubmissionDiagnostic != "" && g.SubmissionDiagnostic != g.Diagnostic {
-		return "原提交：" + g.SubmissionDiagnostic + "；当前观察：" + g.Diagnostic
-	}
-	return g.Diagnostic
-}
-
-func (g Generation) Settled() bool {
-	return g.Unsubmitted() && g.Cancelled || g.State == "rejected" && g.RunID == "" || g.Projection != nil && g.Projection.StopStatus == "stopped"
-}
-
-// NeedsAttention is a display fact, not a terminal state or retry permission.
-func (g Generation) NeedsAttention() bool {
-	return g.State == "accepted" && !g.Cancelled && !g.Settled() && g.Projection != nil &&
-		(g.Projection.Status == "blocked" || g.Projection.Phase == "manual_intervention_required")
+	Project     ProjectEntry `json:"project"`
+	Status      string       `json:"status"`
+	Diagnostic  string       `json:"diagnostic,omitempty"`
+	PlanPath    string       `json:"plan_path"`
+	Commit      string       `json:"commit"`
+	Definitions []Definition `json:"definitions"`
+	Digest      string       `json:"digest,omitempty"`
 }

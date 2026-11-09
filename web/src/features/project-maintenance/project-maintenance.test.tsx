@@ -7,7 +7,6 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { GenerationProgress } from "./generation-progress";
 import { Link } from "react-router-dom";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
@@ -57,21 +56,12 @@ function setup(
         task_id: "101",
         contract: { plan_ref: { path: "SteerlineFlow/plans/task.plan.md" } },
         status: "ready",
-        generation_id: "generation",
       },
     ],
-    profiles: [{ id: "local", name: "本机Codex" }],
-    profile: "",
     ...overrides,
   };
   const api = new Api(identity, "csrf");
   const get = vi.spyOn(api, "get").mockImplementation(async (route) => {
-    if (route.startsWith("/tests/generations/"))
-      return {
-        state: "accepted",
-        run_id: "run-generation",
-        stop_status: "",
-      } as never;
     if (route.startsWith("/maintenance/log"))
       return { commits: [view.remote], more: false } as never;
     if (route.startsWith("/maintenance/commits/"))
@@ -96,23 +86,6 @@ function setup(
   return { api, get, submit, view };
 }
 
-it("registers first preparation without material rows or a remote observation", async () => {
-  const { submit } = setup({ tasks: [], observation: { commit: "" } });
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  const prepare = screen.getByRole("button", { name: "准备材料与测试安排" });
-  await waitFor(() => expect(prepare).toBeEnabled());
-  expect(submit).not.toHaveBeenCalled();
-  fireEvent.click(prepare);
-  await waitFor(() =>
-    expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "maintenance_generate_all",
-        payload: {},
-      }),
-    ),
-  );
-});
-
 it("opens project maintenance when arriving through the task link without preparing automatically", async () => {
   const { submit } = setup(
     {},
@@ -123,7 +96,7 @@ it("opens project maintenance when arriving through the task link without prepar
   );
   fireEvent.click(screen.getByRole("link", { name: "任务维护入口" }));
   expect(
-    await screen.findByRole("heading", { name: "准备材料与测试安排" }),
+    await screen.findByRole("heading", { name: "Git 任务材料与测试安排" }),
   ).toBeVisible();
   expect(screen.getByRole("button", { name: /项目维护/ })).toHaveAttribute(
     "aria-expanded",
@@ -138,40 +111,6 @@ it("opens project maintenance when arriving through the task link without prepar
   expect(submit).not.toHaveBeenCalled();
 });
 
-it("shows asynchronous material reading and prevents another registration while active", async () => {
-  const { submit } = setup({
-    generation_progress: {
-      id: "prepare",
-      status: "preparing",
-      total: 1,
-      succeeded: 0,
-      running: 0,
-      queued: 1,
-      failed: 0,
-      blocked: 0,
-    },
-  });
-  expect(await screen.findByText("0/1 正在读取和校验材料")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  expect(screen.getByRole("button", { name: "准备进行中" })).toBeDisabled();
-  expect(submit).not.toHaveBeenCalled();
-});
-
-it("shows an existing generation and stops it through the original generation action", async () => {
-  const { submit } = setup();
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  fireEvent.click(await screen.findByRole("button", { name: "查看生成执行" }));
-  fireEvent.click(await screen.findByRole("button", { name: "取消生成" }));
-  await waitFor(() =>
-    expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "maintenance_stop_generation",
-        target_id: "generation",
-        payload: { generation_id: "generation" },
-      }),
-    ),
-  );
-});
 it("PMS shows remote/local meaning and only the update workflow", async () => {
   const { get, submit } = setup();
   fireEvent.click(await screen.findByRole("button", { name: /项目维护/ }));
@@ -228,32 +167,6 @@ it("PMS lets users browse log and real associated PR without mutation", async ()
   ).toBeVisible();
   expect(submit).not.toHaveBeenCalled();
 });
-it("PMS exposes configuration and explicit failed retry only on problems", async () => {
-  const { submit } = setup({
-    tasks: [
-      {
-        task_id: "101",
-        contract: { plan_ref: { path: "SteerlineFlow/plans/task.plan.md" } },
-        status: "configuration_required",
-        generation_id: "",
-      },
-    ],
-  });
-  fireEvent.click(await screen.findByRole("button", { name: /项目维护/ }));
-  fireEvent.change(
-    await screen.findByRole("combobox", { name: "测试生成方案" }),
-    { target: { value: "local" } },
-  );
-  fireEvent.click(screen.getByRole("button", { name: "保存测试生成方案" }));
-  await waitFor(() =>
-    expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "maintenance_profile",
-        payload: { profile: "local" },
-      }),
-    ),
-  );
-});
 it("PMS offline view retains facts and does not submit or check automatically", async () => {
   const { get, submit } = setup({}, false);
   fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
@@ -261,225 +174,6 @@ it("PMS offline view retains facts and does not submit or check automatically", 
   expect(screen.getByText(/离线/)).toBeVisible();
   expect(get).not.toHaveBeenCalled();
   expect(submit).not.toHaveBeenCalled();
-});
-
-it("GQ keeps progress in the collapsed title and submits one bulk command", async () => {
-  const { submit } = setup({
-    tasks: [
-      {
-        task_id: "101",
-        contract: { plan_ref: { path: "SteerlineFlow/plans/task.plan.md" } },
-        status: "accepted",
-        generation_id: "generation",
-      },
-    ],
-    generation_progress: {
-      id: "batch",
-      total: 9,
-      succeeded: 8,
-      running: 1,
-      queued: 0,
-      failed: 0,
-      blocked: 0,
-    },
-  });
-  expect(await screen.findByText("8/9 生成中")).toBeVisible();
-  const toggle = screen.getByRole("button", { name: /项目维护/ });
-  expect(toggle).toHaveAttribute("aria-expanded", "false");
-  expect(screen.getByLabelText("正在生成")).toBeVisible();
-  fireEvent.click(toggle);
-  fireEvent.click(screen.getByRole("button", { name: "准备材料与测试安排" }));
-  await waitFor(() =>
-    expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "maintenance_generate_all",
-        target_id: identity.project_id,
-        payload: {},
-      }),
-    ),
-  );
-  fireEvent.click(toggle);
-  expect(screen.getByText("8/9 生成中")).toBeVisible();
-  expect(submit).toHaveBeenCalledTimes(1);
-});
-
-it("shows four ready arrangements and one blocked original without a perpetual spinner", async () => {
-  const { submit } = setup({
-    tasks: [
-      {
-        task_id: "102",
-        contract: { plan_ref: { path: "native-102.plan.md" } },
-        status: "accepted",
-        generation_id: "original",
-        needs_attention: true,
-        can_retry: false,
-        diagnostic: "Original operation reconciliation deadline exhausted",
-      },
-    ],
-    generation_progress: {
-      id: "batch",
-      status: "generating",
-      total: 5,
-      succeeded: 4,
-      running: 1,
-      attention: 1,
-      queued: 0,
-      failed: 0,
-      blocked: 0,
-    },
-  });
-  expect(await screen.findByText("4/5 生成受阻，1 项需处理")).toBeVisible();
-  expect(screen.queryByLabelText("正在生成")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  expect(screen.getByText("#102 · 生成受阻，需人工处理")).toBeVisible();
-  expect(
-    screen.getByText("Original operation reconciliation deadline exhausted"),
-  ).toBeVisible();
-  expect(screen.queryByRole("button", { name: "重试生成" })).toBeNull();
-  expect(submit).not.toHaveBeenCalled();
-});
-
-it("keeps the spinner while another generation is running alongside a blocked one", () => {
-  render(
-    <GenerationProgress
-      value={{
-        id: "mixed",
-        status: "generating",
-        total: 5,
-        succeeded: 3,
-        running: 2,
-        attention: 1,
-        queued: 0,
-        failed: 0,
-        blocked: 0,
-      }}
-      online
-    />,
-  );
-  expect(screen.getByText("3/5 生成中，1 项需处理")).toBeVisible();
-  expect(screen.getByLabelText("正在生成")).toBeVisible();
-});
-
-it.each([false, true])(
-  "uses server retry permission after cancellation (settled=%s)",
-  async (settled) => {
-    const { get, submit, view } = setup({
-      tasks: [
-        {
-          task_id: "102",
-          status: "cancelled",
-          generation_id: "original",
-          contract: { plan_ref: { path: "native-102.plan.md" } },
-          can_retry: settled,
-        },
-      ],
-    });
-    get.mockImplementation(async (route) =>
-      route.startsWith("/tests/generations/")
-        ? ({
-            state: "cancelled",
-            settled,
-            stop_status: settled ? "stopped" : "",
-          } as never)
-        : (view as never),
-    );
-    fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-    const retry = await screen.findByRole("button", { name: "重试生成" });
-    if (settled) expect(retry).toBeEnabled();
-    else expect(retry).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "查看生成执行" }));
-    if (!settled) expect(await screen.findByText("等待停止确认")).toBeVisible();
-    fireEvent.click(retry);
-    if (settled) {
-      await waitFor(() =>
-        expect(submit).toHaveBeenCalledWith(
-          expect.objectContaining({
-            action: "maintenance_retry",
-            target_id: "102",
-            payload: { task_id: "102" },
-          }),
-        ),
-      );
-    } else {
-      expect(submit).not.toHaveBeenCalled();
-    }
-  },
-);
-
-it("GQ hides success after five seconds using the backend completion timestamp", () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date("2026-10-22T00:00:00Z"));
-  const value = {
-    id: "batch",
-    total: 9,
-    succeeded: 9,
-    queued: 0,
-    running: 0,
-    failed: 0,
-    blocked: 0,
-    completed_at: new Date().toISOString(),
-  };
-  const mounted = render(<GenerationProgress value={value} online />);
-  expect(screen.getByText("9/9 生成完毕")).toBeVisible();
-  act(() => vi.advanceTimersByTime(4999));
-  expect(screen.getByText("9/9 生成完毕")).toBeVisible();
-  act(() => vi.advanceTimersByTime(1));
-  expect(screen.queryByRole("status")).toBeNull();
-  mounted.unmount();
-  render(<GenerationProgress value={value} online />);
-  expect(screen.queryByRole("status")).toBeNull();
-});
-
-it("GQ retains failures and stops the spinner for pending verification", () => {
-  vi.useFakeTimers();
-  render(
-    <GenerationProgress
-      value={{
-        id: "batch",
-        total: 9,
-        succeeded: 8,
-        queued: 0,
-        running: 0,
-        failed: 1,
-        blocked: 0,
-      }}
-      online
-    />,
-  );
-  act(() => vi.advanceTimersByTime(60000));
-  expect(screen.getByText("8/9 已生成，1 项失败")).toBeVisible();
-  expect(screen.queryByLabelText("正在生成")).toBeNull();
-});
-
-it("GQ polling delay does not shorten the five-second notice or reset it on remount", () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date("2026-10-22T00:00:00Z"));
-  const active = {
-    id: "delayed",
-    total: 1,
-    succeeded: 0,
-    queued: 0,
-    running: 1,
-    failed: 0,
-    blocked: 0,
-  };
-  const mounted = render(<GenerationProgress value={active} online />);
-  const completed = {
-    ...active,
-    succeeded: 1,
-    running: 0,
-    completed_at: new Date().toISOString(),
-  };
-  act(() => vi.advanceTimersByTime(8000));
-  mounted.rerender(<GenerationProgress value={completed} online />);
-  expect(screen.getByText("1/1 生成完毕")).toBeVisible();
-  act(() => vi.advanceTimersByTime(2000));
-  mounted.unmount();
-  render(<GenerationProgress value={completed} online />);
-  act(() => vi.advanceTimersByTime(2999));
-  expect(screen.getByText("1/1 生成完毕")).toBeVisible();
-  act(() => vi.advanceTimersByTime(1));
-  expect(screen.queryByRole("status")).toBeNull();
 });
 
 it("keeps a binary project status and follows the server verdict instead of individual rows", async () => {
@@ -509,4 +203,15 @@ it("keeps a binary project status and follows the server verdict instead of indi
     await screen.findByRole("button", { name: "项目维护 · 未就绪" }),
   ).toBeVisible();
   expect(screen.getByText("任务 #99 的材料与测试安排未就绪")).toBeVisible();
+});
+
+it("shows committed arrangement paths and errors without generation controls",async()=>{
+ const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"SteerlineFlow/plans/task.plan.md"}},status:"invalid",diagnostic:"task.tests.json: unknown test ID"}]});
+ fireEvent.click(await screen.findByRole("button",{name:/项目维护/}));
+ expect(screen.getByText("SteerlineFlow/plans/task.tests.json")).toBeVisible();
+ expect(screen.getByRole("alert")).toHaveTextContent("unknown test ID");
+ expect(screen.queryByRole("button",{name:"准备材料与测试安排"})).toBeNull();
+ expect(screen.queryByRole("button",{name:"重试生成"})).toBeNull();
+ expect(screen.queryByLabelText("测试生成方案")).toBeNull();
+ expect(submit).not.toHaveBeenCalled();
 });

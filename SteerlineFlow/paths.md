@@ -28,13 +28,13 @@
 | `SteerlineProjectGuideDoc/` | SteerLine 统一提供的固定规范；本项目流程定制归 SteerlineFlow。 |
 | `SteerlineFlow/README.md`、`SteerlineFlow/paths.md` | 流程内容索引与本路径清单。 |
 | `SteerlineFlow/environment.md`、`SteerlineFlow/scripts/verify-environment.ps1/sh` | 所有目标共用的项目环境要求及检测入口，资格按项目×运行机×链路分别保存；manifest5 仅声明入口、解释器及检测辅助程序/运行要求配置，version3 最终结果通过 Runner 封存。项目测试、业务文档、Spec/Plan、roadmap 不属于资格依据。平台只调用一次并消费结果，无平台协议副本或阶段编排。材料存在不等于 ready。 |
-| `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan；执行时还须固定实际 commit。 |
+| `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan 及同名 `.tests.json`；安排随材料入 Git，执行时固定实际 commit。 |
 | `SteerlineFlow/Roadmap/execution-map.md` | 已确认任务、依赖、执行及验收汇总。 |
 | `SteerlineFlow/Roadmap/RoadmapGuide.md` | 本项目定制的 roadmap 维护规则。 |
 | `SteerlineFlow/Roadmap/parse-rules.md`、`document-rules.md`、`SteerlineFlow/spec/SpecGuide.md` | `project prepare-roadmap` 显式初始化/检查的静态材料；规则和默认指南的唯一打包来源为 internal/prompts/materials，不在运行时补写。 |
 | `SteerlineFlow/Roadmap/drafts/`、`SteerlineFlow/Roadmap/task-ids/` | 候选讨论与永久任务身份；身份分配不等于执行授权。 |
 | `SteerlineFlow/environment-project.json` | version1 任务测试入口，仅定位任务测试公共要求与正式清单；测试安排、候选测试及记录共用同提交来源。 |
-| `SteerlineFlow/testing.md`、`SteerlineFlow/testing/test-list.json` | 本仓库入口声明的测试规范和机器定义，其他受管项目可声明自己的实际路径。与 Plan 及固定测试协议一起作为系统测试安排输入。 |
+| `SteerlineFlow/testing.md`、`SteerlineFlow/testing/test-list.json` | 本仓库入口声明的测试规范和机器定义，其他受管项目可声明自己的实际路径。材料阶段供模型选择；执行阶段按同名 `.tests.json` 展开同提交完整定义。 |
 | `SteerlineFlow/testing/l1.md` 至 `l4.md` | 可读测试列表；ID、级别、环境及入口须与清单一致。 |
 | `SteerlineFlow/testing/reports.md` | 报告格式、Git 历史导出和读取规则；不是某次原始报告。 |
 | `SteerlineFlow/testing/records/<完整受测 SHA>.json` | 按受测提交保存的简洁历史，随 PR 合入；SteerLine 只读已核实主分支中的文件，删除文件可清理页面历史。 |

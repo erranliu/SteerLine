@@ -29,7 +29,7 @@ func testPathCatalog(t *testing.T) *runnerclient.Catalog {
 	return cat
 }
 func TestTMCommittedPlanSnapshot(t *testing.T) {
-	m, store, _ := pmsFixture(t)
+	m, store := pmsFixture(t)
 	c := m.config
 	work := callerFrozenWork(t, m, store.contract)
 	raw := work.FrozenTestPlan
@@ -82,7 +82,7 @@ func callerFrozenWork(t *testing.T, m *projectMaintenance, contract taskmodel.Ta
 	require(t, err)
 	catalogue, err := testmanagement.ParseCatalogue(body)
 	require(t, err)
-	snap := testmanagement.Snapshot{Project: entry, Status: "ready", PlanPath: contract.PlanRef.Path, Commit: contract.PlanRef.Commit, GenerationID: "original", Definitions: catalogue.Tests, Digest: testmanagement.Digest(catalogue.Tests)}
+	snap := testmanagement.Snapshot{Project: entry, Status: "ready", PlanPath: contract.PlanRef.Path, Commit: contract.PlanRef.Commit, Definitions: catalogue.Tests, Digest: testmanagement.Digest(catalogue.Tests)}
 	raw, err := json.Marshal(snap)
 	require(t, err)
 	return taskmodel.FixedWork{FrozenTestPlan: raw, Contract: contract}
@@ -92,7 +92,7 @@ func callerTestRun() runnerclient.RunInput {
 }
 
 func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
-	m, store, _ := pmsFixture(t)
+	m, store := pmsFixture(t)
 	ctx := context.Background()
 	for _, mode := range []string{"missing", "same", "crlf", "different"} {
 		t.Run(mode, func(t *testing.T) {
@@ -231,7 +231,7 @@ func testReadOnlyPrompt(t *testing.T) string {
 }
 
 func TestTMCommittedPlanUsesSameCustomProjectSources(t *testing.T) {
-	m, store, _ := pmsFixture(t)
+	m, store := pmsFixture(t)
 	for old, path := range map[string]string{testmodel.RulesPath: "quality/policy.md", testmodel.CataloguePath: "quality/cases.json"} {
 		body, err := os.ReadFile(filepath.Join(m.config.Repository, old))
 		require(t, err)
@@ -251,5 +251,29 @@ func TestTMCommittedPlanUsesSameCustomProjectSources(t *testing.T) {
 	body := run.Workflow.PromptOverrides["implement.execute"]
 	if len(run.Documents.References) != 0 || strings.Contains(body, "quality/") || strings.Contains(body, testmodel.CataloguePath) || strings.Contains(body, testmodel.RulesPath) {
 		t.Fatal("static testing sources leaked into the prompt", body)
+	}
+}
+
+func TestTMCommittedArrangementWhitespaceUsesCanonicalChannelLimit(t *testing.T) {
+	m, store := pmsFixture(t)
+	body := strings.Repeat(" ", 70<<10) + `{"tests":["one"]}`
+	require(t, os.WriteFile(filepath.Join(m.config.Repository, "task.tests.json"), []byte(body), 0600))
+	pmGit(t, m.config.Repository, "add", ".")
+	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "-qm", "formatted arrangement")
+	pmGit(t, m.config.Repository, "push", "origin", "main")
+	_, err := m.check(context.Background())
+	require(t, err)
+	require(t, m.refresh(context.Background()))
+	material := store.materials["101"]
+	if material.Status != "ready" {
+		t.Fatal(material)
+	}
+	run := callerTestRun()
+	_, err = m.config.prepareTestPlan(context.Background(), taskmodel.FixedWork{Contract: material.Contract, FrozenTestPlan: material.TestPlan}, &run)
+	require(t, err)
+	raw, err := base64.StdEncoding.DecodeString(run.ResultFile.InitialContentBase64)
+	require(t, err)
+	if string(raw) != `{"tests":["one"]}` {
+		t.Fatal("raw formatting consumed Runner channel budget")
 	}
 }

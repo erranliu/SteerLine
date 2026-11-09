@@ -97,8 +97,8 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	// This dedicated task intentionally ends before publication. The driver owns
 	// the deterministic test inputs, while Codex supplies a real original Run.
 	spec := "# Test result consumption fixture\n\nNo implementation or publication is requested. Do not edit, commit or push files, do not run publish.ps1, and do not report implementation success. Inspect the original Plan, then finish with a clear BLOCKED diagnosis: deterministic tests are owned by the external acceptance driver. Do not fabricate test results.\n\n## Acceptance\n\nTracked files remain unchanged; the original Codex turn honestly reports the external-driver boundary. No publication.\n"
-	plan := "# Test result consumption plan\n\nThis Plan requires exactly one automatic test: fixture.marker from the catalog. The arrangement MUST be {\"tests\":[\"fixture.marker\"]}; an empty selection would omit the mandatory acceptance test even though product code is unchanged. Its actual program checks the run-owned ignored input. The external driver executes it once with passing input and once with failing input, in fresh .steerrunner/artifacts directories. No code change or publication is required.\n\n## 测试计划\n\n系统自动生成测试安排：fixture.marker, L1, isolated. Command: pwsh -NoProfile -ExecutionPolicy Bypass -File ./test-marker.ps1 -Out .steerrunner/artifacts/<unique-execution>. Pass requires exit 0, a real assertion, original summary and managed report on clean unchanged commit. The second actual assertion must fail with exit 1. The entry updates the runtime progress file only after a real assertion passes; failure remains incomplete. Raw reports remain independent; external acceptance verifies API and browser progress.\n"
-	for path, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": spec, "SteerlineFlow/plans/task.plan.md": plan} {
+	plan := "# Test result consumption plan\n\nThis Plan requires exactly one automatic test: fixture.marker from the catalog. The arrangement MUST be {\"tests\":[\"fixture.marker\"]}; an empty selection would omit the mandatory acceptance test even though product code is unchanged. Its actual program checks the run-owned ignored input. The external driver executes it once with passing input and once with failing input, in fresh .steerrunner/artifacts directories. No code change or publication is required.\n\n## 测试计划\n\nGit 同名 JSON 固定测试安排：fixture.marker, L1, isolated. Command: pwsh -NoProfile -ExecutionPolicy Bypass -File ./test-marker.ps1 -Out .steerrunner/artifacts/<unique-execution>. Pass requires exit 0, a real assertion, original summary and managed report on clean unchanged commit. The second actual assertion must fail with exit 1. The entry updates the runtime progress file only after a real assertion passes; failure remains incomplete. Raw reports remain independent; external acceptance verifies API and browser progress.\n"
+	for path, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": spec, "SteerlineFlow/plans/task.plan.md": plan, "SteerlineFlow/plans/task.tests.json": `{"tests":["fixture.marker"]}`} {
 		if err := os.WriteFile(filepath.Join(d.repo, filepath.FromSlash(path)), []byte(body), 0600); err != nil {
 			return err
 		}
@@ -187,25 +187,6 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	if err != nil {
 		return err
 	}
-	request := material.GenerationID
-	var generation api.TestGeneration
-	err = tmPoll(ctx, func() (bool, error) {
-		var e error
-		generation, e = p.TestGeneration(ctx, request)
-		if e != nil {
-			return false, e
-		}
-		if generation.State == "failed" || generation.State == "invalid" || generation.State == "rejected" {
-			return false, fmt.Errorf("automatic generation: %+v", generation)
-		}
-		return generation.State == "generated" && generation.StopStatus == "stopped", nil
-	})
-	if err != nil {
-		return err
-	}
-	if err = controlled.Write(filepath.Join(out, "generation.json"), generation); err != nil {
-		return err
-	}
 	var catalog struct {
 		Runner runnerclient.Selection `json:"runner"`
 	}
@@ -226,18 +207,6 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	}
 	runner.InstanceID = status.InstanceID
 	proof.RunnerSHA256 = catalog.Runner.SHA256
-	gen, err := runner.Inspect(ctx, "run-id", generation.RunID)
-	if err != nil {
-		return err
-	}
-	if gen.Run == nil || gen.Run.Workflow.ID != "generate" || gen.Run.Final == nil || !gen.Run.Final.Verified || gen.Run.ContentResult == nil {
-		return errors.New("real generate source unverified")
-	}
-	proof.GenerationRun = gen.Run.RunID
-	proof.GenerationSource = gen.Run.Final.Source
-	if err = controlled.Write(filepath.Join(out, "generation-run.json"), gen); err != nil {
-		return err
-	}
 	resumed, err := tmControl(ctx, p, out, "resume", api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RequestedBy: "testing-driver"})
 	if err != nil {
 		return err
@@ -325,11 +294,15 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	if e != nil {
 		return e
 	}
-	definitions, e := testmanagement.Select(generation.Result, catalogue)
+	arrangementText, e := d.git("show", head+":SteerlineFlow/plans/task.tests.json")
 	if e != nil {
 		return e
 	}
-	expectedSnapshot, e := json.Marshal(testmanagement.Snapshot{Project: projectEntry, GenerationID: generation.ID, Inputs: material.Inputs, Status: "ready", PlanPath: material.Contract.PlanRef.Path, Commit: material.Commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)})
+	definitions, e := testmanagement.Select([]byte(arrangementText), catalogue)
+	if e != nil {
+		return e
+	}
+	expectedSnapshot, e := json.Marshal(testmanagement.Snapshot{Project: projectEntry, Status: "ready", PlanPath: material.Contract.PlanRef.Path, Commit: material.Commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)})
 	if e != nil {
 		return e
 	}
@@ -367,7 +340,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 		return errors.New("system snapshot written to worktree")
 	}
 
-	if e = controlled.Write(filepath.Join(out, "system-snapshot-binding.json"), map[string]any{"passed": true, "generation_id": generation.ID, "inputs": material.Inputs, "snapshot_digest": snapshotDigest, "materials": original.Materials}); e != nil {
+	if e = controlled.Write(filepath.Join(out, "system-snapshot-binding.json"), map[string]any{"passed": true, "arrangement_path": "SteerlineFlow/plans/task.tests.json", "snapshot_digest": snapshotDigest, "materials": original.Materials}); e != nil {
 		return e
 	}
 	if original.PR != nil {
@@ -532,8 +505,8 @@ func tmPoll(ctx context.Context, check func() (bool, error)) error {
 	}
 }
 
-// WaitFixtureMaterials registers preparation through project maintenance. It never
-// supplies a result, writes an arrangement, or approves a material version.
+// WaitFixtureMaterials only observes the committed arrangement. It cannot
+// register generation, supply a result, or approve a material version.
 func WaitFixtureMaterials(ctx context.Context, home string, identity httpcontract.Identity, plan, out string) (pmm.Material, error) {
 	var material pmm.Material
 	if err := os.MkdirAll(out, 0700); err != nil {
@@ -544,15 +517,6 @@ func WaitFixtureMaterials(ctx context.Context, home string, identity httpcontrac
 		return material, e
 	}
 	defer client.Close()
-	body := json.RawMessage(`{}`)
-	in := httpcontract.CommandEnvelope{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "maintenance_generate_all", TargetID: identity.ProjectID, ExpectedVersion: 1, Payload: body}
-	var response httpcontract.CommandResponse
-	if e = client.Post(ctx, "/projects/"+identity.ProjectID+"/commands", in, &response); e != nil {
-		return material, e
-	}
-	if response.Status != "applied" {
-		return material, fmt.Errorf("automatic material check: %+v", response)
-	}
 	e = tmPoll(ctx, func() (bool, error) {
 		var view struct {
 			Tasks []pmm.Material `json:"tasks"`

@@ -158,12 +158,12 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 	}
 	var testing testmodel.Snapshot
 	testingBound := len(c.TestPlan) > 0 && json.Unmarshal(c.TestPlan, &testing) == nil && testing.PlanPath == work.Contract.PlanRef.Path && testing.Commit == work.Contract.PlanRef.Commit
-	testingReady := testingBound && testing.Status == "ready"
+	testingReady := testingBound && testing.Status == "ready" && testing.Digest == digestValue(testing.Definitions)
 	if testingReady {
 		arrangement, err := testmodel.FrozenArrangement(testing)
 		if err != nil || len(arrangement) > runnercontract.MaxProgressBytes || input.ResultFile == nil ||
 			input.ResultFile.InitialContentBase64 != base64.StdEncoding.EncodeToString(arrangement) {
-			return nativeErr("contract_mismatch", "Runner test input file differs from the frozen generated arrangement")
+			return nativeErr("contract_mismatch", "Runner test input file differs from the frozen Git arrangement")
 		}
 		context, err := prompts.TestingContext(c.TestPlan)
 		if err != nil {
@@ -173,7 +173,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			return nativeErr("contract_mismatch", "system test snapshot is absent from frozen prompt context")
 		}
 	} else if input.ResultFile != nil {
-		return nativeErr("contract_mismatch", "Runner test input file has no frozen generated arrangement")
+		return nativeErr("contract_mismatch", "Runner test input file has no frozen Git arrangement")
 	}
 	seenRefs := map[string]bool{}
 	for _, doc := range input.Documents.References {
@@ -314,20 +314,8 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			if json.Unmarshal(raw, &current) != nil || current.Digest != c.MaterialDigest || current.Status != "ready" {
 				return nativeErr("materials_changed", "latest materials changed before reservation")
 			}
-			if digestValue(current.Contract) != digestValue(work.Contract) || !testingReady || !bytes.Equal(current.TestPlan, c.TestPlan) || testing.GenerationID != current.GenerationID || testing.Inputs != current.Inputs {
+			if digestValue(current.Contract) != digestValue(work.Contract) || !testingReady || !bytes.Equal(current.TestPlan, c.TestPlan) {
 				return nativeErr("materials_changed", "candidate does not bind latest complete materials")
-			}
-			var generationRaw []byte
-			if e := tx.tx.QueryRowContext(ctx, `SELECT payload FROM test_generations WHERE project_identity=? AND generation_id=?`, c.Project, current.GenerationID).Scan(&generationRaw); e != nil {
-				return e
-			}
-			var generation testmodel.Generation
-			if json.Unmarshal(generationRaw, &generation) != nil || generation.State != "generated" || generation.Cancelled || generation.Inputs != current.Inputs {
-				return nativeErr("materials_changed", "generation is no longer ready")
-			}
-			definitions, e := testmodel.Select(generation.Result, generation.Catalogue)
-			if e != nil || digestValue(definitions) != digestValue(testing.Definitions) || digestValue(generation.ProjectEntry) != digestValue(testing.Project) {
-				return nativeErr("contract_mismatch", "generated test definitions differ from frozen input")
 			}
 
 		}

@@ -72,7 +72,7 @@ func (p *testManagementPort) TestRecords(ctx context.Context, in api.TestRecordF
 	if err != nil {
 		return nil, err
 	}
-	page, err := snapshot.List(p.service.Project, testmanagement.RecordFilter(in))
+	page, err := snapshot.List(p.project, testmanagement.RecordFilter(in))
 	if errors.Is(err, testmanagement.ErrInvalidRecordFilter) {
 		return nil, &api.Error{Kind: api.InvalidInput, Message: err.Error()}
 	}

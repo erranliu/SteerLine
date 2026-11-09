@@ -157,9 +157,9 @@ func TestRoadmapDocumentsRequireCompleteVerifiedSafeSet(t *testing.T) {
 		a := sampleAnalysis()
 		r := model.Record{Analysis: &a, ConfirmedDigest: model.ValueDigest(a), CodeCommit: strings.Repeat("a", 40), DocumentsVerified: true}
 		for _, n := range a.Tasks {
-			r.Documents = append(r.Documents, model.Documents{Key: n.Key,
+			r.Documents = append(r.Documents, model.Documents{Key: n.Key, Tests: []string{},
 				Spec:       model.Document{Path: "SteerlineFlow/spec/" + n.Key + ".spec.md", Body: "# Spec"},
-				Plan:       model.Document{Path: "SteerlineFlow/plans/" + n.Key + ".plan.md", Body: "# Plan"},
+				Plan:       model.Document{Path: "SteerlineFlow/plans/" + n.Key + ".plan.md", Body: "# Plan\n无需自动测试：文档"},
 				Acceptance: []model.Document{{Path: "SteerlineFlow/testing/acceptance/" + n.Key + ".md", Body: "# 验收"}}})
 		}
 		return r

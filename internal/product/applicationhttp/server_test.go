@@ -77,12 +77,12 @@ func TestUnifiedStartupAuthenticationRoutesAndUnavailable(t *testing.T) {
 }
 
 func TestPMReadRoutesKeepMaintenanceWritesOnCommands(t *testing.T) {
-	for _, route := range []string{"/maintenance", "/maintenance/readiness", "/maintenance/tasks/1", "/tests/generations/" + strings.Repeat("a", 32)} {
+	for _, route := range []string{"/maintenance", "/maintenance/readiness", "/maintenance/tasks/1"} {
 		if !httpcontract.AllowedProjectRead(route) {
 			t.Fatal("missing read", route)
 		}
 	}
-	for _, route := range []string{"/maintenance/apply", "/maintenance/generate/extra", "/tests/apply", "/maintenance/tasks/../1"} {
+	for _, route := range []string{"/tests/generations/" + strings.Repeat("a", 32), "/maintenance/apply", "/maintenance/generate/extra", "/tests/apply", "/maintenance/tasks/../1"} {
 		if httpcontract.AllowedProjectRead(route) {
 			t.Fatal("mutation or traversal read", route)
 		}

@@ -16,8 +16,10 @@ import (
 	"time"
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
+	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 type roadmapPR struct {
@@ -159,10 +161,26 @@ func (p *roadmapPort) publicationFiles(ctx context.Context, r roadmap.Record) (m
 	if e := roadmap.ValidateDocuments(r); e != nil {
 		return nil, e
 	}
+	catalogue, err := roadmapservice.TestCatalogue(r)
+	if err != nil {
+		return nil, err
+	}
+	if err = roadmapservice.ValidateTestIDs(r, catalogue); err != nil {
+		return nil, err
+	}
 	out := map[string]string{}
 	for _, d := range r.Documents {
 		out[d.Spec.Path] = d.Spec.Body
 		out[d.Plan.Path] = d.Plan.Body
+		name, err := tm.ArrangementPath(d.Plan.Path)
+		if err != nil {
+			return nil, err
+		}
+		body, err := roadmap.TestsJSON(d)
+		if err != nil {
+			return nil, err
+		}
+		out[name] = body
 		for _, a := range d.Acceptance {
 			out[a.Path] = a.Body
 		}

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
 	"path"
 	"regexp"
@@ -48,6 +49,15 @@ func ValidateDocuments(r Record) error {
 		if e := check(d.Plan, "SteerlineFlow/plans/"); e != nil {
 			return e
 		}
+		rawTests, err := TestsJSON(d)
+		if err != nil {
+			return err
+		}
+		total += len(rawTests)
+		if total > MaxBytes {
+			return errors.New("完整文档与测试选择超过大小上限")
+		}
+
 		if len(d.Acceptance) == 0 {
 			return errors.New("任务缺少专属验收材料")
 		}
@@ -61,4 +71,25 @@ func ValidateDocuments(r Record) error {
 		return errors.New("正式文档集不完整，不能发布")
 	}
 	return nil
+}
+
+// TestsJSON is the single encoding of the committed arrangement.
+func TestsJSON(d Documents) (string, error) {
+	if d.Tests == nil {
+		return "", errors.New("任务缺少测试选择数组")
+	}
+	raw, err := json.Marshal(struct {
+		Tests []string `json:"tests"`
+	}{d.Tests})
+	if err != nil {
+		return "", err
+	}
+	seen := map[string]bool{}
+	for _, id := range d.Tests {
+		if id == "" || seen[id] {
+			return "", errors.New("测试ID为空或重复")
+		}
+		seen[id] = true
+	}
+	return string(raw) + "\n", nil
 }

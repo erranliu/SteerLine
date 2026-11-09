@@ -163,28 +163,6 @@ func TestLocalEnvironmentL4FrozenProfileAndTarget(t *testing.T) {
 	if Selected("testing.project-environment-generation") {
 		t.Fatal("retired generation is still selected")
 	}
-	generation := executionconfig.Profile{ID: "generation-local", Name: "Explicit generation", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}
-	generationPath := filepath.Join(t.TempDir(), "generation.json")
-	raw, _ := json.Marshal(generation)
-	if err := os.WriteFile(generationPath, raw, 0600); err != nil {
-		t.Fatal(err)
-	}
-	vars["STEERLINE_L4_GENERATION_PROFILE"] = generationPath
-	in, err = Load(LocalEnvironment, func(k string) string { return vars[k] })
-	if err != nil || in.GenerationProfile == nil || in.GenerationProfile.ID != generation.ID || in.ExecutionDigest != Digest(p.Execution) {
-		t.Fatal("explicit generator changed the tested execution", in, err)
-	}
-	_ = os.WriteFile(generationPath, []byte("changed"), 0600)
-	if in.GenerationProfile.ID != generation.ID {
-		t.Fatal("generator snapshot changed with source file")
-	}
-	generation.ID = p.ID
-	raw, _ = json.Marshal(generation)
-	_ = os.WriteFile(generationPath, raw, 0600)
-	if _, err := Load(LocalEnvironment, func(k string) string { return vars[k] }); err == nil {
-		t.Fatal("duplicate tested/generation profile ID accepted")
-	}
-	delete(vars, "STEERLINE_L4_GENERATION_PROFILE")
 	p.Execution.Target = runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}
 	b, _ = json.Marshal(p)
 	_ = os.WriteFile(path, b, 0600)

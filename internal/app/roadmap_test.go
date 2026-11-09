@@ -205,8 +205,8 @@ func TestRoadmapPublicationRejectsAnotherInFlightGeneration(t *testing.T) {
 	old := roadmap.Record{ID: strings.Repeat("a", 32), RequestID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1,
 		Source: roadmap.Source{ID: strings.Repeat("b", 32)}, Analysis: &a, ConfirmedDigest: roadmap.ValueDigest(a), CodeCommit: commit,
 		State: "publishing", DocumentsVerified: true,
-		Documents: []roadmap.Documents{{Key: "T1", Spec: roadmap.Document{Path: "SteerlineFlow/spec/one.md", Body: "# Spec"},
-			Plan: roadmap.Document{Path: "SteerlineFlow/plans/one.md", Body: "# Plan"}, Acceptance: []roadmap.Document{{Path: "SteerlineFlow/testing/acceptance/one.md", Body: "# 验收"}}}},
+		Documents: []roadmap.Documents{{Key: "T1", Tests: []string{}, Spec: roadmap.Document{Path: "SteerlineFlow/spec/one.md", Body: "# Spec"},
+			Plan: roadmap.Document{Path: "SteerlineFlow/plans/one.plan.md", Body: "# Plan\n无需自动测试：文档"}, Acceptance: []roadmap.Document{{Path: "SteerlineFlow/testing/acceptance/one.md", Body: "# 验收"}}}},
 		Publication: &roadmap.Publication{RequestID: strings.Repeat("e", 32), State: "pr_unknown"}}
 	require(t, store.SaveRoadmap(ctx, old, 0))
 	current := old

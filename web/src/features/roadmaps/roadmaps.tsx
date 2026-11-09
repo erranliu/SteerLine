@@ -42,6 +42,7 @@ type Documents = {
   local_key: string;
   spec: File;
   plan: File;
+  tests: string[];
   acceptance: File[];
 };
 export type RoadmapRecord = {
@@ -149,7 +150,7 @@ export function Roadmaps() {
     [error, setError] = useState(""),
     [tab, setTab] = useState<"source" | "json">("source");
   const [documentKey, setDocumentKey] = useState(""),
-    [kind, setKind] = useState<"spec" | "plan" | "acceptance">("spec");
+    [kind, setKind] = useState<"spec" | "plan" | "tests" | "acceptance">("spec");
   const [editing, setEditing] = useState(false),
     [body, setBody] = useState("");
   const key = roadmapQueryKey(
@@ -235,9 +236,11 @@ export function Roadmaps() {
     record?.documents?.find((d) => d.local_key === documentKey) ||
     record?.documents?.[0];
   const file =
-    kind === "acceptance"
-      ? currentDocument?.acceptance[0]
-      : currentDocument?.[kind];
+    kind === "tests"
+      ? currentDocument && {path: currentDocument.plan.path.replace(/\.plan\.md$/, ".tests.json"), body: JSON.stringify({tests:currentDocument.tests},null,2)+"\n"}
+      : kind === "acceptance"
+        ? currentDocument?.acceptance[0]
+        : currentDocument?.[kind];
   const generationParent =
     record?.purpose === "documents"
       ? history.find((r) => r.id === record.parent_id)
@@ -881,6 +884,7 @@ export function Roadmaps() {
                 Plan
               </button>
             </div>
+            <button onClick={() => {setKind("tests");setEditing(false);}}>测试安排 JSON</button>
             <button
               onClick={() => {
                 setKind("acceptance");

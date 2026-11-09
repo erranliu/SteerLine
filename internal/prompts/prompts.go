@@ -50,16 +50,6 @@ func SameRules(actual, expected []byte) bool {
 	return len(actual) > 0 && bytes.Equal(bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll(expected, []byte("\r\n"), []byte("\n")))
 }
 
-func TestingGenerate(plan, commit string, project testmodel.ProjectEntry) (string, error) {
-	if plan == "" || commit == "" || project.Version != 1 {
-		return "", errors.New("fixed Plan and commit are required")
-	}
-	projectRaw, _ := json.Marshal(project)
-	if _, err := testmodel.ParseProjectEntry(projectRaw); err != nil {
-		return "", err
-	}
-	return render("testing-generate", struct{ Plan, Commit, ProjectFiles string }{plan, commit, strings.Join(project.Paths(), "、")})
-}
 func TestingReadOnly() (string, error) { return render("testing-readonly", nil) }
 func TestingContext(snapshot []byte) (string, error) {
 	var plan testmodel.Snapshot

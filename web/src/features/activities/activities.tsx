@@ -466,7 +466,6 @@ export function Activities({
                       {(
                         {
                           detection: "检测",
-                          test_preparation: "测试准备",
                           task_execution: "任务执行",
                           submission: "提交确认",
                         } as Record<string, string>

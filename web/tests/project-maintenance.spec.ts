@@ -3,7 +3,7 @@ import {execFileSync} from "node:child_process";
 import {readFileSync,writeFileSync,appendFileSync} from "node:fs";
 import {dirname,resolve,join} from "node:path";
 
-test("runtime.project-maintenance: explicit material preparation, independent candidates and old PR delivery",async({page},info)=>{
+test("runtime.project-maintenance: Git test arrangements, independent candidates and old PR delivery",async({page},info)=>{
  test.setTimeout(300000);page.setDefaultTimeout(30000);
  const config=process.env.STEERLINE_WEB_CONFIG;
  if(!config)throw new Error("fresh debug configuration required");
@@ -37,17 +37,17 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
   await expect.poll(async()=>{const v=await get("/maintenance");return v.tasks.find((t:any)=>t.task_id==="1")?.status},{timeout:90000}).toBe("ready");
   return get("/maintenance");
  };
- await section.getByRole("button",{name:"准备材料与测试安排",exact:true}).click();
+ await expect(section.getByRole("button",{name:"准备材料与测试安排",exact:true})).toHaveCount(0);
  const initial=await ready();
  expect(initial.remote.sha).toBeTruthy();
  expect(initial.remote.time).toBeTruthy();
- expect(initial.tasks.find((t:any)=>t.task_id==="1").generation_id).toBeTruthy();
- expect((await call("maintenance_generate_all",other.project_id,{},"/api/v2/application/projects/"+other.project_id)).status).toBe("applied");
+ expect(initial.tasks.find((t:any)=>t.task_id==="1").test_plan).toBeTruthy();
+ expect((await call("maintenance_check",other.project_id,{},"/api/v2/application/projects/"+other.project_id)).status).toBe("applied");
  // Establish the other project's completed initial state before changing this
  // project. Task/material observations are asynchronous after task creation.
  await expect.poll(async()=>{
   const value=await otherGet();
-  return value.tasks.length===2&&value.tasks.every((t:any)=>t.status==="ready"&&t.generation_id);
+  return value.tasks.length===2&&value.tasks.every((t:any)=>t.status==="ready"&&t.test_plan);
  },{timeout:90000}).toBeTruthy();
  const originalOther=await otherGet();
  await expect(section.getByLabel("维护范围")).toHaveCount(0);
@@ -67,7 +67,7 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
  await expect.poll(()=>git("rev-parse","HEAD")).toBe(latest);
  await section.getByRole("button",{name:"查看提交日志",exact:true}).click();
  await expect(page.getByRole("region",{name:"提交日志"})).toContainText("Source-only remote update");
- expect((await call("maintenance_generate_all",project)).status).toBe("applied");
+ expect((await call("maintenance_check",project)).status).toBe("applied");
  await ready();
  // The current runtime requires a real environment qualification before
  // candidate admission. Exercise the existing public command and peer result.
@@ -95,12 +95,12 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
   git("checkout",manifest.base_branch);
   appendFileSync(join(repo,"SteerlineFlow", "plans", "task.plan.md"),"\n"+label+"\n");
   git("add","SteerlineFlow/plans/task.plan.md");git("commit","-qm",label);git("push",remote,"HEAD:refs/heads/"+manifest.base_branch);
-  expect((await call("maintenance_generate_all",project)).status).toBe("applied");
+  expect((await call("maintenance_check",project)).status).toBe("applied");
   return ready();
  };
  const secondMaterial=await changePlan("Plan version two");
- const secondGeneration=secondMaterial.tasks.find((t:any)=>t.task_id==="1").generation_id;
- expect(secondGeneration).not.toBe(initial.tasks.find((t:any)=>t.task_id==="1").generation_id);
+ const secondSnapshot=secondMaterial.tasks.find((t:any)=>t.task_id==="1").test_plan;
+ expect(secondSnapshot.commit).toBe(secondMaterial.observation.commit);
  const expired=await get("/runs/"+first.run_id+"/tests");
  expect(expired.material_status).toBe("outdated");expect(expired.association_available).toBe(false);expect(expired.commit).toBe(latest);
  start("start_candidate");
@@ -114,7 +114,7 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
  expect(diff.files.find((f:any)=>f.path==="SteerlineFlow/plans/task.plan.md").after).toContain("Plan version two");
  expect(diff.files.find((f:any)=>f.path==="SteerlineFlow/plans/task.plan.md").before).not.toContain("Plan version two");
  const thirdMaterial=await changePlan("Plan version three");
- expect(thirdMaterial.tasks.find((t:any)=>t.task_id==="1").generation_id).not.toBe(secondGeneration);
+ expect(thirdMaterial.tasks.find((t:any)=>t.task_id==="1").test_plan.commit).not.toBe(secondSnapshot.commit);
  expect((await get("/runs/"+third.run_id+"/tests")).association_available).toBe(false);
  expect(readFileSync(arrangement,"utf8")).toBe(beforeArrangement);
  // The last prepared PR now belongs to an outdated candidate. Its real merge
@@ -131,6 +131,6 @@ test("runtime.project-maintenance: explicit material preparation, independent ca
  expect(delivered.delivery.workflow_run_id).toBe(third.run_id);
  const finalOther=await otherGet();
  expect(finalOther.observation.commit).toBe(originalOther.observation.commit);
- expect(finalOther.tasks.map((t:any)=>t.generation_id)).toEqual(originalOther.tasks.map((t:any)=>t.generation_id));
+ expect(finalOther.tasks.map((t:any)=>t.test_plan)).toEqual(originalOther.tasks.map((t:any)=>t.test_plan));
  writeFileSync(info.outputPath("facts.json"),JSON.stringify({project,first,second,third,initial,secondMaterial,thirdMaterial,original,expired,diff,delivered},null,2));
 });

@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+Git 管理任务测试安排（2026-11-09，实施及验证中）：[Spec](git-test-arrangements.spec.md) · [Plan](../plans/git-test-arrangements.plan.md) · [验收安排](../testing/acceptance/git-test-arrangements.md)。恢复同名 `.tests.json` 的 Git 权威，随 roadmap 正式材料同批生成发布，运行时只校验和冻结，删除专用补安排流程；保留现有项目统一准入、候选进度及交付边界，不启动 roadmap。
+
 异步活动中心（2026-11-06，已实施并完成独立代码审核，未部署）：[Spec](async-activity-center.spec.md) · [Plan](../plans/async-activity-center.plan.md) · [专属验收及审核记录](../testing/acceptance/async-activity-center.md)。首期统一观察检测、测试准备和任务候选执行，保留原页面与业务流程；普通开发已实施，不启动 roadmap 调度。
 
 待合并 PR 冲突解决与原 Run 续作（2026-11-06，已实现）：[Spec](pr-conflict-resolution.spec.md) · [Plan](../plans/pr-conflict-resolution.plan.md) · [验收记录](../testing/acceptance/pr-conflict-resolution.md)。手动按钮、SteerLine 短提示词与 Runner 原会话 message；直接沿用原现场，不增加冲突检测、现场预检或业务编排框架。
