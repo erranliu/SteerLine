@@ -11,6 +11,7 @@ import {
   type Environment,
 } from "./use-readiness";
 import { DetectionID, EnvironmentCard } from "./environment-card";
+import { EnvironmentOverview } from "./environment-overview";
 import {
   SubmissionStatus,
   useActivityFeedback,
@@ -197,41 +198,44 @@ function EnvironmentWorkspace() {
   });
   const pending = useRef(false);
   const [submitting, setSubmitting] = useState(false);
-  const startRows = (requests || []).filter(
-    ({ envelope }) =>
-      envelope.project_id === identity.project_id &&
-      envelope.instance_id === identity.instance_id &&
-      envelope.action === "environment_start" &&
-      envelope.payload.environment_key === environmentKey,
-  );
+  const startRowsFor = (key: string) =>
+    (requests || []).filter(
+      ({ envelope }) =>
+        envelope.project_id === identity.project_id &&
+        envelope.instance_id === identity.instance_id &&
+        envelope.action === "environment_start" &&
+        envelope.payload.environment_key === key,
+    );
+  const startRows = startRowsFor(environmentKey);
   const latestStart = [...startRows].sort((a, b) =>
     b.created_at.localeCompare(a.created_at),
   )[0];
-  const startSending = () =>
+  const startSending = (key = environmentKey) =>
     (pendingRequests?.() || []).some(
       (e) =>
-        e.action === "environment_start" &&
-        e.payload.environment_key === environmentKey,
+        e.action === "environment_start" && e.payload.environment_key === key,
     );
-  const receivedID = (
-    latestStart?.response?.environment as { id?: string } | undefined
-  )?.id;
-  const confirmingStart =
-    !!environmentKey &&
-    (startSending() ||
+  const confirmingEnvironment = (current: Environment) => {
+    const rows = startRowsFor(current.environment_key);
+    const latest = [...rows].sort((a, b) =>
+      b.created_at.localeCompare(a.created_at),
+    )[0];
+    const receivedID = (
+      latest?.response?.environment as { id?: string } | undefined
+    )?.id;
+    return (
+      startSending(current.environment_key) ||
       (!!receivedID &&
-        receivedID !== activityID &&
-        (environment?.current_revision || 0) <=
-          Number(latestStart?.envelope.payload.expected_current_revision)) ||
-      startRows.some(
-        ({ envelope, response }) =>
-          envelope.action === "environment_start" &&
-          envelope.project_id === identity.project_id &&
-          envelope.instance_id === identity.instance_id &&
-          envelope.payload.environment_key === environmentKey &&
-          response?.status !== "applied" &&
-          response?.status !== "rejected",
-      ));
+        receivedID !== current.activity_id &&
+        current.current_revision <=
+          Number(latest?.envelope.payload.expected_current_revision)) ||
+      rows.some(
+        ({ response }) =>
+          response?.status !== "applied" && response?.status !== "rejected",
+      )
+    );
+  };
+  const confirmingStart = !!environment && confirmingEnvironment(environment);
   const refresh = async (onOptionsRefreshed?: () => void) => {
     const queries: Promise<unknown>[] = [
       options.refetch().finally(onOptionsRefreshed),
@@ -272,9 +276,13 @@ function EnvironmentWorkspace() {
     }
   };
   useEffect(() => {
-    const node = document.getElementById(
-      `environment-${focusProfile?.environment_key || profile}`,
-    );
+    if (
+      !profile ||
+      !focusProfile ||
+      environmentKey !== focusProfile.environment_key
+    )
+      return;
+    const node = document.getElementById(`environment-${environmentKey}`);
     node?.scrollIntoView?.({ block: "nearest" });
     node?.focus();
   }, [focusProfile?.environment_key, profile, environmentKey]);
@@ -291,78 +299,86 @@ function EnvironmentWorkspace() {
     <div className="settings-page environment-page">
       <div className="environment-header">
         <h1>项目运行环境</h1>
-        {requestedActivity && (
-          <section
-            id="requested-environment-activity"
-            tabIndex={-1}
-            aria-label="指定检测详情"
-          >
-            <h2>指定检测结果</h2>
-            {requestedRecord.data?.id === requestedActivity ? (
-              <>
-                <DetectionID id={requestedActivity} />
-                <p>
-                  {recordLabel(requestedRecord.data)} ·{" "}
-                  {requestedRecord.data.profile_id}
-                </p>
-                <p>{requestedRecord.data.diagnostic}</p>
-              </>
-            ) : (
-              <p>
-                {requestedRecord.isError
-                  ? "无法读取指定检测，请核对原检测 ID"
-                  : "正在读取指定检测…"}
-              </p>
-            )}
-          </section>
-        )}
         <Button variant="ghost" onClick={() => void refresh()}>
           刷新环境
         </Button>
       </div>
+      <p className="muted">查看所有环境的就绪情况，展开详情进行检测和准备。</p>
       {task && (
         <Link to={`/projects/${identity.project_id}/runs?${returnParams}`}>
           返回任务
         </Link>
       )}
       <EnvironmentObservation />
+      {!options.required && (
+        <p className="notice amber">
+          环境就绪阻塞已关闭；检测结果仍按实际状态展示。
+        </p>
+      )}
+      {options.verified && !!options.dataUpdatedAt && (
+        <p className="muted">
+          最近状态更新：
+          {new Date(options.dataUpdatedAt).toLocaleString("zh-CN")}
+        </p>
+      )}
       {options.error && <p role="alert">环境状态查询失败，请刷新重试。</p>}
       {profile && options.verified && !focusProfile && (
         <p role="alert">原执行方案已不存在或不属于开发方案，请重新选择。</p>
       )}
-      <section aria-label="选择运行机与链路">
-        <label>
-          运行环境
-          <select
-            aria-label="运行环境"
-            value={environmentKey}
-            onChange={(event) => chooseEnvironment(event.target.value)}
-          >
-            <option value="">选择运行环境</option>
-            {options.data?.environments.map((e) => (
-              <option
-                key={e.environment_key || e.profiles[0]?.id}
-                value={e.environment_key}
-                disabled={!e.environment_key}
-              >
-                {environmentName(e)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
+      {!!options.data?.environments.length && (
+        <EnvironmentOverview
+          environments={options.data.environments}
+          verified={options.verified}
+          selected={environmentKey}
+          name={environmentName}
+          confirming={confirmingEnvironment}
+          onSelect={chooseEnvironment}
+        />
+      )}
+      {!options.data && !options.error && (
+        <p className="muted">正在读取运行环境…</p>
+      )}
       {environmentKey && !environment && options.verified && (
         <p role="alert">原环境已不在当前配置中，请重新选择。</p>
       )}
-      {!environment && <p className="muted">选择运行环境后即可开始检测。</p>}
       {options.verified && !options.data?.environments.length && (
         <p>
           尚无开发执行方案。
           <Link to="/settings/execution-configs">配置执行方案</Link>
         </p>
       )}
+      {requestedActivity && (
+        <section
+          id="requested-environment-activity"
+          tabIndex={-1}
+          aria-label="指定检测详情"
+        >
+          <h2>指定检测结果</h2>
+          {requestedRecord.data?.id === requestedActivity ? (
+            <>
+              <DetectionID id={requestedActivity} />
+              <p>
+                {recordLabel(requestedRecord.data)} ·{" "}
+                {requestedRecord.data.profile_id}
+              </p>
+              <p>{requestedRecord.data.diagnostic}</p>
+            </>
+          ) : (
+            <p>
+              {requestedRecord.isError
+                ? "无法读取指定检测，请核对原检测 ID"
+                : "正在读取指定检测…"}
+            </p>
+          )}
+        </section>
+      )}
       {environment && (
-        <section aria-label="当前运行环境">
+        <section
+          aria-label="当前运行环境"
+          id="environment-detail"
+          className="environment-detail"
+        >
+          <h2>{environmentName(environment)}</h2>
           <SubmissionStatus
             label={
               startSending()
