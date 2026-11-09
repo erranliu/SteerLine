@@ -2,14 +2,6 @@ package runnercontract
 
 import "time"
 
-type UsageAccessRequirement struct {
-	SourceRef   string    `json:"source_ref"`
-	Environment string    `json:"environment"`
-	HostID      string    `json:"host_id"`
-	SessionRoot string    `json:"session_root"`
-	ObservedAt  time.Time `json:"observed_at"`
-}
-
 // Usage facts are observations, independent of Run business revisions.
 type UsageTokens struct {
 	InputTotal    *int64 `json:"input_total"`
@@ -27,14 +19,13 @@ type UsageIssue struct {
 	SourceRef string `json:"source_ref,omitempty"`
 }
 type UsageSnapshot struct {
-	AccessRequirements []UsageAccessRequirement `json:"access_requirements"`
-	Schema             string                   `json:"schema"`
-	RunID              string                   `json:"run_id"`
-	Revision           uint64                   `json:"snapshot_revision"`
-	Status             string                   `json:"status"`
-	Scope              string                   `json:"scope"`
-	Tokens             *UsageTokens             `json:"tokens"`
-	Coverage           struct {
+	Schema   string       `json:"schema"`
+	RunID    string       `json:"run_id"`
+	Revision uint64       `json:"snapshot_revision"`
+	Status   string       `json:"status"`
+	Scope    string       `json:"scope"`
+	Tokens   *UsageTokens `json:"tokens"`
+	Coverage struct {
 		ExpectedSources  *int64 `json:"expected_sources"`
 		VerifiedSources  int64  `json:"verified_sources"`
 		CountedResponses int64  `json:"counted_responses"`

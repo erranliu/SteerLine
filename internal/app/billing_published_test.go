@@ -33,7 +33,7 @@ func TestBillingUsagePublishedFixture(t *testing.T) {
 	selection := runnerclient.Selection{Executable: os.Getenv("STEERRUNNER_EXE"), Version: os.Getenv("STEERRUNNER_VERSION"), SHA256: os.Getenv("STEERRUNNER_SHA256")}
 	cli, version, err := selection.Open(ctx, filepath.Join(root, "state"), 30*time.Second)
 	require(t, err)
-	cli.UsagePolicy = json.RawMessage(`{"enabled":false,"remote_log_access":{"mode":"disabled","grants":[]}}`)
+	cli.UsagePolicy = json.RawMessage(`{"enabled":false}`)
 	info, err := cli.StartService(ctx, version)
 	require(t, err)
 	cli.InstanceID = info.InstanceID

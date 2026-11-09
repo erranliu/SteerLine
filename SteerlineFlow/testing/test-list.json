@@ -298,12 +298,12 @@
     },
     {
       "id": "usage.remote-codex",
-      "name": "远端 Codex 用量授权与本地费用消费",
+      "name": "远端 Codex 默认用量采集与本地费用消费",
       "level": "L4",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=usage -env=live -scenario usage.remote-codex",
-      "check": "固定独立 Runner EXE、全新隔离 home/独立Git clone、外部冻结execute/1请求；默认未授权→公开发现最小host/session叶目录→显式grant正式停启→同原Run可信Token/同revision明细与SteerLine本地估价状态→重读不重复→撤权保留历史及正式stop/资源结算；无PR/安装变更。非零、零skip、缺前置/原生证据/清理失败不通过。",
-      "note": "显式STEERRUNNER_EXE/VERSION/SHA256、STEERLINE_USAGE_LIVE_INPUT和不存在的STEERLINE_USAGE_LIVE_ROOT（C:/SteerlineDebug下）。会在指定远端环境发起一次冻结请求的模型调用；仅精确选择，单项串行；不得使用安装原Run/数据库或猜授权根。输出根保留原请求/原Run/用量/调用方视图/cleanup精选JSON，正式日志见summary。"
+      "check": "固定独立 Runner EXE、全新隔离 home/独立Git clone、外部冻结execute/1请求；默认采集已核实远端会话→同原Run可信Token/同revision明细与SteerLine本地估价状态→同构建正式停启保留绑定→重读不重复→关闭采集保留历史及正式stop/资源结算；无PR/安装变更。非零、零skip、缺前置/原生证据/清理失败不通过。",
+      "note": "显式STEERRUNNER_EXE/VERSION/SHA256、STEERLINE_USAGE_LIVE_INPUT和不存在的STEERLINE_USAGE_LIVE_ROOT（C:/SteerlineDebug下）。会在指定远端环境发起一次冻结请求的模型调用；仅精确选择，单项串行；不得使用安装原Run/数据库或猜日志根。输出根保留原请求/原Run/用量/调用方视图/cleanup精选JSON，正式日志见summary。"
     }
   ]
 }
