@@ -205,11 +205,11 @@ it("keeps a binary project status and follows the server verdict instead of indi
   expect(screen.getByText("任务 #99 的材料与测试安排未就绪")).toBeVisible();
 });
 
-it("shows committed arrangement paths and errors without generation controls",async()=>{
- const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"SteerlineFlow/plans/task.plan.md"}},status:"invalid",diagnostic:"task.tests.json: unknown test ID"}]});
+it.each(["unknown test ID","pinned path missing"])("shows committed arrangement errors (%s) without generation controls",async(diagnostic)=>{
+ const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"SteerlineFlow/plans/task.plan.md"}},status:"invalid",diagnostic:"task.tests.json: "+diagnostic}]});
  fireEvent.click(await screen.findByRole("button",{name:/项目维护/}));
  expect(screen.getByText("SteerlineFlow/plans/task.tests.json")).toBeVisible();
- expect(screen.getByRole("alert")).toHaveTextContent("unknown test ID");
+ expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
  expect(screen.queryByRole("button",{name:"准备材料与测试安排"})).toBeNull();
  expect(screen.queryByRole("button",{name:"重试生成"})).toBeNull();
  expect(screen.queryByLabelText("测试生成方案")).toBeNull();

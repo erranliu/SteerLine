@@ -76,8 +76,10 @@
 | T2 | A01–A07 必要回归 | 固定 L1：`go run ./cmd/test-feedback -level=L1 -out <out>`；固定 L2：`go run ./cmd/test-feedback -level=L2 -out <out>` | 实施完成及最终集成后；固定集合完整通过，清理完成，超时目标如实记录；独立 summary/managed/scenario |
 | T3 | A02、A04、A05 | L4 isolated：`go run ./cmd/test-feedback -level=L4 -suite=go -scenario <ID> -out <out>`，将 `<ID>` 分别替换为 `go.roadmap`、`go.storage`、`go.http`、`go.deployment`、`go.environment`，每次独立输出 | 更新正式定义后；精确 owner 全量、非零/零跳过，覆盖入图、事务内 Git 快照重核/回滚、已预留重放和 API 删除；本次删除生成责任还影响原停服/部署核验，故补部署专项；各自 summary/JSONL。HTTP 压力与 E2E 串行 |
 | T4 | A02、A05 | L4 isolated：`go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit -out <out>`；`npm --prefix web run build` | UI/类型更新后；原生 Vitest 全集通过，roadmap diff、Git 来源和错误可见，旧生成操作不可触发，生产构建通过；summary/Vitest 与构建日志 |
-| T5 | A03–A06 | L3 controlled：`go run ./cmd/test-feedback -level=L3 -suite=testing -env=controlled -scenario testing.runtime-progress -out <out>`；L4 controlled：`go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario runtime.project-maintenance -out <out>` | 驱动更新后；真实隔离 Git/SQLite/浏览器与公开 Runner fixture 验证 JSON 读取、缺失/坏 ID 提示、重复检查/重启/代码推进零生成、多版本候选/旧 PR 交付及停止结算。runtime-progress 用受控公开快照验证输入绑定、进度变化与异常消费，不证明原生模型实际执行；两份 summary/scenario，长场景不能以部分通过替代 |
+| T5 | A03–A06 | L3 controlled：`go run ./cmd/test-feedback -level=L3 -suite=testing -env=controlled -scenario testing.runtime-progress -out <out>`；L4 controlled：`go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario runtime.project-maintenance -out <out>` | 驱动更新后；真实隔离 Git/SQLite/浏览器与公开 Runner fixture 验证 JSON 读取、重复检查/重启/代码推进零生成、多版本候选/旧 PR 交付及停止结算。runtime-progress 用受控公开快照验证输入绑定、进度变化与异常消费，不证明原生模型实际执行；两份 summary/scenario，长场景不能以部分通过替代 |
 | T6 | A02、A07 | 现有 live 专项：`go run ./cmd/test-feedback -out <out> -- -tags=e2e ./internal/app -run '^TestRoadmapLocalCodexPromotion$' -count=1 -timeout=20m` | 受控通过后；固定独立 Runner EXE/版本摘要、本机 Codex 登录、`STEERRUNNER_EXE` 和 `STEERLINE_ROADMAP_EVIDENCE` 沿原驱动提供；一次真实生成返回合法测试数组，平台编码 JSON，经原隔离 provider 发布/合并/入图，原 Run 停止完整。不得在驱动中自行选择测试掩盖模型遗漏；保留原结果、Git 实际内容和清理证据 |
+
+缺失 JSON、坏 ID 及对应诊断显示由 T1 的解析/App 反例与 T4 的参数化组件用例覆盖，不在 T5 长场景重复增加两轮 Git 提交。T5 维护场景保留原 300 秒预算：先验证维护/日志界面，中间命令阶段关闭页面轮询并使用同会话真实公开 API，最后重开原候选验证界面、旧 PR 交付和结算。此前持续轮询与连续三候选并发的超时另存验收，不以此调度证明该负载性能已修复。
 
 实施审计另发现 `runtime.async-activities` 及其浏览器仍要求已退役的测试准备活动；同步为检测/候选可见、测试准备缺席，并按 T5 同一受控入口补跑该正式 ID，不放宽其余重启、交付与清理断言。
 
