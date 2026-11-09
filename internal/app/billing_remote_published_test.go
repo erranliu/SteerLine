@@ -14,7 +14,6 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/billing"
 	"github.com/erranliu/SteerLine/internal/billingconfig"
-	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
@@ -132,7 +131,7 @@ func TestBillingRemoteUsagePublished(t *testing.T) {
 			t.Error("live cleanup remains unverified", diagnostics)
 		}
 	})
-	initial, _ := json.Marshal(map[string]any{"enabled": true, "remote_log_access": map[string]any{"mode": "disabled", "grants": []any{}}})
+	initial := json.RawMessage(`{"enabled":true}`)
 	start(initial)
 	submitID := uuid.NewString()
 	receipt, err := cli.Submit(ctx, runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: submitID, Input: raw})
@@ -148,7 +147,7 @@ func TestBillingRemoteUsagePublished(t *testing.T) {
 	}
 	save("original-request", map[string]any{"request_id": submitID, "run_id": runID, "input_path": inputPath, "exe_sha256": selection.SHA256, "state_dir": state})
 	t.Logf("isolated Run=%s state=%s evidence=%s", runID, state, root)
-	var missing runnercontract.UsageSnapshot
+	var firstUsage runnercontract.UsageSnapshot
 	var original runnerclient.Run
 	deadline := time.Now().Add(3 * time.Minute)
 	for {
@@ -158,37 +157,23 @@ func TestBillingRemoteUsagePublished(t *testing.T) {
 		}
 		u, e := cli.RunUsage(ctx, runID)
 		if e == nil {
-			missing = u
+			firstUsage = u
 		}
-		blocked := false
-		for _, issue := range missing.Issues {
-			blocked = blocked || issue.Code == "REMOTE_LOG_ACCESS_NOT_CONFIGURED"
-		}
-		if blocked && len(missing.AccessRequirements) > 0 && original.Final != nil && original.Final.Verified {
+		if firstUsage.Tokens != nil && firstUsage.Tokens.Total != nil && *firstUsage.Tokens.Total > 0 && firstUsage.Coverage.Finalized && firstUsage.AccessCleanupStatus != "pending" && original.Final != nil && original.Final.Verified {
 			break
 		}
 		if time.Now().After(deadline) || ctx.Err() != nil {
-			save("missing-usage", missing)
+			save("default-usage", firstUsage)
 			save("original-run", original)
-			t.Fatal("missing authorized source requirement or original final", original.Status, original.Diagnostic, missing.Issues)
+			t.Fatal("default remote collection or original final did not converge", original.Status, original.Diagnostic, firstUsage.Issues)
 		}
 		time.Sleep(time.Second)
 	}
-	save("missing-usage", missing)
+	save("default-usage", firstUsage)
 	save("original-run", original)
-	grants := []executionconfig.UsageGrant{}
-	for _, r := range missing.AccessRequirements {
-		if r.Environment != input.Execution.Target.Environment || r.SourceRef == "" || !executionconfig.SafeUsageRoot(r.SessionRoot) {
-			t.Fatal("unverified remote access requirement", r)
-		}
-		grants = append(grants, executionconfig.UsageGrant{Environment: r.Environment, HostID: r.HostID, SessionRoots: []string{r.SessionRoot}})
-	}
-	policy, _ := json.Marshal(map[string]any{"enabled": true, "remote_log_access": map[string]any{"mode": "temporary", "grants": grants}})
-	_, err = executionconfig.DecodeUsagePolicy(policy)
-	require(t, err)
 	stale := cli
 	stopService()
-	start(policy)
+	start(initial)
 	if _, e := stale.RunUsage(ctx, runID); e == nil {
 		t.Fatal("old instance silently rebound")
 	}
@@ -209,6 +194,9 @@ func TestBillingRemoteUsagePublished(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 	save("authorized-usage", usage)
+	if *usage.Tokens.Total != *firstUsage.Tokens.Total || usage.Coverage.CountedResponses != firstUsage.Coverage.CountedResponses {
+		t.Fatal("restart duplicated or lost default remote usage", firstUsage, usage)
+	}
 	events, err := cli.RunUsageEvents(ctx, usage)
 	require(t, err)
 	save("usage-events", events)
@@ -222,7 +210,7 @@ func TestBillingRemoteUsagePublished(t *testing.T) {
 	inspected, err := cli.Inspect(ctx, "run-id", runID)
 	require(t, err)
 	if inspected.Run.InputDigest != original.InputDigest || inspected.Run.Execution.SessionID != original.Execution.SessionID || inspected.Run.Execution.TurnID != original.Execution.TurnID {
-		t.Fatal("authorization restart changed original execution")
+		t.Fatal("collection restart changed original execution")
 	}
 	// Use conspicuously synthetic rates; missing request-time metadata stays unknown.
 	prices := billing.Policy{Source: "synthetic live arithmetic fixture, not provider prices", Currency: "USD", Basis: billing.Basis, Rules: []billing.Rule{}}
@@ -247,12 +235,12 @@ func TestBillingRemoteUsagePublished(t *testing.T) {
 	}
 	save("steerline-view", view)
 	stopService()
-	start(initial)
+	start(json.RawMessage(`{"enabled":false}`))
 	retained, err := cli.RunUsage(ctx, runID)
 	require(t, err)
 	if retained.Tokens == nil || retained.Tokens.Total == nil || *retained.Tokens.Total != *usage.Tokens.Total {
-		t.Fatal("withdrawing permit erased known usage")
+		t.Fatal("disabling collection erased known usage")
 	}
-	save("withdrawn-usage", retained)
-	t.Logf("same Run=%s responses=%d total=%d; explicit grant/restart/dedup/withdrawal passed", runID, usage.Coverage.CountedResponses, *usage.Tokens.Total)
+	save("disabled-usage", retained)
+	t.Logf("same Run=%s responses=%d total=%d; default remote collection/restart/dedup/disable passed", runID, usage.Coverage.CountedResponses, *usage.Tokens.Total)
 }

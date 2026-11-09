@@ -75,7 +75,7 @@ response 必须使用明确request时间匹配价格；interval 只有在已知�
 
 ### 3.3 移出计价职责
 
-Runner 的目标公开能力不再承担 `estimate-run-cost`、`run_cost`、`run-pricing-policy/v1` 或价表文件读取；删除其价格校验和金额 DTO/测试/文档，不因 SteerLine 仍在展示费用而保留第二套计算器。`usage_policy`、远端访问授权及回收继续归 Runner，SteerLine 按既有部署路径传递；它与计费设置分开，不随改价热更新。
+Runner 的目标公开能力不再承担 `estimate-run-cost`、`run_cost`、`run-pricing-policy/v1` 或价表文件读取；删除其价格校验和金额 DTO/测试/文档，不因 SteerLine 仍在展示费用而保留第二套计算器。`usage_policy` 与远端日志读取及回收继续归 Runner，SteerLine 按既有部署路径传递；它与计费设置分开，不随改价热更新。
 
 两仓交付需要匹配构建。SteerLine 不保留调用旧估价器、缺少计价事实时猜模型、读取旧价表或双算比对作为正式运行后备路径。升级、原现场排空与停止继续按现有部署规则，不通过迁移用量/价表来绕过。
 
@@ -83,16 +83,14 @@ Runner 的目标公开能力不再承担 `estimate-run-cost`、`run_cost`、`run
 
 2026-11-05 对安装home `C:\SteerlineInstall`、项目 `C:\Projects\SteerlineTest`、Task 101、候选 `3b21b9e861fc40f79324e9afa1afadc5` 只读核验：实际Runner Run为 `0b2ac9b03e2d8fdf05ac1d4785bccf03`。公开run-usage的revision 8返回unavailable/tokens=null、verified_sources=0/expected_sources=1，原因是REMOTE_LOG_ACCESS_NOT_CONFIGURED及COVERAGE_INCOMPLETE；同revision明细为空。服务有效策略为enabled=true、remote_log_access.mode=disabled/grants=[]。这是采集授权未配置，非价格缺失或已证实的前端丢Token；启用授权后的原日志/绑定/解析是否成功仍须另验。
 
-本次增加以下闭环，不把用户手改JSON作为唯一产品操作：
+2026-11-09 用户要求取消逐目录授权，默认允许远端用量采集。本节以下规则取代此前 disabled/temporary/grants 方案；原验收报告继续作为旧构建的历史证据。
 
-1. SteerLine在全局执行配置增加“用量采集”设置，沿现有execution.json.usage_policy owner条件保存；配置启用/关闭、远端temporary模式、environment、经核实的稳定host_id和受限session_roots。原样传给Runner，由Runner校验/采集/临时目录登记与回收。billing.json不保存这些权限。
-2. 沿公开service status读取实际usage_policy/digest/revision，与已保存配置分开展示“运行中生效”或“已保存，待正式重启”；服务离线显示未知/离线，不能拿文件值冒充当前有效策略。保存采集策略不热更新、自动停服或自动续发输入；正常停启及未结算资源规则保持。
-3. Runner的缺授权诊断须能关联原source_ref和冻结environment；配置所需host_id与合规最小日志叶目录必须来自已核实公开事实/只读发现，不能从profile、IP、主机名或workspace猜测。若当前公开接口不足以提供这些事实，将最小需求诊断/只读发现作为Runner增量前置；不读取Runner私有checkpoint补齐。无法核实则阻断该授权保存/应用并给原因，不自动放宽根目录。
-4. 仅允许Runner认可的session日志叶目录（如Codex日期叶目录）；不使用账户home、认证根、宽泛.codex根或通配符。temporary登记不等于远端只读ACL或自动TTL；界面明确范围及Runner报告的回收状态，不新增远端helper或日志读取终端。
-5. 执行页摘要直接显示“远端用量未授权”，并提供采集设置入口，不把主因藏在折叠内或只显示“费用未估算/未配置价表”；分别呈现Token采集诊断与计价诊断，保留source关联及retryable。HOST_OFFLINE、LOG_ACCESS_DENIED、绑定不支持和格式不支持均区别于缺价表，不要求改价解决采集故障。
-6. 正式停启使新许可生效后，Runner对仍有可信原绑定的缺口重新进行有界观察；SteerLine根据新实例/策略身份失效原“不可重试”的用量缓存，重新读取公开快照。不得为补Token另建候选、resume/reply原Run或执行模型；日志已缺失/不可绑定继续报告真实原因，不承诺历史必能补齐。旧实例、grant失效/主机变化或回收未核实沿原规则处理。
-
-现有UI已有该错误码的折叠说明和停止轮询规则；本次补的是设置、摘要提示、有效策略/待生效状态和新许可后的观察闭环，不重建日志解析器。该安装现场当前只读诊断，不修改配置、远端登记、进程或原Run；未来现场恢复须在新实现隔离验证后，核实该主机/目录与正式停启条件再单列记录。
+1. `execution.json.usage_policy` 只保留 `enabled:boolean`，缺省为 true，同时控制本机与远端采集。取消远端模式、host/目录 grants 和授权需求发现接口内容；旧授权字段明确拒绝，不迁移或兼容。
+2. 采集开启时，Runner 通过原 Run 的冻结 environment、经配对核实的稳定主机身份、原结构化会话和原生 session 元数据，自动取得该会话的最小日志叶目录。日期变化由原生来源决定，无需按日期重新配置；不从 profile 或名称猜目录，不使用账户 home、认证根、宽泛根或通配符。
+3. 默认允许读取仍须通过原主机/会话绑定、路径组件及链接校验、读取上限、实例采集许可和原有临时目录登记/回收。身份变化、来源无法核实、主机离线或日志缺失均保留真实诊断，不通过取消配置跳过这些校验。
+4. 设置页只保留 Token 采集开关，说明默认自动读取已核实本机和远端会话。应用仅查询所属 Runner 的实际策略/digest/revision，与已保存配置分开展示有效或待正式重启；不再遍历候选查询授权需求，不因保存自动停服或发送执行输入。
+5. 执行页不再提示配置远端授权。Token 采集与计价原因继续分别呈现；采集完成和临时访问回收独立判定。关闭采集不删除已确认历史；正式重启后仍只在原绑定上进行有界观察，不另建候选或执行模型来补 Token。
+6. 两仓须使用匹配的新构建。安装现场恢复、部署和已有 Run 是否能补齐须另行验证，不能用隔离测试冒充现场已回填。当前新增实现与验证记录见[默认远端采集验收](../testing/acceptance/remote-usage-default.md)。
 
 ## 4. SteerLine 计费设置
 

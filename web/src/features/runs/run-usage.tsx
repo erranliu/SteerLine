@@ -27,7 +27,6 @@ const reasons: Record<string, string> = {
   USAGE_NOT_FINALIZED: "当前用量尚未收敛",
   COLLECTION_DISABLED: "用量采集已关闭",
   COLLECTION_NOT_OBSERVED: "尚未完成首次用量观察",
-  REMOTE_LOG_ACCESS_NOT_CONFIGURED: "未配置远端用量读取授权",
   PRODUCTION_BINDING_UNSUPPORTED: "当前执行方式暂不支持用量采集",
   FORMAT_UNSUPPORTED: "当前日志格式暂不支持",
   HOST_OFFLINE: "执行主机离线",
@@ -65,7 +64,6 @@ export function usagePollInterval(view: RunUsageView | undefined) {
         "PRODUCTION_BINDING_UNSUPPORTED",
         "FORMAT_UNSUPPORTED",
         "COLLECTION_DISABLED",
-        "REMOTE_LOG_ACCESS_NOT_CONFIGURED",
       ].includes(code),
     )
   )
@@ -149,12 +147,8 @@ export function RunUsage({ run }: { run: Candidate }) {
     view?.reason === "USAGE_UNSUPPORTED" ||
     usage?.issues.some((i) => i.code === "PRODUCTION_BINDING_UNSUPPORTED") ||
     usage?.issues.some((i) => i.code === "FORMAT_UNSUPPORTED");
-  const remoteUnauthorized = usage?.issues.some(
-    (i) => i.code === "REMOTE_LOG_ACCESS_NOT_CONFIGURED",
-  );
-  const label = remoteUnauthorized
-    ? "远端用量未授权"
-    : amount != null && cost
+  const label =
+    amount != null && cost
       ? `${cost.status === "estimated" ? "费用估算" : "已计价部分"} ${formatted.startsWith("<") ? "" : "≈ "}${formatted}`
       : usage?.status === "pending"
         ? "等待用量数据"
@@ -186,14 +180,6 @@ export function RunUsage({ run }: { run: Candidate }) {
           </span>
           {view?.cost_reason === "PRICE_POLICY_NOT_CONFIGURED" && (
             <a href="/settings#billing">未配置价表 · 打开计费设置</a>
-          )}
-          {remoteUnauthorized && (
-            <a
-              href="/settings#usage-collection"
-              onClick={(e) => e.stopPropagation()}
-            >
-              配置远端用量读取
-            </a>
           )}
           <span className="usage-expand">用量与费用</span>
         </summary>

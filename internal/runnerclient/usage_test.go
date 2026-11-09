@@ -95,7 +95,7 @@ func TestRunUsageCapabilityAndStartupPolicy(t *testing.T) {
 	if c.RunUsageSupported || c.RunUsageEventsSupported {
 		t.Fatal("absent capability inherited")
 	}
-	c.UsagePolicy = json.RawMessage(`{"enabled":true,"remote_log_access":{"mode":"disabled","grants":[]}}`)
+	c.UsagePolicy = json.RawMessage(`{"enabled":true}`)
 	info := ServiceInfo{Protocol: Protocol, Status: "ready", StateDir: c.StateDir, InstanceID: "new", Version: "fixture", ResourceDigest: "resources", ExecutableSHA256: c.SHA256}
 	fixtureResponse(t, info)
 	if _, err := c.StartServiceWithStops(context.Background(), Version{Version: info.Version, ResourceDigest: info.ResourceDigest}, nil); err != nil {
