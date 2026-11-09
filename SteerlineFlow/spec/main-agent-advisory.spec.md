@@ -26,7 +26,7 @@
 
 来源为原 owner 持久保存的 Runner 候选投影：候选仍参与、未请求停止，Run 的当前 Question/Attempt 身份完整且处于明确待答状态。通用 blocked/needs_attention、没有 question 的错误、审批不自行推断成来源；不调用模型分类，不修改 Runner。
 
-稳定身份为 project/candidate/原 Attempt+Question occurrence/advisory-v1。后台独立于 Web 从持久事实登记 queued，再准备上下文。心跳、普通 revision、重复消费、重启不重开同一事项；取消或失败不自动重试。新 Question/Attempt 才是新事项。
+稳定身份为 project/candidate/原 Attempt+Question occurrence/advisory-v1。后台独立于 Web 从持久事实登记 queued，再准备上下文。心跳、普通 revision、重复消费、重启不重开同一事项；取消或失败不自动重试。同一 Question 暂时退出待答又恢复时，只恢复源事项有效性及相应活动提醒，保留原输入、结果和取消决定，不重新生成。新 Question/Attempt 才是新事项。
 
 上下文固定原问题完整题集/选项、候选绑定 commit/digest、Spec/Plan、公共及验收引用、已核实 final 和必要测试安排。不遍历仓库、其他任务或引用图；不混用当前工作树。准备失败保留正式记录、已取得的材料及诊断，不伪造完整上下文。来源解除后取消未提交工作；已提交则停止原生成并结算，历史成功产物仍可查看/复制，不改原问题。
 

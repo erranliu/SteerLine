@@ -245,3 +245,46 @@ func TestAdvisoryPreparationFailureRetainsPartialContext(t *testing.T) {
 		t.Fatal(r)
 	}
 }
+
+func TestAdvisorySourceReappearsWithoutRegenerationOrSnapshotReplacement(t *testing.T) {
+	for _, state := range []string{"ready", "failed", "cancelled", "cancelling"} {
+		t.Run(state, func(t *testing.T) {
+			s, source, f := prepared(t)
+			step(t, s)
+			step(t, s)
+			ctx := context.Background()
+			id := SourceID(s.Project, source)
+			original, e := s.Get(ctx, id)
+			if e != nil {
+				t.Fatal(e)
+			}
+			original.State = state
+			original.Cancelled = state == "cancelled" || state == "cancelling"
+			original.Settled = state != "cancelling"
+			original.StopRequest = runnerbinding.ContentStop("immutable-stop", 1)
+			if _, e = s.save(ctx, original); e != nil {
+				t.Fatal(e)
+			}
+			if e = s.Sync(ctx, nil); e != nil {
+				t.Fatal(e)
+			}
+			hidden, _ := s.Get(ctx, id)
+			if hidden.SourceActive {
+				t.Fatal("resolved source remained active")
+			}
+			source.Goal = "different later text"
+			source.Revision++
+			if e = s.Sync(ctx, []Source{source}); e != nil {
+				t.Fatal(e)
+			}
+			restored, _ := s.Get(ctx, id)
+			before, _ := json.Marshal(original.RunnerRequest)
+			after, _ := json.Marshal(restored.RunnerRequest)
+			oldSource, _ := json.Marshal(original.Source)
+			newSource, _ := json.Marshal(restored.Source)
+			if !restored.SourceActive || restored.State != state || restored.Cancelled != original.Cancelled || restored.Settled != original.Settled || restored.InputDigest != original.InputDigest || string(before) != string(after) || string(oldSource) != string(newSource) || restored.StopRequest.RequestID != "immutable-stop" || f.submits != 1 {
+				t.Fatal("source restoration changed original generation", restored)
+			}
+		})
+	}
+}

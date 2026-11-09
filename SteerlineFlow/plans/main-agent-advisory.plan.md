@@ -24,7 +24,7 @@
 | A01/A02/A03/A09/A10 | 核心/contract/prompts/依赖守卫定向及 l1.minimum；确认纯核心、字节限制、实际完整正文和唯一输出 |
 | A04/A05/A07 | bridge 定向：唯一提交、未知只查、重启、关联伪造、结果/结算分开、取消/源解除/停止回执、共享配额；原 Runner generate 公开客户端验证 |
 | A06/A08 | go.http、web.unit、生产构建；旧动作拒绝、仅展示/复制/取消、模型设置保持本地 |
-| A02/A11/A12/A13 | app 真实 SQLite 待答持久化集成、go.storage、query/Web 活动定向；不只手工传 Source fixture |
+| A02/A11/A12/A13 | app 真实 SQLite 待答持久化集成、go.storage、query/Web 活动定向；不只手工传 Source fixture；同一问题恢复时只恢复来源/提醒，不替换快照或重开生成 |
 | A07 关闭/恢复 | go.deployment，覆盖启动前 pending stop、namespace 与离线结算；smoke.delivery 为固定 L2 必跑 |
 | A04/A05 真实链 | runneracceptance 标签的 bridge 定向测试：显式固定 Runner/Codex EXE、真实 Sol/high、完整 request/result/source/settlement，不创建开发任务或真实 PR |
 

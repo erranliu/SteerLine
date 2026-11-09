@@ -187,6 +187,24 @@ func TestMainAgentAdvisoryPersistedQuestionAutomaticallyGeneratesWithoutWeb(t *t
 	if record.SourceActive || record.State != "ready" {
 		t.Fatal("resolved source rewrote history", record)
 	}
+	originalGoal := record.Request.Context.Goal
+	candidate.Revision++
+	candidate.Projection.Question = &runnercontract.Question{ID: "real-owner-question", Text: "different later display"}
+	candidate.Projection.Controls.CanReply = true
+	require(t, store.SaveCandidate(ctx, candidate, candidate.Revision-1, nil))
+	require(t, restarted.tick(ctx))
+	restored, e := restarted.service.Get(ctx, id)
+	require(t, e)
+	if !restored.SourceActive || restored.State != "ready" || restored.Request.Context.Goal != originalGoal || fake.submits != 1 {
+		t.Fatal("returning question replaced or reopened suggestion", restored)
+	}
+	facts, _, e = store.ReadAsyncActivityFacts(ctx, c.Identity(), ports.AsyncActivityRead{Source: "main_agent_advisory", Filter: "summary", Limit: 50})
+	require(t, e)
+	activity, e = query.ProjectAsyncActivity(c.Identity(), "instance", facts[0], time.Now())
+	require(t, e)
+	if !activity.NeedsAttention {
+		t.Fatal("returning question did not restore attention")
+	}
 }
 
 func TestMainAgentAdvisoryColdAbsenceAndOriginalStops(t *testing.T) {

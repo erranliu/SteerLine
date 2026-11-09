@@ -161,7 +161,14 @@ func (s *Service) Sync(ctx context.Context, sources []Source) error {
 		id := SourceID(s.Project, source)
 		current[id] = true
 		if old, err := s.load(ctx, id); err == nil {
-			s.track(old)
+			if !old.SourceActive {
+				old.SourceActive = true
+				if _, err = s.save(ctx, old); err != nil {
+					return err
+				}
+			} else {
+				s.track(old)
+			}
 			continue
 		} else if !errors.Is(err, contract.ErrNotFound) {
 			return err
