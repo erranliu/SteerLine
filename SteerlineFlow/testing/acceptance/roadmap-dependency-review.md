@@ -50,3 +50,11 @@ RDR-A01/A02 由投影测试及实际画布边集验证；A03/A04 由组件命令
 人工体验未执行，产品未部署；上述受控浏览器不冒充真实模型解析或外部 PR 验收。
 
 2026-11-09 文档静态检查：`python scripts/check_doc_links.py` 检查 720 份 Markdown、4453 个本地链接，0 错误；`git diff --check` 通过。另以本地 Python 读取本批文档/JSON，核对 UTF-8/LF、同名安排中的 4 个测试 ID 已登记且有序唯一、RDR-A01–A06 与后置 M01 的文档映射完整。以上仅为文档检查，不据此更新产品验收项为已验收。
+
+## 5. 提 PR 前同步主干与复验
+
+2026-11-09 用户授权提 PR。实现重基至最新 `main` 的 `2bd25bcd29ba26442aabbbc1ba1c644a9d0bd898`，唯一索引冲突保留环境资格修复和本任务两条验收导航，本功能源码未改。重基后受测提交为 `243479c9a5d6ca1c2a4db38ebb56f517bf22b724`，下述结果不替换第 4 节原始证据。
+
+生产构建通过，Edge 浏览器 1 场景通过（5.2s），日志/trace/三屏宽截图和受测提交见同 scope 的 `diagnostics/pr-20261109-01/`。`web.unit` 352/352（17.886s）、固定 L1（17.684s）、L2（108.746s）均 passed=true，Web/L1 complete=true、L2 cleanup_complete=true；分别见 `test-results/web-unit/20261109-pr-01/summary.json`、`test-results/L1/20261109-pr-01/summary.json`、`test-results/L2/20261109-pr-01/summary.json`。Roadmap 专项保留第 4 节原基线的通过记录，不宣称已在新基线重复执行。
+
+索引及文档静态检查在新基线覆盖 721 份 Markdown、4458 个本地链接，0 错误；PR 差异空白检查通过。未部署，RDR-M01 仍待安排。
