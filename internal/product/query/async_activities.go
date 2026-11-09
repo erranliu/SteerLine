@@ -208,6 +208,7 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		} `json:"observation"`
 		Settled          bool           `json:"settled"`
 		DomainDiagnostic string         `json:"domain_diagnostic"`
+		Blocked          bool           `json:"blocked"`
 		Current          int            `json:"current"`
 		Requests         []string       `json:"requests"`
 		TaskStatus       string         `json:"task_status"`
@@ -288,7 +289,11 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 				}
 			}
 		}
-		a.NeedsAttention = related.Current == 1 && (a.State == "failed" || r.State == "unverified")
+		if related.Blocked {
+			a.State = "waiting"
+			a.Phase = "检测阻断"
+		}
+		a.NeedsAttention = related.Current == 1 && (related.Blocked || a.State == "failed" || r.State == "unverified")
 	case "baseline_check":
 		var r struct {
 			ID        string    `json:"command_id"`

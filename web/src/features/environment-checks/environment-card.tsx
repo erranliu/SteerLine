@@ -164,7 +164,11 @@ export function EnvironmentCard({
         )}
       </div>
       {!confirmingStart && unsettled && (
-        <p className="muted">本次检测结束前不能再次检测。</p>
+        <p className="muted">
+          {e.stage === "blocked"
+            ? "本次检测尚未结束，可停止检测后重新发起。"
+            : "本次检测结束前不能再次检测。"}
+        </p>
       )}
       {!confirmingStart && e.stage === "ready" && (
         <p className="muted">重新检测会使当前就绪状态失效。</p>

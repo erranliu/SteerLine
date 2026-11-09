@@ -231,6 +231,76 @@ it("shows a recorded detection timeout on the card and in history", async () => 
   ).toBeVisible();
 });
 
+it("shows an unsettled blocked Run on the card and in history without restarting or stopping it", async () => {
+  const { client, record, send } = fixture();
+  record.state = "running";
+  record.settled = false;
+  record.blocked = true;
+  record.diagnostic = "远端 Orca 仓库查询超时，无法连接远端运行时";
+  await loaded();
+  await updateOptions(client, ({ environments }) => {
+    environments[0].stage = "blocked";
+    environments[0].reason = record.diagnostic;
+    environments[0].activity_settled = false;
+  });
+  expect(within(currentCard()).getByText(record.diagnostic)).toBeVisible();
+  expect(
+    within(currentCard()).getByText("本次检测尚未结束，可停止检测后重新发起。"),
+  ).toBeVisible();
+  expect(
+    within(currentCard()).queryByRole("button", { name: "重新检测" }),
+  ).not.toBeInTheDocument();
+  await openHistory();
+  const history = screen
+    .getByText("检测历史", { selector: "summary" })
+    .closest("details")!;
+  expect(
+    await within(history).findByText("检测阻断", { selector: "strong" }),
+  ).toBeVisible();
+  expect(within(history).getByText(record.diagnostic)).toBeVisible();
+  expect(send).not.toHaveBeenCalled();
+  fireEvent.click(
+    within(currentCard()).getByRole("button", { name: "停止检测" }),
+  );
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      "environment_stop",
+      record.id,
+      record.revision,
+      {},
+    ),
+  );
+});
+
+it("polls the requested detection ID and shows a later blocked observation", async () => {
+  const { api, record, send } = fixture(
+    true,
+    undefined,
+    false,
+    `/projects/project/environment?activity=${"a".repeat(32)}`,
+  );
+  record.state = "running";
+  record.settled = false;
+  const get = vi.mocked(api.get).getMockImplementation()!;
+  vi.mocked(api.get).mockImplementation(async (path, signal) =>
+    path === `/environment/${record.id}`
+      ? (structuredClone(record) as never)
+      : get(path, signal),
+  );
+  const detail = await screen.findByRole("region", { name: "指定检测详情" });
+  expect(await within(detail).findByText(/检测中 · remote/)).toBeVisible();
+  record.blocked = true;
+  record.diagnostic = "远端 Orca 连接超时";
+  await waitFor(
+    () => {
+      expect(within(detail).getByText(/检测阻断 · remote/)).toBeVisible();
+      expect(within(detail).getByText(record.diagnostic)).toBeVisible();
+    },
+    { timeout: 4500 },
+  );
+  expect(send).not.toHaveBeenCalled();
+});
+
 it("requires a scheme selection only for shared environments without a default", async () => {
   const { client, send } = fixture();
   await loaded();
@@ -573,6 +643,7 @@ function fixture(
     state: "failed",
     status: "not_ready",
     settled: true,
+    blocked: false,
     timed_out: false,
     diagnostic: "",
     rounds: [round],

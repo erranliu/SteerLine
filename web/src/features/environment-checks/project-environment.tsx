@@ -21,6 +21,7 @@ type Record = {
   state: string;
   status: string;
   settled: boolean;
+  blocked?: boolean;
   timed_out?: boolean;
   diagnostic: string;
 };
@@ -33,6 +34,12 @@ const recordState: { [key: string]: string } = {
   stopping: "正在停止",
   unverified: "结果待核实",
 };
+const recordLabel = (record: Record) =>
+  record.timed_out
+    ? "检测超时"
+    : record.blocked
+      ? "检测阻断"
+      : recordState[record.state] || "结果待核实";
 const linkName = (e: Environment) =>
   e.adapter === "codex-app-server"
     ? "Codex 直连"
@@ -84,6 +91,7 @@ function EnvironmentWorkspace() {
       ),
     enabled: online && !!requestedActivity,
     retry: false,
+    refetchInterval: visible && !!requestedActivity ? 3000 : false,
   });
   useEffect(() => {
     if (requestedRecord.data?.id === requestedActivity)
@@ -266,7 +274,7 @@ function EnvironmentWorkspace() {
               <>
                 <DetectionID id={requestedActivity} />
                 <p>
-                  {recordState[requestedRecord.data.state] || "结果待核实"} ·{" "}
+                  {recordLabel(requestedRecord.data)} ·{" "}
                   {requestedRecord.data.profile_id}
                 </p>
                 <p>{requestedRecord.data.diagnostic}</p>
@@ -396,11 +404,7 @@ function EnvironmentWorkspace() {
           return (
             <article className="environment-history-item" key={r.id}>
               <p>
-                <strong>
-                  {r.timed_out
-                    ? "检测超时"
-                    : recordState[r.state] || "结果待核实"}
-                </strong>
+                <strong>{recordLabel(r)}</strong>
                 {r.created_at && (
                   <> · {new Date(r.created_at).toLocaleString("zh-CN")}</>
                 )}

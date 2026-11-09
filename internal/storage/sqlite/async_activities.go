@@ -186,6 +186,7 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 			}
 			relation["settled"] = record.Settled()
 			relation["domain_diagnostic"] = record.DiagnosticText()
+			relation["blocked"] = record.Blocked()
 		}
 		if in.Source == "roadmap" {
 			var record roadmap.Stored
