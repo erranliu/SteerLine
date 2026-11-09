@@ -31,6 +31,7 @@ type testManagementPort struct {
 	progress        *testmanagement.ProgressService
 	maintenance     *projectMaintenance
 	roadmaps        *roadmapPort
+	mainAgent       *mainAgentPort
 }
 
 func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error) *testManagementPort {
@@ -138,6 +139,9 @@ func (p *testManagementPort) close() error {
 
 func (p *testManagementPort) observe(ctx context.Context) error {
 	stages := []func(context.Context) error{p.progress.ObserveNext}
+	if p.mainAgent != nil {
+		stages = append(stages, p.mainAgent.service.ObserveNext)
+	}
 	if p.roadmaps != nil {
 		stages = append(stages, p.roadmaps.service.ObserveNext)
 	}

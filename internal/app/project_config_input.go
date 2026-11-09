@@ -51,6 +51,7 @@ type Config struct {
 	runtimeEnvironment          *environmentPort
 	environmentPolicy           env.AdmissionPolicy
 	runtimeRoadmaps             *roadmapPort
+	runtimeMainAgent            *mainAgentPort
 	startup                     *startupQueries
 
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`

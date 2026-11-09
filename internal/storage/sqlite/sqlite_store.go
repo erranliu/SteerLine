@@ -12,13 +12,12 @@ import (
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
-
-	_ "modernc.org/sqlite"
-
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	_ "modernc.org/sqlite"
 )
 
 type SQLiteStore struct {
+	legacyDiscard40 bool // Existing explicit discard-only reader; never a runtime compatibility path.
 	Reader
 	db                *sql.DB
 	activityDB        *sql.DB

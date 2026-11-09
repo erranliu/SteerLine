@@ -8,11 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/developerconfig"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"io"
 	"regexp"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/developerconfig"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 type Pin struct {
@@ -29,12 +30,48 @@ type File[P any] struct {
 	MaxGenerateConcurrency *int            `json:"max_generate_concurrency,omitempty"`
 	UsagePolicy            json.RawMessage `json:"usage_policy,omitempty"`
 	Profiles               []Profile       `json:"execution_profiles"`
+	MainAgent              *MainAgent      `json:"main_agent,omitempty"`
 }
+
+type MainAgent struct {
+	Model           string `json:"model"`
+	ReasoningEffort string `json:"reasoning_effort"`
+}
+
+func MainAgentSettings(value *MainAgent) (MainAgent, error) {
+	if value == nil {
+		return MainAgent{Model: "gpt-6.1-sol", ReasoningEffort: "high"}, nil
+	}
+	if strings.TrimSpace(value.Model) != value.Model || value.Model == "" || strings.ContainsAny(value.Model, "\r\n\x00") {
+		return *value, errors.New("main_agent.model must be an explicit model identifier")
+	}
+	switch value.ReasoningEffort {
+	case "none", "minimal", "low", "medium", "high", "xhigh", "max":
+	default:
+		return *value, errors.New("main_agent.reasoning_effort is invalid")
+	}
+	return *value, nil
+}
+
 type Profile struct {
 	ID        string                        `json:"id"`
 	Name      string                        `json:"name"`
 	Execution runnercontract.ExecutionInput `json:"execution"`
 	Workflow  runnercontract.Workflow       `json:"workflow"`
+}
+
+// MainAgentBase reuses only an already configured local Codex transport.
+// Its model and permission are replaced through Runner's public compose API.
+// Remote executables and other agents are never used as a local fallback.
+func MainAgentBase(profiles []Profile) *runnercontract.ExecutionInput {
+	for _, profile := range profiles {
+		if profile.Execution.Adapter == "codex-app-server" && profile.Execution.Target.Kind == "local" {
+			copy := profile.Execution
+			copy.Settings = append(json.RawMessage(nil), copy.Settings...)
+			return &copy
+		}
+	}
+	return nil
 }
 
 func (p Profile) Digest() string { return runnercontract.ConfigurationDigest(p.Execution, p.Workflow) }

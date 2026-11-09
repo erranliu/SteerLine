@@ -44,6 +44,15 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 			return errors.New("generation Runner namespace differs")
 		}
 	}
+	analyses, err := store.Analyses(ctx, c.Identity())
+	if err != nil {
+		return err
+	}
+	for _, r := range analyses {
+		if !r.Settled() && !runnerbinding.SamePath(r.Runner.StateDir, pin.StateDir) {
+			return errors.New("material analysis Runner namespace differs")
+		}
+	}
 	roadmaps, err := store.Roadmaps(ctx, c.Identity())
 	if err != nil {
 		return err

@@ -341,6 +341,7 @@ func makeDiscardSchema40(t *testing.T, c Config) {
 		`DROP INDEX preparation_created`, `DROP INDEX candidate_activity_created`,
 		`DROP INDEX environment_activity_created`, `DROP INDEX explicit_check_created`,
 		`DROP TABLE preparation_associations`, `DROP TABLE preparation_batches`, `DROP TABLE source_observations`,
+		`DROP TABLE material_analyses`,
 		`DROP TABLE maintenance_settings`,
 		`CREATE TABLE maintenance_settings (project_identity TEXT PRIMARY KEY, profile TEXT NOT NULL, observation BLOB, generation_batch BLOB)`,
 		`UPDATE schema_migrations SET version=40`,

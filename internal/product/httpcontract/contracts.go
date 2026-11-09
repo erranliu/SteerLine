@@ -83,6 +83,7 @@ type CommandEnvelope struct {
 }
 
 type CommandResponse struct {
+	MainAgent       json.RawMessage         `json:"main_agent,omitempty"`
 	Roadmap         json.RawMessage         `json:"roadmap,omitempty"`
 	Environment     json.RawMessage         `json:"environment,omitempty"`
 	Maintenance     json.RawMessage         `json:"maintenance,omitempty"`

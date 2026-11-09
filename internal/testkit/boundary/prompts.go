@@ -11,6 +11,7 @@ import (
 func promptSinkAllowed(file, function string) bool {
 	switch file + ":" + function {
 	case "internal/testmanagement/generation.go:Generate",
+		"internal/mainagent/service.go:Start",
 		"internal/roadmap/generation.go:Parse",
 		"internal/roadmap/documents.go:GenerateDocuments",
 		"internal/environmentadaptation/service.go:appendRound",

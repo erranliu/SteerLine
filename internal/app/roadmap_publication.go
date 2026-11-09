@@ -20,6 +20,18 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
+type documentProvider struct{ config Config }
+
+func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, input, out any) error {
+	return (documentProvider{p.config}).provider(ctx, method, endpoint, input, out)
+}
+func (p *roadmapPort) prFact(ctx context.Context, url string) (roadmapPR, error) {
+	return (documentProvider{p.config}).prFact(ctx, url)
+}
+func (p *roadmapPort) findPR(ctx context.Context, branch string) (*roadmapPR, error) {
+	return (documentProvider{p.config}).findPR(ctx, branch)
+}
+
 type roadmapPR struct {
 	URL         string `json:"html_url"`
 	Number      int    `json:"number"`
@@ -38,7 +50,7 @@ type roadmapPR struct {
 	} `json:"base"`
 }
 
-func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, input any, out any) error {
+func (p documentProvider) provider(ctx context.Context, method, endpoint string, input any, out any) error {
 	config := p.config.PR
 	if !strings.HasPrefix(endpoint, "repos/"+config.Repository+"/") {
 		return errors.New("provider target differs")
@@ -113,7 +125,7 @@ func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, inp
 	}
 	return nil
 }
-func (p *roadmapPort) prFact(ctx context.Context, prURL string) (roadmapPR, error) {
+func (p documentProvider) prFact(ctx context.Context, prURL string) (roadmapPR, error) {
 	var fact roadmapPR
 	number, e := p.config.PR.PRNumber(prURL)
 	if e != nil {
@@ -131,7 +143,7 @@ func (p *roadmapPort) prFact(ctx context.Context, prURL string) (roadmapPR, erro
 	}
 	return fact, nil
 }
-func (p *roadmapPort) findPR(ctx context.Context, branch string) (*roadmapPR, error) {
+func (p documentProvider) findPR(ctx context.Context, branch string) (*roadmapPR, error) {
 	var match *roadmapPR
 	for page := 1; page <= 100; page++ {
 		var list []roadmapPR

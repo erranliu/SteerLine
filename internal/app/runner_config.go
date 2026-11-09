@@ -14,6 +14,9 @@ type RunnerExecutionConfig executionconfig.File[runnerclient.Selection]
 type RunnerProfile = executionconfig.Profile
 
 func (g RunnerExecutionConfig) Validate() error {
+	if _, err := executionconfig.MainAgentSettings(g.MainAgent); err != nil {
+		return err
+	}
 	if err := g.Developer.Validate(); err != nil {
 		return err
 	}

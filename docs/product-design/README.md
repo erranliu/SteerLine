@@ -32,10 +32,11 @@
 
 计费与采集设置由[计费职责 Spec](../../SteerlineFlow/spec/billing-ownership.spec.md)及[验收](../../SteerlineFlow/testing/acceptance/billing-ownership.md)维护；不在本索引复制规则或部署状态。
 
-## 拟议项目接入
+## 拟议能力与项目接入
 
 | 方案 | 当前限制 |
 | --- | --- |
+| [主 Agent：材料澄清与要求冲突](main-agent.md) | 首批已实现；手动分析两类材料问题，提交原题澄清或创建绑定 Spec/Plan 修订 PR；未部署 |
 | [添加、核验与登记](project-onboarding.md#拟议添加流程) | 角色清单及 PS-01–PS-07；完整 UI、核验器和正式登记尚未实现 |
 | [项目准备提示词](project-onboarding-prompt.md) | 用户自行复制使用；不触发产品 Agent、纳管或 Task |
 
