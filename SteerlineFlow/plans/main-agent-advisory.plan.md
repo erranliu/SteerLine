@@ -29,3 +29,7 @@
 | A04/A05 真实链 | runneracceptance 标签的 bridge 定向测试：显式固定 Runner/Codex EXE、真实 Sol/high、完整 request/result/source/settlement，不创建开发任务或真实 PR |
 
 每次独立 out，定向不冒充全集；失败和复跑分别保留。HTTP 压力与其他压力/E2E 串行；真实测试只运行明确用例，不能 skip 冒认通过。源码完成后固定提交跑 L1/L2，导出受测 SHA 的 Git 历史。人工浏览器可读性/导航/复制未观察就列未验，不阻断已证实自动项。Runner 源码无修改，因此无需 Runner worktree；若后续确需修改，必须另建 worktree。
+
+## 4. 正式 L4 接入
+
+新增现有runtime suite内的 runtime.main-agent-advisory（L4/controlled），映射A07/A08/A11–A14。沿 Scenario/Project/公开CLI peer及Playwright，来源从脚本化公开原Question进入生产观察路径；不构造Source、不改SQLite，不增加测试框架。夹具只补限定建议请求、回执丢失/查询不可用、结果与停止结算脚本及请求计数。Web实际验证活动精确导航、上下文、复制和无执行入口。同步正式JSON、L4说明、manifest、执行器Web构建/串行/必要证据和清理校验。每次新out，完整场景先定向跑通，再在干净提交运行L1/L2及本L4，登记实际证据；对应修改的controller/fixture/driver定向回归，已有活动场景复核防公共夹具回归。提示词资产无变化，提交前独立审核实际请求断言及测试接线。

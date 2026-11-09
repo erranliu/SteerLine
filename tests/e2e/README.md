@@ -92,3 +92,5 @@ go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario testing.
 live 精确单项串行。仅完整正向通过才能记该本机路径可用；负向阻断、缺输入/材料/能力或资源未知均不得算通过。两种本机 profile 的证据分别记录，不从另一模型/目标推断通过。
 
 本机/远端共用标准：正式环境 ready、原 Run 已停止且结果封存、绑定和准入正确、清理完成。项目失败须显示原失败原因并拒绝准入，正式正向 L4 仍判失败；不把负向覆盖算作正向可用。项目结果可包含任意 JSON 详情，平台和外部驱动只检验信封、来源与结果消费，不重跑或复核项目检测。
+
+`runtime.main-agent-advisory` 为 L4/controlled，真实应用/HTTP/Edge 与公开 Runner 夹具验证提示词建议整条行为，不消耗模型或发布PR；会构建Web，使用新out并与其他Web构建及HTTP压力串行。必要语义与清理证据由正式执行器校验。

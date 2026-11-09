@@ -387,14 +387,14 @@ func runE2E(opts options) (code int) {
 	web := ""
 	activityWeb := false
 	for _, entry := range selected {
-		if entry.ID == "runtime.async-activities" {
+		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.main-agent-advisory" {
 			activityWeb = true
 		}
 	}
 	if remoteInput != nil && selected[0].ID != remotetest.Environment || activityWeb {
 		web = filepath.Join(buildDir, "steerline-web.exe")
 		commands := [][]string{{"go", "build", "-tags=webui", "-o", web, "./cmd/steerline-web"}}
-		if remoteInput != nil {
+		if remoteInput != nil || hasMainAgentScenario(selected) {
 			commands = append([][]string{{"npm.cmd", "--prefix", "web", "run", "build"}}, commands...)
 		}
 		for i, args := range commands {
@@ -712,6 +712,11 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				return errors.New("missing project/environment qualification and original delivery proof")
 			}
 		}
+		if e.ID == "runtime.main-agent-advisory" {
+			if err := checkAdvisoryEvidence(filepath.Join(out, "scenarios", e.ID)); err != nil {
+				return err
+			}
+		}
 		if e.ID == "testing.management-local-codex" {
 			if evidence.Testing == nil {
 				return errors.New("missing test management proof")
@@ -803,4 +808,13 @@ func executeE2EPackages(ctx context.Context, names []string, packages map[string
 		}
 	}
 	return failures, blocked
+}
+
+func hasMainAgentScenario(entries []e2eScenario) bool {
+	for _, e := range entries {
+		if e.ID == "runtime.main-agent-advisory" {
+			return true
+		}
+	}
+	return false
 }

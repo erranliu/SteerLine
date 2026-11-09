@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
+import { Link } from "react-router-dom";
 import { identity, mountFeature, run, testClient } from "../../test/workspace";
 import type { Candidate } from "../../shared/api/types";
 import { MainAgent, type AdvisoryDetail } from "./main-agent";
@@ -30,7 +31,7 @@ const ready: AdvisoryDetail = {
     ],
   },
 };
-function mount(record = ready, value = candidate) {
+function mount(record = ready, value = candidate, navigation = false) {
   const api = new Api(identity, "csrf", "home");
   const submit = vi.fn();
   const fetch = vi.fn(async (url: unknown) =>
@@ -44,7 +45,10 @@ function mount(record = ready, value = candidate) {
   const copy = vi.fn(async () => {});
   vi.stubGlobal("navigator", { clipboard: { writeText: copy } });
   const view = mountFeature(
-    <MainAgent run={value} />,
+    <>
+      <MainAgent run={value} />
+      {navigation && <Link to={"?advisory=" + record.id}>打开精确建议</Link>}
+    </>,
     api,
     testClient(),
     true,
@@ -57,6 +61,16 @@ function open() {
   details.open = true;
   fireEvent(details, new Event("toggle"));
 }
+it("opens the exact advisory when activity navigation updates the mounted candidate", async () => {
+  const { fetch, submit } = mount(ready, candidate, true);
+  const panel = screen.getByText("后续对话提示词建议").closest("details")!;
+  expect(panel.open).toBe(false);
+  fireEvent.click(screen.getByRole("link", { name: "打开精确建议" }));
+  expect(await screen.findByText(ready.prompt!)).toBeInTheDocument();
+  expect(panel.open).toBe(true);
+  expect(fetch.mock.calls.some((c) => String(c[0]).includes("/main-agent/" + ready.id))).toBe(true);
+  expect(submit).not.toHaveBeenCalled();
+});
 it("observes an automatic result without generating on mount or open", async () => {
   const { fetch, submit } = mount();
   expect(fetch).not.toHaveBeenCalled();

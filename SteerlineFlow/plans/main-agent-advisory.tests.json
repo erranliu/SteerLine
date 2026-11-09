@@ -5,6 +5,7 @@
     "go.http",
     "go.storage",
     "go.deployment",
-    "web.unit"
+    "web.unit",
+    "runtime.main-agent-advisory"
   ]
 }

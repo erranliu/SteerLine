@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
@@ -41,6 +41,9 @@ export function MainAgent({ run }: { run: Candidate }) {
     new URLSearchParams(useLocation().search).get("advisory") || "";
   const target = /^[a-f0-9]{32}$/.test(requested) ? requested : "";
   const [open, setOpen] = useState(!!target);
+  useEffect(() => {
+    if (target) setOpen(true);
+  }, [target]);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
   const key = [

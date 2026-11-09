@@ -25,14 +25,19 @@ import (
 // RunnerFixture is a scripted public CLI peer. It owns no agent, transport,
 // workflow or native recovery state. Calls are evidence of caller side effects.
 type RunnerFixture struct {
-	WaitEvents []runnercontract.Event                 `json:"wait_events,omitempty"`
-	Progress   map[string]runnercontract.ProgressFile `json:"progress"`
-	Results    map[string]runnercontract.ResultFile   `json:"results"`
-	Providers  map[string]string                      `json:"providers"`
-	Runs       map[string]runnercontract.Run          `json:"runs"`
-	Requests   map[string]runnercontract.Command      `json:"requests"`
-	Bodies     map[string]string                      `json:"bodies"`
-	Calls      []string                               `json:"calls"`
+	SubmitCalls           map[string]int                         `json:"submit_calls,omitempty"`
+	AdvisoryQuestions     map[string]string                      `json:"advisory_questions,omitempty"`
+	AdvisoryStops         map[string]bool                        `json:"advisory_stops,omitempty"`
+	AdvisoryInspects      map[string]int                         `json:"advisory_inspects,omitempty"`
+	AdvisoryQueryFailures map[string]int                         `json:"advisory_query_failures,omitempty"`
+	WaitEvents            []runnercontract.Event                 `json:"wait_events,omitempty"`
+	Progress              map[string]runnercontract.ProgressFile `json:"progress"`
+	Results               map[string]runnercontract.ResultFile   `json:"results"`
+	Providers             map[string]string                      `json:"providers"`
+	Runs                  map[string]runnercontract.Run          `json:"runs"`
+	Requests              map[string]runnercontract.Command      `json:"requests"`
+	Bodies                map[string]string                      `json:"bodies"`
+	Calls                 []string                               `json:"calls"`
 }
 
 func RunnerCLI(args []string) (bool, error) {
@@ -174,6 +179,9 @@ func RunnerCLI(args []string) (bool, error) {
 		}
 		if code != "" {
 			os.Remove(lockPath)
+			if code == "request_outcome_unknown" {
+				os.Exit(6)
+			}
 			os.Exit(5)
 		}
 		return true, nil
@@ -203,6 +211,10 @@ func RunnerCLI(args []string) (bool, error) {
 		return respond(p, "")
 	}
 	if args[0] == "submit" {
+		if s.SubmitCalls == nil {
+			s.SubmitCalls = map[string]int{}
+		}
+		s.SubmitCalls[request.RequestID]++
 		if previous, ok := s.Requests[request.RequestID]; ok {
 			if s.Bodies[request.RequestID] != string(request.Input) {
 				return respond(nil, "request_conflict")
@@ -214,7 +226,11 @@ func RunnerCLI(args []string) (bool, error) {
 			return true, err
 		}
 		if input.Workflow.ID == "generate" {
-			return true, fmt.Errorf("controlled delivery peer does not supply generation results")
+			data, code, err := s.submitAdvisory(stateDir, request)
+			if err != nil {
+				return true, err
+			}
+			return respond(data, code)
 		}
 		directory := input.Repository.LocalPath
 		if directory == "" {
@@ -278,6 +294,17 @@ func RunnerCLI(args []string) (bool, error) {
 		if !ok {
 			return respond(nil, "run_not_found")
 		}
+		if s.AdvisoryQuestions[runID] != "" {
+			updated, code, err := s.observeAdvisory(runID, hasArgument(args, "--offline"))
+			if err != nil {
+				return true, err
+			}
+			if code != "" {
+				return respond(nil, code)
+			}
+			s.Runs[runID] = updated
+			return respond(runnercontract.Inspection{Command: cmd, Run: &updated}, "")
+		}
 		providerPath := s.Providers[runID]
 		if providerPath == "" {
 			providerPath = statePathForDirectory(stateDir)
@@ -338,6 +365,10 @@ func RunnerCLI(args []string) (bool, error) {
 				return respond(nil, "unexpected_runner_pr_refresh")
 			}
 		}
+		run, err = scriptedQuestion(providerPath, run)
+		if err != nil {
+			return true, err
+		}
 		s.Runs[runID] = run
 		if args[0] == "observe" {
 			return respond(map[string]any{"contract": "steerrunner-run-observation/v1", "run": run, "event_page": s.eventPage(run, argument(args, "--after"))}, "")
@@ -377,6 +408,12 @@ func RunnerCLI(args []string) (bool, error) {
 		run.Revision++
 	}
 	if args[0] == "stop" {
+		if s.AdvisoryQuestions[runID] != "" {
+			if s.AdvisoryStops == nil {
+				s.AdvisoryStops = map[string]bool{}
+			}
+			s.AdvisoryStops[runID] = true
+		}
 		if run.ExecutionWait != nil {
 			run.ExecutionWait = nil
 			s.WaitEvents = append(s.WaitEvents, runnercontract.Event{EventID: fmt.Sprintf("wait-%s-%d", runID, run.Revision+1), RunID: runID, Revision: run.Revision + 1, Type: "execution_wait_changed", ExecutionWait: json.RawMessage("null"), AttemptID: run.Execution.AttemptID, CreatedAt: time.Now().UTC()})
@@ -385,6 +422,15 @@ func RunnerCLI(args []string) (bool, error) {
 		run.StopStatus = "stopped"
 		run.NewInputsAllowed = false
 		run.Controls = runnercontract.Controls{}
+		if s.AdvisoryQuestions[runID] != "" {
+			script, err := readAdvisoryScript(s.Providers[runID])
+			if err != nil {
+				return true, err
+			}
+			if script.Results[s.AdvisoryQuestions[runID]].HoldStop {
+				run.StopStatus = "active"
+			}
+		}
 		run.Revision++
 	}
 	s.Runs[runID] = run
