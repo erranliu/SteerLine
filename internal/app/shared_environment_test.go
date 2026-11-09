@@ -34,6 +34,9 @@ func TestSharedEnvironmentMaterialsAndIndependentQualifications(t *testing.T) {
 		return r, current
 	}
 	a, currentA := seed(t, local)
+	if publicEnvironment(a).(map[string]any)["script_digest"] != a.Prepared.Files[a.Prepared.Manifest.Script] {
+		t.Fatal("public script digest did not use the frozen file digest")
+	}
 	if _, _, err := p.admission(ctx, "remote", "", false); err == nil {
 		t.Fatal("local success admitted an untested remote chain")
 	}
@@ -81,7 +84,11 @@ func TestSharedEnvironmentMaterialsAndIndependentQualifications(t *testing.T) {
 			full := filepath.Join(c.Repository, filepath.FromSlash(path))
 			original, err := os.ReadFile(full)
 			require(t, err)
-			require(t, os.WriteFile(full, append(original, []byte("\n# changed common basis\n")...), 0600))
+			changed := append(append([]byte{}, original...), []byte("\n# changed common basis\n")...)
+			if path == env.DocumentPath() {
+				changed = []byte(strings.Replace(string(original), `"requirements":{}`, `"requirements":{"go":"1.27.0"}`, 1))
+			}
+			require(t, os.WriteFile(full, changed, 0600))
 			commit = commitEnvironmentMaterials(t, c)
 			require(t, p.observeBasis(ctx, commit))
 			for i, r := range []env.Record{a, b} {
@@ -89,6 +96,16 @@ func TestSharedEnvironmentMaterialsAndIndependentQualifications(t *testing.T) {
 				require(t, err)
 				if !current.Invalidated || current.Revision != []uint64{beforeA.Revision, beforeB.Revision}[i]+1 {
 					t.Fatal("common change did not durably revoke each chain", current)
+				}
+				want := "检测依赖内容变化：" + path
+				if path == env.DocumentPath() {
+					want = "新增环境要求 go：1.27.0"
+				}
+				if path == env.ScriptPath("ps1") {
+					want = "检测脚本内容变化：" + path
+				}
+				if !strings.Contains(current.Reason, want) {
+					t.Fatal("revocation lost the changed input", current.Reason, want)
 				}
 			}
 			require(t, os.WriteFile(full, original, 0600))

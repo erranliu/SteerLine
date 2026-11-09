@@ -71,16 +71,24 @@ function Test-ToolVersion([string]$Name, [string]$Argument, [string]$Pattern, [v
 }
 
 try {
-    $goModule = [IO.File]::ReadAllText((Join-Path (Get-Location).Path 'go.mod'), $utf8)
-    $goVersion = [regex]::Match($goModule, '(?m)^go\s+(\d+\.\d+(?:\.\d+)?)\s*$')
-    if (-not $goVersion.Success) { throw 'go.mod must declare a Go version.' }
+    $document = [IO.File]::ReadAllText((Join-Path (Get-Location).Path 'SteerlineFlow/environment.md'), $utf8)
+    $blocks = [regex]::Matches($document, '(?ms)^```steerline-environment\r?\n(.*?)\r?\n```(?=\r?\n|$)')
+    if ($blocks.Count -ne 1) { throw 'Expected one environment requirements block.' }
+    $manifest = $blocks[0].Groups[1].Value | ConvertFrom-Json
+    if ($manifest.version -ne 6) { throw 'Unsupported environment manifest.' }
+    $requirements = $manifest.requirements
+    # Validate all minima before querying tools. Empty values must not become 0.0.
+    foreach ($name in @('go', 'node', 'python')) {
+        if ($requirements.$name -notmatch '^\d+\.\d+(?:\.\d+)?$') { throw 'Invalid tool minimum.' }
+        $null = [version]$requirements.$name
+    }
     Test-ToolVersion 'git.exe' '--version' 'git version (\d+\.\d+(?:\.\d+)?)' ([version]'0.0')
-    Test-ToolVersion 'go.exe' 'version' 'go version go(\d+\.\d+(?:\.\d+)?)' ([version]$goVersion.Groups[1].Value)
-    Test-ToolVersion 'node.exe' '--version' 'v(\d+\.\d+\.\d+)' ([version]'24.0')
+    Test-ToolVersion 'go.exe' 'version' 'go version go(\d+\.\d+(?:\.\d+)?)' ([version]$requirements.go)
+    Test-ToolVersion 'node.exe' '--version' 'v(\d+\.\d+\.\d+)' ([version]$requirements.node)
     Test-ToolVersion 'npm.cmd' '--version' '(?m)^(\d+\.\d+\.\d+)\s*$' ([version]'0.0')
-    Test-ToolVersion 'python.exe' '--version' 'Python (\d+\.\d+\.\d+)' ([version]'3.0')
+    Test-ToolVersion 'python.exe' '--version' 'Python (\d+\.\d+\.\d+)' ([version]$requirements.python)
 } catch {
-    $checks.Add([ordered]@{ tool = 'requirements'; ready = $false; message = 'Cannot read the required Go version from go.mod.' })
+    $checks.Add([ordered]@{ tool = 'requirements'; ready = $false; message = 'Cannot read valid tool requirements from SteerlineFlow/environment.md.' })
 }
 $failed = @($checks | Where-Object { -not $_.ready })
 $report.completed = $true

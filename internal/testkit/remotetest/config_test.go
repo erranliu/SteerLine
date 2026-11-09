@@ -102,7 +102,7 @@ func projectFixture(t *testing.T, execution runnercontract.ExecutionInput) (stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest, _ := json.Marshal(env.Manifest{Version: 5, Script: env.ScriptPath("ps1"), Interpreter: "powershell.exe", Dependencies: []string{}})
+	manifest, _ := json.Marshal(env.Manifest{Version: 6, Requirements: map[string]string{}, Script: env.ScriptPath("ps1"), Interpreter: "powershell.exe", Dependencies: []string{}})
 	for path, body := range map[string]string{tm.ProtocolPath: string(testingRules), tm.WriterPath: progresstools.PowerShellWriter, "SteerlineFlow/environment-project.json": `{"version":1,"requirements":[],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, env.DocumentPath(): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath("ps1"): "throw 'fixture only'\n"} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		if e := os.MkdirAll(filepath.Dir(full), 0700); e != nil {

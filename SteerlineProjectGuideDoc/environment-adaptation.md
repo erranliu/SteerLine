@@ -1,6 +1,6 @@
 # 项目环境接口适配指导
 
-当前接口采用公共材料 manifest 5 和结果信封 version 3。项目共用一套要求与检测入口，各运行机和链路分别检测并保存资格。字段和执行规则见[环境 Spec](../SteerlineFlow/spec/project-environment-workflow.spec.md)及[共用材料 Spec](../SteerlineFlow/spec/shared-environment-materials.spec.md)，已验证的构建和范围见[共用材料验收](../SteerlineFlow/testing/acceptance/shared-environment-materials.md)。
+当前接口采用公共材料 manifest 6 和结果信封 version 3。项目共用一套要求与检测入口，各运行机和链路分别检测并保存资格。字段和执行规则见[环境 Spec](../SteerlineFlow/spec/project-environment-workflow.spec.md)及[共用材料 Spec](../SteerlineFlow/spec/shared-environment-materials.spec.md)；manifest6 本轮实现与验证见[资格依据收窄验收](../SteerlineFlow/testing/acceptance/environment-basis-scope.md)，旧构建范围见[共用材料历史验收](../SteerlineFlow/testing/acceptance/shared-environment-materials.md)。
 
 开始前核实部署的 SteerLine 和独立 Runner 构建。项目维护者按[项目初始化指南](project-initialization.md#4-适配各目标的环境检测)准备并自检仓库材料。
 
@@ -28,9 +28,9 @@ SteerLine 展示并据最终 ready 控制对应环境准入
 
 环境资格与项目测试独立。环境入口不读取测试定义、安排、进度或报告，不执行项目测试、构建验收或 PR 发布，不以文档导航、Spec/Plan、roadmap 或业务源码正确性决定 ready。项目测试继续由任务原有流程安排和验收，不反向成为环境检测的输入。
 
-使用项目公共 `SteerlineFlow/environment.md` 和选定的 `SteerlineFlow/scripts/verify-environment.ps1` 或 `.sh`，不加另一份 input/context、检查清单或框架。文档是项目要求说明的权威入口，脚本实现该要求，manifest5 不含 environment_key，只定位项目公共入口/解释器和显式 dependencies。字段/版本/安全约束以 Spec §3 为准，本文不复制第二套 schema。新增目标只配置执行方案并检测，不新增 Git 材料；旧环境目录/版本不回退。
+使用项目公共 `SteerlineFlow/environment.md` 和选定的 `SteerlineFlow/scripts/verify-environment.ps1` 或 `.sh`，不加另一份 input/context、检查清单或框架。文档是项目说明入口，manifest6 的 requirements 是有效要求的机器可读权威，脚本读取并实现该要求；平台不解释项目要求语义。manifest6 不含 environment_key，包含公共入口/解释器、显式 dependencies 和 requirements（必填、可为空的非秘密字符串映射）。字段/版本/安全约束以 Spec §3 为准，本文不复制第二套 schema。新增目标只配置执行方案并检测，不新增 Git 材料；旧环境目录/版本不回退。
 
-dependencies 只声明检测实际使用的辅助程序和工具/SDK、权限、服务要求配置，可为空；环境说明和入口自动计入。业务文档、Spec/Plan、roadmap、测试清单及其程序/报告不属于环境资格依据。平台只按项目声明校验和计算摘要，不扫描业务文件、不维护测试路径分类或自动推导依赖；项目负责声明的边界和完整性。
+dependencies 只声明检测实际使用的辅助程序和工具/SDK、权限、服务要求配置，可为空；机器段与入口自动计入，说明正文不计入。业务文档、Spec/Plan、roadmap、测试清单及其程序/报告不属于环境资格依据。平台只按项目声明校验和计算摘要，不扫描业务文件、不维护测试路径分类或自动推导依赖；项目负责声明的边界和完整性。
 
 ## 项目自行完成检测闭环
 
@@ -58,9 +58,9 @@ dependencies 只声明检测实际使用的辅助程序和工具/SDK、权限、
 
 ## 结果适用范围与日常更新
 
-项目应完整声明会影响就绪结论的文件。平台把项目公共环境文档、入口、全部显式依赖、上述全部固定稳定调用字段及接口语义版本固定为 inputs_digest；每次活动/Run/request 身份、调用序号、源提交、当前引用 revision、时间戳、临时结果路径及摘要自身不计入该摘要，只作原信封绑定。结果原样回传该摘要及原提交，不能在执行后另选依据或改成当前提交。
+项目应完整声明会影响就绪结论的文件。平台把解析并规范化的机器段（含 requirements、入口、解释器、排序后的依赖路径）、入口脚本、全部显式依赖的原始字节摘要、上述全部固定稳定调用字段及接口语义版本固定为 inputs_digest；说明正文、JSON 排版/键序和依赖列表顺序不计入。项目不得把影响要求的条件只写在正文中，脚本必须读取 requirements 或声明的要求文件。不要将整份业务依赖文件仅为其中一个字段列入依据；在项目侧维护最小要求并以开发测试核对源配置一致性。每次活动/Run/request 身份、调用序号、源提交、当前引用 revision、时间戳、临时结果路径及摘要自身不计入该摘要，只作原信封绑定。结果原样回传该摘要及原提交，不能在执行后另选依据或改成当前提交。
 
-平台原观察 owner 确认要求、检测程序或声明等依据变化后，按原 Current revision 持久撤销资格；后续回退原字节也不恢复，须新检测。纯读取故障只暂阻断，不误作变更撤销；只读查询不写撤销。未观察到的中间提交不声称已检测。公共环境文档、入口及声明依赖变化，使各使用者的资格分别撤销；单目标失败或主动撤销仅作用该目标。无关源码提交且全部声明依据不变时，可以沿用原提交的结果，历史来源不改写。模型、生成记录和平台提示词措辞不单独使资格失效。
+平台原观察 owner 确认要求、检测程序或声明等依据变化后，按原 Current revision 持久撤销资格；后续回退原字节也不恢复，须新检测。纯读取故障只暂阻断，不误作变更撤销；只读查询不写撤销。未观察到的中间提交不声称已检测。机器段有效要求、入口及声明依赖变化，使各使用者的资格分别撤销；查询及持久失效原因展示要求的旧/新值或具体入口/依赖路径（多项变化最多展示八项及剩余数量）。单目标失败或主动撤销仅作用该目标。无关源码提交且全部声明依据不变时，可以沿用原提交的结果，历史来源不改写。模型、生成记录和平台提示词措辞不单独使资格失效。
 
 动态机器状态、凭据或服务变化无法仅靠 Git 文件发现。项目或用户知晓变化时，应使用既有标记失效/重新检测操作；平台不承诺持续监控，也不新增 TTL/自动扫描。新检测切换当前引用后，旧成功不兜底；迟到成功不能撤销人工失效或覆盖新的引用。
 
