@@ -18,6 +18,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
+	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -103,15 +104,8 @@ func TestDeploymentInterruptedRecovery(t *testing.T) {
 	store, err := OpenNativeTaskCommandStore(ctx, &c)
 	require(t, err)
 	defer store.Close()
-	generations, err := store.Generations(ctx, c.Identity())
-	require(t, err)
-	if len(generations) != 1 {
-		t.Fatal("expected the frozen task's generation", generations)
-	}
-	generation := generations[0]
-	generation.RunID, generation.InputDigest = "original-generation", "original-generation-input"
-	generation.Revision++
-	require(t, store.SaveGeneration(ctx, generation, generation.Revision-1))
+	generation := roadmap.Record{ID: strings.Repeat("a", 32), Project: c.Identity(), RequestID: strings.Repeat("a", 32), Revision: 1, Submission: "started", State: "accepted", Runner: d.runner.client.BuildPin(), RunID: "original-roadmap", InputDigest: "original-roadmap-input", Request: runnercontract.Request{RequestID: "original-roadmap-submit", Input: json.RawMessage(`{}`)}}
+	require(t, store.SaveRoadmap(ctx, generation, 0))
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	require(t, err)
 	var checkpoint hostcontract.ServiceCheckpoint

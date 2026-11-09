@@ -48,6 +48,11 @@ type Report struct {
 // PureImportsAllowed encodes the ownership matrix for definitions already
 // migrated by #73. Transitional aggregations are checked by the existing guards.
 func PureImportsAllowed(owner, dependency string) bool {
+	if owner == module+"/internal/mainagent" || owner == module+"/internal/mainagent/contract" {
+		if dependency == "os" || strings.HasPrefix(dependency, "os/") || dependency == "net" || strings.HasPrefix(dependency, "net/") || dependency == "io/fs" {
+			return false
+		}
+	}
 	if dependency == "database/sql" {
 		return false
 	}
@@ -79,7 +84,11 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
 	case module + "/internal/runnerstate":
 		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/taskcontract"
-	case module + "/internal/mainagent/model", module + "/internal/testmanagement/model", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model":
+	case module + "/internal/mainagent/contract":
+		return false
+	case module + "/internal/mainagent":
+		return dependency == module+"/internal/mainagent/contract" || dependency == module+"/internal/prompts"
+	case module + "/internal/testmanagement/model", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model":
 		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/prompts":
 		return dependency == module+"/internal/testmanagement/model" || dependency == module+"/internal/runnercontract" || dependency == module+"/tools"
@@ -89,7 +98,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/mainagent/model", module + "/internal/billing", module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/mainagent", module + "/internal/mainagent/contract", module + "/internal/billing", module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -448,7 +457,7 @@ func storageSQLiteImportAllowed(dependency string) bool {
 		module + "/internal/testmanagement/model",
 		module + "/internal/prompts",
 		module + "/internal/projectmaintenance/model",
-		module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/mainagent/model",
+		module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/mainagent/contract",
 	} {
 		if dependency == allowed {
 			return true

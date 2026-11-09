@@ -14,7 +14,7 @@ import (
 )
 
 const Basis = "manual_flat_token_estimate"
-const CalculationVersion = "flat-token/v1"
+const CalculationVersion = "configured-stage-token/v1"
 const MaxRecords = 50000
 
 type Rates struct {
@@ -84,12 +84,8 @@ type Tokens struct {
 	Total         *int64 `json:"total"`
 }
 type Record struct {
-	ID                                    string
-	Provider, Model                       *string
-	MetadataBasis, TimeBasis, Granularity string
-	CallTime, IntervalStart, IntervalEnd  *time.Time
-	Tokens                                Tokens
-	MetadataConflict                      bool
+	ID, StepID, Model, ReasoningEffort string
+	Tokens                             Tokens
 }
 type Usage struct {
 	RunID, Scope, Status string
@@ -97,41 +93,45 @@ type Usage struct {
 	Finalized            bool
 	CoverageComplete     bool
 	ZeroKnown            bool
+	PriceAt              time.Time
 	Records              []Record
 }
 type Match struct {
-	Provider string `json:"provider"`
-	Model    string `json:"model"`
-	RuleID   string `json:"rule_id"`
-	Records  int64  `json:"records"`
-	Amount   string `json:"amount"`
+	StepID          string `json:"step_id"`
+	ReasoningEffort string `json:"configured_reasoning_effort"`
+	Provider        string `json:"provider"`
+	Model           string `json:"model"`
+	RuleID          string `json:"rule_id"`
+	Records         int64  `json:"records"`
+	Amount          string `json:"amount"`
 }
 type Estimate struct {
-	Status             string   `json:"status"`
-	RunID              string   `json:"run_id"`
-	Scope              string   `json:"scope"`
-	UsageRevision      uint64   `json:"usage_revision"`
-	PolicyID           string   `json:"pricing_policy"`
-	PolicyVersion      string   `json:"pricing_policy_version"`
-	PolicyDigest       string   `json:"pricing_policy_digest"`
-	PolicySource       string   `json:"pricing_source"`
-	Generation         uint64   `json:"settings_generation"`
-	Currency           string   `json:"currency"`
-	CalculationVersion string   `json:"calculation_version"`
-	Basis              string   `json:"basis"`
-	Covered            *string  `json:"covered_estimated_amount"`
-	Total              *string  `json:"total_estimated_amount"`
-	RecordCount        int64    `json:"record_count"`
-	FullyPriced        int64    `json:"fully_priced_records"`
-	PartlyPriced       int64    `json:"partially_priced_records"`
-	Unpriced           int64    `json:"unpriced_records"`
-	Matches            []Match  `json:"matches"`
-	Assumptions        []string `json:"assumptions"`
-	Issues             []string `json:"issues"`
+	Status             string    `json:"status"`
+	RunID              string    `json:"run_id"`
+	Scope              string    `json:"scope"`
+	UsageRevision      uint64    `json:"usage_revision"`
+	PolicyID           string    `json:"pricing_policy"`
+	PolicyVersion      string    `json:"pricing_policy_version"`
+	PolicyDigest       string    `json:"pricing_policy_digest"`
+	PolicySource       string    `json:"pricing_source"`
+	Generation         uint64    `json:"settings_generation"`
+	Currency           string    `json:"currency"`
+	CalculationVersion string    `json:"calculation_version"`
+	Basis              string    `json:"basis"`
+	PriceAt            time.Time `json:"price_at"`
+	Covered            *string   `json:"covered_estimated_amount"`
+	Total              *string   `json:"total_estimated_amount"`
+	RecordCount        int64     `json:"record_count"`
+	FullyPriced        int64     `json:"fully_priced_records"`
+	PartlyPriced       int64     `json:"partially_priced_records"`
+	Unpriced           int64     `json:"unpriced_records"`
+	Matches            []Match   `json:"matches"`
+	Assumptions        []string  `json:"assumptions"`
+	Issues             []string  `json:"issues"`
 }
 
 func Calculate(u Usage, p Policy) (Estimate, error) {
-	e := Estimate{Status: "unavailable", RunID: u.RunID, Scope: u.Scope, UsageRevision: u.Revision, PolicyID: p.ID, PolicyVersion: p.Version, PolicyDigest: p.Digest(), PolicySource: p.Source, Currency: p.Currency, CalculationVersion: CalculationVersion, Basis: Basis, RecordCount: int64(len(u.Records)), Matches: []Match{}, Issues: []string{}, Assumptions: []string{"按配置固定费率估算，非实际账单；未建模上下文阶梯、服务档位、缓存多档、折扣和附加费。"}}
+	e := Estimate{Status: "unavailable", RunID: u.RunID, Scope: u.Scope, UsageRevision: u.Revision, PolicyID: p.ID, PolicyVersion: p.Version, PolicyDigest: p.Digest(), PolicySource: p.Source, Currency: p.Currency, CalculationVersion: CalculationVersion, Basis: Basis, PriceAt: u.PriceAt, RecordCount: int64(len(u.Records)), Matches: []Match{}, Issues: []string{}, Assumptions: []string{"按约定配置模型估算，非实际账单；按候选创建时间匹配当前价表，同模型须唯一匹配计价供应商。", "仅主执行会话；不含独立 parser、子 agent 及工具内部模型调用。未建模上下文阶梯、服务档位、折扣和附加费。"}}
 	if err := p.Validate(); err != nil {
 		return e, err
 	}
@@ -141,8 +141,8 @@ func Calculate(u Usage, p Policy) (Estimate, error) {
 	sum := new(big.Rat)
 	seen := map[string]bool{}
 	reasons := map[string]bool{}
-	amounts := map[string]*big.Rat{}
-	counts := map[string]int64{}
+	type group struct{ rule, step, effort string }
+	groups := map[group]int{}
 	addIssue := func(s string) {
 		if !reasons[s] {
 			e.Issues = append(e.Issues, s)
@@ -164,30 +164,24 @@ func Calculate(u Usage, p Policy) (Estimate, error) {
 		}
 		fail := ""
 		var matched *Rule
-		if r.MetadataConflict {
-			fail = "PRICING_METADATA_CONFLICT"
-		} else if r.Provider == nil || r.Model == nil || r.MetadataBasis != "observed" {
-			fail = "MODEL_UNKNOWN"
-		} else if r.Granularity == "interval" && (r.IntervalStart == nil || r.IntervalEnd == nil || !r.IntervalEnd.After(*r.IntervalStart)) || r.Granularity != "interval" && (r.CallTime == nil || r.TimeBasis != "request") {
+		if strings.TrimSpace(r.Model) == "" || strings.TrimSpace(r.StepID) == "" {
+			fail = "CONFIGURED_MODEL_UNASSIGNED"
+		} else if u.PriceAt.IsZero() {
 			fail = "PRICE_PERIOD_UNKNOWN"
 		} else {
 			for i := range p.Rules {
 				rule := &p.Rules[i]
-				if rule.Provider != *r.Provider || rule.Model != *r.Model {
+				if rule.Model != r.Model {
 					continue
 				}
-				at := r.CallTime
-				if r.Granularity == "interval" {
-					at = r.IntervalStart
-				}
-				if at.Before(rule.From) || rule.Until != nil && !at.Before(*rule.Until) {
+				if u.PriceAt.Before(rule.From) || rule.Until != nil && !u.PriceAt.Before(*rule.Until) {
 					continue
 				}
-				if r.Granularity == "interval" && rule.Until != nil && r.IntervalEnd.After(*rule.Until) {
-					continue
+				if matched != nil {
+					fail = "PRICE_AMBIGUOUS"
+					break
 				}
 				matched = rule
-				break
 			}
 			if matched == nil {
 				fail = "PRICE_NOT_FOUND"
@@ -224,11 +218,17 @@ func Calculate(u Usage, p Policy) (Estimate, error) {
 			addIssue("USAGE_PARTIAL")
 		}
 		sum.Add(sum, amount)
-		if amounts[matched.ID] == nil {
-			amounts[matched.ID] = new(big.Rat)
+		key := group{matched.ID, r.StepID, r.ReasoningEffort}
+		index, ok := groups[key]
+		if !ok {
+			index = len(e.Matches)
+			groups[key] = index
+			e.Matches = append(e.Matches, Match{RuleID: matched.ID, Provider: matched.Provider, Model: matched.Model, StepID: r.StepID, ReasoningEffort: r.ReasoningEffort, Amount: "0"})
 		}
-		amounts[matched.ID].Add(amounts[matched.ID], amount)
-		counts[matched.ID]++
+		m := &e.Matches[index]
+		previous, _ := new(big.Rat).SetString(m.Amount)
+		m.Amount = previous.Add(previous, amount).FloatString(18)
+		m.Records++
 	}
 	complete := u.Status == "available" && u.Finalized && u.CoverageComplete && (len(u.Records) > 0 || u.ZeroKnown)
 	if complete && e.FullyPriced == e.RecordCount {
@@ -244,11 +244,6 @@ func Calculate(u Usage, p Policy) (Estimate, error) {
 		e.Covered = &v
 		if e.Status == "estimated" {
 			e.Total = &v
-		}
-	}
-	for _, r := range p.Rules {
-		if a := amounts[r.ID]; a != nil {
-			e.Matches = append(e.Matches, Match{RuleID: r.ID, Provider: r.Provider, Model: r.Model, Records: counts[r.ID], Amount: a.FloatString(18)})
 		}
 	}
 	return e, nil

@@ -69,7 +69,7 @@ test("web.smoke.billing: isolated settings save, conflict, versions and narrow l
     .getByRole("textbox", { name: "Provider 1", exact: true })
     .fill("fixture-provider");
   await panel
-    .getByRole("textbox", { name: "实际模型 1", exact: true })
+    .getByRole("textbox", { name: "配置模型 1", exact: true })
     .fill("fixture-model");
   await panel
     .getByRole("textbox", { name: "生效时间 1", exact: true })

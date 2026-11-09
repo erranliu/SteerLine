@@ -72,6 +72,17 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 			require(t, err)
 			dir := filepath.Join(t.TempDir(), "prepared-project")
 			counts, err := prepareDiscardedTasks(ctx, c, dir)
+			if schema == "schema40" {
+				if err == nil {
+					t.Fatal("retired schema admitted for discard")
+				}
+				afterFile, readErr := os.ReadFile(filepath.Join(c.RunDir, "steerline.db"))
+				require(t, readErr)
+				if !bytes.Equal(beforeFile, afterFile) {
+					t.Fatal("rejected schema modified original database")
+				}
+				return
+			}
 			require(t, err)
 			if counts.Tasks != 2 || counts.Dependencies != 1 {
 				t.Fatal(counts)
@@ -284,7 +295,7 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 		}
 		return nil
 	})
-	blocked := fault == "changed-during-preparation" || fault == "changed-runner" || strings.HasPrefix(fault, "interrupted-") || fault == "corrupt-shutdown" || fault == "stale-shutdown" || fault == "schema40-wrong-host" || fault == "schema40-invalid-definition" || fault == "unsupported-schema"
+	blocked := strings.HasPrefix(fault, "schema40") || fault == "changed-during-preparation" || fault == "changed-runner" || strings.HasPrefix(fault, "interrupted-") || fault == "corrupt-shutdown" || fault == "stale-shutdown" || fault == "schema40-wrong-host" || fault == "schema40-invalid-definition" || fault == "unsupported-schema"
 	if blocked {
 		if err == nil {
 			t.Fatal("discard accepted changed ownership or concurrent configuration", fault)
@@ -337,15 +348,7 @@ func makeDiscardSchema40(t *testing.T, c Config) {
 	db, err := sql.Open("sqlite", filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
 	defer db.Close()
-	for _, stmt := range []string{
-		`DROP INDEX preparation_created`, `DROP INDEX candidate_activity_created`,
-		`DROP INDEX environment_activity_created`, `DROP INDEX explicit_check_created`,
-		`DROP TABLE preparation_associations`, `DROP TABLE preparation_batches`, `DROP TABLE source_observations`,
-		`DROP TABLE material_analyses`,
-		`DROP TABLE maintenance_settings`,
-		`CREATE TABLE maintenance_settings (project_identity TEXT PRIMARY KEY, profile TEXT NOT NULL, observation BLOB, generation_batch BLOB)`,
-		`UPDATE schema_migrations SET version=40`,
-	} {
+	for _, stmt := range []string{`UPDATE schema_migrations SET version=40`} {
 		_, err = db.Exec(stmt)
 		require(t, err)
 	}

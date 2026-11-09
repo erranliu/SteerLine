@@ -73,6 +73,7 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 			Design: "Reuse package logic; T2 follows T1.", Investigation: []roadmap.InvestigationReference{{Source: "repository", Path: "logic.go", Reason: "Pure logic owner"}}, Questions: []string{}, Documents: roadmap.PlannedDocuments(r)}
 		for i := range out.Documents {
 			out.Documents[i].Spec.Body = "# Spec\n## 目标\n" + r.Analysis.Tasks[i].Goal + "\n## 范围\n纯函数\n## 验收\n明确输入输出"
+			out.Documents[i].Tests = []string{"arithmetic.unit"}
 			out.Documents[i].Plan.Body = "# Plan\n## 实施\n扩展 logic.go\n## 测试\n运行 go test ./...，报告保存在独立目录"
 			out.Documents[i].Acceptance[0].Body = "# 验收\n## 自动\n待执行\n## 人工\n无需"
 		}

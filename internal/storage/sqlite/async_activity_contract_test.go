@@ -9,11 +9,9 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/product/query"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
-	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 // The reference reads ALL source facts, bypassing the SQL activity filter. It
@@ -182,28 +180,4 @@ func TestAsyncActivitySQLDetectionFiltersAreProjectionSupersets(t *testing.T) {
 	}
 	t.Run("environment", func(t *testing.T) { assertAsyncActivityFilterContract(t, s, "p", "environment_detection") })
 	t.Run("baseline", func(t *testing.T) { assertAsyncActivityFilterContract(t, s, "p", "baseline_check") })
-}
-
-func TestAsyncActivitySQLPreparationFilterIsProjectionSuperset(t *testing.T) {
-	s, err := OpenSQLiteStore(t.TempDir() + "/domain.db")
-	require(t, err)
-	defer s.Close()
-	ctx := context.Background()
-	for n, status := range []string{"queued", "preparing", "generating", "completed", "failed", "future_state"} {
-		for child := 0; child < 3; child++ {
-			id := fmt.Sprintf("batch%d-%d", n, child)
-			require(t, s.RegisterPreparation(ctx, "p", id, pm.GenerationBatch{ID: id, Status: "preparing", Items: []pm.GenerationBatchItem{{TaskID: "1"}}}))
-			if child > 0 {
-				require(t, s.SaveMaterial(ctx, "p", pm.Material{TaskID: "1", Inputs: id, GenerationID: id}))
-				g := tm.Generation{Project: "p", ID: id, Inputs: id, Revision: 1, State: "accepted", Submission: "started", Request: runnercontract.Request{RequestID: id}}
-				if child == 2 {
-					g.State = "failed"
-					g.Projection = &runnercontract.Run{StopStatus: "stopped", UpdatedAt: time.Now().UTC()}
-				}
-				require(t, s.SaveGeneration(ctx, g, 0))
-			}
-			require(t, s.SaveGenerationBatch(ctx, "p", pm.GenerationBatch{ID: id, Status: status, Items: []pm.GenerationBatchItem{{TaskID: "1"}}}))
-		}
-	}
-	assertAsyncActivityFilterContract(t, s, "p", "test_preparation")
 }

@@ -1,6 +1,8 @@
 # 主 Agent：给定上下文中的后续对话提示词建议
 
-状态：待实施的目标契约。本文收敛 PR475 的首批实现；不表示当前代码已经满足本边界。实现基线为 SteerLine `e9ee368f753322145457f1730b2309a68d566f83`，原实现及原测试见[历史验收](../testing/acceptance/main-agent-materials.md)。本次仅编写 Spec/Plan，不启动实现、模型验证、PR 更新或部署。
+状态：目标契约，分阶段实施中。用户于 2026-11-09 授权先交付模块重构 Draft PR，严格边界不变，生产建议生成保持阻断。本草稿不声明完整功能交付。调查基线为 SteerLine `e9ee368f753322145457f1730b2309a68d566f83`，原实现及原测试见[历史验收](../testing/acceptance/main-agent-materials.md)。
+
+当前阶段完成独立 contract/core、宿主本地异步记录、只读详情与活动投影，删除原答案/材料发布能力。原生零工具及排除隐式上下文未通过，故代码不装配任何模型或 Runner 提交客户端；模型偏好仅保存。首批来源适配器只认明确的两类原因码，实际生产方是否持续提供这些码仍未验证。完整自动生成、真实来源、失败时部分材料展示及人工体验仍以专属验收的未完成项为准。后续开放生成须另行补齐 Runner 能力与真实验证，不由配置开关启用。
 
 配套：[实现 Plan](../plans/main-agent-advisory.plan.md)、[专属验收](../testing/acceptance/main-agent-advisory.md)。规范：[编写规范](../../SteerlineProjectGuideDoc/spec-plan-guidelines.md)、[测试指南](../testing.md)、[提示词治理](../../docs/prompt-governance.md)。不建立 roadmap 或正式 Task 编号。
 

@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | [测试上下文](../../internal/testmanagement/model/documents.go)、[候选准备](../../internal/app/test_documents.go) | 内联选中ID及来源、长规则；缺少同源writer时仍附源码 | 提示引用固定安排/协议，缺helper或材料阻断 |
 | [提示组合](../../internal/runnerclient/prompt_context.go)、[候选存储](../../internal/storage/sqlite/runner_candidates.go) | 组合调用方上下文并核验原输入 | 保留冻结/CAS边界，核验引用及实际材料，不只查路径存在 |
-| [测试安排生成](../../internal/testmanagement/generation.go) | Plan、规范和清单仍inline | Agent读取同版本完整文件 |
+| [测试安排生成](https://github.com/erranliu/SteerLine/blob/221812ec058ec7dd608e447f8aeaeafb8587e376/internal/testmanagement/generation.go) | Plan、规范和清单仍inline | Agent读取同版本完整文件 |
 | [Roadmap解析](../../internal/roadmap/generation.go)、[文档生成](../../internal/roadmap/documents.go) | 规范已改引用；原文、任务图和确认结果仍inline | 原始输入均有可读固定文件，不能用同名快照文件冒充不同原文 |
 | [环境调用](../../internal/app/environment_adaptation.go)、[调用短提示](../../internal/prompts/environment-invoke.md)、[调用接线](../../internal/environmentadaptation/service.go) | 旧生成/阶段编排已退役 | 项目自行检测，平台只调用并消费结果，指令只引用 |
 | [用户回答](../../internal/taskrunner/input.go) | 按原问题/选项/原回答回复 | 原通道传递，超出2000个UTF-8字节拒绝，不转文件 |

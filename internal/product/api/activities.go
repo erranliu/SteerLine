@@ -34,10 +34,11 @@ type AsyncActivityProgress struct {
 	Diagnostic string `json:"diagnostic,omitempty"`
 }
 type AsyncActivityDetails struct {
-	Kind       string `json:"kind"`
-	Target     string `json:"target"`
-	TaskID     string `json:"task_id,omitempty"`
-	Historical bool   `json:"historical,omitempty"`
+	CandidateID string `json:"candidate_id,omitempty"`
+	Kind        string `json:"kind"`
+	Target      string `json:"target"`
+	TaskID      string `json:"task_id,omitempty"`
+	Historical  bool   `json:"historical,omitempty"`
 }
 type AsyncActivitySource struct {
 	Source     string `json:"source"`

@@ -90,7 +90,9 @@ export function BillingSettings({
       aria-label="计费设置"
     >
       <h2>计费</h2>
-      <p>所有项目共享。按配置价表估算，非实际账单；历史用量按当前价表重算。</p>
+      <p>
+        所有项目共享。按约定配置模型估算，非实际账单；历史用量按当前价表重算。以候选创建时间匹配价格，同一配置模型须唯一匹配计价供应商。
+      </p>
       <p className="muted">
         固定费率不包含上下文阶梯、服务档位、缓存多档、折扣及附加费。单价单位：每一百万
         Token。
@@ -155,9 +157,9 @@ export function BillingSettings({
                   />
                 </label>
                 <label>
-                  实际模型
+                  配置模型
                   <input
-                    aria-label={`实际模型 ${i + 1}`}
+                    aria-label={`配置模型 ${i + 1}`}
                     value={r.model}
                     onChange={(e) => rule(i, { ...r, model: e.target.value })}
                   />

@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 const RulesPath = "SteerlineFlow/testing.md"
@@ -10,7 +11,7 @@ const CataloguePath = "SteerlineFlow/testing/test-list.json"
 const WriterPath = "tools/testing/RuntimeProgress.ps1"
 const ProtocolPath = "SteerlineFlow/testing/runtime-progress.md"
 
-// FrozenArrangement serializes the original generated selection for the Runner.
+// FrozenArrangement serializes the original committed selection for the Runner.
 func FrozenArrangement(plan Snapshot) ([]byte, error) {
 	ids := make([]string, 0, len(plan.Definitions))
 	for _, definition := range plan.Definitions {
@@ -35,4 +36,8 @@ func ValidateArrangement(plan Snapshot, raw []byte, catalogue Catalogue) error {
 		}
 	}
 	return nil
+}
+
+func AllowsNoTests(plan string) bool {
+	return strings.Contains(plan, "无需自动测试") || strings.Contains(strings.ToLower(plan), "no automated tests")
 }

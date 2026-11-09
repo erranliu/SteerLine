@@ -9,13 +9,11 @@ import (
 // Material is the latest observed input for one task. Candidates hold their own
 // immutable contract; replacing this observation never changes an execution.
 type Material struct {
-	TaskID       string                    `json:"task_id"`
-	Commit       string                    `json:"commit"`
-	Contract     taskcontract.TaskContract `json:"contract"`
-	Digest       string                    `json:"digest"`
-	Inputs       string                    `json:"inputs"`
-	GenerationID string                    `json:"generation_id"`
-	TestPlan     json.RawMessage           `json:"test_plan,omitempty"`
-	Status       string                    `json:"status"`
-	Diagnostic   string                    `json:"diagnostic,omitempty"`
+	TaskID     string                    `json:"task_id"`
+	Commit     string                    `json:"commit"`
+	Contract   taskcontract.TaskContract `json:"contract"`
+	Digest     string                    `json:"digest"`
+	TestPlan   json.RawMessage           `json:"test_plan,omitempty"`
+	Status     string                    `json:"status"`
+	Diagnostic string                    `json:"diagnostic,omitempty"`
 }

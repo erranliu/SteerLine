@@ -23,7 +23,7 @@ SpecGuide 已同步本次身份规则：生成前固定 Roadmap 内部身份，�
 | 已有事实 | 复用与差异 |
 | --- | --- |
 | [内容生成契约](../../internal/runnercontract/content.go)、[只读配置映射](../../internal/runnerclient/content.go) | generate/1 接收 instruction、内联 materials、output_schema；已接入本机 Codex，只复制所需模型/程序偏好并构造 read_only |
-| [测试生成](../../internal/testmanagement/generation.go) | 已有原请求先保存、结果来源核验、查询、停止、恢复；其 Plan→测试 ID 的业务结果不可用于保存 Roadmap 任务或文档 |
+| [测试生成](https://github.com/erranliu/SteerLine/blob/221812ec058ec7dd608e447f8aeaeafb8587e376/internal/testmanagement/generation.go) | 已有原请求先保存、结果来源核验、查询、停止、恢复；其 Plan→测试 ID 的业务结果不可用于保存 Roadmap 任务或文档 |
 | [Task 批次应用](../../internal/task/batch.go)、[模型](../../internal/task/model/batch.go) | 已有同事务创建 Task / Contract / DAG / 回执和 local_key→Task ID 映射；当前输入要求调用方给出 task_id，尚无本版入图时分配编号的能力 |
 | [Task 事务端口](../../internal/task/commands.go)、[存储组装](../../internal/app/task_command_store.go) | 沿唯一 Task 写入 owner 补编号分配、来源唯一约束及入图回执，不由规划模块绕过 Task 应用直接写表 |
 | [Web 主导航](../../web/src/app/app-shell.tsx) | 当前无本版 Roadmap 产品页面；新增真实 HTTP/Web 接线，不把单文件原型移入生产冒充功能 |

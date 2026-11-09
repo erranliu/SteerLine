@@ -335,6 +335,15 @@ func (s *Service) observe(ctx context.Context, r model.Record) (out model.Record
 						return s.save(ctx, r)
 					}
 					applied, err := model.DecodeDocuments(r, r.Result, result.RepositorySource)
+					if err == nil && applied.State == "documents-review" {
+						var catalogueErr error
+						catalogue, catalogueErr := TestCatalogue(applied)
+						if catalogueErr != nil {
+							err = catalogueErr
+						} else {
+							err = ValidateTestIDs(applied, catalogue)
+						}
+					}
 					if err != nil {
 						r.State = "invalid"
 						r.Diagnostic = err.Error()

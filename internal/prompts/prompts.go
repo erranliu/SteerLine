@@ -43,7 +43,13 @@ func RoadmapParseRules() ([]byte, error)    { return files.ReadFile("materials/r
 func RoadmapDocumentRules() ([]byte, error) { return files.ReadFile("materials/roadmap-documents.md") }
 func RoadmapSpecGuide() ([]byte, error)     { return files.ReadFile("materials/roadmap-spec-guide.md") }
 func MainAgentRules() ([]byte, error)       { return files.ReadFile("materials/main-agent.md") }
-func MainAgent() (string, error)            { return render("main-agent", nil) }
+func MainAgentAdvisory(context string) (string, error) {
+	rules, err := MainAgentRules()
+	if err != nil {
+		return "", err
+	}
+	return render("main-agent", struct{ Rules, Context string }{string(rules), context})
+}
 
 // SameRules tolerates only checkout line endings on fixed rule copies.
 // Dynamic JSON must instead match its original bytes; Roadmap Markdown has its
@@ -52,16 +58,6 @@ func SameRules(actual, expected []byte) bool {
 	return len(actual) > 0 && bytes.Equal(bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll(expected, []byte("\r\n"), []byte("\n")))
 }
 
-func TestingGenerate(plan, commit string, project testmodel.ProjectEntry) (string, error) {
-	if plan == "" || commit == "" || project.Version != 1 {
-		return "", errors.New("fixed Plan and commit are required")
-	}
-	projectRaw, _ := json.Marshal(project)
-	if _, err := testmodel.ParseProjectEntry(projectRaw); err != nil {
-		return "", err
-	}
-	return render("testing-generate", struct{ Plan, Commit, ProjectFiles string }{plan, commit, strings.Join(project.Paths(), "、")})
-}
 func TestingReadOnly() (string, error) { return render("testing-readonly", nil) }
 func TestingContext(snapshot []byte) (string, error) {
 	var plan testmodel.Snapshot

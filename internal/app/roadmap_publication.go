@@ -16,21 +16,11 @@ import (
 	"time"
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
+	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
-
-type documentProvider struct{ config Config }
-
-func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, input, out any) error {
-	return (documentProvider{p.config}).provider(ctx, method, endpoint, input, out)
-}
-func (p *roadmapPort) prFact(ctx context.Context, url string) (roadmapPR, error) {
-	return (documentProvider{p.config}).prFact(ctx, url)
-}
-func (p *roadmapPort) findPR(ctx context.Context, branch string) (*roadmapPR, error) {
-	return (documentProvider{p.config}).findPR(ctx, branch)
-}
 
 type roadmapPR struct {
 	URL         string `json:"html_url"`
@@ -50,7 +40,7 @@ type roadmapPR struct {
 	} `json:"base"`
 }
 
-func (p documentProvider) provider(ctx context.Context, method, endpoint string, input any, out any) error {
+func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, input any, out any) error {
 	config := p.config.PR
 	if !strings.HasPrefix(endpoint, "repos/"+config.Repository+"/") {
 		return errors.New("provider target differs")
@@ -125,7 +115,7 @@ func (p documentProvider) provider(ctx context.Context, method, endpoint string,
 	}
 	return nil
 }
-func (p documentProvider) prFact(ctx context.Context, prURL string) (roadmapPR, error) {
+func (p *roadmapPort) prFact(ctx context.Context, prURL string) (roadmapPR, error) {
 	var fact roadmapPR
 	number, e := p.config.PR.PRNumber(prURL)
 	if e != nil {
@@ -143,7 +133,7 @@ func (p documentProvider) prFact(ctx context.Context, prURL string) (roadmapPR, 
 	}
 	return fact, nil
 }
-func (p documentProvider) findPR(ctx context.Context, branch string) (*roadmapPR, error) {
+func (p *roadmapPort) findPR(ctx context.Context, branch string) (*roadmapPR, error) {
 	var match *roadmapPR
 	for page := 1; page <= 100; page++ {
 		var list []roadmapPR
@@ -171,10 +161,26 @@ func (p *roadmapPort) publicationFiles(ctx context.Context, r roadmap.Record) (m
 	if e := roadmap.ValidateDocuments(r); e != nil {
 		return nil, e
 	}
+	catalogue, err := roadmapservice.TestCatalogue(r)
+	if err != nil {
+		return nil, err
+	}
+	if err = roadmapservice.ValidateTestIDs(r, catalogue); err != nil {
+		return nil, err
+	}
 	out := map[string]string{}
 	for _, d := range r.Documents {
 		out[d.Spec.Path] = d.Spec.Body
 		out[d.Plan.Path] = d.Plan.Body
+		name, err := tm.ArrangementPath(d.Plan.Path)
+		if err != nil {
+			return nil, err
+		}
+		body, err := roadmap.TestsJSON(d)
+		if err != nil {
+			return nil, err
+		}
+		out[name] = body
 		for _, a := range d.Acceptance {
 			out[a.Path] = a.Body
 		}

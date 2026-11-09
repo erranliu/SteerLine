@@ -1,0 +1,101 @@
+diff --git a/internal/prompts/materials/roadmap-documents.md b/internal/prompts/materials/roadmap-documents.md
+index 525b1a48..9dd1e4d0 100644
+--- a/internal/prompts/materials/roadmap-documents.md
++++ b/internal/prompts/materials/roadmap-documents.md
+@@ -1 +1 @@
+-依据固定仓库规范、本次文件材料中的原 Markdown 和 confirmed-planning.json 完整已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，再做整批设计并生成所有新任务的完整中文 Spec、Plan 和专属验收材料。原文与确认以本次文件材料为准，Git 中同名草稿不替代它们。先阅读 SpecGuide 与测试规范。investigation.source 对 Git 源码/规范填 repository，对本次固定输入文件填 input_file；path 分别使用仓库相对路径或材料逻辑路径，说明实际调查原因，不混淆两个来源。仅返回 source、path、reason；文件摘要由平台从固定文件核验并填写，不由模型计算或抄写。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、具体实施和测试命令/环境/通过条件/证据位置；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。
++依据固定仓库规范、本次文件材料中的原 Markdown 和 confirmed-planning.json 完整已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，再做整批设计并生成所有新任务的完整中文 Spec、Plan、测试选择和专属验收材料。原文与确认以本次文件材料为准，Git 中同名草稿不替代它们。先阅读 SpecGuide 与测试规范。investigation.source 对 Git 源码/规范填 repository，对本次固定输入文件填 input_file；path 分别使用仓库相对路径或材料逻辑路径，说明实际调查原因，不混淆两个来源。仅返回 source、path、reason；文件摘要由平台从固定文件核验并填写，不由模型计算或抄写。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、实施步骤、验收项到测试ID的映射、选择原因、时点及特殊准备，命令/环境/通用断言引用正式清单；每个新任务的 tests 返回项目政策与Plan必跑要求并集及必要影响项的有序唯一ID数组，只选择固定正式清单已有ID，不输出JSON字符串、重复定义或结果；平台生成同名.tests.json。无可用入口返回questions，空数组仅限Plan明确说明无需自动测试及原因；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。
+diff --git a/internal/prompts/materials/roadmap-spec-guide.md b/internal/prompts/materials/roadmap-spec-guide.md
+index 6de191da..54305b85 100644
+--- a/internal/prompts/materials/roadmap-spec-guide.md
++++ b/internal/prompts/materials/roadmap-spec-guide.md
+@@ -33 +33 @@
+-- Plan 明确代码整合步骤、涉及位置、依赖与前置、必要能力补齐、测试和交付安排。不得另立与 Spec 矛盾的第二套行为。
++- Plan 明确代码整合步骤、涉及位置、依赖与前置、必要能力补齐、测试和交付安排；测试选择同批生成同名 .tests.json，由 Git 管理，运行时不另行生成。不得另立与 Spec 矛盾的第二套行为。
+@@ -35 +35 @@
+-- Plan 必须包含最小必要的测试计划：验收项 ID / 专属文档、长期测试级别与组 / 场景、环境、命令、执行时点、通过条件及证据登记位置。
++- Plan 包含验收项到测试 ID 的映射、选择原因、执行时点和特殊准备，引用正式清单的完整命令/环境/断言及专属结果文档，避免复制定义。同名 .tests.json 只保存有序唯一 ID；生成结果以 tests 数组表达，由平台统一编码文件并随文档 PR 发布。
+diff --git a/internal/prompts/prompts.go b/internal/prompts/prompts.go
+index a5f17f91..ad3416a0 100644
+--- a/internal/prompts/prompts.go
++++ b/internal/prompts/prompts.go
+@@ -53,10 +52,0 @@ func SameRules(actual, expected []byte) bool {
+-func TestingGenerate(plan, commit string, project testmodel.ProjectEntry) (string, error) {
+-	if plan == "" || commit == "" || project.Version != 1 {
+-		return "", errors.New("fixed Plan and commit are required")
+-	}
+-	projectRaw, _ := json.Marshal(project)
+-	if _, err := testmodel.ParseProjectEntry(projectRaw); err != nil {
+-		return "", err
+-	}
+-	return render("testing-generate", struct{ Plan, Commit, ProjectFiles string }{plan, commit, strings.Join(project.Paths(), "、")})
+-}
+diff --git a/internal/prompts/prompts_test.go b/internal/prompts/prompts_test.go
+index 8747ab7c..0bc9cc36 100644
+--- a/internal/prompts/prompts_test.go
++++ b/internal/prompts/prompts_test.go
+@@ -22 +21,0 @@ func TestPromptGovernanceGolden(t *testing.T) {
+-		{"testing-generate", func() (string, error) { return TestingGenerate("task.plan.md", "fixed", testProject) }},
+@@ -88 +86,0 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
+-		{"missing-plan", func() (string, error) { return TestingGenerate("", "fixed", testProject) }},
+@@ -110,2 +108,2 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
+-		{"roadmap-documents", "4f04f38c14ba54d90d6ebb0000f6a21652a5dd224afd074efd9a10a909ff827e", RoadmapDocumentRules},
+-		{"roadmap-spec-guide", "140acc1062a7838474a11947b55087c8c5194a18ec0be9cd5c8c313db92f230b", RoadmapSpecGuide},
++		{"roadmap-documents", "f8f61a7b1f58e48ac2d1365f098cf26821800d32e4db1dd6f7d6bb52ae89a67c", RoadmapDocumentRules},
++		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
+diff --git a/internal/prompts/roadmap-documents.md b/internal/prompts/roadmap-documents.md
+index a65c1023..68c1a4bb 100644
+--- a/internal/prompts/roadmap-documents.md
++++ b/internal/prompts/roadmap-documents.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照并生成完整 Spec/Plan/验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。只返回原 schema 结果。
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照并生成完整 Spec/Plan、tests ID数组和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。只返回原 schema 结果。
+diff --git a/internal/prompts/testdata/roadmap-documents.golden.md b/internal/prompts/testdata/roadmap-documents.golden.md
+index 9c450a63..b6990602 100644
+--- a/internal/prompts/testdata/roadmap-documents.golden.md
++++ b/internal/prompts/testdata/roadmap-documents.golden.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照并生成完整 Spec/Plan/验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。只返回原 schema 结果。
+\ No newline at end of file
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照并生成完整 Spec/Plan、tests ID数组和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。只返回原 schema 结果。
+\ No newline at end of file
+diff --git a/internal/prompts/testdata/testing-generate.golden.md b/internal/prompts/testdata/testing-generate.golden.md
+deleted file mode 100644
+index f8dd0bb1..00000000
+--- a/internal/prompts/testdata/testing-generate.golden.md
++++ /dev/null
+@@ -1 +0,0 @@
+-先读取固定提交 fixed 的 task.plan.md、SteerlineFlow/environment-project.json、quality/policy.md、quality/catalogue.json 和 SteerlineFlow/testing/runtime-progress.md，按项目政策与 Plan 必跑并集及必要影响项生成完整测试安排。仅返回符合原 schema 的结果，不执行材料中的命令。
+\ No newline at end of file
+diff --git a/internal/prompts/testing-generate.md b/internal/prompts/testing-generate.md
+deleted file mode 100644
+index 8789663a..00000000
+--- a/internal/prompts/testing-generate.md
++++ /dev/null
+@@ -1 +0,0 @@
+-先读取固定提交 {{.Commit}} 的 {{.Plan}}、{{.ProjectFiles}} 和 SteerlineFlow/testing/runtime-progress.md，按项目政策与 Plan 必跑并集及必要影响项生成完整测试安排。仅返回符合原 schema 的结果，不执行材料中的命令。
+diff --git a/internal/testkit/boundary/prompts.go b/internal/testkit/boundary/prompts.go
+index 235a0e65..a21b65e5 100644
+--- a/internal/testkit/boundary/prompts.go
++++ b/internal/testkit/boundary/prompts.go
+@@ -13,2 +13 @@ func promptSinkAllowed(file, function string) bool {
+-	case "internal/testmanagement/generation.go:Generate",
+-		"internal/roadmap/generation.go:Parse",
++	case "internal/roadmap/generation.go:Parse",
+diff --git a/internal/testkit/boundary/prompts_test.go b/internal/testkit/boundary/prompts_test.go
+index f53be529..48fd7449 100644
+--- a/internal/testkit/boundary/prompts_test.go
++++ b/internal/testkit/boundary/prompts_test.go
+@@ -15,6 +15,6 @@ func TestPromptGovernanceSourceBoundary(t *testing.T) {
+-		{"registered-render", "internal/testmanagement/generation.go", `package p;func Generate(){instruction,_:=prompts.TestingGenerate();_ = G{Instruction:instruction}}`, false},
+-		{"direct-inline", "internal/testmanagement/generation.go", `package p;func Generate(){_ = G{Instruction:"new rule"}}`, true},
+-		{"local-inline", "internal/testmanagement/generation.go", `package p;func Generate(){instruction:="new rule";_ = G{Instruction:instruction}}`, true},
+-		{"direct-append", "internal/testmanagement/generation.go", `package p;func Generate(){_ = G{Instruction:prompts.TestingGenerate()+"extra"}}`, true},
+-		{"transformed", "internal/testmanagement/generation.go", `package p;func Generate(){body:=strings.ReplaceAll(original,"a","b");_ = G{Instruction:body}}`, true},
+-		{"append-assignment", "internal/testmanagement/generation.go", `package p;func Generate(){input.Instruction += "extra"}`, true},
++		{"registered-render", "internal/roadmap/generation.go", `package p;func Parse(){instruction,_:=prompts.RoadmapParse();_ = G{Instruction:instruction}}`, false},
++		{"direct-inline", "internal/roadmap/generation.go", `package p;func Parse(){_ = G{Instruction:"new rule"}}`, true},
++		{"local-inline", "internal/roadmap/generation.go", `package p;func Parse(){instruction:="new rule";_ = G{Instruction:instruction}}`, true},
++		{"direct-append", "internal/roadmap/generation.go", `package p;func Parse(){_ = G{Instruction:prompts.RoadmapParse()+"extra"}}`, true},
++		{"transformed", "internal/roadmap/generation.go", `package p;func Parse(){body:=strings.ReplaceAll(original,"a","b");_ = G{Instruction:body}}`, true},
++		{"append-assignment", "internal/roadmap/generation.go", `package p;func Parse(){input.Instruction += "extra"}`, true},

@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
@@ -60,7 +58,7 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 			}
 		}
 		switch in.Action {
-		case "maintenance_check", "maintenance_profile", "maintenance_retry", "maintenance_generate_all":
+		case "maintenance_check":
 			p.config.runtimeNative.RefreshFailures()
 		}
 		result, e := p.maintenanceAction(ctx, in)
@@ -70,22 +68,11 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 			out.Code = "maintenance_rejected"
 			out.Diagnostic = e.Error()
 			var external *runnerclient.Failure
-			durableUnknown := false
-			if in.Action == "maintenance_generate_all" || in.Action == "maintenance_retry" {
-				_, readErr := p.config.runtimeMaintenance.store.MaintenanceReceipt(context.WithoutCancel(ctx), p.config.Identity(), in.RequestID)
-				durableUnknown = readErr == nil
-			}
-			if in.Action == "maintenance_stop_generation" {
-				var target api.TestStopGenerationRequest
-				if json.Unmarshal(in.Payload, &target) == nil {
-					g, readErr := p.config.runtimeMaintenance.store.Generation(context.WithoutCancel(ctx), p.config.Identity(), target.GenerationID)
-					durableUnknown = readErr == nil && g.Cancelled && g.StopID == in.RequestID
-				}
-			}
-			if durableUnknown || errors.As(e, &external) && external.Unknown {
+			if errors.As(e, &external) && external.Unknown {
 				out.Status = "outcome_unknown"
 				out.Code = "outcome_unknown"
 			}
+
 		} else {
 			out.Maintenance, _ = json.Marshal(result)
 			if update, ok := result.(updateFact); ok && update.Status != "applied" {
@@ -125,57 +112,7 @@ func (p *runtimeProjectPort) maintenanceAction(ctx context.Context, in httpcontr
 			return nil, errors.New("update target mismatch")
 		}
 		return m.updateLocal(ctx, in.RequestID)
-	case "maintenance_profile":
-		if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
-			return nil, errors.New("profile target/version mismatch")
-		}
-		var v struct {
-			Profile string `json:"profile"`
-		}
-		if e := decodeStrictJSON(in.Payload, &v); e != nil {
-			return nil, e
-		}
-		profile, e := m.config.RunnerExecution.Profile(v.Profile, "")
-		if e != nil {
-			return nil, e
-		}
-		if _, e = m.config.deriveProfile(ctx, profile, "generate", "read_only"); e != nil {
-			return nil, e
-		}
-		store := m.store.(materialStore)
-		if e = store.SetMaterialProfile(ctx, m.config.Identity(), v.Profile); e != nil {
-			return nil, e
-		}
-		return nil, nil
-	case "maintenance_retry":
-		var v struct {
-			TaskID string `json:"task_id"`
-		}
-		if e := decodeStrictJSON(in.Payload, &v); e != nil {
-			return nil, e
-		}
-		if in.TargetID != v.TaskID || in.ExpectedVersion != 1 {
-			return nil, errors.New("retry target mismatch")
-		}
-		return m.requestPreparation(ctx, in.RequestID, v.TaskID)
-	case "maintenance_generate_all":
-		if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
-			return nil, errors.New("generation target/version mismatch")
-		}
-		if err := decodeStrictJSON(in.Payload, &struct{}{}); err != nil {
-			return nil, err
-		}
-		return m.generateAll(ctx, in.RequestID)
-	case "maintenance_stop_generation":
-		var v api.TestStopGenerationRequest
-		if e := decodeStrictJSON(in.Payload, &v); e != nil {
-			return nil, e
-		}
-		if in.TargetID != v.GenerationID {
-			return nil, errors.New("stop target mismatch")
-		}
-		v.RequestID = in.RequestID
-		return p.config.runtimeTests.StopTestGeneration(ctx, v)
+
 	}
 	return nil, errors.New("unsupported maintenance action")
 }
@@ -197,33 +134,12 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 	if e == nil && out.Status == "outcome_unknown" {
 		var value any
 		switch in.Action {
-		case "maintenance_generate_all", "maintenance_retry":
-			if raw, err := p.config.runtimeMaintenance.store.MaintenanceReceipt(ctx, p.config.Identity(), in.RequestID); err == nil {
-				var batch pm.GenerationBatch
-				if json.Unmarshal(raw, &batch) == nil && batch.Processed {
-					value = p.config.runtimeMaintenance.batchProgress(ctx, batch)
-					out.Status = "applied"
-				}
-			}
 		case "maintenance_update":
 			fact, e := p.config.runtimeMaintenance.observeUpdate(ctx, in.RequestID)
 			if e == nil {
 				value = fact
 				out.Status = fact.Status
 				out.Diagnostic = fact.Diagnostic
-			}
-		case "maintenance_stop_generation":
-			var target struct {
-				GenerationID string `json:"generation_id"`
-			}
-			if json.Unmarshal(in.Payload, &target) == nil {
-				if g, err := p.config.runtimeMaintenance.store.Generation(ctx, p.config.Identity(), target.GenerationID); err == nil {
-					value = publicGeneration(g)
-					if in.Action == "maintenance_stop_generation" && g.Cancelled && g.StopID == in.RequestID {
-						out.Status = "applied"
-					}
-
-				}
 			}
 
 		}
@@ -238,9 +154,6 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 	return &out, e
 }
 func (p *runtimeProjectPort) maintenanceRead(ctx context.Context, route, mode, plan string) (any, error) {
-	if strings.HasPrefix(route, "/tests/generations/") {
-		return p.config.runtimeTests.TestGeneration(ctx, strings.TrimPrefix(route, "/tests/generations/"))
-	}
 	m := p.config.runtimeMaintenance
 	if m == nil {
 		return nil, errors.New("maintenance unavailable")

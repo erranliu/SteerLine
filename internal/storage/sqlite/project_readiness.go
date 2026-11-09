@@ -8,7 +8,6 @@ import (
 
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 // Check all unfinished tasks in the reservation transaction, so another task's
@@ -29,16 +28,6 @@ func (tx *sqliteTx) verifyProjectMaterials(project, commit string, tasks []taskm
 			}
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
-		}
-		if material.Status == "ready" {
-			err = tx.tx.QueryRowContext(tx.ctx, `SELECT payload FROM test_generations WHERE project_identity=? AND generation_id=?`, project, material.GenerationID).Scan(&raw)
-			var generation testmodel.Generation
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-			if err != nil || json.Unmarshal(raw, &generation) != nil || generation.State != "generated" || generation.Cancelled || generation.Inputs != material.Inputs {
-				material.Status = "unknown"
-			}
 		}
 		materials = append(materials, material)
 	}

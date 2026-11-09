@@ -32,6 +32,7 @@ export type Activity = {
     kind: string;
     target: string;
     task_id?: string;
+    candidate_id?: string;
     historical?: boolean;
   };
 };
@@ -62,8 +63,6 @@ export const matchesActivity = (a: Activity, filter: ActivityFilter) =>
 export const activityActions = new Set([
   "environment_start",
   "maintenance_check",
-  "maintenance_generate_all",
-  "maintenance_retry",
   "start_task",
   "start_candidate",
   "roadmap_parse",
@@ -178,6 +177,8 @@ export function provisionalActivities(
 export function activityDestination(project: string, activity: Activity) {
   const root = `/projects/${encodeURIComponent(project)}`;
   const d = activity.details_ref;
+  if (d.kind === "advisory")
+    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.candidate_id || "")}&advisory=${encodeURIComponent(d.target)}`;
   if (d.kind === "roadmap")
     return `${root}/roadmaps?record=${encodeURIComponent(d.target)}`;
   if (d.kind === "roadmap-source")

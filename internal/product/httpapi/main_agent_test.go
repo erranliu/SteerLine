@@ -30,7 +30,7 @@ func TestMainAgentSharedImmutableCommandNamespace(t *testing.T) {
 	c := newRegistryTestOwner(authority, commands, records)
 	port := &mainAgentPortFixture{}
 	e := registryTestEnvelope(strings.Repeat("a", 32))
-	e.Action = "main_agent_analyze"
+	e.Action = "main_agent_cancel"
 	if _, err := c.submitMainAgent(ctx, e, port); err != nil {
 		t.Fatal(err)
 	}
@@ -51,13 +51,13 @@ func TestMainAgentSharedImmutableCommandNamespace(t *testing.T) {
 	if _, err := c.Submit(ctx, control, "fixture"); err != nil {
 		t.Fatal(err)
 	}
-	control.Action = "main_agent_analyze"
+	control.Action = "main_agent_cancel"
 	if _, err := c.submitMainAgent(ctx, control, &mainAgentPortFixture{}); err == nil {
 		t.Fatal("MainAgent replaced control")
 	}
 
 	pending := registryTestEnvelope(strings.Repeat("c", 32))
-	pending.Action = "main_agent_analyze"
+	pending.Action = "main_agent_cancel"
 	raw, _ := json.Marshal(pending)
 	if err := records.Register(requestRecord{Version: 1, Envelope: pending, Digest: digestBytes(raw)}); err != nil {
 		t.Fatal(err)

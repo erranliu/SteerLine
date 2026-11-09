@@ -84,7 +84,7 @@ Windows 安装根目录须向普通子目录传递当前用户的访问权限。
 
 原宿主中断且缺停机回执时，可严格离线核验原进程退出、租约/锁、全部数据库 checkpoint 身份及原 Runner 绑定，再由原 Runner 停止资源，不临时重启项目宿主。只允许明确缺失回执；已有但损坏、过期或本地关闭未核实的回执仍阻断。discard.json 保留 interrupted_host 和原停止诊断。
 
-original-shutdown.json、discard.json 记录原请求、结算、任务数量和切换进度；shutdown-verification.json 绑定部署包。开始切换后中断会留下 `<home>/deployment-discard.json`，阻断 start/serve、后续部署及升级预检，须按该记录完成现场恢复；不自动重发未知 stop 或回滚。开始切换前失败不移动原执行目录，服务可能已停止。本功能使用当前 Runner 命名空间，不迁移旧运行状态。schema 41 程序的显式放弃模式允许只读核验 schema 40 的完整结构、任务和原运行归属，归档旧库并重建新 schema 41 任务库，不改版本号或原地升级；正常启动/查询/写入仍只接受 schema 41，其他旧格式或定义不符继续阻断。实际范围见[清理修复验收](../../SteerlineFlow/testing/acceptance/deployment-schema40-discard-20261106.md)。
+original-shutdown.json、discard.json 记录原请求、结算、任务数量和切换进度；shutdown-verification.json 绑定部署包。开始切换后中断会留下 `<home>/deployment-discard.json`，阻断 start/serve、后续部署及升级预检，须按该记录完成现场恢复；不自动重发未知 stop 或回滚。开始切换前失败不移动原执行目录，服务可能已停止。本功能使用当前 Runner 命名空间，不迁移旧运行状态。当前 schema 42 仅接受当前完整定义；旧开发格式需用原构建核实和结算，不提供迁移、双读或旧库任务导入。schema 41 对 schema 40 的历史显式放弃行为仅按原版本追溯，原验收见[清理修复验收](../../SteerlineFlow/testing/acceptance/deployment-schema40-discard-20261106.md)。
 
 ## 实现与历史证据
 

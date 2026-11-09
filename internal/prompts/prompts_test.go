@@ -19,10 +19,9 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		name   string
 		render func() (string, error)
 	}{
-		{"testing-generate", func() (string, error) { return TestingGenerate("task.plan.md", "fixed", testProject) }},
 		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot)) }},
 		{"testing-readonly", TestingReadOnly},
-		{"main-agent", MainAgent},
+		{"main-agent", func() (string, error) { return MainAgentAdvisory(`{"goal":"clarify","materials":[]}`) }},
 		{"pr-conflict-resolution", func() (string, error) { return PRConflictResolution("https://example.test/repo/pull/1", "main") }},
 		{"testing-step", func() (string, error) {
 			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true)
@@ -86,7 +85,6 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
 		{"missing-body", func() (string, error) { return TestingStep("", []byte(testSnapshot), true) }},
 		{"missing-entry", func() (string, error) { return EnvironmentInvoke("powershell.exe", "") }},
 		{"unsupported-interpreter", func() (string, error) { return EnvironmentInvoke("other", "entry") }},
-		{"missing-plan", func() (string, error) { return TestingGenerate("", "fixed", testProject) }},
 		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md") }},
 		{"missing-roadmap-source", func() (string, error) { return RoadmapParse("", "fixed") }},
 	}
@@ -107,10 +105,10 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		read         func() ([]byte, error)
 	}{
 		{"testing", "75671b11e26c540791678c1593c3b14ed4161ba53b721d8758ae8c9c1eba937a", TestingRules},
-		{"main-agent", "aad1a1af160eb9873dd570adc60b8a4041ac8d9e8f56c75ad911151f9d91aaa0", MainAgentRules},
+		{"main-agent", "79e76b91c5ec53c9d7d6cb5df33483da62822a6667b2286944476e51cb10ecdc", MainAgentRules},
 		{"roadmap-parse", "426c10f34a883e9066d3060bc06723bcf2823989e5cc74d78c50a3a3882738bb", RoadmapParseRules},
-		{"roadmap-documents", "4f04f38c14ba54d90d6ebb0000f6a21652a5dd224afd074efd9a10a909ff827e", RoadmapDocumentRules},
-		{"roadmap-spec-guide", "140acc1062a7838474a11947b55087c8c5194a18ec0be9cd5c8c313db92f230b", RoadmapSpecGuide},
+		{"roadmap-documents", "f8f61a7b1f58e48ac2d1365f098cf26821800d32e4db1dd6f7d6bb52ae89a67c", RoadmapDocumentRules},
+		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

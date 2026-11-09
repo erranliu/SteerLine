@@ -63,7 +63,7 @@ func documentSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, mod
 	s.Repository = t.TempDir()
 	s.PrepareDocuments = func(context.Context, model.Record) (model.DocumentContext, error) {
 		body := "fixed generation guidelines"
-		return model.DocumentContext{Commit: strings.Repeat("a", 40), Tree: strings.Repeat("b", 40), Materials: []runnercontract.Document{{Kind: "inline", Path: "SpecGuide.md", Content: &body}}}, nil
+		return model.DocumentContext{Commit: strings.Repeat("a", 40), Tree: strings.Repeat("b", 40), Materials: []runnercontract.Document{{Kind: "inline", Path: "SpecGuide.md", Content: &body}, {Path: "SteerlineFlow/environment-project.json", Content: stringPtr(`{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`)}, {Path: "quality/cases.json", Content: stringPtr(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)}}}, nil
 	}
 	rules, err := prompts.RoadmapDocumentRules()
 	if err != nil {
@@ -71,6 +71,8 @@ func documentSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, mod
 	}
 	f.files[DocumentRulesPath] = rules
 	f.files["SpecGuide.md"] = []byte("fixed generation guidelines")
+	f.files["SteerlineFlow/environment-project.json"] = []byte(`{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`)
+	f.files["quality/cases.json"] = []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)
 	f.files["code.go"] = []byte("fixed code\n")
 	return s, store, f, r
 }
@@ -85,6 +87,7 @@ func documentResult(r model.Record) (model.GeneratedDocuments, *runnercontract.R
 		Questions: []string{}, Documents: model.PlannedDocuments(r)}
 	for i := range out.Documents {
 		out.Documents[i].Spec.Body = "# Spec\n## 目标\n完整目标\n## 范围\n当前范围\n## 验收\n通过条件"
+		out.Documents[i].Tests = []string{"one"}
 		out.Documents[i].Plan.Body = "# Plan\n## 实施\n复用现有代码\n## 测试\n明确命令与证据"
 		out.Documents[i].Acceptance[0].Body = "# 验收\n## 自动\n待执行\n## 人工\n待安排"
 	}
@@ -312,5 +315,34 @@ func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
 				t.Fatal("unverified Git bytes adopted", done, err)
 			}
 		})
+	}
+}
+
+func stringPtr(s string) *string { return &s }
+
+func TestRoadmapDocumentTestsUseFrozenCatalogue(t *testing.T) {
+	service, _, _, parent := documentSetup(t)
+	record, err := service.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	documents, _ := documentResult(record)
+	record.Documents = documents.Documents
+	catalogue, err := TestCatalogue(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, selection := range [][]string{nil, {"missing"}, {"one", "one"}, {}} {
+		changed := record
+		changed.Documents = append([]model.Documents(nil), record.Documents...)
+		changed.Documents[0].Tests = selection
+		if err := ValidateTestIDs(changed, catalogue); err == nil {
+			t.Fatal("invalid test selection accepted", selection)
+		}
+	}
+	record.Documents[0].Tests = []string{}
+	record.Documents[0].Plan.Body += "\n无需自动测试：仅文档。"
+	if err := ValidateTestIDs(record, catalogue); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -56,7 +56,8 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 }
 
 var nativeTaskSchema = []string{
-	`CREATE TABLE material_analyses (project_identity TEXT NOT NULL, analysis_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,analysis_id))`,
+	`CREATE TABLE advisory_jobs (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
+	`CREATE TABLE maintenance_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, digest TEXT NOT NULL, result BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
 	`CREATE TABLE source_observations (project_identity TEXT NOT NULL, source TEXT NOT NULL, source_id TEXT NOT NULL, source_revision INTEGER NOT NULL, last_success TEXT NOT NULL, diagnostic TEXT NOT NULL, PRIMARY KEY(project_identity,source,source_id))`,
 	`CREATE TABLE project_environment_current (project_identity TEXT NOT NULL, environment_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,environment_key))`,
 	`CREATE TABLE roadmaps (project_identity TEXT NOT NULL, roadmap_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,roadmap_id))`,
@@ -65,15 +66,9 @@ var nativeTaskSchema = []string{
 	`CREATE TABLE roadmap_task_sources (project_identity TEXT NOT NULL, roadmap_id TEXT NOT NULL, local_key TEXT NOT NULL, task_id TEXT NOT NULL, request_id TEXT NOT NULL, PRIMARY KEY(project_identity,roadmap_id,local_key), UNIQUE(project_identity,task_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
 	`CREATE TABLE project_environments (project_identity TEXT NOT NULL, activity_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,activity_id))`,
 	`CREATE TABLE environment_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, activity_id TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,activity_id) REFERENCES project_environments(project_identity,activity_id))`,
-	`CREATE TABLE maintenance_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, digest TEXT NOT NULL, result BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
 	`CREATE TABLE project_materials (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,task_id))`,
-	`CREATE TABLE maintenance_settings (project_identity TEXT PRIMARY KEY, profile TEXT NOT NULL, observation BLOB, generation_batch TEXT)`,
-	`CREATE TABLE preparation_batches (project_identity TEXT NOT NULL, batch_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,batch_id))`,
-	`CREATE TABLE preparation_associations (project_identity TEXT NOT NULL, batch_id TEXT NOT NULL, task_id TEXT NOT NULL, inputs TEXT NOT NULL, generation_id TEXT NOT NULL, PRIMARY KEY(project_identity,batch_id,task_id,inputs,generation_id), FOREIGN KEY(project_identity,batch_id) REFERENCES preparation_batches(project_identity,batch_id))`,
-	`CREATE INDEX preparation_created ON preparation_batches(project_identity,COALESCE(json_extract(CAST(payload AS TEXT),'$.created_at'),''),batch_id)`,
-	`CREATE TABLE test_generations (project_identity TEXT NOT NULL, generation_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,generation_id))`,
+	`CREATE TABLE maintenance_settings (project_identity TEXT PRIMARY KEY, observation BLOB)`,
 	`CREATE TABLE candidate_progress ( project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,
-	`CREATE TABLE test_generation_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, generation_id TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,generation_id) REFERENCES test_generations(project_identity,generation_id))`,
 	`CREATE TABLE runner_candidates (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, task_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), request_id TEXT NOT NULL, run_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), UNIQUE(project_identity,candidate_id,task_id), UNIQUE(project_identity,request_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
 	`CREATE UNIQUE INDEX runner_candidate_run ON runner_candidates(project_identity,run_id) WHERE run_id<>''`,
 	`CREATE INDEX candidate_activity_created ON runner_candidates(project_identity,COALESCE(json_extract(CAST(payload AS TEXT),'$.created_at'),''),candidate_id)`,

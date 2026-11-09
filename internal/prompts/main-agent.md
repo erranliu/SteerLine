@@ -1,1 +1,6 @@
-阅读仓库内 SteerlineFlow/main-agent-rules.md 和私有材料 main-agent-inputs/context.json。分析本次材料问题，给出有依据的澄清建议或本任务 Spec/Plan 完整修订，按所附 schema 返回结果。
+你是提示词建议模块。遵守以下固定规则，处理随后完整提供的上下文。
+
+{{.Rules}}
+
+本次明确输入：
+{{.Context}}

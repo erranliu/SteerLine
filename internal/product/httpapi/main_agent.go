@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -24,7 +23,7 @@ func (s *Server) CommandMainAgent(ctx context.Context, e CommandEnvelope, port M
 }
 
 func (c *commandRegistry) submitMainAgent(ctx context.Context, e CommandEnvelope, port MainAgentCommandPort) (CommandResponse, error) {
-	if port == nil || !strings.HasPrefix(e.Action, "main_agent_") {
+	if port == nil || e.Action != "main_agent_cancel" {
 		return CommandResponse{}, &protocolError{status: 400, code: "request_invalid", reason: "invalid MainAgent application command"}
 	}
 	unlock, err := c.lockRequest(ctx, e.RequestID)

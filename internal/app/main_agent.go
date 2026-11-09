@@ -4,180 +4,128 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/url"
 	"strings"
-	"sync"
-	"unicode/utf8"
+	"time"
 
-	"github.com/erranliu/SteerLine/internal/executionconfig"
-	"github.com/erranliu/SteerLine/internal/mainagent"
-	ma "github.com/erranliu/SteerLine/internal/mainagent/model"
-	"github.com/erranliu/SteerLine/internal/prompts"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/mainagent/contract"
+	"github.com/erranliu/SteerLine/internal/mainagentbridge"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 type mainAgentPort struct {
-	config        Config
-	store         *sqlite.SQLiteStore
-	service       *mainagent.Service
-	publicationMu sync.Mutex
+	config  Config
+	store   *sqlite.SQLiteStore
+	service *mainagentbridge.Service
 }
 
-func newMainAgentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *mainAgentPort {
-	c = bindNativeConfiguration(c, cli)
+func newMainAgentPort(c Config, store *sqlite.SQLiteStore) *mainAgentPort {
 	p := &mainAgentPort{config: c, store: store}
-	p.service = &mainagent.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit, Context: p.context, Prepare: p.prepare, Read: c.runtimeMaintenance.read}
+	p.service = &mainagentbridge.Service{Project: c.Identity(), Store: store, Build: p.context}
 	return p
 }
-func (p *mainAgentPort) prepare(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-	settings, err := executionconfig.MainAgentSettings(p.config.RunnerExecution.MainAgent)
-	if err != nil {
-		return runnercontract.ExecutionInput{}, nil, err
+
+// The first source adapter accepts only explicit owner reason codes. Neither
+// arbitrary question prose nor generic attention/blocked states classify a problem.
+func materialAdviceSource(c runnerstate.Candidate) (mainagentbridge.Source, bool) {
+	r := c.Projection
+	if c.Participation != "active" || c.StopRequested || r == nil || r.Question == nil || r.Question.ID == "" || r.Execution.AttemptID == "" {
+		return mainagentbridge.Source{}, false
 	}
-	selection := runnercontract.ExecutionSelection{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex", Model: &settings.Model, ReasoningEffort: &settings.ReasoningEffort, AccessMode: "read_only"}
-	result, err := p.config.runtimeNative.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{Operation: "compose", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Selection: &selection, BaseExecution: executionconfig.MainAgentBase(p.config.RunnerExecution.Profiles)})
-	if err != nil {
-		return runnercontract.ExecutionInput{}, nil, err
+	source := mainagentbridge.Source{CandidateID: c.ID, TaskID: c.TaskID, Occurrence: r.Execution.AttemptID + ":" + r.Question.ID, Revision: r.Revision, Reason: r.Controls.Reason, Goal: r.Question.Text}
+	source.BaseRevision, source.ContractDigest = c.BaseRevision, c.ContractDigest
+	q, _ := json.Marshal(r.Question)
+	source.Facts = []contract.Material{{ID: "question", Label: "原问题", Body: string(q), Source: c.ID, Revision: source.Occurrence}}
+	if r.Final != nil && r.Final.Verified {
+		source.Facts = append(source.Facts, contract.Material{ID: "final", Label: "已核实的原结果", Body: r.Final.Text, Source: c.ID, Revision: source.Occurrence})
 	}
-	if result.Execution == nil {
-		return runnercontract.ExecutionInput{}, nil, errors.New("Runner did not return a local Codex configuration")
+	if len(c.TestPlan) > 0 {
+		source.Facts = append(source.Facts, contract.Material{ID: "test-plan", Label: "原测试安排", Body: string(c.TestPlan), Source: c.ID})
 	}
-	if result.Execution.Adapter != "codex-app-server" || result.Execution.Target.Kind != "local" || result.View.Model == nil || *result.View.Model != settings.Model || result.View.ReasoningEffort == nil || *result.View.ReasoningEffort != settings.ReasoningEffort || result.View.AccessMode != "read_only" {
-		return runnercontract.ExecutionInput{}, nil, errors.New("主 Agent 本地 Codex/模型/强度/只读配置未核实")
-	}
-	return *result.Execution, p.config.runtimeCatalog, nil
+	return source, source.Valid()
 }
-func (p *mainAgentPort) context(ctx context.Context, in ma.Start) (ma.Context, error) {
-	var out ma.Context
-	c, err := p.store.Candidate(ctx, p.config.Identity(), in.CandidateID)
+func (p *mainAgentPort) tick(ctx context.Context) error {
+	snapshot, err := p.store.ReadRunnerSnapshot(ctx, p.config.Identity())
 	if err != nil {
-		return out, err
+		return err
 	}
-	if c.Revision != in.CandidateRevision || c.Participation != "active" || c.StopRequested {
-		return out, errors.New("stale_revision: 原候选已变化或停止参与")
-	}
-	graph, err := p.store.TaskGraphSnapshot(ctx, p.config.Identity())
-	if err != nil {
-		return out, err
-	}
-	task, ok := graph.ByID[c.TaskID]
-	if !ok || task.Status != "in_progress" {
-		return out, errors.New("原任务已结束，不接受新材料分析")
-	}
-	observation, err := p.config.runtimeMaintenance.check(ctx)
-	if err != nil {
-		return out, err
-	}
-	out = ma.Context{CandidateID: c.ID, CandidateRevision: c.Revision, TaskID: c.TaskID, TaskVersion: task.Version, Title: task.Title, ContractDigest: c.ContractDigest, OriginalBase: c.BaseRevision, RepositoryCommit: observation.Commit, SpecPath: c.Contract.SpecRef.Path, PlanPath: c.Contract.PlanRef.Path, RunID: c.RunID, Original: []ma.Document{}, Current: []ma.Document{}, CurrentMissing: map[string]string{}, TestPlan: c.TestPlan}
-	if c.Projection != nil {
-		out.RunnerRevision = c.Projection.Revision
-		out.SourceAttemptID = c.Projection.Execution.AttemptID
-		out.Question = c.Projection.Question
-		if c.Projection.Final != nil && c.Projection.Final.Verified {
-			out.Final = c.Projection.Final
+	sources := []mainagentbridge.Source{}
+	for _, c := range snapshot.Candidates {
+		if source, ok := materialAdviceSource(c); ok {
+			sources = append(sources, source)
 		}
 	}
-	out.Inputs, _ = json.Marshal(c.Actions)
-	paths := []string{out.SpecPath, out.PlanPath}
-	for _, ref := range append(c.Contract.CommonRefs, c.Contract.AcceptanceRefs...) {
-		paths = append(paths, ref.Path)
+	if err = p.service.Sync(ctx, sources); err != nil {
+		return err
 	}
+	return p.service.ProcessNext(ctx)
+}
+func (p *mainAgentPort) run(ctx context.Context) {
+	timer := time.NewTicker(time.Second)
+	defer timer.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		step, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_ = p.tick(step)
+		cancel()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+	}
+}
+func (p *mainAgentPort) context(ctx context.Context, source mainagentbridge.Source, id string) (contract.Request, error) {
+	out := contract.Request{Protocol: contract.Protocol, RequestID: id, Capability: contract.Capability, Context: contract.Context{Goal: source.Goal, Materials: []contract.Material{}}}
+	c, err := p.store.Candidate(ctx, p.config.Identity(), source.CandidateID)
+	if err != nil {
+		return out, err
+	}
+	current, ok := materialAdviceSource(c)
+	if !ok || current.Occurrence != source.Occurrence || c.BaseRevision != source.BaseRevision || c.ContractDigest != source.ContractDigest {
+		return out, errors.New("原材料问题已变化")
+	}
+	// Use the original occurrence/goal. Later observations cannot replace the frozen request.
+	out.Context.Materials = append(out.Context.Materials, source.Facts...)
+	refs := append(append(append(c.Contract.CommonRefs[:0:0], c.Contract.CommonRefs...), c.Contract.AcceptanceRefs...), c.Contract.SpecRef, c.Contract.PlanRef)
 	seen := map[string]bool{}
-	for _, path := range paths {
-		if seen[path] {
+	for _, ref := range refs {
+		if ref.Path == "" || seen[ref.Path] {
 			continue
 		}
-		seen[path] = true
-		body, e := p.config.runtimeMaintenance.read(ctx, c.BaseRevision, path)
+		seen[ref.Path] = true
+		body, e := p.config.runtimeMaintenance.read(ctx, c.BaseRevision, ref.Path)
 		if e != nil {
-			return out, fmt.Errorf("原候选材料 %s: %w", path, e)
+			return out, e
 		}
-		if len(body) > ma.MaxBytes || !utf8.Valid(body) {
-			return out, errors.New("原材料超过分析容量")
-		}
-		out.Original = append(out.Original, ma.Document{Path: path, Commit: c.BaseRevision, SHA256: ma.Digest(body), Body: string(body)})
-		current, e := p.config.runtimeMaintenance.read(ctx, observation.Commit, path)
-		if e != nil {
-			var missing *missingCommittedFileError
-			if errors.As(e, &missing) {
-				if out.CurrentMissing == nil {
-					out.CurrentMissing = map[string]string{}
-				}
-				out.CurrentMissing[path] = e.Error()
-				continue
-			}
-			return out, fmt.Errorf("当前材料 %s: %w", path, e)
-		}
-		if len(current) > ma.MaxBytes || !utf8.Valid(current) {
-			return out, errors.New("当前材料不是完整有效的 UTF-8 正文")
-		}
-		out.Current = append(out.Current, ma.Document{Path: path, Commit: observation.Commit, SHA256: ma.Digest(current), Body: string(current)})
+		out.Context.Materials = append(out.Context.Materials, contract.Material{ID: ref.Path, Label: ref.Path, Body: string(body), Source: ref.Path, Revision: c.BaseRevision})
 	}
-	return out, nil
-}
-
-type mainAgentOptions struct {
-	Commit     string `json:"commit"`
-	RulesReady bool   `json:"rules_ready"`
-	Diagnostic string `json:"diagnostic"`
-	Model      string `json:"model"`
-	Effort     string `json:"reasoning_effort"`
-}
-
-func (p *mainAgentPort) options(ctx context.Context) mainAgentOptions {
-	settings, _ := executionconfig.MainAgentSettings(p.config.RunnerExecution.MainAgent)
-	out := mainAgentOptions{Model: settings.Model, Effort: settings.ReasoningEffort}
-	head, err := p.config.runtimeMaintenance.git(ctx, "rev-parse", "HEAD^{commit}")
-	if err != nil {
-		out.Diagnostic = err.Error()
-		return out
-	}
-	out.Commit = strings.TrimSpace(string(head))
-	body, err := p.config.runtimeMaintenance.read(ctx, out.Commit, ma.RulesPath)
-	expected, e := prompts.MainAgentRules()
-	if err != nil || e != nil || !prompts.SameRules(body, expected) {
-		out.Diagnostic = "请准备并审阅主 Agent 规则，再提交并合入项目目标分支"
-		return out
-	}
-	out.RulesReady = true
-	return out
+	return out, contract.Validate(out)
 }
 func (p *mainAgentPort) read(ctx context.Context, route string, values url.Values) (any, error) {
-	if route == "/main-agent/options" {
-		if len(values) > 0 {
-			return nil, errors.New("invalid main Agent options query")
-		}
-		return p.options(ctx), nil
-	}
 	if route == "/main-agent" {
-		if len(values) != 1 || len(values["candidate_id"]) != 1 || !ma.ID.MatchString(values.Get("candidate_id")) {
+		if len(values) != 1 || len(values["candidate_id"]) != 1 || !contract.ID.MatchString(values.Get("candidate_id")) {
 			return nil, errors.New("exact candidate_id required")
 		}
-		rows, more, err := p.store.AnalysisSummaries(ctx, p.config.Identity(), values.Get("candidate_id"))
+		rows, more, err := p.service.List(ctx, values.Get("candidate_id"))
 		if err != nil {
 			return nil, err
 		}
 		return struct {
-			Records []ma.Summary `json:"records"`
-			HasMore bool         `json:"has_more"`
+			Records []json.RawMessage `json:"records"`
+			HasMore bool              `json:"has_more"`
 		}{rows, more}, nil
 	}
-	if len(values) > 0 {
-		return nil, errors.New("analysis query does not accept parameters")
-	}
 	id := strings.TrimPrefix(route, "/main-agent/")
-	if !ma.ID.MatchString(id) {
-		return nil, errors.New("invalid analysis id")
+	if len(values) > 0 || !contract.ID.MatchString(id) {
+		return nil, errors.New("invalid advisory request")
 	}
-	r, err := p.store.Analysis(ctx, p.config.Identity(), id)
+	r, err := p.service.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return struct {
-		ma.Record
-		Review string `json:"review"`
-	}{r, ma.Review(r)}, nil
+	return mainagentbridge.View(r), nil
 }

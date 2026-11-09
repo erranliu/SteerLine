@@ -42,7 +42,7 @@ func runUsageResponseFixture() bool {
 func TestRunUsageCallerIsolation(t *testing.T) {
 	exe, err := os.Executable()
 	require(t, err)
-	cli := runnerclient.Client{Executable: exe, StateDir: t.TempDir(), RunUsageSupported: true, RunUsageEventsSupported: true}
+	cli := runnerclient.Client{Executable: exe, StateDir: t.TempDir(), RunUsageSupported: true, RunUsageEventsSupported: true, ConfiguredUsageSupported: true}
 	one, zero, count := int64(1), int64(0), int64(1000000)
 	provider, model := "synthetic", "model"
 	at := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
@@ -50,8 +50,8 @@ func TestRunUsageCallerIsolation(t *testing.T) {
 	u.Coverage.ExpectedSources = &one
 	u.Coverage.VerifiedSources = 1
 	u.Coverage.CountedResponses = 1
-	p := runnercontract.UsagePage{RunID: u.RunID, Revision: u.Revision, Events: []runnercontract.UsageEvent{{ID: "response", RunID: u.RunID, Decision: "counted", Provider: &provider, Model: &model, MetadataBasis: "observed", TimeBasis: "request", CallTime: &at, Tokens: *u.Tokens}}}
-	for _, mode := range []string{"normal", "finalized", "metadata-incomplete", "metadata-conflict", "details-unsupported", "no-price", "bad-page", "bad-usage", "unsupported", "invalid-price"} {
+	p := runnercontract.UsagePage{RunID: u.RunID, Revision: u.Revision, Events: []runnercontract.UsageEvent{{ID: "response", RunID: u.RunID, Decision: "counted", StepID: "implement.execute", ConfiguredModel: model, ConfiguredReasoningEffort: "high", Provider: &provider, Model: &model, MetadataBasis: "observed", TimeBasis: "request", CallTime: &at, Tokens: *u.Tokens}}}
+	for _, mode := range []string{"normal", "finalized", "metadata-incomplete", "metadata-conflict", "observed-alias", "unassigned-model", "unassigned-step", "configured-unsupported", "details-unsupported", "no-price", "bad-page", "bad-usage", "unsupported", "invalid-price"} {
 		t.Run(mode, func(t *testing.T) {
 			client, usage, page, home := cli, u, p, t.TempDir()
 			page.Events = append([]runnercontract.UsageEvent(nil), p.Events...)
@@ -63,10 +63,20 @@ func TestRunUsageCallerIsolation(t *testing.T) {
 			case "finalized":
 				usage.Status, usage.Coverage.Finalized = "available", true
 			case "metadata-incomplete":
-				page.Events[0].Model, page.Events[0].MetadataBasis = nil, "unknown"
+				page.Events[0].Model, page.Events[0].Provider, page.Events[0].CallTime = nil, nil, nil
+				page.Events[0].MetadataBasis, page.Events[0].TimeBasis = "unknown", "unknown"
 				page.Events[0].MetadataIssues = []runnercontract.UsageIssue{{Category: "metadata", Code: "SOURCE_METADATA_INCOMPLETE"}}
 			case "metadata-conflict":
 				page.Events[0].MetadataIssues = []runnercontract.UsageIssue{{Category: "metadata", Code: "SOURCE_METADATA_CONFLICT"}}
+			case "observed-alias":
+				alias, vendor := "different-observed-alias", "different-observed-provider"
+				page.Events[0].Model, page.Events[0].Provider = &alias, &vendor
+			case "unassigned-model":
+				page.Events[0].ConfiguredModel = ""
+			case "unassigned-step":
+				page.Events[0].StepID = ""
+			case "configured-unsupported":
+				client.ConfiguredUsageSupported = false
 			case "details-unsupported":
 				client.RunUsageEventsSupported = false
 			case "bad-page":
@@ -82,7 +92,7 @@ func TestRunUsageCallerIsolation(t *testing.T) {
 			t.Setenv("STEERLINE_USAGE_QUERY_FIXTURE", string(raw))
 			calls := filepath.Join(t.TempDir(), "calls")
 			t.Setenv("STEERLINE_USAGE_QUERY_CALLS", calls)
-			view, err := readRunnerUsage(context.Background(), client, "candidate", "original", home)
+			view, err := readRunnerUsage(context.Background(), client, "candidate", "original", home, at)
 			if mode == "bad-usage" {
 				if err == nil {
 					t.Fatal("foreign usage accepted")
@@ -99,7 +109,7 @@ func TestRunUsageCallerIsolation(t *testing.T) {
 			if view.Usage == nil || view.Usage.Tokens.Total == nil || *view.Usage.Tokens.Total != count {
 				t.Fatal("Token truth lost", view)
 			}
-			if mode == "normal" {
+			if mode == "normal" || strings.HasPrefix(mode, "metadata-") || mode == "observed-alias" {
 				if view.Cost == nil || view.Cost.Total != nil || view.Cost.Covered == nil || *view.Cost.Covered != "2.000000000000000000" {
 					t.Fatal(view)
 				}
@@ -107,13 +117,9 @@ func TestRunUsageCallerIsolation(t *testing.T) {
 				if view.Cost == nil || view.Cost.Status != "estimated" || view.Cost.Total == nil || *view.Cost.Total != "2.000000000000000000" {
 					t.Fatal("final total missing", view)
 				}
-			} else if strings.HasPrefix(mode, "metadata-") {
-				want := "MODEL_UNKNOWN"
-				if mode == "metadata-conflict" {
-					want = "PRICING_METADATA_CONFLICT"
-				}
-				if view.Cost == nil || view.Cost.Status != "unavailable" || len(view.Cost.Issues) == 0 || view.Cost.Issues[0] != want {
-					t.Fatal("metadata cause lost", view)
+			} else if strings.HasPrefix(mode, "unassigned-") {
+				if view.Cost == nil || view.Cost.Status != "unavailable" || len(view.Cost.Issues) == 0 || view.Cost.Issues[0] != "CONFIGURED_MODEL_UNASSIGNED" {
+					t.Fatal("unassigned usage was priced from observed model", view)
 				}
 			} else if view.Cost != nil || view.CostReason == "" {
 				t.Fatal("pricing error hidden", view)

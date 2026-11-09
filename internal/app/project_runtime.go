@@ -137,10 +137,14 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	var maintenanceDone chan struct{}
 	var preparationDone chan struct{}
 	var environmentDone chan struct{}
+	var advisoryDone chan struct{}
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
 	defer startupTimer.Stop()
 	defer func() {
 		cancel()
+		if advisoryDone != nil {
+			<-advisoryDone
+		}
 		if environmentDone != nil {
 			<-environmentDone
 		}
@@ -197,8 +201,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
 	r.tests.roadmaps = r.config.runtimeRoadmaps
-	r.config.runtimeMainAgent = newMainAgentPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
-	r.tests.mainAgent = r.config.runtimeMainAgent
+	r.config.runtimeMainAgent = newMainAgentPort(r.config, r.store)
 	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
@@ -228,6 +231,10 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		}
 		if service.State.Service.Ready {
 			startupTimer.Stop()
+			if advisoryDone == nil {
+				advisoryDone = make(chan struct{})
+				go func() { defer close(advisoryDone); r.config.runtimeMainAgent.run(ctx) }()
+			}
 			if preparationDone == nil {
 				preparationDone = make(chan struct{})
 				go func() { defer close(preparationDone); r.config.runtimeMaintenance.runPreparation(ctx) }()
@@ -268,11 +275,6 @@ func (r *ProjectRuntime) close() {
 				fmt.Fprintf(r.log, "roadmap generation stop remains unverified: %v\n", err)
 			}
 			cancel()
-		}
-		if r.tests != nil {
-			if err := r.tests.close(); err != nil && r.log != nil {
-				fmt.Fprintf(r.log, "test generation stop remains unverified: %v\n", err)
-			}
 		}
 		if r.environment != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -340,18 +342,7 @@ func (p *runtimeProjectPort) Task(ctx context.Context, method, route string, bod
 		return nil, err
 	}
 	defer p.users.RUnlock()
-	if strings.HasPrefix(route, "/tests/") {
-		if method == "GET" || p.actor == nil {
-			return p.testing(ctx, method, route, body)
-		}
-		var out any
-		e := p.actor.Call(ctx, func(ctx context.Context) error {
-			var err error
-			out, err = p.testing(ctx, method, route, body)
-			return err
-		})
-		return out, e
-	}
+
 	if method == "GET" {
 		kind, target, id := "create_task_batch", p.config.Identity(), strings.TrimPrefix(route, "/task-batches/")
 		if strings.HasPrefix(route, "/tasks/") {
@@ -459,7 +450,7 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		}
 		return p.config.runtimeMaintenance.candidateDocuments(ctx, strings.TrimSuffix(strings.TrimPrefix(route, "/runs/"), "/documents"))
 	}
-	if strings.HasPrefix(route, "/maintenance") || strings.HasPrefix(route, "/tests/generations/") {
+	if strings.HasPrefix(route, "/maintenance") {
 		if strings.HasPrefix(route, "/maintenance/tasks/") && len(values) > 0 {
 			if len(values) != 1 || len(values["view"]) != 1 || values.Get("view") != "status" {
 				return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unsupported or repeated maintenance query"}

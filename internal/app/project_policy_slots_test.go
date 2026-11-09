@@ -11,7 +11,7 @@ import (
 )
 
 func TestProjectPolicySlotsPinnedCatalogAndRequestBytes(t *testing.T) {
-	m, store, _ := pmsFixture(t)
+	m, store := pmsFixture(t)
 	c := m.config
 	slots, err := c.runtimeCatalog.ProjectPolicySlots()
 	require(t, err)

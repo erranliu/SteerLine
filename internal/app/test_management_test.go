@@ -27,7 +27,7 @@ func (s tmSnapshotStore) Candidate(_ context.Context, project, id string) (runne
 
 func TestTMPlanTestsRequiresPublicReports(t *testing.T) {
 	raw, _ := json.Marshal(testmanagement.Snapshot{Status: "ready", PlanPath: "task.plan.md", Definitions: []testmanagement.Definition{{ID: "rules", Name: "规则"}}})
-	p := &testManagementPort{service: &testmanagement.GenerationService{Project: "project"}, store: tmSnapshotStore{candidate: runnerstate.Candidate{Project: "project", ID: "candidate", TestPlan: raw}}}
+	p := &testManagementPort{project: "project", store: tmSnapshotStore{candidate: runnerstate.Candidate{Project: "project", ID: "candidate", TestPlan: raw}}}
 	body, err := p.PlanTests(context.Background(), "candidate")
 	var view testmanagement.View
 	if err != nil || json.Unmarshal(body, &view) != nil || view.Total != 1 || view.Pending != 1 || view.Passed != 0 || view.Diagnostic == "" {
@@ -57,18 +57,12 @@ func (s *auxiliaryObservationStore) RunnerCandidates(context.Context, string, st
 	return nil, errors.New("progress unavailable")
 }
 
-func (s *auxiliaryObservationStore) Generations(context.Context, string) ([]testmanagement.Generation, error) {
-	s.generations++
-	return nil, errors.New("generation unavailable")
-}
-
 func TestTMAuxiliaryStagesAdvanceAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	store := &auxiliaryObservationStore{cancel: cancel}
 	p := &testManagementPort{
 		progress: &testmanagement.ProgressService{Store: store},
-		service:  &testmanagement.GenerationService{Store: store},
 	}
 	if err := p.observe(ctx); !errors.Is(err, context.Canceled) || store.generations != 0 {
 		t.Fatal("cancelled stage did not yield", err, store.generations)

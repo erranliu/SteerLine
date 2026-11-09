@@ -13,19 +13,15 @@ import (
 	pmm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 type maintenanceStore interface {
-	Generation(context.Context, string, string) (testmanagement.Generation, error)
-	Generations(context.Context, string) ([]testmanagement.Generation, error)
 	MaintenanceReceipt(context.Context, string, string) (json.RawMessage, error)
 	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
 }
 type projectMaintenance struct {
 	environmentObservation func(context.Context, string) error
-	tests                  *testManagementPort
 	commitCache            map[string]cachedBaselineCommit
 	config                 Config
 	store                  maintenanceStore
@@ -100,7 +96,10 @@ func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error)
 	}
 	m.mu.Lock()
 	if persistence, ok := m.store.(observationStore); ok {
-		_ = persistence.SaveMaterialObservation(context.WithoutCancel(ctx), m.config.Identity(), o)
+		if saveErr := persistence.SaveMaterialObservation(context.WithoutCancel(ctx), m.config.Identity(), o); saveErr != nil {
+			e = errors.Join(e, saveErr)
+			o.Diagnostic = e.Error()
+		}
 	}
 	m.observation = o
 	m.checking = nil

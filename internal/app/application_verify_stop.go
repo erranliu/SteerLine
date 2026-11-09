@@ -13,7 +13,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/localservice"
-	"github.com/erranliu/SteerLine/internal/mainagent"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
@@ -289,25 +288,11 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	} else if err = verifyStoppedCheckpoint(snapshot.Checkpoint, c, p, id); err != nil {
 		return proof, err
 	}
-	generations, err := reader.Generations(ctx, c.Identity())
-	if err != nil {
-		return proof, err
-	}
-	analyses, err := reader.Analyses(ctx, c.Identity())
-	if err != nil {
-		return proof, err
-	}
 	roadmaps, err := reader.Roadmaps(ctx, c.Identity())
 	if err != nil {
 		return proof, err
 	}
-	contents := make([]runnerbinding.Content, 0, len(generations)+len(roadmaps))
-	for _, g := range generations {
-		contents = append(contents, generationContent(g))
-	}
-	for _, r := range analyses {
-		contents = append(contents, mainagent.Binding(r))
-	}
+	contents := make([]runnerbinding.Content, 0, len(roadmaps))
 	for _, r := range roadmaps {
 		contents = append(contents, roadmapContent(r))
 	}

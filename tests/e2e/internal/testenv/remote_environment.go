@@ -177,9 +177,6 @@ func runProjectEnvironment(t *testing.T, id string) {
 	selection, err := driver.RunnerSelection(s.Run.Runner)
 	s.Must(err)
 	profiles := []any{in.Profile}
-	if in.GenerationProfile != nil {
-		profiles = append(profiles, *in.GenerationProfile)
-	}
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": in.Profile.ID, "execution_profiles": profiles}))
 	raw, err := p.Driver.Run(s.Context, "home", "-config", p.Config)
 	s.Must(err)
@@ -202,14 +199,6 @@ func runProjectEnvironment(t *testing.T, id string) {
 	if in.Profile.Execution.Adapter == "orca-terminal" {
 		r := loadOrcaTarget(s, p)
 		r.Fetch(s, p, fixture)
-	}
-	if in.GenerationProfile != nil {
-		p.StartService()
-		receipt := p.EnvironmentCommand("maintenance_profile", map[string]string{"profile": in.GenerationProfile.ID})
-		s.Must(controlled.Write(filepath.Join(s.Output, "generation-profile-selection.json"), receipt))
-		if receipt.Status != "applied" {
-			t.Fatal("explicit admission generation profile was not applied", receipt)
-		}
 	}
 	p.CreateTasks()
 	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "resume_dispatch", ""))

@@ -76,10 +76,10 @@ func TestTaskReadinessRejectsUnsupportedQueries(t *testing.T) {
 }
 
 func TestTaskReadinessKnownTaskWithoutMaterialIsUnprepared(t *testing.T) {
-	m, store, cli := pmsFixture(t)
+	m, store := pmsFixture(t)
 	m.config.Git.Executable = "unavailable-git"
 	got, err := m.taskReadiness(context.Background(), "101")
-	if err != nil || got.Status != "unprepared" || got.Diagnostic == "" || len(store.materials) != 0 || cli.submits != 0 {
+	if err != nil || got.Status != "unprepared" || got.Diagnostic == "" || len(store.materials) != 0 {
 		t.Fatal("a read performed preparation or treated a missing material as an unknown task", got, err)
 	}
 }

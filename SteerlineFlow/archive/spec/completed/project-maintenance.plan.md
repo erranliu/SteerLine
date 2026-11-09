@@ -15,7 +15,7 @@
 | [taskrunner/base.go](../../../../internal/taskrunner/base.go)、[service.go](../../../../internal/taskrunner/service.go) | 保留 fetch、祖先/前置检查及原请求重放；首次准备完整材料，后续候选先读冻结快照 |
 | [task/model](../../../../internal/task/model)、[task/documents.go](../../../../internal/task/documents.go)、[test_documents.go](../../../../internal/app/test_documents.go) | 提取实际共用 blob/路径/限额能力；最近确认 contract 与执行 contract 分开，测试沿同 commit 解析 |
 | [runner_candidates.go](../../../../internal/storage/sqlite/runner_candidates.go)、[runnerstate](../../../../internal/runnerstate) | 扩展原项目库预留事务，固定同一 Task 执行快照/候选/outbox，保留不可变字段规则 |
-| [testmanagement](../../../../internal/testmanagement)、[test_generations.go](../../../../internal/storage/sqlite/test_generations.go) | 保留严格解析、原 generation/profile/信封/停止，分离生成结果与单文件应用；不叠加通用 outbox |
+| [testmanagement](../../../../internal/testmanagement)、[test_generations.go](https://github.com/erranliu/SteerLine/blob/221812ec058ec7dd608e447f8aeaeafb8587e376/internal/storage/sqlite/test_generations.go) | 保留严格解析、原 generation/profile/信封/停止，分离生成结果与单文件应用；不叠加通用 outbox |
 | [application_service.go](../../../../internal/app/application_service.go)、[product/api](../../../../internal/product/api)、[web/src](../../../../web/src) | 原宿主安排观察，原项目 actor 写依据/操作，沿原认证/路由和 typed API；不在 Web 建状态权威 |
 | [项目添加 Spec](../../../spec/project-onboarding.spec.md)、[结构方案](../../../../docs/product-design/project-onboarding.md#拟议结构与核验) | 仍未实现；本批提供窄公共检查与初始化模式适配，全套 PS/登记/候选入口继续后置，无强依赖环 |
 

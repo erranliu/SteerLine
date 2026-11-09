@@ -5,10 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 
 	"github.com/erranliu/SteerLine/internal/prompts"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 	progresstools "github.com/erranliu/SteerLine/tools"
 	"os"
 	"path/filepath"
@@ -309,38 +307,13 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	m := r.config.runtimeMaintenance
 	_, err = m.check(ctx)
 	require(t, err)
-	require(t, r.port.actor.Call(ctx, func(ctx context.Context) error {
-		graph, e := r.store.TaskGraphSnapshot(ctx, c.Identity())
-		if e != nil {
-			return e
-		}
-		mat, e := m.materialInput(materialReads(ctx), graph.Tasks[0], base)
-		if e != nil {
-			return e
-		}
-		raw, e := m.read(ctx, base, testmanagement.CataloguePath)
-		if e != nil {
-			return e
-		}
-		cat, e := testmanagement.ParseCatalogue(raw)
-		if e != nil {
-			return e
-		}
-		selection := []string{}
-		for _, d := range cat.Tests {
-			selection = append(selection, d.ID)
-		}
-		planText, e := m.read(ctx, base, mat.Contract.PlanRef.Path)
-		if e != nil {
-			return e
-		}
-		result, _ := json.Marshal(map[string]any{"tests": selection})
-		id := strings.Repeat("6", 32)
-		if e = r.store.SaveGeneration(ctx, testmanagement.Generation{ProjectEntry: testmodel.ProjectEntry{Version: 1, Requirements: []string{"SteerlineFlow/testing.md"}, TestingCatalogue: "SteerlineFlow/testing/test-list.json"}, Request: runnercontract.Request{RequestID: "fixture-" + id, Protocol: runnercontract.Protocol, Input: json.RawMessage(`{}`)}, ID: id, Project: c.Identity(), Revision: 1, Runner: m.tests.service.Build, PlanText: string(planText), Projection: &runnercontract.Run{StopStatus: "stopped"}, Inputs: mat.Inputs, Command: testmanagement.GenerateCommand{Plan: mat.Contract.PlanRef.Path, Commit: base}, State: "generated", Catalogue: cat, Result: result}, 0); e != nil {
-			return e
-		}
-		return m.refresh(ctx)
-	}))
+	require(t, r.port.actor.Call(ctx, func(ctx context.Context) error { return m.refresh(ctx) }))
+	material, err := r.store.Material(ctx, c.Identity(), "1")
+	require(t, err)
+	if material.Status != "ready" {
+		t.Fatalf("stopped Run fixture materials: %s: %s", material.Status, material.Diagnostic)
+	}
+
 	// This lifecycle-only prerequisite supplies stored qualification with the
 	// actual material/build basis and no external preparation execution. It is
 	// not evidence that preparation ran; the formal readiness L3 covers that.

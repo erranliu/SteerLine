@@ -28,13 +28,12 @@ const Environment = "testing.project-environment-orca"
 const LocalEnvironment = "testing.project-environment-local"
 
 type Input struct {
-	Profile           executionconfig.Profile  `json:"profile"`
-	GenerationProfile *executionconfig.Profile `json:"generation_profile,omitempty"`
-	ExecutionDigest   string                   `json:"execution_digest"`
-	Project           string                   `json:"project,omitempty"`
-	Commit            string                   `json:"commit,omitempty"`
-	ProjectConfig     json.RawMessage          `json:"project_config,omitempty"`
-	RoundSeconds      int                      `json:"round_seconds,omitempty"`
+	Profile         executionconfig.Profile `json:"profile"`
+	ExecutionDigest string                  `json:"execution_digest"`
+	Project         string                  `json:"project,omitempty"`
+	Commit          string                  `json:"commit,omitempty"`
+	ProjectConfig   json.RawMessage         `json:"project_config,omitempty"`
+	RoundSeconds    int                     `json:"round_seconds,omitempty"`
 }
 
 func Selected(id string) bool {
@@ -87,28 +86,6 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	in.ExecutionDigest = Digest(p.Execution)
 	if id == Discovery {
 		return in, nil
-	}
-	if id == Environment || id == LocalEnvironment {
-		if path := getenv("STEERLINE_L4_GENERATION_PROFILE"); path != "" {
-			if !filepath.IsAbs(path) {
-				return nil, errors.New("STEERLINE_L4_GENERATION_PROFILE must be an absolute explicit profile path")
-			}
-			raw, err := os.ReadFile(path)
-			if err != nil {
-				return nil, err
-			}
-			var profile executionconfig.Profile
-			if err := executionconfig.Decode(raw, &profile); err != nil {
-				return nil, err
-			}
-			if profile.Execution.Adapter != "codex-app-server" || profile.Execution.Target.Kind != "local" || profile.Execution.Target.Environment != "" || profile.Workflow.ID != "development" || profile.Workflow.Version != 2 {
-				return nil, errors.New("admission material generation requires an explicit local Codex development/2 profile")
-			}
-			if err := executionconfig.Validate(3, p.ID, []executionconfig.Profile{p, profile}); err != nil {
-				return nil, err
-			}
-			in.GenerationProfile = &profile
-		}
 	}
 	in.RoundSeconds, err = strconv.Atoi(getenv("STEERLINE_L4_ROUND_TIMEOUT_SECONDS"))
 	if err != nil || in.RoundSeconds <= 0 || int64(in.RoundSeconds) > int64((time.Duration(1<<63-1)-40*time.Minute)/3/time.Second) {

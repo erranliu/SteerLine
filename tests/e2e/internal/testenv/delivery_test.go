@@ -7,7 +7,7 @@ import (
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 
-func TestDeliveryRequestCountSeparatesMaterialGenerationWithoutHidingExtraInputs(t *testing.T) {
+func TestDeliveryRequestCountIncludesUnexpectedGenerationAndExtraInputs(t *testing.T) {
 	material, delivery, environment := "material-run", "delivery-run", "environment-run"
 	fixture := controlled.RunnerFixture{
 		Runs: map[string]runnercontract.Run{
@@ -22,17 +22,17 @@ func TestDeliveryRequestCountSeparatesMaterialGenerationWithoutHidingExtraInputs
 		Bodies: map[string]string{"environment": "adaptation input", "environment-stop": "adaptation stop", "material": "generation input", "submit": "delivery input", "stop": "stop input"},
 	}
 	requests := deliveryRequestBodies(fixture)
-	if len(requests) != 2 || requests["submit"] == "" || requests["stop"] == "" {
-		t.Fatal("preparation changed the delivery submit/stop count", requests)
+	if len(requests) != 3 || requests["material"] == "" || requests["submit"] == "" || requests["stop"] == "" {
+		t.Fatal("unexpected generation was hidden from delivery input count", requests)
 	}
 	fixture.Bodies["duplicate"] = "another delivery input"
 	fixture.Requests["duplicate"] = runnercontract.Command{RunID: &delivery}
-	if len(deliveryRequestBodies(fixture)) != 3 {
+	if len(deliveryRequestBodies(fixture)) != 4 {
 		t.Fatal("duplicate delivery input hidden")
 	}
 	delete(fixture.Bodies, "duplicate")
 	fixture.Bodies["unknown"] = "unclassified input"
-	if len(deliveryRequestBodies(fixture)) != 3 {
+	if len(deliveryRequestBodies(fixture)) != 4 {
 		t.Fatal("unclassified input hidden")
 	}
 }

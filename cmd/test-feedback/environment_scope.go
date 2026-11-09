@@ -28,7 +28,7 @@ var environmentAppSources = map[string][]string{
 
 var environmentAppExtra = map[string][]string{
 	"developer_test.go":           {"TestDeveloperConfigurationOptions", "TestDeveloperConfigurationLoad", "TestDeveloperReadinessService"},
-	"project_maintenance_test.go": {"TestPMReservationRejectsPendingEnvironmentObservation", "TestPMSGenerationFreshnessAndCandidateVersions", "TestPMSNativeConfigurationPrecheckSnapshot"},
+	"project_maintenance_test.go": {"TestPMReservationRejectsPendingEnvironmentObservation", "TestPMSGitArrangementFreshnessAndCandidateVersions", "TestPMSMaterialReadinessDoesNotDependOnGenerationProfiles"},
 	"shared_environment_test.go":  {"TestSharedEnvironmentMaterialsAndIndependentQualifications"},
 }
 

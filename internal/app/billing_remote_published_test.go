@@ -134,6 +134,7 @@ func TestBillingRemoteUsagePublished(t *testing.T) {
 	initial := json.RawMessage(`{"enabled":true}`)
 	start(initial)
 	submitID := uuid.NewString()
+	priceAt := time.Now().UTC() // This isolated harness reserves its candidate immediately before submission.
 	receipt, err := cli.Submit(ctx, runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: submitID, Input: raw})
 	if err != nil {
 		// Only reconcile this exact original request; never submit another ID.
@@ -212,23 +213,23 @@ func TestBillingRemoteUsagePublished(t *testing.T) {
 	if inspected.Run.InputDigest != original.InputDigest || inspected.Run.Execution.SessionID != original.Execution.SessionID || inspected.Run.Execution.TurnID != original.Execution.TurnID {
 		t.Fatal("collection restart changed original execution")
 	}
-	// Use conspicuously synthetic rates; missing request-time metadata stays unknown.
+	// Use conspicuously synthetic rates for the frozen configured models only.
 	prices := billing.Policy{Source: "synthetic live arithmetic fixture, not provider prices", Currency: "USD", Basis: billing.Basis, Rules: []billing.Rule{}}
 	seen := map[string]bool{}
 	for _, e := range events {
-		if e.Provider == nil || e.Model == nil {
+		if e.ConfiguredModel == "" || e.StepID == "" {
 			continue
 		}
-		key := *e.Provider + "/" + *e.Model
+		key := e.ConfiguredModel
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		prices.Rules = append(prices.Rules, billing.Rule{ID: fmt.Sprint(len(prices.Rules) + 1), Provider: *e.Provider, Model: *e.Model, From: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), Rates: billing.Rates{Input: "1", Read: "0.1", Write: "0", Output: "2"}})
+		prices.Rules = append(prices.Rules, billing.Rule{ID: fmt.Sprint(len(prices.Rules) + 1), Provider: "synthetic", Model: e.ConfiguredModel, From: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), Rates: billing.Rates{Input: "1", Read: "0.1", Write: "0", Output: "2"}})
 	}
 	_, err = (billingconfig.Store{Home: home}).Save("*", prices)
 	require(t, err)
-	view, err := readRunnerUsage(ctx, cli, "isolated-live-candidate", runID, home)
+	view, err := readRunnerUsage(ctx, cli, "isolated-live-candidate", runID, home, priceAt)
 	require(t, err)
 	if view.Usage == nil || view.Usage.Tokens == nil || view.Usage.Tokens.Total == nil || *view.Usage.Tokens.Total != *usage.Tokens.Total || view.CostReason != "" {
 		t.Fatal("SteerLine lost independently acquired tokens", view)

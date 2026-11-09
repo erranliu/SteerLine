@@ -18,10 +18,11 @@ const reasons: Record<string, string> = {
   PRICE_POLICY_INVALID: "价表配置无效或无法读取",
   COST_QUERY_FAILED: "费用读取失败，可刷新重试",
   PRICE_NOT_FOUND: "部分模型缺少适用价格",
-  MODEL_UNKNOWN: "模型信息未核实",
-  PRICING_METADATA_CONFLICT: "计价信息存在冲突",
-  PRICING_CONTEXT_UNKNOWN: "计价条件不完整",
-  PRICE_PERIOD_UNKNOWN: "无法确定适用价格时段",
+  CONFIGURED_MODEL_UNASSIGNED: "部分用量未分配配置模型或阶段，未计价",
+  CONFIGURED_USAGE_UNSUPPORTED:
+    "当前 Runner 不支持按阶段配置模型估价，Token 仍可查看",
+  PRICE_AMBIGUOUS: "同一配置模型匹配到多个计价供应商，请调整价表",
+  PRICE_PERIOD_UNKNOWN: "候选创建时间未知，无法选择价格时段",
   USAGE_UNAVAILABLE: "暂无可信用量",
   USAGE_PARTIAL: "用量覆盖不完整",
   USAGE_NOT_FINALIZED: "当前用量尚未收敛",
@@ -209,7 +210,27 @@ export function RunUsage({ run }: { run: Candidate }) {
           </div>
           <div>
             <dt>统计范围</dt>
-            <dd>该候选累计主会话 · 包含已知历次执行</dd>
+            <dd>
+              该候选累计主执行会话 · 不含独立 parser、子 agent 及工具内部模型
+            </dd>
+          </div>
+          <div>
+            <dt>部分计价 / 未计价记录</dt>
+            <dd>
+              {cost
+                ? `${cost.partially_priced_records} / ${cost.unpriced_records}`
+                : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt>价格匹配时间（候选创建）</dt>
+            <dd>
+              {cost?.price_at && !cost.price_at.startsWith("0001-")
+                ? new Date(cost.price_at).toLocaleString("zh-CN", {
+                    hour12: false,
+                  })
+                : "—"}
+            </dd>
           </div>
           <div>
             <dt>价表</dt>
@@ -239,8 +260,20 @@ export function RunUsage({ run }: { run: Candidate }) {
           </div>
         </dl>
         {cost?.matches.map((match) => (
-          <p className="muted" key={match.rule_id} title={match.rule_id}>
-            {match.provider} / {match.model} · {match.records} 条记录 ·{" "}
+          <p
+            className="muted"
+            key={JSON.stringify([
+              match.rule_id,
+              match.step_id,
+              match.configured_reasoning_effort,
+            ])}
+            title={match.rule_id}
+          >
+            {match.step_id} · {match.provider} / {match.model}
+            {match.configured_reasoning_effort
+              ? ` · ${match.configured_reasoning_effort}`
+              : ""}{" "}
+            · {match.records} 条记录 ·{" "}
             {formatAmount(match.amount, cost.currency)}
           </p>
         ))}
@@ -255,8 +288,8 @@ export function RunUsage({ run }: { run: Candidate }) {
           </p>
         ))}
         <p className="output-hint">
-          按配置价表估算，非实际账单；历史用量按当前价表重算。不含订阅额度结算及工具、外部
-          API 费用。主会话范围不包含未关联的子会话。
+          按约定配置模型估算，非实际账单；历史用量按当前价表重算，以候选创建时间匹配价格。未分配模型的用量保留为未计价，不含订阅额度结算及外部
+          API 费用。
         </p>
         <Button
           size="sm"

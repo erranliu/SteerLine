@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -177,6 +178,13 @@ func (p *roadmapPort) verifyMerged(ctx context.Context, r *roadmap.Record) error
 		if string(got) != body {
 			return errors.New("合并后的文档内容与审阅结果不同：" + name)
 		}
+	}
+	catalogue, _, e := p.testCatalogueAt(ctx, fact.MergeCommit)
+	if e != nil {
+		return e
+	}
+	if e = roadmapservice.ValidateTestIDs(*r, catalogue); e != nil {
+		return e
 	}
 	r.Publication.MergedCommit = fact.MergeCommit
 	r.Publication.State = "merged"
