@@ -26,9 +26,6 @@
   gap: 20px;
 }
 .roadmaps-progress {
-  position: sticky;
-  top: 12px;
-  z-index: 10;
   padding: 16px 20px;
   margin-bottom: 20px;
   border: 1px solid var(--color-border);
@@ -103,9 +100,6 @@
   background: #263d2f;
   font-size: 12px;
 }
-.roadmaps-section {
-  scroll-margin-top: 260px;
-}
 .roadmaps-library,
 .roadmaps-controls,
 .roadmaps-document {
@@ -178,6 +172,7 @@
   cursor: pointer;
 }
 .roadmaps-section {
+  scroll-margin-top: 24px;
   margin-top: 24px;
   padding: 20px;
   border: 1px solid var(--color-border);
@@ -199,10 +194,135 @@
   border-bottom: 1px solid var(--color-border);
   vertical-align: top;
 }
-.roadmaps-table blockquote {
+.roadmaps-review {
+  min-width: 0;
+  --xy-controls-button-background-color: var(--color-background);
+  --xy-controls-button-background-color-hover: var(--color-border);
+  --xy-controls-button-color: var(--color-foreground);
+  --xy-controls-button-border-color: var(--color-border);
+  --xy-edge-stroke: var(--color-muted);
+  --xy-edge-label-background-color: var(--color-background);
+  --xy-edge-label-color: var(--color-foreground);
+  --xy-attribution-background-color: var(--color-background);
+}
+.roadmaps-review-summary {
   margin: 12px 0;
+}
+.roadmaps-review-legend {
+  color: var(--color-muted);
+  margin: 4px 0;
+}
+.roadmaps-review-layout {
+  margin: 16px 0;
+}
+.roadmaps-review-canvas {
+  height: 450px;
+  min-width: 0;
+}
+.roadmaps-review-node {
+  width: 180px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.roadmaps-review-node small,
+.roadmaps-review-node strong,
+.roadmaps-review-node span {
+  display: block;
+}
+.roadmaps-review-node span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.roadmaps-review-node small {
+  color: var(--color-muted);
+}
+.roadmaps-review-node.formal {
+  border-style: dashed;
+}
+.roadmaps-review .selected .roadmaps-review-node {
+  outline: 2px solid var(--color-primary);
+}
+.roadmaps-review .review-dimmed {
+  opacity: 0.4;
+}
+.roadmaps-review .review-edge.added .react-flow__edge-path {
+  stroke: var(--color-primary);
+  stroke-dasharray: 9 5;
+}
+.roadmaps-review .review-edge.removed .react-flow__edge-path {
+  stroke-dasharray: 2 5;
+}
+.roadmaps-review button[aria-pressed="true"] {
+  border-color: var(--color-primary);
+}
+.roadmaps-review-detail {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin-top: 20px;
+}
+.roadmaps-review-detail h3 {
+  margin: 0 0 12px;
+}
+.roadmaps-review-detail h4 {
+  margin: 12px 0 4px;
+}
+.roadmaps-review-detail dl {
+  margin: 12px 0;
+}
+.roadmaps-review-detail dt {
+  color: var(--color-muted);
+  margin-top: 8px;
+}
+.roadmaps-review-detail dd {
+  margin: 0;
   white-space: pre-wrap;
-  font-size: 12px;
+}
+.roadmaps-review-detail blockquote {
+  margin: 4px 0;
+  white-space: pre-wrap;
+}
+.roadmaps-review-changes {
+  margin: 20px 0;
+  overflow-wrap: anywhere;
+}
+.roadmaps-review-changes h3 {
+  margin-bottom: 12px;
+}
+.roadmaps-review-changes ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+.roadmaps-review-changes > div + div {
+  margin-top: 16px;
+}
+.roadmaps-review-tasks ul {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.roadmaps-review-tasks li {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.roadmaps-review-tasks button {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.roadmaps-review-basis {
+  margin-top: 20px;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 1200px) {
   .roadmaps-grid {
@@ -214,7 +334,6 @@
 }
 @media (max-width: 700px) {
   .roadmaps-progress {
-    top: 0;
     padding: 12px;
   }
   .roadmaps-steps {
@@ -222,9 +341,6 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px 8px;
     font-size: 12px;
-  }
-  .roadmaps-section {
-    scroll-margin-top: 360px;
   }
   .roadmaps-page {
     padding: 12px;
