@@ -1,5 +1,9 @@
 # 当前 Spec 与 Plan
 
+异步操作统一反馈与活动中心衔接（2026-11-09，已实施、自动验收通过）：[Spec](async-operation-feedback.spec.md) · [Plan](../plans/async-operation-feedback.plan.md) · [测试选择](../plans/async-operation-feedback.tests.json) · [专属验收规划](../testing/acceptance/async-operation-feedback.md)。首批覆盖 Roadmap 全流程、环境检测发起、手动候选和检查更新；统一即时反馈、局部阻塞、进入活动中心动画及原请求衔接，执行所有权保持原业务边界，不启动 roadmap。
+
+Roadmap 草稿任务与依赖审阅（2026-11-09，已实施，自动验证通过，未部署）：[Spec](roadmap-dependency-review.spec.md) · [Plan](../plans/roadmap-dependency-review.plan.md) · [测试安排](../plans/roadmap-dependency-review.tests.json) · [专属验收](../testing/acceptance/roadmap-dependency-review.md)。全宽只读依赖图、原始/建议/差异三视图、变更清单与单一任务详情，复用当前快照与确认命令；普通开发，不启动 roadmap。
+
 Git 管理任务测试安排（2026-11-09，已实现并完成功能自动验收）：[Spec](git-test-arrangements.spec.md) · [Plan](../plans/git-test-arrangements.plan.md) · [验收安排](../testing/acceptance/git-test-arrangements.md)。恢复同名 `.tests.json` 的 Git 权威，随 roadmap 正式材料同批生成发布，运行时只校验和冻结，删除专用补安排流程；保留现有项目统一准入、候选进度及交付边界，不启动 roadmap。
 
 异步活动中心（2026-11-06，已实施并完成独立代码审核，未部署）：[Spec](async-activity-center.spec.md) · [Plan](../plans/async-activity-center.plan.md) · [专属验收及审核记录](../testing/acceptance/async-activity-center.md)。首期统一观察检测、测试准备和任务候选执行，保留原页面与业务流程；普通开发已实施，不启动 roadmap 调度。

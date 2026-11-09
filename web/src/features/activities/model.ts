@@ -69,6 +69,7 @@ export const activityActions = new Set([
   "roadmap_generate_documents",
   "roadmap_publish",
   "roadmap_admit",
+  "roadmap_resume",
 ]);
 
 // Existing starts and journal rows are observations. This function cannot send
@@ -115,6 +116,8 @@ export function provisionalActivities(
               ? "提交 Roadmap 文档发布"
               : e.action === "roadmap_admit"
                 ? "提交 Roadmap 入图"
+                : e.action === "roadmap_resume"
+                  ? "继续原 Roadmap 操作"
                 : e.action === "environment_start"
                   ? "提交环境检测"
                   : e.action.startsWith("maintenance_")

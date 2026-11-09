@@ -31,6 +31,7 @@ import { ProjectEnvironment } from "../features/environment-checks/project-envir
 import { useApplicationProjects } from "./use-application-projects";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
+import { ActivityFeedbackProvider } from "../features/activities/feedback/feedback";
 import { useCandidateStarts } from "./use-candidate-starts";
 const Roadmaps = lazy(() =>
   import("../features/roadmaps/roadmaps").then((module) => ({
@@ -90,6 +91,8 @@ export function Workspace({
     busy,
     reconcile,
     reconciling,
+    observedRequests,
+    pendingRequests,
   } = useOriginalRequests(api, !!online);
   const candidateStarts = useCandidateStarts(
     api,
@@ -113,155 +116,163 @@ export function Workspace({
         snapshot: snapshot.data,
         send,
         submit,
-        requests: requests.data,
+        requests: observedRequests,
+        pendingRequests,
         candidateStarts,
         busy,
         refresh,
       }}
     >
-      <AppShell
-        projectId={identity.project_id}
-        activities={
-          <Activities control={activityControl} projectName={projectName} />
-        }
-        switcher={
-          switcher ?? (
-            <div className="project-card">{identity.repository_identity}</div>
-          )
-        }
-        questions={counts.questions}
-        footer={`${counts.runs} 个候选 · 业务状态由 Go 服务核验`}
-        connection={
-          <div className="connection">
-            <span className={"connection-dot " + (online ? "" : "offline")} />
-            <span aria-live="polite">{online ? "服务在线" : "连接待核实"}</span>
-            {!environmentPage && <EnvironmentSummary />}
-            {!environmentPage && (
-              <span className="instance-label">
-                {short(identity.instance_id)}
-              </span>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-label="刷新查询"
-              onClick={refresh}
-            >
-              <RefreshCw size={15} />
-            </Button>
-          </div>
-        }
+      <ActivityFeedbackProvider
+        key={api.home + identity.project_id + identity.instance_id}
       >
-        {!environmentPage && (
-          <ProjectMaintenance
-            key={identity.project_id + identity.instance_id}
-          />
-        )}
-        {!online && (
-          <div className="notice amber" role="status">
-            <strong>
-              {connectionError instanceof ApiError &&
-              connectionError.status === 401
-                ? "会话已失效，请从本机 CLI 重新打开"
-                : "当前不可提交业务操作"}
-            </strong>
-            <p>
-              {diagnostic || "正在核验项目与服务实例…"}{" "}
-              {snapshot.dataUpdatedAt
-                ? "最后观察 " +
-                  new Date(snapshot.dataUpdatedAt).toLocaleTimeString("zh-CN")
-                : ""}
-            </p>
-          </div>
-        )}
-        {error && (
-          <div role="alert" className="notice amber">
-            <strong>
-              {environmentPage
-                ? "操作未完成，请查看操作结果或刷新重试。"
-                : "操作结果未放行"}
-            </strong>
-            <p>{error}</p>
-            <Button size="sm" onClick={clearError}>
-              收起提示
-            </Button>
-          </div>
-        )}
-        {requests.error && (
-          <div className="notice amber">
-            本机请求存储不可用：{String(requests.error)}
-          </div>
-        )}
-        {configurationPending && (
-          <div className="notice amber" role="status">
-            配置已保存，需重启 SteerLine 后才能启动新候选。已有执行保留原参数。
-          </div>
-        )}
-        {!environmentPage && <Dispatch />}
-        <Suspense fallback={<div className="empty">正在加载页面…</div>}>
-          <Routes>
-            <Route
-              path={"/projects/" + identity.project_id + "/roadmaps"}
-              element={
-                <Roadmaps
-                  key={api.home + identity.project_id + identity.instance_id}
-                />
-              }
+        <AppShell
+          projectId={identity.project_id}
+          activities={
+            <Activities control={activityControl} projectName={projectName} />
+          }
+          switcher={
+            switcher ?? (
+              <div className="project-card">{identity.repository_identity}</div>
+            )
+          }
+          questions={counts.questions}
+          footer={`${counts.runs} 个候选 · 业务状态由 Go 服务核验`}
+          connection={
+            <div className="connection">
+              <span className={"connection-dot " + (online ? "" : "offline")} />
+              <span aria-live="polite">
+                {online ? "服务在线" : "连接待核实"}
+              </span>
+              {!environmentPage && <EnvironmentSummary />}
+              {!environmentPage && (
+                <span className="instance-label">
+                  {short(identity.instance_id)}
+                </span>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label="刷新查询"
+                onClick={refresh}
+              >
+                <RefreshCw size={15} />
+              </Button>
+            </div>
+          }
+        >
+          {!environmentPage && (
+            <ProjectMaintenance
+              key={identity.project_id + identity.instance_id}
             />
-            <Route
-              path={"/projects/" + identity.project_id + "/environment"}
-              element={
-                <ProjectEnvironment
-                  key={identity.project_id + identity.instance_id}
-                />
-              }
-            />
-            <Route
-              path={"/projects/" + identity.project_id + "/tests"}
-              element={<Tests />}
-            />
-            <Route
-              path={"/projects/" + identity.project_id + "/dag"}
-              element={<Dag />}
-            />
-            <Route
-              path={"/projects/" + identity.project_id + "/runs"}
-              element={<Runs />}
-            />
-            <Route
-              path={"/projects/" + identity.project_id + "/settings"}
-              element={
-                <SettingsPage
-                  api={api}
-                  online={!!online}
-                  home={home}
-                  csrf={initial.csrf_token}
-                  loadedDigest={loadedDigest}
-                  applicationConnected={applicationConnected}
-                />
-              }
-            />
-            <Route
-              path="*"
-              element={
-                <Navigate
-                  to={"/projects/" + identity.project_id + "/dag"}
-                  replace
-                />
-              }
-            />
-          </Routes>
-        </Suspense>
-        <Operations
-          compact={environmentPage}
-          requests={(requests.data ?? []).filter(
-            (r) => r.envelope.project_id === identity.project_id,
           )}
-          online={!!online}
-          reconcile={reconcile}
-          reconciling={reconciling}
-        />
-      </AppShell>
+          {!online && (
+            <div className="notice amber" role="status">
+              <strong>
+                {connectionError instanceof ApiError &&
+                connectionError.status === 401
+                  ? "会话已失效，请从本机 CLI 重新打开"
+                  : "当前不可提交业务操作"}
+              </strong>
+              <p>
+                {diagnostic || "正在核验项目与服务实例…"}{" "}
+                {snapshot.dataUpdatedAt
+                  ? "最后观察 " +
+                    new Date(snapshot.dataUpdatedAt).toLocaleTimeString("zh-CN")
+                  : ""}
+              </p>
+            </div>
+          )}
+          {error && (
+            <div role="alert" className="notice amber">
+              <strong>
+                {environmentPage
+                  ? "操作未完成，请查看操作结果或刷新重试。"
+                  : "操作结果未放行"}
+              </strong>
+              <p>{error}</p>
+              <Button size="sm" onClick={clearError}>
+                收起提示
+              </Button>
+            </div>
+          )}
+          {requests.error && (
+            <div className="notice amber">
+              本机请求存储不可用：{String(requests.error)}
+            </div>
+          )}
+          {configurationPending && (
+            <div className="notice amber" role="status">
+              配置已保存，需重启 SteerLine
+              后才能启动新候选。已有执行保留原参数。
+            </div>
+          )}
+          {!environmentPage && <Dispatch />}
+          <Suspense fallback={<div className="empty">正在加载页面…</div>}>
+            <Routes>
+              <Route
+                path={"/projects/" + identity.project_id + "/roadmaps"}
+                element={
+                  <Roadmaps
+                    key={api.home + identity.project_id + identity.instance_id}
+                  />
+                }
+              />
+              <Route
+                path={"/projects/" + identity.project_id + "/environment"}
+                element={
+                  <ProjectEnvironment
+                    key={identity.project_id + identity.instance_id}
+                  />
+                }
+              />
+              <Route
+                path={"/projects/" + identity.project_id + "/tests"}
+                element={<Tests />}
+              />
+              <Route
+                path={"/projects/" + identity.project_id + "/dag"}
+                element={<Dag />}
+              />
+              <Route
+                path={"/projects/" + identity.project_id + "/runs"}
+                element={<Runs />}
+              />
+              <Route
+                path={"/projects/" + identity.project_id + "/settings"}
+                element={
+                  <SettingsPage
+                    api={api}
+                    online={!!online}
+                    home={home}
+                    csrf={initial.csrf_token}
+                    loadedDigest={loadedDigest}
+                    applicationConnected={applicationConnected}
+                  />
+                }
+              />
+              <Route
+                path="*"
+                element={
+                  <Navigate
+                    to={"/projects/" + identity.project_id + "/dag"}
+                    replace
+                  />
+                }
+              />
+            </Routes>
+          </Suspense>
+          <Operations
+            compact={environmentPage}
+            requests={(requests.data ?? []).filter(
+              (r) => r.envelope.project_id === identity.project_id,
+            )}
+            online={!!online}
+            reconcile={reconcile}
+            reconciling={reconciling}
+          />
+        </AppShell>
+      </ActivityFeedbackProvider>
     </WorkspaceContext.Provider>
   );
 }

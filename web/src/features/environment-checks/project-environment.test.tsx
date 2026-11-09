@@ -13,6 +13,8 @@ import { Navigate } from "react-router-dom";
 import type { EnvironmentOptions } from "./use-readiness";
 import { ProjectEnvironment } from "./project-environment";
 import { Dispatch } from "../tasks/dispatch";
+import { useOriginalRequests } from "../../app/use-original-requests";
+import { WorkspaceContext, useWorkspace } from "../../app/context";
 
 afterEach(() => {
   cleanup();
@@ -182,10 +184,10 @@ it("preserves the selected timeout and profile and prevents duplicate detection 
   });
   const start = screen.getByRole("button", { name: "重新检测" });
   fireEvent.click(start);
-  expect(screen.getByRole("heading", { name: "正在确认启动" })).toBeVisible();
+  await screen.findByRole("heading", { name: "正在确认启动" });
   expect(start).toBeDisabled();
   fireEvent.click(start);
-  expect(send).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
   expect(send).toHaveBeenCalledWith(
     "environment_start",
     identity.project_id,
@@ -715,10 +717,41 @@ function fixture(
     ) as never;
   });
   const client = testClient();
+  vi.spyOn(api, "submit").mockImplementation(async (envelope) => {
+    const accepted = await send(
+      envelope.action,
+      envelope.target_id,
+      envelope.expected_version,
+      envelope.payload,
+    );
+    return {
+      ...envelope,
+      original: envelope,
+      status: accepted ? "applied" : "outcome_unknown",
+      sampled_at: new Date().toISOString(),
+      environment: record,
+    };
+  });
+  function ObservedEnvironment() {
+    const workspace = useWorkspace();
+    const original = useOriginalRequests(api, online);
+    return (
+      <WorkspaceContext.Provider
+        value={{
+          ...workspace,
+          submit: original.submit,
+          requests: original.observedRequests,
+          pendingRequests: original.pendingRequests,
+        }}
+      >
+        <ProjectEnvironment />
+      </WorkspaceContext.Provider>
+    );
+  }
   mountFeature(
     <>
       {path && <Navigate to={path} />}
-      <ProjectEnvironment />
+      <ObservedEnvironment />
     </>,
     api,
     client,

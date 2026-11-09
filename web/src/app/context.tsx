@@ -14,6 +14,7 @@ export interface Workspace {
   online: boolean;
   snapshot?: Snapshot;
   requests?: StoredRequest[];
+  pendingRequests?: () => Envelope[];
   candidateStarts?: CandidateStarts;
   submit: (envelope: Envelope) => Promise<Receipt | undefined>;
   send: (

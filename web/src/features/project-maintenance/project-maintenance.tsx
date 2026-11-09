@@ -5,6 +5,10 @@ import { useWorkspace } from "../../app/context";
 import { SafeLink } from "../../shared/ui/status";
 import { testPreparationNames as names } from "../tasks/use-test-readiness";
 import type { ProjectReadiness } from "../../shared/api/types";
+import {
+  SubmissionStatus,
+  useActivityFeedback,
+} from "../activities/feedback/feedback";
 
 export type Commit = {
   sha: string;
@@ -90,7 +94,9 @@ function CommitDetails({ commit }: { commit: Commit }) {
   );
 }
 export function ProjectMaintenance() {
-  const { api, identity, online, refresh, requests } = useWorkspace();
+  const { api, identity, online, refresh, requests, submit, pendingRequests } =
+    useWorkspace();
+  const feedback = useActivityFeedback();
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -107,7 +113,12 @@ export function ProjectMaintenance() {
       panel.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
     }
   }, [location.search, location.key]);
-  const base = ["maintenance", identity.project_id, identity.instance_id];
+  const base = [
+    api.home,
+    identity.project_id,
+    identity.instance_id,
+    "maintenance",
+  ];
   const view = useQuery({
     queryKey: base,
     queryFn: () => api.get<MaintenanceView>("/maintenance"),
@@ -129,6 +140,23 @@ export function ProjectMaintenance() {
     target: string,
     payload: Record<string, unknown> = {},
   ) {
+    if (name === "maintenance_check") {
+      if (
+        !online ||
+        busy ||
+        checking() ||
+        pending.some((r) => r.envelope.action === name)
+      )
+        return;
+      setError("");
+      const operation = submit(api.envelope(name, target, 1, payload));
+      feedback.notify("检查更新", document.activeElement as HTMLElement);
+      // The original request owner retains/reconciles the receipt and error;
+      // don't freeze an unknown result in a second local error string.
+      await operation;
+      void view.refetch({ cancelRefetch: false });
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -164,9 +192,30 @@ export function ProjectMaintenance() {
   const pending =
     requests?.filter(
       (r) =>
+        r.envelope.project_id === identity.project_id &&
+        r.envelope.instance_id === identity.instance_id &&
         r.envelope.action.startsWith("maintenance_") &&
         !["applied", "rejected"].includes(r.response?.status || ""),
     ) || [];
+  const checking = () =>
+    (pendingRequests?.() || []).some((e) => e.action === "maintenance_check");
+  const latestCheck = (requests || [])
+    .filter(
+      (r) =>
+        r.envelope.project_id === identity.project_id &&
+        r.envelope.instance_id === identity.instance_id &&
+        r.envelope.action === "maintenance_check",
+    )
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const checkLabel = checking()
+    ? "正在检查更新…"
+    : latestCheck?.response?.status === "applied"
+      ? "本次检查完成"
+      : latestCheck?.response?.status === "rejected"
+        ? "检查未启动 · " + (latestCheck.response.diagnostic || "请查看原请求")
+        : pending.some((r) => r.envelope.action === "maintenance_check")
+          ? "检查结果待核实 · 请查看原请求"
+          : "";
   return (
     <section
       ref={panel}
@@ -223,15 +272,28 @@ export function ProjectMaintenance() {
           {l?.reason && <p className="notice amber">{l.reason}</p>}
           <p>
             <button
-              disabled={!online || busy}
+              disabled={
+                !online ||
+                busy ||
+                checking() ||
+                pending.some((r) => r.envelope.action === "maintenance_check")
+              }
               onClick={() =>
                 void action("maintenance_check", identity.project_id)
               }
             >
-              检查更新
+              {checking() ? "正在检查更新…" : "检查更新"}
             </button>{" "}
             <button
-              disabled={!online || busy || !l?.can_update}
+              disabled={
+                !online ||
+                busy ||
+                checking() ||
+                pending.some(
+                  (r) => r.envelope.action === "maintenance_check",
+                ) ||
+                !l?.can_update
+              }
               onClick={() =>
                 void action("maintenance_update", identity.project_id)
               }
@@ -242,6 +304,11 @@ export function ProjectMaintenance() {
               查看提交日志
             </button>
           </p>
+          <SubmissionStatus
+            label={checkLabel}
+            busy={checking()}
+            showActivity={!!latestCheck}
+          />
           {logs && (
             <section aria-label="提交日志">
               <label>
@@ -275,11 +342,18 @@ export function ProjectMaintenance() {
             </section>
           )}
           <h4>Git 任务材料与测试安排</h4>
-          <p className="muted">检查更新后读取已提交的 Plan 和同名 .tests.json。材料错误通过正常 Git 修改处理。</p>
+          <p className="muted">
+            检查更新后读取已提交的 Plan 和同名 .tests.json。材料错误通过正常 Git
+            修改处理。
+          </p>
           {v?.tasks.map((t) => (
             <article key={t.task_id}>
-              <p>任务 #{t.task_id} · {names[t.status] || t.status}</p>
-              <code>{t.contract.plan_ref.path.replace(/\.plan\.md$/, ".tests.json")}</code>
+              <p>
+                任务 #{t.task_id} · {names[t.status] || t.status}
+              </p>
+              <code>
+                {t.contract.plan_ref.path.replace(/\.plan\.md$/, ".tests.json")}
+              </code>
               {t.diagnostic && <p role="alert">{t.diagnostic}</p>}
             </article>
           ))}

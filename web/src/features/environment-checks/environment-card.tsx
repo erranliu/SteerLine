@@ -42,6 +42,7 @@ export function EnvironmentCard({
   preferred,
   onProfileChange,
   confirmingStart,
+  submittingStart = false,
   statusVerified,
   disabled,
   stopDisabled,
@@ -54,6 +55,7 @@ export function EnvironmentCard({
   preferred?: string;
   onProfileChange: (profile: string) => void;
   confirmingStart: boolean;
+  submittingStart?: boolean;
   statusVerified: boolean;
   disabled: boolean;
   stopDisabled: boolean;
@@ -109,6 +111,7 @@ export function EnvironmentCard({
           <select
             aria-label="检测所用方案"
             value={profile}
+            disabled={confirmingStart}
             onChange={(event) => onProfileChange(event.target.value)}
           >
             <option value="">选择本次检测方案</option>
@@ -123,7 +126,7 @@ export function EnvironmentCard({
         </label>
       )}
       <div className="actions">
-        {unsettled && !confirmingStart ? (
+        {unsettled && activity?.id === activityID ? (
           <Button
             disabled={stopDisabled || !activity || activity.settled}
             onClick={() =>
@@ -159,7 +162,11 @@ export function EnvironmentCard({
               })
             }
           >
-            {e.stage === "ready" || activityID ? "重新检测" : "开始检测"}
+            {submittingStart
+              ? "正在提交检测…"
+              : e.stage === "ready" || activityID
+                ? "重新检测"
+                : "开始检测"}
           </Button>
         )}
       </div>
@@ -180,6 +187,7 @@ export function EnvironmentCard({
           <input
             aria-label="本次检测总超时（秒）"
             type="number"
+            disabled={confirmingStart}
             min={1}
             value={timeout}
             onChange={(event) => setTimeout(Number(event.target.value))}

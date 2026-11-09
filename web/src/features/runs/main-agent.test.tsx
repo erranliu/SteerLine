@@ -68,7 +68,11 @@ it("opens the exact advisory when activity navigation updates the mounted candid
   fireEvent.click(screen.getByRole("link", { name: "打开精确建议" }));
   expect(await screen.findByText(ready.prompt!)).toBeInTheDocument();
   expect(panel.open).toBe(true);
-  expect(fetch.mock.calls.some((c) => String(c[0]).includes("/main-agent/" + ready.id))).toBe(true);
+  expect(
+    fetch.mock.calls.some((c) =>
+      String(c[0]).includes("/main-agent/" + ready.id),
+    ),
+  ).toBe(true);
   expect(submit).not.toHaveBeenCalled();
 });
 it("observes an automatic result without generating on mount or open", async () => {

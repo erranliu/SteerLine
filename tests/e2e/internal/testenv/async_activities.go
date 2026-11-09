@@ -10,6 +10,7 @@ import (
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
+	"github.com/erranliu/SteerLine/internal/roadmap"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 
@@ -124,5 +125,92 @@ func AsyncActivities(s *Scenario) {
 	p.WaitStoppedCandidates()
 	p.StopService()
 	s.Must(controlled.Write(filepath.Join(s.Output, "activity-proof.json"), map[string]any{"passed": true, "original_activity_id": originalID, "observed_kinds": kinds, "no_extra_execution_inputs": true, "restarted_original_run": true, "resources_settled": true}))
+	s.activityFeedback(web, node)
 	s.Must(s.FinishBody())
+}
+
+// Keep explicit user submissions in a separate project and browser phase so
+// the original observation-only zero-input assertion remains unchanged.
+func (s *Scenario) activityFeedback(web, node string) {
+	p := s.NewProject("feedback")
+	_, err := roadmap.PrepareStatic(p.Repo, false)
+	s.Must(err)
+	draft := filepath.Join(p.Repo, "SteerlineFlow", "Roadmap", "drafts", "feedback.md")
+	s.Must(os.MkdirAll(filepath.Dir(draft), 0700))
+	s.Must(os.WriteFile(draft, []byte("# Feedback draft\n\nT1: Verify immediate feedback.\n"), 0600))
+	p.PrepareControlledEnvironment("controlled")
+	p.CreateTasks()
+	product, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
+	s.Must(err)
+	project := product.Identity().ProjectID
+	product.Close()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	s.Must(err)
+	address := listener.Addr().String()
+	s.Must(listener.Close())
+	s.Must(controlled.Write(filepath.Join(p.Home, "web.json"), map[string]any{"version": 1, "address": address}))
+	s.start(p.Command(web, "serve"), "feedback-web")
+	s.Wait("feedback Web listener", func() (bool, error) {
+		connection, err := net.DialTimeout("tcp", address, 200*time.Millisecond)
+		if err == nil {
+			connection.Close()
+		}
+		return err == nil, err
+	})
+	output := filepath.Join(s.Output, "feedback-browser")
+	s.Must(os.MkdirAll(output, 0700))
+	command := p.Command(node, filepath.Join(s.Run.Root, "web", "node_modules", "@playwright", "test", "cli.js"), "test", "tests/async-feedback.spec.ts")
+	command.Dir = filepath.Join(s.Run.Root, "web")
+	command.Env = append(command.Env, "STEERLINE_ACTIVITIES_WEB="+web, "STEERLINE_ACTIVITIES_HOME="+p.Home, "STEERLINE_ACTIVITIES_PROJECT="+project, "STEERLINE_WEB_EVIDENCE="+output, "STEERLINE_FEEDBACK_DRAFT="+draft)
+	_, err = s.RunCommand(command, "feedback-browser")
+	s.Must(err)
+	proof, err := os.ReadFile(filepath.Join(output, "feedback-browser-proof.json"))
+	s.Must(err)
+	var evidence struct {
+		Passed   bool `json:"passed"`
+		Commands []struct {
+			Action    string `json:"action"`
+			RequestID string `json:"request_id"`
+		} `json:"commands"`
+	}
+	s.Must(json.Unmarshal(proof, &evidence))
+	expected := map[string]int{"resume_dispatch": 1, "roadmap_parse": 1, "maintenance_check": 1, "start_task": 1, "start_candidate": 1, "environment_start": 1}
+	seen := map[string]bool{}
+	for _, command := range evidence.Commands {
+		if command.RequestID == "" || seen[command.RequestID] {
+			s.t.Fatal("feedback repeated or missing original request ID")
+		}
+		seen[command.RequestID] = true
+		expected[command.Action]--
+	}
+	if !evidence.Passed || len(evidence.Commands) != 6 {
+		s.t.Fatal("feedback browser evidence incomplete")
+	}
+	for action, remaining := range expected {
+		if remaining != 0 {
+			s.t.Fatalf("feedback command %s count differs", action)
+		}
+	}
+	if len(p.CallerRequests()) != 2 {
+		s.t.Fatal("explicit feedback phase must create exactly two candidate inputs")
+	}
+	s.Wait("both explicit feedback candidates observed", func() (bool, error) {
+		snapshot, err := p.Snapshot()
+		if err != nil || len(snapshot.Runner.Candidates) != 2 {
+			return false, err
+		}
+		for _, candidate := range snapshot.Runner.Candidates {
+			if candidate.SubmitState == "rejected" {
+				s.t.Fatal("explicit feedback candidate rejected: ", candidate.Diagnostic)
+			}
+			if candidate.RunID == "" || candidate.Projection == nil {
+				return false, nil
+			}
+		}
+		p.Record("parallel-observed", snapshot)
+		return true, nil
+	})
+	// The observation-only project above proves delivery and merge. This
+	// project's two parallel Runs are fenced by the existing owned cleanup.
+	p.StopService()
 }

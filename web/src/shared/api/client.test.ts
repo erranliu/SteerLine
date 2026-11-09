@@ -562,6 +562,40 @@ it("sends independently confirmed candidates concurrently while preserving same-
   expect(fetch).toHaveBeenCalledTimes(2);
 });
 
+it.each(["alias", "other-environment", "unknown-environment"])(
+  "uses environment identity for the original uncertainty guard (%s)",
+  async (kind) => {
+    const original = api.envelope("environment_start", identity.project_id, 1, {
+      ...(kind === "unknown-environment"
+        ? {}
+        : { environment_key: "a".repeat(64) }),
+      profile_id: "first-profile",
+    });
+    await journal.saveRequest(original);
+    const next = api.envelope("environment_start", identity.project_id, 1, {
+      environment_key: (kind === "other-environment" ? "b" : "a").repeat(64),
+      profile_id: "second-profile",
+    });
+    const fetch = vi.fn(async (_path: string, init: RequestInit) => {
+      const input = JSON.parse(String(init.body));
+      return response({
+        ...input,
+        original: input,
+        status: "applied",
+        sampled_at: new Date().toISOString(),
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    if (kind === "other-environment") {
+      expect((await api.submit(next)).status).toBe("applied");
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } else {
+      await expect(api.submit(next)).rejects.toThrow("待核实操作");
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  },
+);
+
 it("bounds original-query lock waiting and preserves the uncertain stop", async () => {
   envelope.action = "stop_candidate";
   await journal.saveRequest(envelope);

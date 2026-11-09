@@ -10,11 +10,22 @@ import {
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { WorkspaceContext, type Workspace } from "../../app/context";
+import { useWorkspace } from "../../app/context";
+import { useOriginalRequests } from "../../app/use-original-requests";
 import { currentRoadmapRecord, roadmapProgress } from "./workflow";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
 import type { StoredRequest } from "../../shared/api/types";
 import { Roadmaps, type RoadmapRecord, type RoadmapView } from "./roadmaps";
+
+// Layout and real canvas interactions are covered by the production-build browser test.
+vi.mock("@xyflow/react", () => ({
+  ReactFlow: () => <div>依赖图画布</div>,
+  Controls: () => null,
+  Handle: () => null,
+  Position: { Left: "left", Right: "right" },
+  MarkerType: { ArrowClosed: "arrowclosed" },
+}));
 
 afterEach(() => {
   cleanup();
@@ -28,6 +39,7 @@ function setup(
   online = true,
   requests: StoredRequest[] = [],
   configure?: (view: RoadmapView, record: RoadmapRecord) => void,
+  observed = false,
 ) {
   const source = {
     id: "b".repeat(32),
@@ -111,18 +123,161 @@ function setup(
       }) as never,
   );
   configure?.(view, record);
+  const client = testClient();
+  function ObservedRoadmaps() {
+    const workspace = useWorkspace();
+    const original = useOriginalRequests(api, online);
+    return (
+      <WorkspaceContext.Provider
+        value={{
+          ...workspace,
+          submit: original.submit,
+          requests: original.observedRequests,
+          pendingRequests: original.pendingRequests,
+        }}
+      >
+        <Roadmaps />
+      </WorkspaceContext.Provider>
+    );
+  }
   mountFeature(
     <>
-      <Roadmaps />
+      {observed ? <ObservedRoadmaps /> : <Roadmaps />}
       <LocationProbe />
     </>,
     api,
-    testClient(),
+    client,
     online,
     { requests },
   );
-  return { api, get, submit, source, record, view };
+  return { api, get, submit, source, record, view, client };
 }
+
+it("keeps static initialization blocked until the acknowledged material state is read", async () => {
+  const { submit, view } = setup(
+    "review",
+    true,
+    [],
+    (view) => {
+      view.preparation.ready = false;
+      view.preparation.local_ready = false;
+    },
+    true,
+  );
+  const initialize = await screen.findByRole("button", {
+    name: "初始化静态材料",
+  });
+  await waitFor(() => expect(initialize).toBeEnabled());
+  fireEvent.click(initialize);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  await screen.findAllByText("已受理，正在读取工作信息");
+  expect(screen.getByRole("button", { name: "初始化静态材料" })).toBeDisabled();
+  view.preparation.local_ready = true;
+  fireEvent.click(screen.getByRole("button", { name: "刷新 Markdown 与观察" }));
+  await waitFor(() =>
+    expect(screen.queryByText("已受理，正在读取工作信息")).toBeNull(),
+  );
+  expect(submit).toHaveBeenCalledTimes(1);
+});
+
+it("does not block another draft while the first draft is submitting", async () => {
+  const { submit } = setup(
+    "review",
+    true,
+    [],
+    (view, record) => {
+      view.sources.push({
+        ...record.source,
+        id: "other",
+        path: "SteerlineFlow/Roadmap/drafts/other.md",
+      });
+    },
+    true,
+  );
+  submit.mockImplementation(() => new Promise(() => {}) as never);
+  const first = await screen.findByRole("button", { name: "重新解析草稿" });
+  await waitFor(() => expect(first).toBeEnabled());
+  fireEvent.click(first);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: /other\.md/ }));
+  const second = await screen.findByRole("button", {
+    name: "Runner generate · 解析任务与依赖",
+  });
+  await waitFor(() => expect(second).toBeEnabled());
+  fireEvent.click(second);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+  expect(submit.mock.calls[1][0].target_id).toBe("other");
+});
+it("blocks duplicate parses synchronously and keeps the accepted handoff locked until its own record is read", async () => {
+  const { submit, view, source, record, get } = setup(
+    "review",
+    true,
+    [],
+    undefined,
+    true,
+  );
+  let finish!: (value: unknown) => void;
+  submit.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }) as never,
+  );
+  const button = await screen.findByRole("button", { name: "重新解析草稿" });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  await screen.findAllByText("正在提交解析…");
+  expect(button).toBeDisabled();
+  const envelope = submit.mock.calls[0][0];
+  const next = {
+    ...record,
+    id: envelope.request_id,
+    state: "queued",
+    revision: 1,
+    created_at: new Date().toISOString(),
+  };
+  finish({ ...envelope, status: "applied", roadmap: next });
+  await screen.findAllByText("已受理，正在读取工作信息");
+  expect(screen.getByRole("button", { name: "重新解析草稿" })).toBeDisabled();
+  view.records.push(next);
+  fireEvent.click(screen.getByRole("button", { name: "刷新 Markdown 与观察" }));
+  await screen.findByText("解析草稿中", { selector: "strong" });
+  expect(screen.queryByText("已受理，正在读取工作信息")).toBeNull();
+  expect(submit).toHaveBeenCalledTimes(1);
+  expect(get).toHaveBeenCalledWith("/roadmaps/sources/" + source.id);
+});
+
+it("keeps observe and stop available for an unknown parse, without trusting activity queries", async () => {
+  const { api, record, submit } = setup("unknown");
+  cleanup();
+  const envelope = api.envelope("roadmap_parse", record.source.id, 1, {});
+  mountFeature(<Roadmaps />, api, testClient(), true, {
+    busy: true,
+    requests: [
+      {
+        envelope,
+        created_at: new Date().toISOString(),
+        response: {
+          ...envelope,
+          status: "outcome_unknown",
+          sampled_at: new Date().toISOString(),
+        },
+      },
+    ],
+  });
+  expect(
+    await screen.findByRole("button", { name: "查询原操作结果" }),
+  ).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: "停止当前内容请求" }),
+  ).toBeEnabled();
+  expect(screen.getByRole("button", { name: "重新解析草稿" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "查询原操作结果" }));
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  expect(submit.mock.calls[0][0].action).toBe("roadmap_observe");
+});
 it.each([false, true])(
   "opens an activity record in its own draft and preserves current/history actions (historical=%s)",
   async (historical) => {
@@ -189,7 +344,7 @@ it.each([false, true])(
     } else {
       await waitFor(() =>
         expect(
-          screen.getByRole("button", { name: "确认任务与依赖" }),
+          screen.getByRole("button", { name: /确认本次任务与依赖/ }),
         ).toBeEnabled(),
       );
       expect(screen.queryByRole("button", { name: "返回当前流程" })).toBeNull();
@@ -252,14 +407,18 @@ it("follows the current document generation after acting on a parse activity lin
       </WorkspaceContext.Provider>
     </QueryClientProvider>,
   );
-  const confirm = await screen.findByRole("button", { name: "确认任务与依赖" });
+  const confirm = await screen.findByRole("button", {
+    name: /确认本次任务与依赖/,
+  });
   await waitFor(() => expect(confirm).toBeEnabled());
   fireEvent.click(confirm);
   const generate = await screen.findByRole("button", {
     name: "生成 Spec / Plan",
   });
   await waitFor(() => expect(generate).toBeEnabled());
-  expect(screen.getByTestId("location")).not.toHaveTextContent("record=");
+  await waitFor(() =>
+    expect(screen.getByTestId("location")).not.toHaveTextContent("record="),
+  );
   expect(screen.getByTestId("location")).toHaveTextContent(
     "source=" + record.source.id,
   );
@@ -285,7 +444,7 @@ it("reads Markdown and shows original versus proposed dependencies without alloc
   ).not.toBeInTheDocument();
   expect(screen.getByText("入 DAG 时分配")).toBeVisible();
   expect(submit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "确认任务与依赖" }));
+  fireEvent.click(screen.getByRole("button", { name: /确认本次任务与依赖/ }));
   await waitFor(() =>
     expect(submit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -304,18 +463,79 @@ it("shows mixed original references separately from proposed formal dependencies
   task.original_dependencies = { local: ["T0"], formal: ["8"] };
   task.proposed_dependencies = { local: [], formal: ["8"] };
   task.reason = "T0 已关联正式 #8，合并重复依赖";
-  await screen.findByText(task.reason);
-  const row = screen.getByRole("row", { name: /候选控制.*合并重复依赖/ });
-  const cells = within(row).getAllByRole("cell");
-  expect(within(cells[1]).getByText("本 Roadmap T0")).toBeVisible();
-  expect(
-    within(cells[1]).getByRole("link", { name: "正式 #8 · 固定调度" }),
-  ).toHaveAttribute("href", "/projects/" + identity.project_id + "/dag?task=8");
-  expect(within(cells[2]).queryByText("本 Roadmap T0")).toBeNull();
-  expect(
-    within(cells[2]).getByRole("link", { name: "正式 #8 · 固定调度" }),
-  ).toBeVisible();
+  record.analysis!.tasks.push({
+    ...task,
+    local_key: "T0",
+    title: "原有基础",
+    existing_task_id: "8",
+    original_dependencies: { local: [], formal: [] },
+    proposed_dependencies: { local: [], formal: [] },
+    reason: "",
+  });
+  fireEvent.click(
+    await screen.findByRole("button", { name: "查看 T1 · 候选控制" }),
+  );
+  const detail = screen.getByRole("region", { name: "所选任务详情" });
+  expect(within(detail).getByText("本 Roadmap T0、正式 #8")).toBeVisible();
+  expect(within(detail).getByText("正式 #8", { exact: true })).toBeVisible();
+  expect(within(detail).getByText(task.reason)).toBeVisible();
+  expect(screen.getByText("依赖未调整")).toBeVisible();
 });
+it("uses one task detail for comparison and confirms the whole proposed snapshot from the original view", async () => {
+  const { submit, get } = setup();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "草稿原始" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "查看变更 · T1" }));
+  const detail = screen.getByRole("region", { name: "所选任务详情" });
+  expect(within(detail).getByText("T1 候选控制")).toBeVisible();
+  expect(within(detail).getByText("#8 → T1 · 新增")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "草稿原始" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect(submit).not.toHaveBeenCalled();
+  expect(get.mock.calls.some(([path]) => path.startsWith("/graph"))).toBe(
+    false,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /确认本次任务与依赖/ }));
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  expect(submit.mock.calls[0][0]).toMatchObject({
+    action: "roadmap_confirm",
+    target_id: "a".repeat(32),
+    expected_version: 3,
+    payload: {},
+  });
+});
+it.each(["questions", "stale", "offline"])(
+  "keeps the original confirmation guard with a readable %s preview",
+  async (guard) => {
+    const { submit } = setup(
+      "review",
+      guard !== "offline",
+      [],
+      (_view, record) => {
+        if (guard === "questions")
+          record.analysis!.questions = ["需要明确依赖范围"];
+        if (guard === "stale")
+          record.source = { ...record.source, body: "旧原文", digest: "old" };
+      },
+    );
+    // Offline has no cached server data in this fixture and therefore no preview.
+    if (guard !== "offline") {
+      await screen.findByRole("button", { name: "差异" });
+      fireEvent.click(
+        screen.getByRole("button", { name: "差异" }),
+      );
+      if (guard === "questions")
+        expect(screen.getByText("需要明确依赖范围")).toBeVisible();
+    }
+    const confirm = screen.queryByRole("button", {
+      name: /确认本次任务与依赖/,
+    });
+    if (confirm) expect(confirm).toBeDisabled();
+    expect(submit).not.toHaveBeenCalled();
+  },
+);
 it("submits an explicit Runner parse with original request identity and no formal IDs", async () => {
   const { submit, source } = setup();
   await screen.findByDisplayValue(/T1 候选控制/);

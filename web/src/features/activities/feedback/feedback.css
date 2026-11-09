@@ -1,0 +1,57 @@
+.submission-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin: 0.65rem 0;
+  font-size: 0.875rem;
+}
+.activity-feedback-decoration {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  overflow: clip;
+}
+.activity-feedback-pulse {
+  position: fixed;
+  border: 2px solid var(--accent, #60a5fa);
+  border-radius: 0.5rem;
+  animation: activity-feedback-pulse 400ms ease-out both;
+}
+.activity-feedback-flight {
+  position: fixed;
+  max-width: min(180px, 80vw);
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.5rem;
+  background: #1e40af;
+  color: white;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: activity-feedback-flight 400ms ease-in both;
+}
+@keyframes activity-feedback-flight {
+  to {
+    transform: translate(var(--feedback-x), var(--feedback-y)) scale(0.35);
+    opacity: 0;
+  }
+}
+@keyframes activity-feedback-pulse {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-feedback-flight {
+    display: none;
+  }
+  .activity-feedback-pulse {
+    animation: none;
+    opacity: 0.6;
+  }
+}

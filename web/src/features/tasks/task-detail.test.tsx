@@ -409,6 +409,20 @@ it("keeps first startup using the selected profile", async () => {
   );
 });
 
+it("deduplicates one confirmation while allowing a newly opened parallel confirmation", async () => {
+  const { start } = setup();
+  fireEvent.click(await screen.findByRole("button", { name: "新增并行候选" }));
+  const first = await screen.findByRole("button", { name: "确认启动" });
+  act(() => {
+    fireEvent.click(first);
+    fireEvent.click(first);
+  });
+  expect(start).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "新增并行候选" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认启动" }));
+  expect(start).toHaveBeenCalledTimes(2);
+});
+
 it("blocks a new start for an online service with an unprepared environment", async () => {
   const { start } = setup({ firstStart: true, environmentReady: false });
   fireEvent.click(await screen.findByRole("button", { name: "手动启动" }));
