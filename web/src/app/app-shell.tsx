@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
-  ArrowUpRight,
   Command,
   FlaskConical,
   GitBranch,
@@ -14,6 +13,7 @@ import { Button } from "../shared/ui/button";
 
 export function AppShell({
   projectId,
+  projectName,
   switcher,
   connection,
   children,
@@ -23,6 +23,7 @@ export function AppShell({
   activities,
 }: {
   projectId?: string;
+  projectName?: string;
   switcher: ReactNode;
   connection: ReactNode;
   children: ReactNode;
@@ -52,7 +53,6 @@ export function AppShell({
           <strong>SteerLine</strong>
           <span className="brand-caption">WORKSPACE</span>
         </div>
-        {switcher}
         <p className="nav-heading">项目</p>
         <nav aria-label="主导航">
           {projectId ? (
@@ -117,10 +117,7 @@ export function AppShell({
             <Settings size={16} />
             <span>配置</span>
           </NavLink>
-          <div className="sidebar-note">
-            <span className="connection-dot" /> LOCAL SERVICE{" "}
-            <ArrowUpRight size={12} />
-          </div>
+          {switcher}
         </div>
       </aside>
       <div className="main-shell">
@@ -134,7 +131,9 @@ export function AppShell({
             >
               <PanelLeftClose size={17} />
             </Button>
-            <span>{global ? "设置" : "当前项目"}</span>
+            <span className="breadcrumb-project" title={projectName}>
+              {global ? "设置" : projectName || "当前项目"}
+            </span>
             <span>/</span>
             <strong>{title}</strong>
           </div>
