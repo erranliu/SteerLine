@@ -20,6 +20,7 @@ import (
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
@@ -87,6 +88,18 @@ func RunnerCLI(args []string) (bool, error) {
 		return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": "steerrunner-cli/v1", "ok": true, "request_id": nil, "data": controlledCapabilities(), "error": nil})
 	}
 	switch args[0] {
+	case "validate":
+		if argument(args, "--kind") != "run-configuration" || argument(args, "--input") != "-" {
+			return true, fmt.Errorf("unsupported fixture validation input")
+		}
+		raw, err := io.ReadAll(io.LimitReader(os.Stdin, runnercontract.ExecutionConfigurationLimit+1))
+		if err != nil {
+			return true, err
+		}
+		if err = validateFixtureConfiguration(raw); err != nil {
+			return true, err
+		}
+		return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": runnercontract.Protocol, "ok": true, "request_id": nil, "data": map[string]any{"kind": "run-configuration", "valid": true}, "error": nil})
 	case "version", "capabilities", "service":
 		os.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "caller-fixture-v1")
 		return protocol.RunRunnerServiceFixture(), nil
@@ -431,6 +444,39 @@ func RunnerCLI(args []string) (bool, error) {
 	s.Requests[request.RequestID] = cmd
 	s.Bodies[request.RequestID] = string(request.Input)
 	return respond(map[string]any{"command_id": cmd.CommandID, "run_id": runID, "receipt_status": "accepted", "action_status": "completed"}, "")
+}
+
+// This peer checks its advertised public schema, not native Runner semantics.
+func validateFixtureConfiguration(raw []byte) error {
+	if len(raw) > runnercontract.ExecutionConfigurationLimit {
+		return fmt.Errorf("fixture configuration exceeds public input limit")
+	}
+	var input struct {
+		Execution runnercontract.ExecutionInput `json:"execution"`
+		Workflow  runnercontract.Workflow       `json:"workflow"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		return err
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		return fmt.Errorf("fixture requires one configuration value")
+	}
+	rawCaps, _ := json.Marshal(controlledCapabilities())
+	var caps runnerclient.Capabilities
+	if err := json.Unmarshal(rawCaps, &caps); err != nil {
+		return err
+	}
+	catalog, err := runnerclient.CompileCatalog(caps)
+	if err != nil {
+		return err
+	}
+	if err = catalog.ValidateExecution(input.Execution); err != nil {
+		return err
+	}
+	return catalog.ValidateConfiguration(input.Execution, input.Workflow)
 }
 
 // Only an absent file means a new fixture. In particular, a sharing or ACL

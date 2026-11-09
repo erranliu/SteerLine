@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -12,6 +13,24 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
+
+func TestControlledDeploymentConfigurationValidation(t *testing.T) {
+	valid := `{"execution":{"adapter":"codex-app-server","target":{"kind":"local"},"settings":{"access_mode":"read_only"}},"workflow":{"id":"development","version":2}}`
+	if err := validateFixtureConfiguration([]byte(valid)); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{
+		strings.Replace(valid, `"codex-app-server"`, `"unknown"`, 1),
+		strings.Replace(valid, `"development"`, `"unknown"`, 1),
+		strings.Replace(valid, `"kind":"local"`, `"kind":""`, 1),
+		valid + `{}`,
+		`{"unknown":true}`,
+	} {
+		if err := validateFixtureConfiguration([]byte(raw)); err == nil {
+			t.Fatalf("accepted invalid deployment configuration: %s", raw)
+		}
+	}
+}
 
 func TestDirectControlledHelperAdvertisesGeneration(t *testing.T) {
 	capture, err := os.CreateTemp(t.TempDir(), "capabilities-*.json")

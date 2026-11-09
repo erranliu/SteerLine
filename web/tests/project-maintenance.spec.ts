@@ -1,6 +1,6 @@
 import {test,expect} from "@playwright/test";
 import {execFileSync} from "node:child_process";
-import {readFileSync,writeFileSync,appendFileSync} from "node:fs";
+import {readFileSync,writeFileSync,appendFileSync,unlinkSync} from "node:fs";
 import {dirname,resolve,join} from "node:path";
 
 test("runtime.project-maintenance: Git test arrangements, independent candidates and old PR delivery",async({page},info)=>{
@@ -54,6 +54,23 @@ test("runtime.project-maintenance: Git test arrangements, independent candidates
  await expect(section.getByRole("button",{name:"应用已审阅内容"})).toHaveCount(0);
  const arrangement=join(repo,"SteerlineFlow","plans","task.tests.json");
  const beforeArrangement=readFileSync(arrangement,"utf8");
+ const publishArrangement=async(body:string|null,label:string)=>{
+  git("checkout",manifest.base_branch);
+  if(body===null)unlinkSync(arrangement);else writeFileSync(arrangement,body);
+  git("add","--","SteerlineFlow/plans/task.tests.json");
+  git("commit","-qm",label);git("push",remote,"HEAD:refs/heads/"+manifest.base_branch);
+  expect((await call("maintenance_check",project)).status).toBe("applied");
+ };
+ for(const [body,label] of [[null,"Missing committed arrangement"],[JSON.stringify({tests:["unknown.test"]}),"Unknown committed test ID"]] as const){
+  await publishArrangement(body,label);
+  await expect.poll(async()=>{const v=await get("/maintenance");return v.tasks.find((t:any)=>t.task_id==="1")?.status},{timeout:90000}).toBe("invalid");
+  const broken=(await get("/maintenance")).tasks.find((t:any)=>t.task_id==="1");
+  expect(broken.diagnostic).toContain("task.tests.json");
+  if(body!==null)expect(broken.diagnostic).toContain("unknown.test");
+  await expect(section.getByRole("alert").filter({hasText:"task.tests.json"}).first()).toBeVisible();
+ }
+ await publishArrangement(beforeArrangement,"Restore committed arrangement");
+ await ready();
  // The package is isolated. Advance its bare remote, leaving local one commit behind.
  git("checkout",manifest.base_branch);
  const old=git("rev-parse","HEAD");
