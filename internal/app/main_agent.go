@@ -8,8 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/mainagent/contract"
 	"github.com/erranliu/SteerLine/internal/mainagentbridge"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
@@ -20,20 +23,34 @@ type mainAgentPort struct {
 	service *mainagentbridge.Service
 }
 
-func newMainAgentPort(c Config, store *sqlite.SQLiteStore) *mainAgentPort {
+func newMainAgentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *mainAgentPort {
+	c = bindNativeConfiguration(c, cli)
 	p := &mainAgentPort{config: c, store: store}
-	p.service = &mainagentbridge.Service{Project: c.Identity(), Store: store, Build: p.context}
+	p.service = &mainagentbridge.Service{Project: c.Identity(), Store: store, Build: p.context, Runner: cli, RunnerBuild: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
+	p.service.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+		settings, err := executionconfig.MainAgentSettings(c.RunnerExecution.MainAgent)
+		if err != nil {
+			return runnercontract.ExecutionInput{}, nil, err
+		}
+		resolved, err := c.runtimeNative.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{Operation: "compose", BaseExecution: executionconfig.MainAgentBase(c.RunnerExecution.Profiles), Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Selection: &runnercontract.ExecutionSelection{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex", Model: &settings.Model, ReasoningEffort: &settings.ReasoningEffort, AccessMode: "read_only"}})
+		if err != nil {
+			return runnercontract.ExecutionInput{}, nil, err
+		}
+		if resolved.Execution == nil {
+			return runnercontract.ExecutionInput{}, nil, errors.New("Runner 未返回主 Agent 执行配置")
+		}
+		return *resolved.Execution, c.runtimeNative.Catalog, nil
+	}
 	return p
 }
 
-// The first source adapter accepts only explicit owner reason codes. Neither
-// arbitrary question prose nor generic attention/blocked states classify a problem.
+// The source is the persisted public question and reply control, never prose classification.
 func materialAdviceSource(c runnerstate.Candidate) (mainagentbridge.Source, bool) {
 	r := c.Projection
-	if c.Participation != "active" || c.StopRequested || r == nil || r.Question == nil || r.Question.ID == "" || r.Execution.AttemptID == "" {
+	if c.Participation != "active" || c.StopRequested || r == nil || r.Question == nil || r.Question.ID == "" || r.Execution.AttemptID == "" || r.Closed || !r.Controls.CanReply {
 		return mainagentbridge.Source{}, false
 	}
-	source := mainagentbridge.Source{CandidateID: c.ID, TaskID: c.TaskID, Occurrence: r.Execution.AttemptID + ":" + r.Question.ID, Revision: r.Revision, Reason: r.Controls.Reason, Goal: r.Question.Text}
+	source := mainagentbridge.Source{CandidateID: c.ID, TaskID: c.TaskID, Occurrence: r.Execution.AttemptID + ":" + r.Question.ID, Revision: r.Revision, Reason: "pending_question", Goal: r.Question.Text}
 	source.BaseRevision, source.ContractDigest = c.BaseRevision, c.ContractDigest
 	q, _ := json.Marshal(r.Question)
 	source.Facts = []contract.Material{{ID: "question", Label: "原问题", Body: string(q), Source: c.ID, Revision: source.Occurrence}}
@@ -86,7 +103,7 @@ func (p *mainAgentPort) context(ctx context.Context, source mainagentbridge.Sour
 	}
 	current, ok := materialAdviceSource(c)
 	if !ok || current.Occurrence != source.Occurrence || c.BaseRevision != source.BaseRevision || c.ContractDigest != source.ContractDigest {
-		return out, errors.New("原材料问题已变化")
+		return out, errors.New("原待答问题已变化")
 	}
 	// Use the original occurrence/goal. Later observations cannot replace the frozen request.
 	out.Context.Materials = append(out.Context.Materials, source.Facts...)
@@ -97,11 +114,14 @@ func (p *mainAgentPort) context(ctx context.Context, source mainagentbridge.Sour
 			continue
 		}
 		seen[ref.Path] = true
-		body, e := p.config.runtimeMaintenance.read(ctx, c.BaseRevision, ref.Path)
+		body, e := p.config.runtimeMaintenance.read(ctx, ref.Commit, ref.Path)
 		if e != nil {
 			return out, e
 		}
-		out.Context.Materials = append(out.Context.Materials, contract.Material{ID: ref.Path, Label: ref.Path, Body: string(body), Source: ref.Path, Revision: c.BaseRevision})
+		if ref.Commit == "" || contract.Digest(body) != ref.SHA256 {
+			return out, errors.New("原绑定材料正文或版本不匹配：" + ref.Path)
+		}
+		out.Context.Materials = append(out.Context.Materials, contract.Material{ID: ref.Path, Label: ref.Path, Body: string(body), Source: ref.Path, Revision: ref.Commit})
 	}
 	return out, contract.Validate(out)
 }

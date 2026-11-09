@@ -64,7 +64,9 @@ func (s *SQLiteStore) AdvisoryIDs(ctx context.Context, project, scope string) ([
 	case "active":
 		where = `json_extract(payload,'$.source_active')=1`
 	case "pending":
-		where = `json_extract(payload,'$.state') IN ('queued','preparing')`
+		where = `NOT (json_extract(payload,'$.settled')=1 AND json_extract(payload,'$.state') IN ('ready','failed','cancelled'))`
+	case "all":
+		where = `1=1`
 	default:
 		return nil, fmt.Errorf("unsupported advisory read scope %q", scope)
 	}

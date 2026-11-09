@@ -26,7 +26,10 @@ type Summary = { id: string; state: string; diagnostic?: string };
 const states: Record<string, string> = {
   queued: "等待准备",
   preparing: "准备上下文",
-  blocked: "生成已阻断",
+  running: "生成提示词建议",
+  unknown: "核实原生成请求",
+  cancelling: "取消并结算中",
+  settling: "等待资源结算",
   failed: "生成失败",
   ready: "建议已生成",
   cancelled: "已取消",
@@ -68,7 +71,9 @@ export function MainAgent({ run }: { run: Candidate }) {
     refetchInterval: (query) =>
       online &&
       open &&
-      ["queued", "preparing"].includes(query.state.data?.state ?? "")
+      query.state.data &&
+      (!query.state.data.settled ||
+        ["queued", "preparing"].includes(query.state.data.state))
         ? 2500
         : false,
   });
@@ -113,14 +118,14 @@ export function MainAgent({ run }: { run: Candidate }) {
       {open && (
         <>
           <p className="muted">
-            收到明确的材料待处理状态后自动准备建议；仅供外部继续对话使用。
+            收到候选明确待答问题后自动准备建议；仅供外部继续对话使用。
           </p>
           {(list.error || detail.error) && (
             <p role="alert">{String(list.error || detail.error)}</p>
           )}
           {!id && !list.isLoading && (
             <p>
-              暂无已登记建议。当前原生链路尚未核验严格零工具能力，建议生成保持阻断；原业务入口继续可用。
+              暂无已登记建议。候选有明确待答问题时会自动生成，原问题仍通过原入口处理。
             </p>
           )}
           {detail.data && !record && (
@@ -159,7 +164,13 @@ export function MainAgent({ run }: { run: Candidate }) {
                   <Button onClick={() => void copy()}>复制提示词</Button>
                 </>
               )}
-              {["queued", "preparing"].includes(record.state) && (
+              {[
+                "queued",
+                "preparing",
+                "running",
+                "unknown",
+                "settling",
+              ].includes(record.state) && (
                 <Button
                   variant="outline"
                   disabled={!online || busy || working}

@@ -201,7 +201,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
 	r.tests.roadmaps = r.config.runtimeRoadmaps
-	r.config.runtimeMainAgent = newMainAgentPort(r.config, r.store)
+	r.config.runtimeMainAgent = newMainAgentPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
@@ -265,7 +265,7 @@ func (r *ProjectRuntime) close() {
 		if r.config.runtimeMainAgent != nil {
 			stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			if err := r.config.runtimeMainAgent.service.Close(stopCtx); err != nil && r.log != nil {
-				fmt.Fprintf(r.log, "material analysis stop unverified: %v\n", err)
+				fmt.Fprintf(r.log, "advisory stop unverified: %v\n", err)
 			}
 			cancel()
 		}

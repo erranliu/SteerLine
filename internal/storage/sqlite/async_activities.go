@@ -23,10 +23,10 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	case "main_agent_advisory":
 		table = "advisory_jobs a"
 		id = "a.request_id"
-		payload = "json_remove(CAST(a.payload AS TEXT),'$.request','$.suggestion','$.source.facts','$.source.goal')"
+		payload = "json_remove(CAST(a.payload AS TEXT),'$.request','$.suggestion','$.source.facts','$.source.goal','$.prepared_text','$.runner_request','$.runner','$.projection','$.stop_request')"
 		created = "json_extract(a.payload,'$.created_at')"
 		finished = "json_extract(a.payload,'$.finished_at')"
-		related = "json_object('settled',json_extract(a.payload,'$.settled'))"
+		related = "'{}'"
 		request = "a.request_id IN (%s)"
 	case "environment_detection":
 		table = "project_environments a"
@@ -83,6 +83,13 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	if len(in.RequestIDs) == 0 && in.Filter != "summary" {
 		terminal := "COALESCE(json_extract(CAST(a.payload AS TEXT),'$.state'),'') IN ('ready','failed','cancelled')"
 		switch in.Source {
+		case "main_agent_advisory":
+			terminal = "(json_extract(a.payload,'$.settled')=1 AND " + terminal + ")"
+			if in.Filter == "recent" {
+				where += " AND " + terminal
+			} else if in.Filter == "ongoing" {
+				where += " AND (NOT " + terminal + " OR json_extract(a.payload,'$.source_active')=1)"
+			}
 		case "environment_detection":
 			unsettled := "EXISTS(SELECT 1 FROM json_each(CAST(a.payload AS TEXT),'$.rounds') r WHERE COALESCE(json_extract(r.value,'$.settled'),0)=0)"
 			if in.Filter == "recent" {

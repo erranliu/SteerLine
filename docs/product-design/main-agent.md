@@ -1,40 +1,43 @@
-# 主 Agent：给定上下文中的提示词建议
+# 主 Agent：给定材料的后续对话提示词建议
 
-状态：模块重构草稿，生产建议生成保持阻断，未部署。完整目标见[Spec](../../SteerlineFlow/spec/main-agent-advisory.spec.md)和[Plan](../../SteerlineFlow/plans/main-agent-advisory.plan.md)，实际证据与未完成项见[验收记录](../../SteerlineFlow/testing/acceptance/main-agent-advisory.md)。PR475 的有工具调查、原题回答及材料 PR 方案已被此方向替代，其[历史验收](../../SteerlineFlow/testing/acceptance/main-agent-materials.md)不证明新边界。
+状态：已接入现有 Runner generate/1，本地 Codex 只读生成；未合并、未部署。正式契约见[Spec](../../SteerlineFlow/spec/main-agent-advisory.spec.md)、[Plan](../../SteerlineFlow/plans/main-agent-advisory.plan.md)，实际验证与未验项见[验收](../../SteerlineFlow/testing/acceptance/main-agent-advisory.md)。用户已明确放宽此前严格零工具要求，并选择直接接入开发候选的明确待答问题。
 
-## 能力与模块边界
+## 模块和执行边界
 
-主 Agent 接收外部明确提供的 goal 和材料，唯一产物是一段继续对话的提示词。用户在外部采用、修改或执行；模块没有工具、文件读取、仓库调查、自动追问或业务命令能力。未来自主执行需要新的契约与显式能力扩展，不能用配置或模型输出扩大 advisory-v1。
+主 Agent 唯一业务产物是一段继续对话的提示词。使用者如何采用、修改或执行属于外部行为。核心只处理给定请求与文本结果；不持有 Runner、存储、Git、文件/网络/进程或业务命令。没有答案投递、材料 PR 或采用状态。
 
-| 所有者 | 职责 | 边界 |
-| --- | --- | --- |
-| `internal/mainagent/contract` | advisory-v1 请求、材料、建议及严格校验 | 仅标准库；不承载候选、Runner 或动作模型 |
-| `internal/mainagent` | 校验明确输入、调用固定材料组装、校验唯一提示词 | 只依赖自身契约与 prompts；无外部读取和执行入口 |
-| `internal/mainagentbridge` | 宿主作业身份、快照、异步准备、去重、取消和诊断 | 唯一作业状态 owner；本草稿无模型客户端，始终阻断生成 |
-| app 来源适配器 | 从允许的业务事实构建固定上下文，装配后台工作 | 不能根据自然语言或通用 attention 猜测问题类型 |
-| SQLite | payload、项目隔离、唯一性和 revision CAS | 不依赖运行模块；活动读不更新业务 |
-| Web/活动查询 | 持久状态、明确上下文、只读提示词、复制、取消及导航 | 查询不创建作业，不投递答案、发布文件或执行建议 |
+| 所有者 | 职责与稳定边界 |
+| --- | --- |
+| `internal/mainagent/contract` | stdlib-only advisory-v1 DTO、UTF-8/字段/数量/字节校验 |
+| `internal/mainagent` | 明确输入校验、固定提示词同包组装、唯一 prompt 校验，无外部读取或执行 |
+| `internal/mainagentbridge` | 异步作业、冻结请求、共享配额、原请求提交/观察、取消及结算 |
+| app | 从原 owner 的持久候选投影读取明确待答与固定版本材料；组装本地 Codex 模型配置及恢复/停止接线 |
+| SQLite / 查询 / Web | payload/CAS与隔离、纯读活动投影、只读查看/复制/取消，不展示内部执行记录 |
 
-输入最多 64 项材料、序列化上下文 1 MiB，输出最多 16 KiB；按 UTF-8 校验，未知字段、重复材料 ID 和超限明确拒绝。核心冻结完整文本及 digest；来源路径只用于解释，不触发核心读取。旧多字段分析与动作协议不兼容。
+调用链固定 SteerLine → Runner 公开 generate/1 → Runner 内部本地 Codex。复用既有 Run、原请求去重、完整 final、停止和资源结算；没有新增 workflow、原生直连或模型 API 旁路。默认 GPT 6.1 Sol / high，复用已有本地执行器，配置在准备新请求时冻结，重启后新设置生效。
 
-## 首批最小接入
+接受 generate 原生只读工具与上下文加载限制，不承诺严格零工具、完全无隐式指令或单目录读取隔离。只依据提供材料、不探索属于固定提示词行为要求。宿主完整组装规则与材料为正式文本，不提供 repository、业务 directory 或 file 材料，使用默认私有空目录；缺资产失败，无 inline 兜底。
 
-只接候选材料问题的两个明确原因：`requirements_unclear`、`requirements_conflict`。身份使用项目、候选、原 Attempt/Question occurrence 和协议；普通 revision、心跳、重启不产生新建议。取消或失败不自动重开。无明确业务原因的普通提问、审批、环境问题继续原路径。
+## 首批自动触发
 
-后台从持久候选快照消费事实，先登记 queued，再异步准备原候选固定版本的 Spec/Plan、公共及验收引用、原问题、已核实 final 和必要测试安排。来源解除取消待处理工作；已完成历史不改写。页面与活动 GET 不参与推进，也不获取最新材料替换历史。
+来源为仍参与、未停止候选的原生 Question，须有原 Attempt/Question 身份、Run 未关闭且公开 CanReply 为 true。覆盖普通待答，也能帮助继续讨论材料不足和冲突；不依赖不存在的业务原因码，不根据文案或通用 blocked/attention 分类。Runner 不因此取得跨任务协调职责。
 
-当前适配器已经按这两个原因码接线并做受控测试，**现有 Runner 是否实际生产这些语义码尚未验证**。没有明确来源时不自动生成，也不以文案分类补齐。来源缺少有效 goal 或超出适配限制的登记，以及准备失败时已取得的部分材料展示，仍需后续完善。
+后台独立于页面读取持久候选，按 project/candidate/Attempt+Question/protocol 去重登记，再冻结原问题、Spec/Plan、公共及验收引用、已核实 final、必要测试安排。文档按绑定引用的 commit 与 SHA 核验，不混用当前工作树；准备失败也有作业、已取得材料和诊断。心跳、普通 revision、重启不重开同一事项，取消/失败不自动重试。
 
-## 阻断与界面
+来源解除后取消尚未提交的生成，已提交则停止原生成并结算；完成历史仍可查看/复制，不代替原问题解除。新问题或 Attempt 使用新 occurrence。
 
-严格零工具必须由实际执行链在调用前保证，同时排除自动附加的项目、个人指令与旧会话。只读 sandbox、空工作目录、提示词禁止调用、工具事件为空都不足以证明。本机原生请求捕获仍含工具定义及附加材料，因此目前不能开放生产推理；也没有改走直接模型调用。
+## 异步工作与活动
 
-本草稿只推进 queued/preparing 到 blocked、failed 或 cancelled，均没有原生资源提交。准备成功时保存完整上下文；失败只保存原因，当前不能查看已取得的部分材料。设置默认 GPT 6.1 Sol / high，当前仅保存模型偏好，不能解除阻断。
+宿主先保存冻结输入与唯一 Runner 请求，加入 home 共享 ContentQueue，提交前持久 started；未知只查原 request/Run，不重复 Submit。完整结果核验原 correlation/digest/revision、ContentResult 与公开 Final 的 command/attempt/session/turn及原文。只在资源 stopped 后完成；取消后的迟到结果不能覆盖取消。
 
-候选详情提供“后续对话提示词建议”，自动读取既有记录、展开明确上下文及只读正文并复制；没有生成、编辑、补充、采用或执行按钮。正在准备的作业可显式取消，不停止原候选。当前无生产生成结果，正文查看/复制只经受控 fixture 验证。
+启动前冷态检查全部未结算 started 请求：原请求不存在则失败/取消并释放槽，不重发；原失败或取消的停止信封随启动恢复。关闭、构建 namespace 及离线停止证明包含本用途。
 
-活动中心注册 `main_agent_advisory` / `prompt_suggestion`，直接读取作业事实；导航定位候选和具体 request。失败及阻断如实显示，来源解除后不再提醒。复用现有分页、预算、request links 和失败隔离，不新增活动状态表。真实浏览器体验尚未人工验收。
+候选详情显示上下文、状态与只读 prompt，可复制并显式取消；无生成、编辑、补充、采用或执行入口。未提交的 queued/preparing 和所有未结算记录持续观察。页面与活动 GET 均只读持久事实，不调用模型、Git 或 Runner 对账。
 
-## 后续开放条件
+活动中心注册 main_agent_advisory/prompt_suggestion，复用原分页、预算、request links 和故障隔离，导航定位候选与精确 request。未知/取消/结果未结算为 waiting；成功只表示提示词已生成并结算，原问题仍在时保留 needs_attention。
 
-先在独立 Runner worktree 验证并发布“明确上下文、无工具”的公开能力，再添加宿主提交、观察及停止结算；核心协议保持不变。补齐实际来源生产方、真实模型验证、失败上下文展示和人工体验后，才能声明自动提示词闭环完成。生成与任何外部业务执行始终分属不同能力。
+## 验证与后续扩展
+
+真实 SQLite 待答投影到后台、生成及活动的受控集成，以及一次真实 Runner/本地 Codex generate 已验证；最终全集结果和人工未验项以专属记录为准。真实链验证只做建议生成，不创建开发任务或真实 PR，不宣称严格零工具。SQLite schema 44，不迁移旧开发数据。
+
+后续自主业务执行必须经新契约、授权与验收显式扩展。advisory-v1 不预留 action/executor 或扩权开关，本轮不建设主 Agent 工作台。

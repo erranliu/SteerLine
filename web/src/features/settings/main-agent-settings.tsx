@@ -101,8 +101,8 @@ export function MainAgentSettings({
     <section className="settings-panel" aria-label="主 Agent 设置">
       <h2>主 Agent</h2>
       <p className="muted">
-        所有项目共享 · 本地 Codex ·
-        提示词建议。当前仅保存模型偏好，建议生成保持阻断。
+        所有项目共享 · Runner generate · 本地 Codex
+        只读生成提示词建议。重启后生效。
       </p>
       {query.error && <p role="alert">{String(query.error)}</p>}
       <p>

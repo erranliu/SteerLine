@@ -4,11 +4,11 @@ SteerLine 自身的固定行为说明统一放在 [internal/prompts](../internal
 
 Runner 正文、用户覆盖/原回答、测试安排、规范、schema、报告和正式 writer 继续使用各自原来源。仅固定模板统一 UTF-8/LF；用户文字和资产不得被统一 trim 或改换行。新请求从固定仓库读取完整材料，缺材料阻断，不内联补发。[规则资产](../internal/prompts/materials/)由平台随对应能力交付；任务测试安排与[正式 writer](../tools/progress_assets.go)按原任务功能的固定来源核验。环境检测仅通过平台固定短提示调用项目入口，不要求项目复制或同源校验平台协议；项目负责检测闭环和结果，平台只核对信封与生命周期。具体路径及动态材料格式见 [文档驱动 Spec](../SteerlineFlow/spec/caller-prompt-convergence.spec.md)。
 
-## 主 Agent advisory-v1 的给定上下文边界
+## 主 Agent advisory-v1 的完整文本通道
 
-按用户明确的零工具要求，主 Agent 的固定规则改由宿主从 `internal/prompts/main-agent.md`、`materials/main-agent.md` 读取并同包组装，和本次明确事实作为完整文本传入；模型不自行打开文件或仓库。这是本用途的正式文本通道，不是缺文件时的 inline 回退。缺资产阻断；业务代码不补规则。其他生成用途继续沿原固定仓库/file 材料约束。
+按用户明确确认，主 Agent 复用 Runner generate/1 的本地 Codex 只读执行，接受其原生只读工具与隐式上下文限制。固定规则由宿主从 `internal/prompts/main-agent.md`、`materials/main-agent.md` 读取并同包组装，和本次明确事实作为完整文本传入；不提供仓库、业务目录或 file 材料。这是本用途的正式完整文本通道，不是缺文件时的 inline 回退。缺资产失败，业务代码不补规则；其他生成用途沿原固定仓库/file 材料约束。
 
-当前 advisory 草稿只验证组装及边界，生产生成保持阻断，没有注册新的 Runner instruction 发送点。只有原生给定上下文/零工具能力通过独立核验并发布，才可新增发送接线；届时须审阅实际完整正文、UTF-8 字节前后值、真实输入、黄金样本与源码守卫。仅提示词说“没有工具”不证明执行层权限。
+只依据提供材料、不探索或调用工具属于行为要求，不宣称原生没有工具。正式发送点为 bridge 的 generateRequest；须审阅实际完整正文、UTF-8 字节前后值、真实输入、黄金样本与源码守卫。模块唯一业务产物仍是提示词，所有业务采用与执行在模块外。
 
 ## 修改与本地检查
 

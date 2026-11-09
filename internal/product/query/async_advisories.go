@@ -45,6 +45,10 @@ func projectAdvisoryActivity(a api.AsyncActivity, f ports.AsyncActivityFact) (ap
 	case "preparing":
 		a.State = "running"
 		a.Phase = "准备明确上下文"
+	case "running":
+		a.State, a.Phase = "running", "生成提示词建议"
+	case "unknown", "cancelling", "settling":
+		a.State, a.Phase = "waiting", "核实原生成与资源结算"
 	case "ready":
 		a.State = "succeeded"
 		a.Phase = "提示词建议已生成"
@@ -60,7 +64,7 @@ func projectAdvisoryActivity(a api.AsyncActivity, f ports.AsyncActivityFact) (ap
 		a.State = "waiting"
 		a.Phase = "生成状态待核实"
 	}
-	if !r.Settled {
+	if !r.Settled && activityTerminal(a.State) {
 		a.State = "waiting"
 		a.Phase = "等待原生成资源结算"
 	} else if activityTerminal(a.State) {

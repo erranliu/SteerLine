@@ -1,0 +1,10 @@
+{
+  "tests": [
+    "l1.minimum",
+    "smoke.delivery",
+    "go.http",
+    "go.storage",
+    "go.deployment",
+    "web.unit"
+  ]
+}

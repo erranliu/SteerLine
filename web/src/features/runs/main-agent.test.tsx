@@ -88,15 +88,17 @@ it("copies the immutable suggestion even after the original candidate ends", asy
   await waitFor(() => expect(copy).toHaveBeenCalledWith(ready.prompt));
   expect(submit).not.toHaveBeenCalled();
 });
-it("shows native capability failure without opening a generation path", async () => {
+it("shows generate failure without opening a generation path", async () => {
   const { submit } = mount({
     ...ready,
-    state: "blocked",
+    state: "failed",
     prompt: undefined,
-    diagnostic: "严格零工具能力尚未核验，未提交模型请求",
+    diagnostic: "Runner generate 配置不可用，未提交模型请求",
   });
   open();
-  expect(await screen.findByText(/严格零工具能力/)).toBeInTheDocument();
+  expect(
+    await screen.findByText(/Runner generate 配置不可用/),
+  ).toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
   expect(submit).not.toHaveBeenCalled();
 });
@@ -109,3 +111,32 @@ it("does not show a response from another candidate", async () => {
   expect(screen.queryByText(ready.prompt!)).not.toBeInTheDocument();
   expect(copy).not.toHaveBeenCalled();
 });
+
+it.each(["cancelling", "failed"])(
+  "keeps observing %s until resource settlement",
+  async (state) => {
+    const record: AdvisoryDetail = {
+      ...ready,
+      state,
+      settled: false,
+      prompt: undefined,
+      diagnostic: "等待原资源结算",
+    };
+    const { fetch } = mount(record);
+    open();
+    expect(await screen.findByText("等待原资源结算")).toBeInTheDocument();
+    record.state = state === "cancelling" ? "cancelled" : "failed";
+    record.settled = true;
+    record.diagnostic = "原生成资源已核实停止";
+    await waitFor(
+      () =>
+        expect(screen.getByText("原生成资源已核实停止")).toBeInTheDocument(),
+      { timeout: 4500 },
+    );
+    expect(
+      fetch.mock.calls.filter((c) => !String(c[0]).includes("?candidate_id="))
+        .length,
+    ).toBeGreaterThanOrEqual(2);
+  },
+  7000,
+);

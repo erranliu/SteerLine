@@ -10,7 +10,8 @@ import (
 // New sinks require a deliberate source-rule and consumer-test change.
 func promptSinkAllowed(file, function string) bool {
 	switch file + ":" + function {
-	case "internal/roadmap/generation.go:Parse",
+	case "internal/mainagentbridge/generate.go:generateRequest",
+		"internal/roadmap/generation.go:Parse",
 		"internal/roadmap/documents.go:GenerateDocuments",
 		"internal/environmentadaptation/service.go:appendRound",
 		"internal/runnerclient/prompt_context.go:WithTestProgressContext":

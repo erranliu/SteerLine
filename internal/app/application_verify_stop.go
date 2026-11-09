@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/localservice"
+	"github.com/erranliu/SteerLine/internal/mainagentbridge"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
@@ -295,6 +296,13 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	contents := make([]runnerbinding.Content, 0, len(roadmaps))
 	for _, r := range roadmaps {
 		contents = append(contents, roadmapContent(r))
+	}
+	advisories, err := advisoryRecords(ctx, reader, c.Identity())
+	if err != nil {
+		return proof, err
+	}
+	for _, r := range advisories {
+		contents = append(contents, mainagentbridge.Content(r))
 	}
 	environments, err := reader.Environments(ctx, c.Identity())
 	if err != nil {

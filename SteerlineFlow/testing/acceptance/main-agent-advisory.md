@@ -1,86 +1,63 @@
-# 主 Agent 给定上下文提示词建议：验收记录
+# 主 Agent：generate 接入验收
 
-状态：2026-11-09，按用户选择交付**模块重构 Draft PR，生产建议生成保持阻断**。完整目标见 [Spec](../../spec/main-agent-advisory.spec.md) 与 [Plan](../../plans/main-agent-advisory.plan.md)。这次阶段交付不等同于完整自动生成闭环；旧 [PR475 验收](main-agent-materials.md)只作历史记录。
+状态：按 2026-11-09 用户确认，复用现有 Runner generate/1，本地 Codex 只读生成；来源为开发候选明确待答问题（包括普通待答）。核心独立且唯一业务产物仍为后续对话提示词，采用与执行在外部。未合并、未部署。正式目标见 [Spec](../../spec/main-agent-advisory.spec.md)、[Plan](../../plans/main-agent-advisory.plan.md)及[测试选择](../../plans/main-agent-advisory.tests.json)。
 
-## 范围与验收结论
+此前严格零工具前置及生产永久阻断已被用户明确替换，[初始阻断草稿](main-agent-advisory-blocked-draft.md)及[PR475 原实现](main-agent-materials.md)仅作历史。原生工具/隐式上下文仍按 generate 既有能力，不声称严格零工具或单目录隔离；SteerLine 没有直连 Codex/app-server/模型 API。
 
-| ID | 本次结果 | 未完成或证据边界 |
+## 当前验收映射
+
+| ID | 实施与验证范围 | 状态 |
 | --- | --- | --- |
-| MAA-A01 | 受控通过：stdlib-only contract、无外部读取/执行的 core、宿主 owner、显式详情 DTO；依赖负例守卫通过 | 独立静态审核通过，不证明原生能力 |
-| MAA-A02 | 受控通过：冻结正文/digest、材料 ID、UTF-8、未知字段、数量/字节限制及完整给定输入 | 准备失败未保存已取得的部分材料，界面仅显示诊断；来源适配缺有效 goal 或超限时的登记仍待完善 |
-| MAA-A03 | 受控通过：唯一非空 prompt 校验、旧 JSON 动作产物拒绝、内存结果接收 | 生产没有模型产物；清晰/缺失/冲突材料的真实生成质量未验 |
-| MAA-A04 | **未通过**：当前本机捕获仍包含工具定义，未获得强制零工具的公开保证 | 生产无模型/Runner 客户端，零业务提交；不以 read_only 降级 |
-| MAA-A05 | **未通过**：受测配置仍附加 skills、权限、协作模式等材料 | 未穷举所有原生设置，不能声称原生永远不支持；阻断不变 |
-| MAA-A06 | 受控通过：旧回答/发布/规则准备链删除；旧动作在任何业务访问前拒绝 | 原业务入口沿现有实现，HTTP/L2/部署回归通过；没有再次向真实候选发答案或发布 PR |
-| MAA-A07 | 本地阶段通过：持久去重、重启不重开、准备中取消、迟到结果不覆盖取消、源解除 | 无原生资源启动；真实提交未知、配额及停止结算未验，待未来宿主接入 |
-| MAA-A08 | 受控通过：只读上下文/正文、复制、取消；无生成/编辑/采用/执行入口；Sol/high 默认设置保留 | 仅保存模型偏好，不启动生成；失败材料不完整；人工体验未验 |
-| MAA-A09 | 静态与受控通过：同包固定材料组装、无 inline fallback、正文 diff/字节/hash/golden及提示词守卫独立审核 | 无生产 on-wire 请求；1174 B 是代表性完整组装文本，不冒充真实模型输入 |
-| MAA-A10 | 受控通过：advisory-v1 身份固定；未知协议/能力/字段拒绝；无工具或动作开关 | 扩权需新契约 |
-| MAA-A11 | 受控通过：明确原因码适配、缓存原事实、稳定 occurrence 去重、后台准备/失败/阻断登记 | **真实生产方是否提供两类语义原因码未验**；普通 question/blocked 不触发，不宣称真实自动闭环完成 |
-| MAA-A12 | 受控通过：单一正式活动来源、状态/attention、原请求关联、精确导航、只读/分页/预算/项目隔离 | SQLite 首次旧分页测试失败，定向与全集复跑通过，保留失败证据；真实用户体验未验 |
-| MAA-A13 | 部分受控通过：后台独立于页面、持久去重、跨候选/记录隔离、不在打开面板时生成 | 真实无页面自动生成、完整崩溃窗口及浏览器手工操作未验 |
+| A01 | contract 仅 stdlib；核心只依赖 contract/prompts；显式详情 DTO不暴露执行记录 | 定向与独立静态审核通过 |
+| A02 | 冻结全文、UTF-8/数量/字节约束；按绑定 ref commit/SHA 读取；准备失败保留已取得材料和诊断 | 核心/宿主定向及真实 SQLite 来源集成通过 |
+| A03 | 唯一非空 prompt；旧 JSON 动作对象拒绝；结果实际来源与原文一致 | 定向与真实 generate 通过 |
+| A04 | 只经 Runner generate/1，原 compose 本地 Sol/high/read_only，复用公开提交/观察/停止 | 实际真实链通过；不再要求零工具 capability |
+| A05 | 完整固定文本与显式材料进入 Instruction，空 materials，无 repository/directory/file/output_schema | 实际请求断言、真实输入样本及独立审核通过；隐式原生材料不作隔离保证 |
+| A06 | 无原题答案、文件发布或隐藏业务执行入口 | 旧动作拒绝定向通过，HTTP 全集待本轮最终登记 |
+| A07 | 原请求去重、started未知只查、共享队列、取消/源解除/结算、冷态落定与原停止恢复 | bridge 与恢复定向通过，真实服务/资源停止核实；部署全集待本轮最终登记 |
+| A08 | 默认模型与设置冻结；最小只读上下文/正文、复制及取消；未结算继续轮询 | Web 全集待本轮最终登记，人工浏览器体验未验 |
+| A09 | 同包固定材料、缺失失败、实际全文 diff/字节/hash/golden/发送守卫 | 独立静态审核通过，最终证据复核待完成 |
+| A10 | advisory-v1 固定，不接受未知协议/能力或旧动作产物 | 定向通过 |
+| A11 | 原 owner 持久当前 Question/Attempt/CanReply 自动登记，不依赖诊断文案或虚构原因码 | 真实 SQLite 候选保存→后台→生成→活动→重启去重集成通过；原生问题由公开 fixture 提供，未跑完整真实开发任务 |
+| A12 | 单一正式活动来源、原请求/精确导航、attention、纯读与有界正文剥离 | 集成与投影定向通过，SQLite 全集待本轮最终登记 |
+| A13 | 不打开页面亦推进、跨候选隔离、来源解除不改历史、重启不重投 | 集成与定向通过；真实浏览器手工体验未验 |
 
-`ProductionAvailable()` 固定为 false，bridge 准备后无条件进入 blocked。不存在生产模型 sender，不能用设置或输出绕过；已结算仅表示未提交任何外部资源。核心 Accept 的内存测试以及 Web 的 ready fixture 不构成生产成功路径。
+## 定向及真实链证据
 
-## 受测基线与自动报告
+本轮受测基础为 `448ddda0` 上的 dirty worktree，完整命令和各次实际源码/工作区状态在原报告中。Runner 源码未修改，无需 Runner worktree。SQLite schema 44，不迁移之前开发数据。
 
-文档冻结提交 `4316418ba0ca854813816a042b99274c9a46539e`；实施在其 dirty worktree，合入 `origin/main` 的 `eed86e1355b14d07521c85483c511bd2e625f585` 后验证。各报告保存实际 source_commit 和 worktree_status；不是以最终提交 SHA 冒认先前测试。SteerRunner 未修改、未重新发布，本次没有真实模型调用。
+报告根 `C:/Users/lmas1/AppData/Local/Temp/`，每次使用独立 out：
 
-以下报告根均为 `C:/Users/lmas1/AppData/Local/Temp/`，每次使用独立 scope，完整命令、原始日志和断言在各 `summary.json` 及 managed 报告中：
-
-| 检查 | 报告目录 | 结果 |
+| 范围 | 目录 | 结果 |
 | --- | --- | --- |
-| owner 核心/宿主/app/SQLite/query/prompts/boundary 定向 | `steerline-advisory-owner-33b99aeab7ce4418be169fa053915489` | 42 项通过；contract 无测试文件仅编译，不冒认行为通过 |
-| 准备中取消与核心定向 | `steerline-advisory-cancel-7e5a580862b546929a8d1ec4ef322a92` | 通过，覆盖取消及时返回及迟到结果 |
-| 最终 owner 定向 | `steerline-advisory-final-owner-20261109` | 通过 |
-| L1 固定最小集 | `steerline-advisory-final-L1-report` | 通过，18.2 秒；原 scope 为工作区临时 `$scope`，只在完成后移动报告目录，日志内部原路径保留 |
-| L2 固定 controlled smoke | `steerline-advisory-L2-83fd72b37c054b618169125bf3f76586` | 通过，97.1 秒，清理完成 |
-| HTTP 全集 `go.http` | `steerline-advisory-http-f159cf1e5ca34f478259ac1697aaf6c0` | 通过，63.4 秒；最终复核 `steerline-advisory-final-http-20261109` 通过，66.6 秒 |
-| Web 全集 `web.unit` | `steerline-advisory-web-155011bf0a654d55aa5bc5d1b8a42606` | 350/350 通过；最终复核 `steerline-advisory-final-web-20261109` 通过，37.3 秒 |
-| SQLite 全集首次 `go.storage` | `steerline-advisory-storage-8d7431e84ee74486aa8684ce39d7e8ed` | 失败：旧 `TestAsyncActivityPaginationAndRequestLookup` 报 association lookup depended on page |
-| 原失败项独立复核 | `steerline-advisory-storage-link-181b090f64294413863a47ff5422a45b` | 通过，25.0 秒；未改断言或每来源预算 |
-| SQLite 全集复核 `go.storage` | `steerline-advisory-storage-recheck-8d605cfdbdb04e859c59bdef9ecbf300` | 通过，85.5 秒；失败原因未被确证，不以推测掩盖首次失败 |
-| 部署全集 `go.deployment` | `steerline-advisory-deployment-1f5343857a814b1baa306964e8ef1edf` | 通过，557.1 秒 |
+| 首轮 bridge/来源/核心/提示词守卫 | `steerline-advisory-generate-owner1` | 通过，5.9 秒 |
+| 补强结果绑定后的 owner | `steerline-advisory-generate-owner2` | 通过，47.4 秒 |
+| 持久来源集成首次 | `steerline-advisory-real-source1` | 失败：SQL related.settled 为数字，投影 bool 解码拒绝；不是生成失败 |
+| 持久来源集成修复复验 | `steerline-advisory-real-source2` | 通过，42.6 秒；此来源从 payload 读取结算，不再重复写 related 数字 |
+| 冷态恢复及原停止身份 | `steerline-advisory-recovery1` | 通过，33.3 秒；未取消/已取消 absent 均落定并释放槽，failed-stop保留原unknown信封，两次准备不换ID |
+| 真实 generate 首轮 | `steerline-advisory-generate-native1` | 通过，23.4 秒；原证据 `steerline-advisory-generate-native-result1.json` |
+| 最终完整 Final 绑定真实复验 | `steerline-advisory-generate-native2` | 通过，27.9 秒；原证据 `steerline-advisory-generate-native-result2.json` |
 
-正式命令形式：`go run ./cmd/test-feedback -level=L1/-level=L2 -out=<独立目录>`；owner 通过 `--` 传具体包及 TestAdvisory/主 Agent/活动过滤，详见报告 command；全集使用 `-level=L4 -suite=go -scenario go.http/go.storage/go.deployment` 或 `-suite=web -scenario web.unit`（每次一个场景）。PowerShell 原生参数须引用带点场景字符串。未启动成功的参数解析尝试不登记为测试通过。
+定向用 `go run ./cmd/test-feedback -out=<本次目录> -- <具体包> -run <明确Test过滤> -count=1 -timeout=<预算>`；真实用例位于 bridge、带 runneracceptance 标签并只选 TestAdvisoryLocalCodexGeneratePublished。环境显式 STEERRUNNER_EXE、MAIN_AGENT_CODEX_EXE、MAIN_AGENT_LIVE_EVIDENCE。没有标签测试的包只算编译，不将零匹配/skip算通过。
 
-`npm --prefix web run build` 与 TypeScript 编译通过。`roadmap_publication.go` 已恢复至 origin/main，Roadmap 实现/提示词/守卫相对本 PR base 无改动，故不重复跑 `go.roadmap`。本 PR 的 main-agent 固定资产与边界守卫由 L1/owner 覆盖；main 上已合并的其他提示词改动不计入本用途审核。
+真实链使用固定 `C:/Project/SteerRunner/bin/steerrunner.exe`：`0.2.0-dev.4`，SHA `d15da21b7b82e21f7347c72404d282f4432b963dcc97db5825595d09676eae6d`，资源摘要 `910c7fa06b933be3632f862062e966200fd581b34873a395268826d44c1bbbe7`。原生使用已配置本地 Codex EXE、模型 gpt-6.1-sol/high，经 Runner compose 冻结 read_only。每次创建新临时 state-dir，不使用安装环境，不创建开发候选或真实 PR。
 
-## 原生前置调查：未通过
+[真实请求/来源/唯一正文及清理摘要](evidence/main-agent-generate-live.json)保存实际完整 generate.Instruction（1665 UTF-8字节）、摘要、空材料与无仓库字段、原 request/Run、InputDigest、verified Final/Source一致及 stop_status。样本仅移除执行器本机路径/运行目录，不修改模型实际输入或提示词；原记录文件另有 hash。模型产出经过核心 Accept，Service.Close、Runner StopService 和 VerifyServiceSettlement均通过后删除隔离执行现场。这个真实测试不证明完整真实开发任务产出 Question；真实来源生产字段沿既有 Runner Question/CanReply 契约，生产适配已由持久来源集成验证。
 
-公开原生接口参考 [app-server](https://learn.chatgpt.com/docs/app-server) 和[配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)，并核对本机生成的普通及 experimental schema。ThreadStart/TurnStart 未发现 toolChoice/allowedTools 字段；`dynamicTools=[]` 不能证明内建工具关闭。
+## 提示词差异及独立审核
 
-- npm Codex `0.166.0`，EXE SHA-256 `9d563ee4e0441ff9d59d612013e0460ddf8e5709735c2d9f6b98b7ef8ca4eb42`。
-- desktop Codex `0.167.0-alpha.3.2`，EXE SHA-256 `4b3286e35d7fe866c6b0eb3f07d7a4cdb5e96489576170dfd6b3a15aa1c67382`；分别核对 schema，下面最终干净配置捕获仅针对 npm 版本。
-- 用隔离本地 fake Responses provider 捕获请求，不访问真实模型。清空父级 CODEX 环境、使用新 CODEX_HOME，关闭 shell、code_mode、multi_agent、apps/plugins/hooks 等开关，`project_doc_max_bytes=0`。有效配置及原始请求保存在 `steerline-advisory-surface-9ivroga_`。
-- 顶层没有 `tools`，但 `input.additional_tools` 中有两个 namespace、递归 **10 个叶子工具**，包括 functions.exec/wait/用户输入及 collaboration 操作，`tool_choice=auto`。只数顶层字段或两个 namespace 会误报零工具。
-- 同时存在 skills 元信息、权限、协作与多 Agent 规则、环境上下文。该配置的 include_permissions_instructions/include_collaboration_mode_instructions 仍为 true、skills 为 null；不声称已经穷举原生配置或证明永不可能支持。
+用户放宽的是推理约束，模块唯一产物和外部执行边界不变。[本轮零上下文实际 diff](evidence/main-agent-generate-prompts.diff)以 `448ddda0` 为基线。唯一行为正文变化：将“你没有工具和项目访问能力。不得读取文件……”改为“本次仅需理解已提供的正文，不要读取其他文件……”，不再把提示词约定声称为工具硬保证；保留不编造、只输出一段提示词、不执行业务操作。
 
-[脱敏调查摘要及原文件 hash](evidence/main-agent-native-gate.json)可供核对；完整原始捕获留在本机临时目录，包含个人环境材料，不提交仓库。该证据证明受测组合未达到保证，不能作为“已强制零工具”的正向证据。没有获得可发布的 Runner capability，也没有模拟成真实生成成功。
+| UTF-8 资产 | 本轮前 | 本轮后 |
+| --- | ---: | ---: |
+| 短模板 main-agent.md | 145 B | 145 B |
+| 完整规则 materials/main-agent.md | 1019 B | 1025 B |
+| 代表性完整组装 golden | 1174 B | 1180 B |
 
-## 提示词实际变更与独立审核
+规则 SHA `3a7a447bbe7527bf4c1c46867f9180cab32bc3b61359a92d9db9784172c38189`；golden SHA `8333a709f40e5fa818fd0562f5bba3bfc1ebef3e0afd13dcf0902356eb36e6d1`。1180 B 仍是 goal=clarify/空材料样本，1665 B 才是本次真实请求的完整组装正文，不能混为工具执行审计。
 
-[完整正文与接线差异](evidence/main-agent-advisory-prompts.diff)使用零上下文补丁（`git diff --unified=0`）保留每条实际修改正文，以 PR475 的 `e9ee368f` 为基准，包含模板、规则、代表性组装 golden、组装/测试接线、旧项目规则删除与治理例外。业务原因：模型不能读文件，必须由宿主在调用前完整组装；唯一输出收敛为后续对话提示词，删除有工具调查、答案和文件变更指令。没有读取失败时的 inline 兜底。
+独立 reviewer `/root/independent_review` 已审核实际规则、字节/hash、正式 Instruction 发送点、空材料及无仓库字段、核心依赖与宿主生命周期，结论为当前 generate/1 read_only 用户授权范围静态审核通过。发现并修复：全部 started 未结算的冷态不存在请求落定、共享槽释放、失败停止意图恢复、完整 Final/command/attempt来源绑定、取消中及失败未结算的持续轮询。审核者未运行测试；当前聊天运行上述自动验证。黄金样本更新不替代独立批准。
 
-| UTF-8 资产 | PR475 之前 | 本草稿之后 | 相对 origin/main |
-| --- | ---: | ---: | --- |
-| `internal/prompts/main-agent.md` | 227 B | 145 B | 新增，0 → 145 B |
-| `internal/prompts/materials/main-agent.md` | 2930 B | 1019 B | 新增，0 → 1019 B |
-| `internal/prompts/testdata/main-agent.golden.md` | 226 B | 1174 B | 新增，0 → 1174 B |
-| `SteerlineFlow/main-agent-rules.md` | 2930 B | 删除 | main 原无此资产，净无新增 |
+## 完整回归与剩余边界
 
-完整规则 SHA-256：`79e76b91c5ec53c9d7d6cb5df33483da62822a6667b2286944476e51cb10ecdc`。1174 B golden 为 goal=clarify、空材料的固定完整组装正文；动态请求实际长度随上下文变化，本草稿没有生产模型输入。黄金样本通过不能替代批准。
-
-独立 reviewer `/root/independent_review` 已审核实际正文 diff、字节、hash、同包组装/缺失失败、依赖及旧出口删除，结论为“可按生产生成保持阻断的 Draft 范围通过独立静态审核”。审核发现准备中取消不能及时生效，修复为 context-aware gate + 每记录取消，测试验证迟到结果不覆盖取消，复审通过。审核者未运行测试，自动结果由当前聊天执行，职责不混淆。
-
-## 保留的完成条件
-
-完整 Spec 仍需：可验证的无工具/无隐式上下文 Runner 公开能力、真实来源生产方、真实模型及停止/未知资源验证、准备失败时部分材料可见，以及人工浏览器可读性/导航/复制检查。没有人工验收通过记录，没有部署或合并。开放能力必须经后续实现与真实验证，不是解除当前硬编码阻断即可完成。
-
-最终文档独立复核亦通过：证据 diff 与实际差异一致，字节/hash及脱敏摘要的四份原文件 hash 均已独立核对；未批准开放生产推理。最终 Web 生产构建通过（2195 modules）。本阶段文档导航检查：722 个 Markdown、4461 条本地链接、0 错误；`git diff --check` 通过。
-
-## 干净提交的最终固定集
-
-实现提交 `8835437cf77b7911935dbcdb804d500012a3da93` 在前后干净且源码未变化的状态下再次运行 L1/L2，均通过，L2 清理完成。报告根仍为系统临时目录：`steerline-advisory-committed-L1-8835437c`（34.7 秒）和 `steerline-advisory-committed-L2-8835437c`（127.4 秒）。通过正式 record 入口导出[受测 SHA 的 Git 测试历史](../records/8835437cf77b7911935dbcdb804d500012a3da93.json)。后续仅追加本验收说明和测试历史，不将新文档提交 SHA 冒认为受测 SHA。
-
-PR 创建后按 base…HEAD 检查发现证据补丁的未改动上下文空行/制表符被 Git 作为正文空白告警。已将证据改为零上下文补丁，实际正文与代码不变，并复核 PR 全量 diff。
+L1/L2、go.http、go.storage、go.deployment、web.unit、生产构建及文档检查待本轮最终登记；不继承初始草稿的全集通过。最终受测提交固定后导出正式 Git 测试历史。人工浏览器可读性、复制及导航未验；没有合并、部署、真实开发/PR执行，亦不声明严格零工具能力。

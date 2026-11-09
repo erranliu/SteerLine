@@ -59,14 +59,15 @@ func (m *memory) AdvisorySummaries(context.Context, string, string) ([]json.RawM
 }
 func fixture() (*Service, Source, *int) {
 	calls := new(int)
-	source := Source{CandidateID: strings.Repeat("b", 32), Occurrence: "original-attempt:question", Revision: 1, Reason: "requirements_unclear", Goal: "Empty input is unspecified"}
+	source := Source{CandidateID: strings.Repeat("b", 32), Occurrence: "original-attempt:question", Revision: 1, Reason: "pending_question", Goal: "Empty input is unspecified"}
 	s := &Service{Project: "project", Store: &memory{rows: map[string][]byte{}}, Build: func(_ context.Context, source Source, id string) (contract.Request, error) {
 		*calls++
 		return contract.Request{Protocol: contract.Protocol, RequestID: id, Capability: contract.Capability, Context: contract.Context{Goal: source.Goal, Materials: []contract.Material{}}}, nil
 	}}
+	attachFake(s)
 	return s, source, calls
 }
-func TestAdvisoryAutomaticOccurrenceDedupAndProductionBlock(t *testing.T) {
+func TestAdvisoryAutomaticOccurrenceDedupAndGeneration(t *testing.T) {
 	s, source, calls := fixture()
 	ctx := context.Background()
 	if err := s.Sync(ctx, []Source{source}); err != nil {
@@ -81,7 +82,7 @@ func TestAdvisoryAutomaticOccurrenceDedupAndProductionBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := s.Get(ctx, id)
-	if err != nil || r.State != "blocked" || !r.Complete() || r.Diagnostic != NativeUnavailable || r.Request == nil || ProductionAvailable() {
+	if err != nil || r.State != "queued" || r.Complete() || r.Request == nil || r.RunnerRequest == nil {
 		t.Fatal(r, err)
 	}
 	for i := 0; i < 3; i++ {
@@ -96,6 +97,7 @@ func TestAdvisoryAutomaticOccurrenceDedupAndProductionBlock(t *testing.T) {
 	}
 	// A reconstructed host shares persisted identities; no UI or model submission is needed.
 	restarted := &Service{Project: s.Project, Store: s.Store, Build: s.Build}
+	restarted.Runner, restarted.RunnerBuild = s.Runner, s.RunnerBuild
 	if err = restarted.ProcessNext(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +109,7 @@ func TestAdvisoryAutomaticOccurrenceDedupAndProductionBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _ = s.Get(ctx, id)
-	if r.SourceActive || r.State != "blocked" {
+	if r.SourceActive || r.State != "ready" {
 		t.Fatal("source resolution rewrote historical result", r)
 	}
 }

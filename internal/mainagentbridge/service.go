@@ -6,20 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+
 	"github.com/erranliu/SteerLine/internal/mainagent"
 	"github.com/erranliu/SteerLine/internal/mainagent/contract"
 )
-
-const NativeUnavailable = "严格给定上下文/零工具能力尚未核验，生成保持阻断；未提交模型请求"
-
-// There is deliberately no production model client in this draft. Only a newly
-// verified native capability may add one. No setting or model text can open it.
-func ProductionAvailable() bool { return false }
 
 type Source struct {
 	CandidateID    string              `json:"candidate_id"`
@@ -34,28 +30,38 @@ type Source struct {
 }
 
 func (s Source) Valid() bool {
-	return contract.ID.MatchString(s.CandidateID) && s.Occurrence != "" && utf8.ValidString(s.Occurrence) && len(s.Occurrence) <= 1024 && s.Revision > 0 && strings.TrimSpace(s.Goal) != "" && utf8.ValidString(s.Goal) && len(s.Goal) <= contract.MaxPromptBytes && (s.Reason == "requirements_unclear" || s.Reason == "requirements_conflict")
+	return contract.ID.MatchString(s.CandidateID) && s.Occurrence != "" && utf8.ValidString(s.Occurrence) && len(s.Occurrence) <= 1024 && s.Revision > 0 && s.Reason == "pending_question"
 }
 func SourceID(project string, s Source) string {
-	raw, _ := json.Marshal([]string{project, "candidate-material", s.CandidateID, s.Occurrence, contract.Protocol})
+	raw, _ := json.Marshal([]string{project, "candidate-question", s.CandidateID, s.Occurrence, contract.Protocol})
 	return contract.Digest(raw)[:32]
 }
 
 type Record struct {
-	Project      string               `json:"project"`
-	ID           string               `json:"id"`
-	Revision     uint64               `json:"revision"`
-	Source       Source               `json:"source"`
-	SourceActive bool                 `json:"source_active"`
-	State        string               `json:"state"`
-	CreatedAt    time.Time            `json:"created_at"`
-	FinishedAt   *time.Time           `json:"finished_at,omitempty"`
-	ObservedAt   time.Time            `json:"observed_at"`
-	Request      *contract.Request    `json:"request,omitempty"`
-	InputDigest  string               `json:"input_digest,omitempty"`
-	Suggestion   *contract.Suggestion `json:"suggestion,omitempty"`
-	Diagnostic   string               `json:"diagnostic,omitempty"`
-	Settled      bool                 `json:"settled"`
+	PreparedText  string                  `json:"prepared_text,omitempty"`
+	Runner        runnercontract.BuildPin `json:"runner"`
+	RunnerRequest *runnercontract.Request `json:"runner_request,omitempty"`
+	RunID         string                  `json:"run_id,omitempty"`
+	RunnerDigest  string                  `json:"runner_digest,omitempty"`
+	Projection    *runnercontract.Run     `json:"projection,omitempty"`
+	Submission    string                  `json:"submission,omitempty"`
+	Cancelled     bool                    `json:"cancelled"`
+	StopRequest   *runnercontract.Request `json:"stop_request,omitempty"`
+	StopState     string                  `json:"stop_state,omitempty"`
+	Project       string                  `json:"project"`
+	ID            string                  `json:"id"`
+	Revision      uint64                  `json:"revision"`
+	Source        Source                  `json:"source"`
+	SourceActive  bool                    `json:"source_active"`
+	State         string                  `json:"state"`
+	CreatedAt     time.Time               `json:"created_at"`
+	FinishedAt    *time.Time              `json:"finished_at,omitempty"`
+	ObservedAt    time.Time               `json:"observed_at"`
+	Request       *contract.Request       `json:"request,omitempty"`
+	InputDigest   string                  `json:"input_digest,omitempty"`
+	Suggestion    *contract.Suggestion    `json:"suggestion,omitempty"`
+	Diagnostic    string                  `json:"diagnostic,omitempty"`
+	Settled       bool                    `json:"settled"`
 }
 
 func (r Record) Complete() bool {
@@ -68,14 +74,29 @@ type Store interface {
 	AdvisoryIDs(context.Context, string, string) ([]string, error)
 	AdvisorySummaries(context.Context, string, string) ([]json.RawMessage, bool, error)
 }
+type Runner interface {
+	Submit(context.Context, runnercontract.Request) (runnerclient.Receipt, error)
+	Inspect(context.Context, string, string) (runnerclient.Inspection, error)
+	Call(context.Context, string, []string, *runnercontract.Request) (runnerclient.Response, error)
+}
+type Queue interface {
+	UpdateContent(string, string, time.Time, bool, bool)
+	AcquireContent(string, string) bool
+}
 type Service struct {
-	Project string
-	Store   Store
+	Runner      Runner
+	RunnerBuild runnercontract.BuildPin
+	Queue       Queue
+	Prepare     func(context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error)
+	Admit       func(context.Context) error
+	Project     string
+	Store       Store
 	// Build is called only by the host's worker, never by the advisory core or a query.
 	Build    func(context.Context, Source, string) (contract.Request, error)
 	gateOnce sync.Once
 	gate     chan struct{}
 	inflight sync.Map
+	next     int
 }
 
 func (s *Service) enter(ctx context.Context) error {
@@ -111,7 +132,15 @@ func (s *Service) save(ctx context.Context, r Record) (Record, error) {
 	if err == nil {
 		err = s.Store.SaveAdvisory(ctx, r.Project, r.ID, r.Source.CandidateID, raw, expected)
 	}
+	if err == nil {
+		s.track(r)
+	}
 	return r, err
+}
+func (s *Service) track(r Record) {
+	if s.Queue != nil {
+		s.Queue.UpdateContent(s.Project, "advisory:"+r.ID, r.CreatedAt, r.Submission == "started", r.Complete())
+	}
 }
 func (s *Service) Get(ctx context.Context, id string) (Record, error) { return s.load(ctx, id) }
 func (s *Service) List(ctx context.Context, candidate string) ([]json.RawMessage, bool, error) {
@@ -131,7 +160,8 @@ func (s *Service) Sync(ctx context.Context, sources []Source) error {
 		}
 		id := SourceID(s.Project, source)
 		current[id] = true
-		if _, err := s.load(ctx, id); err == nil {
+		if old, err := s.load(ctx, id); err == nil {
+			s.track(old)
 			continue
 		} else if !errors.Is(err, contract.ErrNotFound) {
 			return err
@@ -158,7 +188,7 @@ func (s *Service) Sync(ctx context.Context, sources []Source) error {
 			if cancel, ok := s.inflight.Load(id); ok {
 				cancel.(context.CancelFunc)()
 			}
-			finish(&r, "cancelled", "原事项已解除，未提交模型")
+			cancelRecord(&r, "原事项已解除")
 		}
 		if _, err = s.save(ctx, r); err != nil {
 			return err
@@ -174,8 +204,7 @@ func finish(r *Record, state, diagnostic string) {
 	r.Settled = true
 }
 
-// ProcessNext is asynchronous host work. Production inference remains fail-closed
-// until the native precondition has passed; there is no read-only fallback.
+// ProcessNext advances one host job independently of all product queries.
 func (s *Service) ProcessNext(ctx context.Context) error {
 	if err := s.enter(ctx); err != nil {
 		return err
@@ -186,8 +215,11 @@ func (s *Service) ProcessNext(ctx context.Context) error {
 		return err
 	}
 	var id string
-	for _, candidate := range ids {
+	for i := 0; i < len(ids); i++ {
+		at := (s.next + i) % len(ids)
+		candidate := ids[at]
 		if _, busy := s.inflight.Load(candidate); !busy {
+			s.next = (at + 1) % len(ids)
 			id = candidate
 			break
 		}
@@ -200,6 +232,14 @@ func (s *Service) ProcessNext(ctx context.Context) error {
 	if err != nil {
 		s.leave()
 		return err
+	}
+	if r.RunnerRequest != nil {
+		work, cancel := context.WithCancel(ctx)
+		s.inflight.Store(id, cancel)
+		s.leave()
+		defer s.inflight.Delete(id)
+		defer cancel()
+		return s.advance(work, id)
 	}
 	if !r.SourceActive {
 		finish(&r, "cancelled", "原事项已解除")
@@ -220,8 +260,12 @@ func (s *Service) ProcessNext(ctx context.Context) error {
 	defer cancel()
 	request, buildErr := s.Build(work, r.Source, r.ID)
 	var prepared mainagent.Prepared
+	var runnerRequest *runnercontract.Request
 	if buildErr == nil {
 		prepared, buildErr = mainagent.Prepare(request)
+	}
+	if buildErr == nil {
+		runnerRequest, buildErr = s.generateRequest(work, prepared)
 	}
 	// Preparation is outside the gate: explicit cancellation/source resolution can
 	// persist first. A cancelled or newer record always wins over this result.
@@ -244,11 +288,13 @@ func (s *Service) ProcessNext(ctx context.Context) error {
 	if work.Err() != nil {
 		finish(&current, "cancelled", "上下文准备已取消，未提交模型")
 	} else if buildErr != nil {
+		current.Request = &request
 		finish(&current, "failed", fmt.Sprintf("上下文准备失败：%v", buildErr))
 	} else {
 		current.Request = &request
-		current.InputDigest = prepared.Digest
-		finish(&current, "blocked", NativeUnavailable)
+		current.InputDigest, current.PreparedText = prepared.Digest, prepared.Text
+		current.RunnerRequest, current.Runner = runnerRequest, s.RunnerBuild
+		current.Submission, current.State = "pending", "queued"
 	}
 	_, err = s.save(saveCtx, current)
 	return err
@@ -274,7 +320,7 @@ func (s *Service) Cancel(ctx context.Context, id string, expected uint64) (Recor
 	if cancel, ok := s.inflight.Load(id); ok {
 		cancel.(context.CancelFunc)()
 	}
-	finish(&r, "cancelled", "本次提示词生成已取消，未提交模型")
+	cancelRecord(&r, "本次提示词生成已取消")
 	return s.save(ctx, r)
 }
 
@@ -300,19 +346,41 @@ func View(r Record) Detail {
 	}
 	return d
 }
+func cancelRecord(r *Record, reason string) {
+	r.Cancelled = true
+	if r.Submission != "started" {
+		finish(r, "cancelled", reason+"，未提交模型")
+	} else {
+		r.State, r.Diagnostic = "cancelling", reason+"，等待原生成资源结算"
+	}
+}
 func (s *Service) Close(ctx context.Context) error {
-	ids, err := s.Store.AdvisoryIDs(ctx, s.Project, "pending")
-	if err != nil {
-		return err
-	}
-	for _, id := range ids {
-		r, e := s.load(ctx, id)
-		if e != nil {
-			return e
+	for {
+		ids, err := s.Store.AdvisoryIDs(ctx, s.Project, "pending")
+		if err != nil {
+			return err
 		}
-		if _, e = s.Cancel(ctx, id, r.Revision); e != nil {
-			return e
+		if len(ids) == 0 {
+			return nil
+		}
+		for _, id := range ids {
+			r, e := s.Get(ctx, id)
+			if e != nil {
+				return e
+			}
+			if !r.Cancelled {
+				if _, e = s.Cancel(ctx, id, r.Revision); e != nil {
+					return e
+				}
+			}
+		}
+		if err = s.ProcessNext(ctx); err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	return nil
 }
