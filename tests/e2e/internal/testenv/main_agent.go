@@ -1,6 +1,7 @@
 package testenv
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"os"
@@ -227,12 +228,19 @@ func MainAgentAdvisory(s *Scenario) {
 	})
 	assertCount("unknown", 1)
 	unknownRun := bindings()["unknown"]
-	unknownQueries := fixture().AdvisoryQueryFailures[unknownRun]
-	p.RestartService()
-	wait(unknownID, "unknown")
-	s.Wait("restored unknown observes the same Run", func() (bool, error) {
-		return fixture().AdvisoryQueryFailures[unknownRun] > unknownQueries, nil
-	})
+	unknownQueries := fixture().AdvisoryInspects[unknownRun]
+	// Crash with the unknown record intact, then restore peer availability before
+	// boot: startup deliberately requires its original recovery queries to work.
+	stopContext, stopCancel := context.WithTimeout(s.Context, 30*time.Second)
+	s.Must(p.Service.Stop(stopContext))
+	stopCancel()
+	p.Service = nil
+	response.Unavailable = false
+	script.Results["unknown"] = response
+	write()
+	p.StartService()
+	wait(unknownID, "running")
+	s.Wait("restored unknown observes the same Run", func() (bool, error) { return fixture().AdvisoryInspects[unknownRun] > unknownQueries, nil })
 	assertCount("unknown", 1)
 	response.State, response.Unavailable = "ready", false
 	script.Results["unknown"] = response
