@@ -384,6 +384,23 @@ func TestProjectEnvironmentBlockedFinalStopsOnlyWhenVerified(t *testing.T) {
 	}
 }
 
+func TestProjectEnvironmentRejectedPreparationRemainsObservableWithoutStopping(t *testing.T) {
+	s, remote, _, _ := setup(t)
+	r := start(t, s)
+	observe(t, s)
+	remote.run.Status = "blocked"
+	remote.run.Phase = "operation_rejected"
+	remote.run.Diagnostic = "cannot query Orca repository inventory: context deadline exceeded"
+	remote.run.Final = nil
+	for i := 0; i < 2; i++ {
+		observe(t, s)
+		got := read(t, s, r.ID)
+		if !got.Blocked() || got.DiagnosticText() != remote.run.Diagnostic || got.State != "running" || got.Settled() || got.Rounds[0].TimedOut || got.Rounds[0].Stop != nil || remote.stops != 0 || remote.resultReads != 0 {
+			t.Fatal("blocked observation changed execution lifecycle", got)
+		}
+	}
+}
+
 func TestProjectEnvironmentIncompleteScriptPreservesExecutionFailure(t *testing.T) {
 	s, remote, _, _ := setup(t)
 	r := start(t, s)

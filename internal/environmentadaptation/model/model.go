@@ -165,6 +165,15 @@ func (r Record) TimedOut() bool {
 	return len(r.Rounds) > 0 && r.Rounds[len(r.Rounds)-1].TimedOut
 }
 
+// Blocked is an observation, not a terminal state or permission to stop a Run.
+func (r Record) Blocked() bool {
+	if r.Settled() || r.Cancelled || r.TimedOut() || r.State == "stopping" || len(r.Rounds) == 0 {
+		return false
+	}
+	run := r.Rounds[len(r.Rounds)-1].Run
+	return run != nil && run.Status == "blocked" && run.StopStatus != "stopped"
+}
+
 func (r Record) Status() string {
 	if r.Kind == "adaptation" && r.State == "ready" && r.Settled() {
 		return "ready"
@@ -176,13 +185,23 @@ func (r Record) Status() string {
 // A recovered ready result keeps its normal explanation; the original failure
 // remains in the round's durable submission_diagnostic for inspection.
 func (r Record) DiagnosticText() string {
+	diagnostic := r.Diagnostic
 	if r.Status() != "ready" && len(r.Rounds) > 0 {
-		original := r.Rounds[len(r.Rounds)-1].SubmissionDiagnostic
-		if original != "" && original != r.Diagnostic {
-			return "首次提交：" + original + "；当前观察：" + r.Diagnostic
+		round := r.Rounds[len(r.Rounds)-1]
+		if strings.TrimSpace(diagnostic) == "" {
+			diagnostic = round.Diagnostic
+		}
+		if strings.TrimSpace(diagnostic) == "" && round.Run != nil {
+			diagnostic = round.Run.Diagnostic
 		}
 	}
-	return r.Diagnostic
+	if r.Status() != "ready" && len(r.Rounds) > 0 {
+		original := r.Rounds[len(r.Rounds)-1].SubmissionDiagnostic
+		if original != "" && original != diagnostic {
+			return "首次提交：" + original + "；当前观察：" + diagnostic
+		}
+	}
+	return diagnostic
 }
 
 type Report struct {

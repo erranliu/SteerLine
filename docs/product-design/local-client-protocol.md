@@ -95,6 +95,8 @@ Web 只作受限同源 `/api/v2/application/...` 转接；原生 `/native/identi
 
 环境结果以原 Run 绑定、停止结算、封存的 result-file、脚本报告及 verified 成功 final 共同核验；进度/回复或命令 applied 不单独授予 ready。最终结果 closed/0 保留采集失败，closed/1 才有文件，封存后不重采。失效只阻断新候选，未知按原号核实，不因 not_found 补交。当前单次执行和准入以[服务实现](../../internal/environmentadaptation/service.go)及[模型](../../internal/environmentadaptation/model/model.go)为准；[适配 Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)记录原交付范围。
 
+检测详情和历史的 `blocked` 是原 Run 阻断事实的只读投影，`timed_out` 表示整次检测已超时；两者不改写 `state`、`settled` 或停止资格。未就绪时，顶层诊断优先保留原活动原因，缺少说明时读取当前轮及原 Run 诊断，首次提交错误继续保留。未结算阻断在环境页显示“检测阻断”，活动中心列入进行中及需要关注；指定检测 ID 的详情沿原号轮询，不自动停止或重试。
+
 ## 项目维护动作与能力边界
 
 维护动作沿原项目 actor、命令 journal 和原请求回执，不使用图/控制 revision。

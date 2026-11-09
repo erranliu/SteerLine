@@ -76,6 +76,8 @@ func View(current Current, record Record, basis string, materialError error) (st
 			return status, "timed_out", "等待原检测停止并核实结果"
 		}
 		return status, "timed_out", record.DiagnosticText()
+	case record.Blocked():
+		return status, "blocked", record.DiagnosticText()
 	case record.ID != "" && !record.Settled():
 		reason = record.DiagnosticText()
 		if strings.TrimSpace(reason) == "" {

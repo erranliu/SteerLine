@@ -30,7 +30,7 @@ func publicEnvironment(r env.Record) any {
 		}
 		rounds = append(rounds, map[string]any{"number": a.Number, "deadline": a.Deadline, "run_id": a.RunID, "submission": a.Submission, "submission_diagnostic": a.SubmissionDiagnostic, "settled": a.Settled, "timed_out": a.TimedOut, "diagnostic": a.Diagnostic, "result": a.Result, "report": a.Report, "run": run})
 	}
-	return map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": rounds, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.ScriptDigest, "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
+	return map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": rounds, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.ScriptDigest, "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
 }
 func environmentExcerpt(s string) string {
 	r := []rune(s)
@@ -218,7 +218,7 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 			if len(out) == 20 {
 				break
 			}
-			out = append(out, map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": []any{}})
+			out = append(out, map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": []any{}})
 		}
 		return map[string]any{"records": out}, nil
 	}
