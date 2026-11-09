@@ -27,7 +27,7 @@
 | `docs/prompt-governance.md`、`.github/workflows/prompt-governance.yml` | 提示词变更说明、原生测试 job 与保护接入边界；远端是否生效另按专属验收核实。 |
 | `SteerlineProjectGuideDoc/` | SteerLine 统一提供的固定规范；本项目流程定制归 SteerlineFlow。 |
 | `SteerlineFlow/README.md`、`SteerlineFlow/paths.md` | 流程内容索引与本路径清单。 |
-| `SteerlineFlow/environment.md`、`SteerlineFlow/scripts/verify-environment.ps1/sh` | 所有目标共用的项目环境要求及检测入口，资格按项目×运行机×链路分别保存；manifest5 仅声明入口、解释器及检测辅助程序/运行要求配置，version3 最终结果通过 Runner 封存。项目测试、业务文档、Spec/Plan、roadmap 不属于资格依据。平台只调用一次并消费结果，无平台协议副本或阶段编排。材料存在不等于 ready。 |
+| `SteerlineFlow/environment.md`、`SteerlineFlow/scripts/verify-environment.ps1/sh` | 所有目标共用的项目环境要求及检测入口，资格按项目×运行机×链路分别保存；manifest6 声明入口、解释器、非秘密 requirements 及检测辅助程序/运行要求配置，机器段/脚本/依赖计入资格摘要，说明正文不计入；version3 最终结果通过 Runner 封存。项目测试、业务文档、Spec/Plan、roadmap 不属于资格依据。平台只调用一次并消费结果，无平台协议副本或阶段编排。材料存在不等于 ready。 |
 | `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan 及同名 `.tests.json`；安排随材料入 Git，执行时固定实际 commit。 |
 | `SteerlineFlow/Roadmap/execution-map.md` | 已确认任务、依赖、执行及验收汇总。 |
 | `SteerlineFlow/Roadmap/RoadmapGuide.md` | 本项目定制的 roadmap 维护规则。 |

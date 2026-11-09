@@ -18,7 +18,7 @@ func TestManifestDeclaresWindowsPowerShellOrBash(t *testing.T) {
 		{"ps1", "", false},
 	} {
 		t.Run(tc.script+"-"+tc.interpreter, func(t *testing.T) {
-			doc := fmt.Sprintf("```steerline-environment\n{\"version\":5,\"script\":%q,\"interpreter\":%q,\"dependencies\":[]}\n```", ScriptPath(tc.script), tc.interpreter)
+			doc := fmt.Sprintf("```steerline-environment\n{\"version\":6,\"requirements\":{},\"script\":%q,\"interpreter\":%q,\"dependencies\":[]}\n```", ScriptPath(tc.script), tc.interpreter)
 			_, err := ParseManifest([]byte(doc))
 			if (err == nil) != tc.valid {
 				t.Fatalf("valid=%v err=%v", tc.valid, err)

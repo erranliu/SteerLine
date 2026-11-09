@@ -104,7 +104,7 @@ func (p *Project) ResolveOriginalPRConflict(original Snapshot) Snapshot {
 func (p *Project) writeLiveFixtureEnvironment() {
 	s := p.Scenario
 	files := map[string]string{
-		"SteerlineFlow/environment.md": "# Live fixture tools\n\nGit and gh must be available on PATH.\n\n```steerline-environment\n{\"version\":5,\"script\":\"SteerlineFlow/scripts/verify-environment.ps1\",\"interpreter\":\"powershell.exe\",\"dependencies\":[]}\n```\n",
+		"SteerlineFlow/environment.md": "# Live fixture tools\n\nGit and gh must be available on PATH.\n\n```steerline-environment\n{\"version\":6,\"requirements\":{},\"script\":\"SteerlineFlow/scripts/verify-environment.ps1\",\"interpreter\":\"powershell.exe\",\"dependencies\":[]}\n```\n",
 		"SteerlineFlow/scripts/verify-environment.ps1": `$ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $path = $env:STEERLINE_RESULT_FILE

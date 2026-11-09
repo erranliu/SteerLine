@@ -98,17 +98,22 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 		current, record, readErr := p.current(ctx, id)
 		materialErr := errors.Join(historyErr, readErr, sourceErr)
 		basis := ""
+		var prepared env.Prepared
 		if materialErr == nil && !current.Invalidated {
 			if current.ActivityID == "" {
 				// No qualification exists to compare. Validate the invocation only;
 				// start still validates every declared dependency before executing.
 				_, _, _, materialErr = p.invocationAt(ctx, commit)
 			} else if record.Status() == "ready" {
-				prepared, err := p.materialAt(ctx, id, commit)
+				var err error
+				prepared, err = p.materialAt(ctx, id, commit)
 				materialErr, basis = err, prepared.Inputs
 			}
 		}
 		item.Status, item.Stage, item.Reason = env.View(current, record, basis, materialErr)
+		if !current.Invalidated && materialErr == nil && item.Stage == "stale" && basis != "" && basis != record.Prepared.Inputs {
+			item.Reason = environmentBasisChange(record.Prepared, prepared) + "；须重新检测"
+		}
 		basisUnverified := materialErr != nil && !confirmedEnvironmentBasisError(materialErr) &&
 			!current.Invalidated && (current.ActivityID == "" || record.Status() == "ready")
 		if historyErr != nil || readErr != nil || item.Key == "" || basisUnverified {
