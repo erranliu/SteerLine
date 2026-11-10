@@ -201,3 +201,22 @@ PR 目标 main 已前进到 `3ce94c753f4b610aa3f6c7d70b98d194ad4ecf2e`。初始�
 干净集成提交已跑 L1/L2/Web 全集（422 项）并导出对应 Git 历史。首轮 `go.roadmap` 的 draft-dependencies 子例出现进度观察断言失败：业务仍为 awaiting-merge，但旧模拟错误的观察诊断尚未清除；生产代码与原断言均未改，此次失败与原始日志保留在 `test-results/pr-roadmap/01` 和同 SHA 历史中，后续串行复验另存。不能用其他分支通过或分类查询测试替代该失败。
 
 最新 main 的 UI 隐藏检测 ID、统一从“复制执行信息”读取，首轮两文件浏览器验证为 7 passed / 1 failed（`diagnostics/pr-browser-01`）。将旧的 ID 直接可见断言改为核实完整 ID 被复制、正文不外露后，配置导航及 UI 简化两文件完整 8 passed / 31.8 s（`diagnostics/pr-browser-02`）；未放宽产品行为或删除身份检查。长期 SteerAgent 文档同步为分类已落地，明确用途标签、独立建议设置与仍未实现的能力缺口；运行日志继续只记在本验收中。
+
+
+### 最终干净提交验证与测试历史
+
+最终源码/测试/长期文档受测提交为 `76cadaeb539c0835b91bef2eeba83e13c69b7424`。下列七项正式执行的 managed 报告均确认 before/after SHA 相同、before_clean/after_clean=true，完整且零测试跳过；L2、建议生命周期、异步活动的 summary/scenario 均确认清理完成。正式历史已导出到同名 records 文件，后续只提交记录与本验收补记，记录仍指向真实受测 SHA。
+
+| 正式 ID | 结果 / 执行耗时 | 原始目录（相对独立根） |
+| --- | --- | --- |
+| l1.minimum | 通过 / 17.6 s | `test-results/pr-L1/02` |
+| smoke.delivery | 通过 / 86.4 s | `test-results/pr-L2/02` |
+| web.unit | 通过 / 22.7 s | `test-results/pr-web/02` |
+| go.http | 通过 / 48.9 s | `test-results/pr-http/02` |
+| go.roadmap | 通过 / 361.0 s | `test-results/pr-roadmap/02` |
+| runtime.main-agent-advisory | 通过 / 151.0 s | `test-results/pr-advisory/02` |
+| runtime.async-activities | 通过 / 264.4 s | `test-results/pr-activities/02` |
+
+相关建议/core/bridge/query/配置 owner 全量 154 项通过（`diagnostics/pr-integration-01/owners`）；App 建议来源、配置冻结、重启、停止的 17 项通过（`diagnostics/pr-app-02`）。当前 Web 全集 422 项通过，0 fail/skip/todo。配置导航和 UI 简化两文件在固定提交上完整 8 passed / 30.9 s（`diagnostics/pr-browser-03`），不以定向子集冒称整文件。Roadmap 首轮失败对应 `3954901`，后续完整串行复验通过对应 `76cadaeb`；两者之间 Go 生产文件没有变化，也没有放宽原观察断言，不把可能的时间/负载因素写成已确认根因。
+
+本轮未重复原基线已有的 go.storage/go.environment/go.deployment 专项，不把第 4 节十项通过套用为最新提交全部重跑。此前脏工作树报告仍只保留本地；只有两份真实干净提交记录进入 Git 历史。最新 main 实际输入 0 B 差异与独立审核批准已在上节明确。原始证据索引为 `pr-integration-summary.json`。代码 PR 的创建是本次开发交付，不等于 SteerLine 产品真实 PR/模型业务链的验收，也不代表安装部署或合并完成。
