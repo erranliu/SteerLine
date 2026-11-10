@@ -2,11 +2,11 @@
   "tests": [
     {
       "id": "runtime.async-activities",
-      "name": "异步活动中心只读观察与抽屉",
+      "name": "异步活动中心抽屉与独立阅读页",
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.async-activities",
-      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测与候选可发现，退役测试准备活动缺席，PR-ready保持等待；原观察阶段跨路由、320px模态/焦点、断连/刷新/重启原活动和Run不变且零新增输入。另一个独立项目从浏览器发起草稿解析（真实来源变化拒绝）、检查更新、首次及并行候选、环境检测，验证即时局部反馈、飞入动效及窄屏减少动态效果，每意图一次原命令；分别核对浏览器证据和两次候选提交，完整交付与资源结算。",
+      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测与候选可发现，退役测试准备活动缺席，PR-ready保持等待；原观察阶段跨路由、320px模态/焦点、断连/刷新/重启原活动和Run不变且零新增输入。独立活动页及摘要深链接默认不读交互/正文，显式展开一页索引，连续轻量变化检查不追页，正文显式一段或完整短预览免查询，历史无焦点重取，1440/768/320px截图及请求计数证据经执行器校验。另一个独立项目从浏览器发起草稿解析（真实来源变化拒绝）、检查更新、首次及并行候选、环境检测，验证即时局部反馈、飞入动效及窄屏减少动态效果，每意图一次原命令；分别核对浏览器证据和两次候选提交，完整交付与资源结算。",
       "note": "Windows/Go/Git、Node/npm/Edge；先 npm --prefix web ci 和 npm --prefix web run build，场景只读共享资产/依赖，Web EXE由本次构建冻结；两独立项目按顺序运行观察与发起阶段，正文10分钟/包12分钟，清理沿原独立上下文。home/repo/DB/provider/端口/浏览器/证据独立，不依赖其他场景产物。总并发最多二；受控不证明真实模型/PR。"
     },
     {

@@ -96,7 +96,7 @@ func ReadAsyncActivities(ctx context.Context, reader ports.AsyncActivityReader, 
 	if o.Limit == 0 {
 		o.Limit = 50
 	}
-	if o.Filter != "ongoing" && o.Filter != "attention" && o.Filter != "recent" || o.Limit < 1 || o.Limit > 200 || len(o.RequestIDs) > 100 {
+	if o.Filter != "ongoing" && o.Filter != "attention" && o.Filter != "recent" && o.Filter != "history" || o.Limit < 1 || o.Limit > 200 || len(o.RequestIDs) > 100 {
 		return api.AsyncActivities{}, errors.New("invalid activities query")
 	}
 	c := activityCursor{Project: project, Instance: instance, Filter: o.Filter}
@@ -111,13 +111,13 @@ func ReadAsyncActivities(ctx context.Context, reader ports.AsyncActivityReader, 
 		}
 		c = saved
 	}
-	out := api.AsyncActivities{ProjectID: project, InstanceID: instance, SampledAt: time.Now().UTC(), Items: []api.AsyncActivity{}, Links: map[string]api.AsyncActivity{}, Counts: map[string]int{"ongoing": 0, "attention": 0, "recent": 0}, CountsKnown: true}
+	out := api.AsyncActivities{ProjectID: project, InstanceID: instance, SampledAt: time.Now().UTC(), Items: []api.AsyncActivity{}, Links: map[string]api.AsyncActivity{}, Counts: map[string]int{"ongoing": 0, "attention": 0, "recent": 0, "history": 0}, CountsKnown: true}
 	if o.PublicProjectID != "" {
 		out.ProjectID = o.PublicProjectID
 	}
 	facts := []ports.AsyncActivityFact{}
 	var watermark *ports.AsyncActivityFact
-	desc := o.Filter == "recent"
+	desc := o.Filter == "recent" || o.Filter == "history"
 	sources := o.Sources
 	if len(sources) == 0 {
 		sources = AsyncActivitySources
@@ -201,19 +201,22 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 			ObservedAt *time.Time `json:"observed_at"`
 			Diagnostic string     `json:"diagnostic"`
 		} `json:"observation"`
-		Settled          bool           `json:"settled"`
-		DomainDiagnostic string         `json:"domain_diagnostic"`
-		Blocked          bool           `json:"blocked"`
-		Current          int            `json:"current"`
-		Requests         []string       `json:"requests"`
-		TaskStatus       string         `json:"task_status"`
-		Title            string         `json:"title"`
-		Winner           string         `json:"winner"`
-		Progress         *activityTests `json:"progress"`
+		Settled          bool                `json:"settled"`
+		DomainDiagnostic string              `json:"domain_diagnostic"`
+		Blocked          bool                `json:"blocked"`
+		Current          int                 `json:"current"`
+		Requests         []string            `json:"requests"`
+		TaskStatus       string              `json:"task_status"`
+		Title            string              `json:"title"`
+		Winner           string              `json:"winner"`
+		Progress         *activityTests      `json:"progress"`
+		Message          *api.ReadingPreview `json:"message"`
+		PendingEffects   bool                `json:"pending_effects"`
 	}
 	if json.Unmarshal(f.Related, &related) != nil {
 		return a, errors.New("invalid activity related facts")
 	}
+	a.Message = related.Message
 	switch f.Source {
 	case "environment_detection":
 		var r activityEnvironment
@@ -424,7 +427,7 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 			}
 		}
 
-		pendingEffects := false
+		pendingEffects := related.PendingEffects
 		for _, action := range c.Actions {
 			if action.State == "unknown" || action.State == "accepted" && action.ActionStatus != "completed" && action.ActionStatus != "failed" && action.ActionStatus != "rejected" && action.ActionStatus != "cancelled" {
 				pendingEffects = true
@@ -512,5 +515,5 @@ func ParseAsyncActivityRequestIDs(value string) []string {
 // MatchesAsyncActivity is the final product predicate. SQL may only prune a
 // conservative superset; it does not own the activity classification.
 func MatchesAsyncActivity(a api.AsyncActivity, filter string) bool {
-	return filter == "ongoing" && !activityTerminal(a.State) || filter == "attention" && a.NeedsAttention || filter == "recent" && activityTerminal(a.State)
+	return filter == "ongoing" && !activityTerminal(a.State) || filter == "attention" && a.NeedsAttention || (filter == "recent" || filter == "history") && activityTerminal(a.State)
 }
