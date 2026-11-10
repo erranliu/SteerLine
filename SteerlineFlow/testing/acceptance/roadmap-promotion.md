@@ -62,6 +62,20 @@
 
 本次源码 PR 不代表产品真实模型/远端业务 PR 链路复验或安装版已更新。
 
+### PR #488：合入主干 UI 简化后的复验
+
+测试期间 main 更新至 59241c7a（PR #487）。以 merge 提交 7eb38a7c5cac2960a7246019625b549eae0a4311 集成，保留主干折叠摘要/可信检查时间，在摘要追加等待前置测试数量；Roadmap 测试先展开主干“设计与调查依据”再核验，并保留测试声明及失败原因可见断言。独立只读审核已批准冲突处理。
+
+该提交相对 2e78c318 的 internal、cmd、go.mod/go.sum 无变化，后端与提示词保持已通过的 Roadmap 专项版本；不重复未受影响的 Go 专项。对合入后的固定 clean 提交完成：
+
+| 范围 | 证据根下输出目录 | 结果 |
+| --- | --- | --- |
+| L1 | test-results/L1/pr-ui-merge-20261110-1 | passed/complete=true；30.494s |
+| L2 | test-results/L2/pr-ui-merge-20261110-1 | passed/cleanup_complete=true；86.886s |
+| web.unit | test-results/L4/pr-ui-merge-web-20261110-1 | 416 项通过，零失败/skip；24.233s |
+
+上述三份报告 before/after 均为同一 clean 提交，已导出到[UI 合入提交测试历史](../records/7eb38a7c5cac2960a7246019625b549eae0a4311.json)。同提交 TypeScript/Vite 构建通过；新增断言核对折叠状态下等待测试数量仍可见。随后仅补充本段与测试历史，不将记录提交当成另一次源码验证。
+
 ## 2026-11-06：转正进度与当前流程展示
 
 用户授权首轮界面调整：固定进度区、当前流程与历史分离、集中主操作及左侧草稿状态；不接活动中心。实现仅调整 Web 展示与原命令入口，不修改 Runner 请求、提示词、材料生成、文档发布或 Task/DAG 事务。
