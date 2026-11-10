@@ -304,6 +304,7 @@ test("global developer switches preserve drafts, require restart and disappear i
 
 test("runtime environments keep card actions, failed observations and task return scoped", async ({
   page,
+  context,
 }, info) => {
   const projects = ["a".repeat(64), "b".repeat(64)];
   const remoteMachineID = "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8";
@@ -662,10 +663,17 @@ test("runtime environments keep card actions, failed observations and task retur
   await expect(
     operationResult.getByRole("button", { name: "复制执行信息", exact: true }),
   ).toBeEnabled();
-  await expect(first.getByText("d".repeat(32), { exact: true })).toBeVisible();
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await first
+    .getByRole("button", { name: "复制执行信息", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toContain("d".repeat(32));
   const bodyText = await page.locator("body").innerText();
   for (const hidden of [
     remoteMachineID,
+    "d".repeat(32),
     "1".repeat(64),
     "c".repeat(40),
     "instance-a",
