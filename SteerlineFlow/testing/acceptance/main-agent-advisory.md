@@ -1,6 +1,6 @@
 # 主 Agent：generate 接入验收
 
-状态：按 2026-11-09 用户确认，复用现有 Runner generate/1，本地 Codex 只读生成；来源为开发候选明确待答问题（包括普通待答）。核心独立且唯一业务产物仍为后续对话提示词，采用与执行在外部。未合并、未部署。正式目标见 [Spec](../../spec/main-agent-advisory.spec.md)、[Plan](../../plans/main-agent-advisory.plan.md)及[测试选择](../../plans/main-agent-advisory.tests.json)。
+状态：按 2026-11-09 用户确认，复用现有 Runner generate/1，本地 Codex 只读生成；来源为开发候选明确待答问题（包括普通待答）。核心独立且唯一业务产物仍为后续对话提示词，采用与执行在外部。合并状态见[PR #478](https://github.com/erranliu/SteerLine/pull/478)，未部署。正式目标见 [Spec](../../spec/main-agent-advisory.spec.md)、[Plan](../../plans/main-agent-advisory.plan.md)及[测试选择](../../plans/main-agent-advisory.tests.json)。
 
 此前严格零工具前置及生产永久阻断已被用户明确替换，[初始阻断草稿](main-agent-advisory-blocked-draft.md)及[PR475 原实现](main-agent-materials.md)仅作历史。原生工具/隐式上下文仍按 generate 既有能力，不声称严格零工具或单目录隔离；SteerLine 没有直连 Codex/app-server/模型 API。
 
@@ -21,7 +21,7 @@
 | A11 | 原 owner 持久当前 Question/Attempt/CanReply 自动登记，不依赖诊断文案或虚构原因码 | 真实 SQLite 候选保存→后台→生成→活动→重启去重集成通过；原生问题由公开 fixture 提供，未跑完整真实开发任务 |
 | A12 | 单一正式活动来源、原请求/精确导航、attention、纯读与有界正文剥离 | 集成与投影定向通过，SQLite 全集串行复核通过（本轮） |
 | A13 | 不打开页面亦推进、跨候选隔离、来源解除不改历史、重启不重投 | 集成与定向、正式L4通过；使用者人工主观体验未验 |
-| A14 | 稳定受控L4、真实触发至活动/浏览器、未知/重启/取消/共享槽与必要证据 | 04724814同一干净提交连续两轮通过，独立证据复核通过 |
+| A14 | 稳定受控L4、真实触发至活动/浏览器、未知/重启/取消/共享槽与必要证据 | 初版04724814连续两轮；2026-11-10 cdf5bd77补普通进度取消/未知停止恢复后通过，独立复核通过 |
 
 ## 定向及真实链证据
 
@@ -135,3 +135,36 @@ go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario ru
 独立reviewer `/root/independent_review` 已复核完整测试接线、上述UI修复及等待/读取修正，并独立核对run7的原始公开请求、两份浏览器证明、截图及清理。确认六次唯一提交、unknown原Run观察、仅停止两个建议、0字节资产变化，无遗留发现；测试由当前聊天实际执行。
 
 本项不调用真实模型、不创建外部PR、不修改安装环境；controlled的公开结算证明及实际所属进程/命名空间清理不冒称新增真实Codex资源验证。此前真实generate证据仍独立保留。使用者人工主观体验及完整真实开发任务待答闭环仍未验；不声称严格工具/隐式上下文隔离。后续main仅引起验收索引冲突，本功能索引移至独立位置解决，不为收尾引入其他功能修改。未合并、未部署。
+
+## 2026-11-10 合并前新鲜复审
+
+本次重新审查完整PR及当前main的组合，确实发现并修复两项P2，不沿用上一轮“未发现”结论：
+
+| 问题 | 真实触发与后果 | 修复及新增验证 |
+| --- | --- | --- |
+| 普通观察使取消过期 | 后台观察每次推进记录revision，页面读取后再点取消即可能被严格相等校验拒绝；原L4取消前冻结观察，漏掉正常路径 | 作业ID/输入始终不变，取消接受历史正revision；0/未来值及成功/失败终态仍拒绝。静态与实际进度两类红测先复现，再验证修复；浏览器暂停原POST直到显示版本过期，再真实提交 |
+| 未知stop无法核实 | CAS过期而拒绝的停止回执又丢失时，只查原Run不会识别未受理信封，可能持续cancelling并占槽/阻断启动 | live/startup共用公开原stop查询：先读已核实Run，再查原请求；缺失且旧CAS小于单调Run版本才永久stale，先持久拒绝再换信封；同版未知和已接受停止不重发。补错绑定、查询失败、启动恢复及fresh stopped不额外停止的测试 |
+
+这不扩展模块能力。contract/core、提示词及Runner源码均未改；生成仍只有原提交一次，取消/停止仅面向原建议资源。实际提示词diff为空，模板145→145 B、规则1025→1025 B、golden1180→1180 B，无样本更新。
+
+修复提交 `cdf5bd77ec640ccb65ddd11f6572d18ded6fe0f8` 已无冲突整合当时main `d1fe6f77`。以下正式运行均绑定该干净受测源码；之后只收尾本说明、Spec状态及正式历史，不冒认文档提交重新执行了这些用例。
+
+| 正式范围 | 系统临时目录（根同上） | 执行时间 | 结果 |
+| --- | --- | --- | --- |
+| l1.minimum | `steerline-advisory-review-L1-20261110` | 32.1秒 | 通过 |
+| smoke.delivery（L2） | `steerline-advisory-review-L2-20261110` | 90.0秒 | 通过 |
+| runtime.main-agent-advisory | `steerline-advisory-review-L4a-20261110` | 160.1秒 | 通过 |
+| web.unit（400项） | `steerline-advisory-review-web-20261110` | 22.5秒 | 通过 |
+| go.http | `steerline-advisory-review-http-20261110` | 51.0秒 | 通过 |
+| go.deployment | `steerline-advisory-review-deployment-20261110` | 500.5秒 | 通过 |
+| runtime.async-activities | `steerline-advisory-review-activities2-20261110` | 288.9秒 | 通过 |
+
+[本次正式历史](../records/cdf5bd77ec640ccb65ddd11f6572d18ded6fe0f8.json)保存七项完整运行，无skip，E2E所属资源清理均完成。HTTP压力、部署及新增L4串行；最后L2与单场景L3在隔离现场并行，总并发最多二。L3最初显式workers参数被入口拒绝、未执行测试，去掉不适用参数后使用新out运行，未把参数拒绝算场景失败或通过。
+
+定向证据另存 `steerline-advisory-review-red-20261110`（两问题修复前确实失败）、`steerline-advisory-review-fix1-20261110`（bridge修复通过，旧启动夹具未按selector分别返回原submit/stop查询而失败）、`steerline-advisory-review-fix2-20261110`（55项通过，70.6秒）及 `steerline-advisory-review-controller-20261110`（35项通过，7.1秒）。这些是dirty诊断，不冒充正式分级全集。修正旧夹具只使用既有公开inspection映射，没有写生产状态或放宽绑定。
+
+新版L4已去掉取消前的Unavailable冻结，公开peer在首次stop尝试之前持续产生正常进度。浏览器证明包含cancel_after_progress；公开请求证据包含两份不同的stop信封、对首次缺失请求的查询及第二份accepted，仅原建议的已受理stop允许在取消窗口新增一次。控制器还要求cancel_after_progress/unknown_stop_recovered事实及原请求/新停止身份，缺证据、不查原请求或替换已接受停止均失败。六个作业各Submit一次、业务/工作区不变、未结算占槽、source解除与清理断言保留。
+
+独立reviewer `/root/independent_review` 新鲜审查确认上述两项，随后复核生产修复、强化L4及原始公开请求/浏览器/清理证据，结论为两项闭合、无剩余确定问题。实际测试由当前聊天执行。远端cdf5bd77的[prompt-governance](https://github.com/erranliu/SteerLine/actions/runs/42744261976/job/129592486791)也已success；旧4f96b677检查曾15分钟超时cancelled且未能取得日志，不作为当前通过依据。
+
+人工主观体验及完整真实开发任务产Question仍未验；本次不新增真实模型调用，不改变原生工具/隐式上下文的既有边界。满足本轮合并前检查，实际合并状态以PR #478为准，未部署。

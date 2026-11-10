@@ -1,6 +1,6 @@
 # 主 Agent：给定材料的后续对话提示词建议
 
-状态：已按 2026-11-09 用户确认方案实施并验证，未合并、未部署。取代此前严格零工具、生产永久阻断的草稿要求；复用 Runner generate/1 的本地 Codex 只读执行。配套：[Plan](../plans/main-agent-advisory.plan.md)、[验收](../testing/acceptance/main-agent-advisory.md)。
+状态：已按用户确认方案实施，并通过2026-11-10合并前复审及补充验证；合并状态见[PR #478](https://github.com/erranliu/SteerLine/pull/478)，未部署。取代此前严格零工具、生产永久阻断的草稿要求；复用 Runner generate/1 的本地 Codex 只读执行。配套：[Plan](../plans/main-agent-advisory.plan.md)、[验收](../testing/acceptance/main-agent-advisory.md)。
 
 ## 1. 目标与模块边界
 
