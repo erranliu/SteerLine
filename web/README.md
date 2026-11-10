@@ -79,6 +79,8 @@ go run ./cmd/test-feedback -level=L1
 
 ## 执行配置管理
 
+项目页 `/projects/{project_id}/environment` 直接列出全部运行环境的当前状态、原因与关联执行方案，按环境而非方案统计就绪数量。首次成功观察时异常优先，轮询保持行顺序；点击行内详情查看原检测、准备要求、设置和历史。窄屏以纵向行布局保留全部环境。查询失败时总览与详情显示待核实，上次状态只作参考；关闭环境就绪阻塞单独提示，不改变检测结果。状态来自现有 options 查询，材料和历史仍按需读取，详见[总览验收](../SteerlineFlow/testing/acceptance/project-environment-overview.md)。
+
 全局入口 `/settings/execution-configs` 支持本机 Codex、本机 Orca/Codex、Pi、DSH（Windows/amd64）、已配对远端 Orca/Codex 的配置编辑、复制、默认选择及条件保存。Web 通过固定 Runner EXE 的无服务目录和配置接口处理原生语义，保留逻辑编辑及条件保存；`execution.json` 是唯一执行配置文件，Go 后端消费启动快照。保存后通过 `steerline restart --no-open` 生效；浏览器不会自动重启。目录结果标明原生默认账号范围，不等于项目执行资格。冻结调试包拒绝保存，换方案须生成新包。
 
 定向验证：

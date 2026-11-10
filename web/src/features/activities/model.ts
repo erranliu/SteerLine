@@ -1,5 +1,6 @@
-import type { StoredRequest } from "../../shared/api/types";
+import type { Envelope, Receipt, StoredRequest } from "../../shared/api/types";
 import type { CandidateStart } from "../../app/use-candidate-starts";
+import type { ExecutionReference } from "./execution-info";
 
 export type ActivityFilter = "ongoing" | "attention" | "recent";
 export type Activity = {
@@ -9,6 +10,7 @@ export type Activity = {
   source_id: string;
   kind: string;
   request_ids: string[];
+  execution_ref?: ExecutionReference;
   title: string;
   state: string;
   phase?: string;
@@ -118,11 +120,11 @@ export function provisionalActivities(
                 ? "提交 Roadmap 入图"
                 : e.action === "roadmap_resume"
                   ? "继续原 Roadmap 操作"
-                : e.action === "environment_start"
-                  ? "提交环境检测"
-                  : e.action.startsWith("maintenance_")
-                    ? "提交项目准备操作"
-                    : "启动任务候选",
+                  : e.action === "environment_start"
+                    ? "提交环境检测"
+                    : e.action.startsWith("maintenance_")
+                      ? "提交项目准备操作"
+                      : "启动任务候选",
       state: rejected ? "failed" : "waiting",
       needs_attention: false,
       created_at: r.created_at,
@@ -183,7 +185,7 @@ export function activityDestination(project: string, activity: Activity) {
   if (d.kind === "advisory")
     return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.candidate_id || "")}&advisory=${encodeURIComponent(d.target)}`;
   if (d.kind === "roadmap")
-    return `${root}/roadmaps?record=${encodeURIComponent(d.target)}`;
+    return `${root}/roadmaps?record=${encodeURIComponent(d.target)}${activity.execution_ref?.action && activity.execution_ref.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   if (d.kind === "roadmap-source")
     return `${root}/roadmaps?source=${encodeURIComponent(d.target)}`;
   if (d.kind === "candidate")
@@ -194,5 +196,33 @@ export function activityDestination(project: string, activity: Activity) {
     return `${root}/environment${d.target ? `?profile=${encodeURIComponent(d.target)}` : ""}`;
   if (d.kind === "environment")
     return `${root}/environment?activity=${encodeURIComponent(d.target)}`;
-  return `${root}/dag?maintenance=preparation#project-maintenance`;
+  return `${root}/dag?maintenance=preparation&request_id=${encodeURIComponent(d.target)}#project-maintenance`;
+}
+
+export function requestDestination(e: Envelope, receipt?: Receipt) {
+  const root = `/projects/${encodeURIComponent(e.project_id)}`;
+  const request = `request_id=${encodeURIComponent(e.request_id)}`;
+  const record = (receipt?.roadmap || receipt?.environment) as
+    { id?: string } | undefined;
+  if (e.action.startsWith("roadmap_")) {
+    if (record?.id)
+      return `${root}/roadmaps?record=${encodeURIComponent(record.id)}&${request}`;
+    if (e.action === "roadmap_parse")
+      return `${root}/roadmaps?source=${encodeURIComponent(e.target_id)}&${request}`;
+    if (e.action === "roadmap_prepare_static")
+      return `${root}/roadmaps?${request}`;
+    return `${root}/roadmaps?record=${encodeURIComponent(e.target_id)}&${request}`;
+  }
+  if (e.action.startsWith("environment_")) {
+    const id =
+      record?.id || (e.action === "environment_stop" ? e.target_id : "");
+    return id
+      ? `${root}/environment?activity=${encodeURIComponent(id)}&${request}`
+      : undefined;
+  }
+  if (e.action.startsWith("maintenance_"))
+    return `${root}/dag?maintenance=preparation&${request}#project-maintenance`;
+  if (["start_task", "start_candidate"].includes(e.action))
+    return `${root}/runs?task=${encodeURIComponent(e.target_id)}&run=${encodeURIComponent(e.request_id)}`;
+  return undefined;
 }

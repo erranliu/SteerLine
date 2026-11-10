@@ -37,3 +37,23 @@ func TestAsyncActivityObservationFailureDoesNotFailRunningWork(t *testing.T) {
 		t.Fatalf("observation changed business state: %+v %v", a, err)
 	}
 }
+
+func TestAsyncActivityExecutionReferencesUseOriginalBindings(t *testing.T) {
+	run := &runnercontract.Run{Execution: runnercontract.Execution{AttemptID: "attempt"}}
+	for _, tc := range []struct {
+		source, id string
+		payload    any
+	}{
+		{"environment_detection", "detection", env.Record{Project: "p", ID: "detection", Rounds: []env.Round{{RunID: "older"}, {RunID: "runner", Run: run}}}},
+		{"task_candidate", "candidate", runnerstate.Candidate{Project: "p", ID: "candidate", RunID: "runner", Projection: run}},
+		{"roadmap", "roadmap", map[string]any{"project": "p", "id": "roadmap", "request_id": "roadmap", "run_id": "runner", "projection": run}},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			raw, _ := json.Marshal(tc.payload)
+			a, err := ProjectAsyncActivity("p", "new-instance", ports.AsyncActivityFact{Source: tc.source, ID: tc.id, Payload: raw, Related: json.RawMessage(`{}`)}, time.Now())
+			if err != nil || a.Execution.RequestID != tc.id || a.Execution.RunID != "runner" || a.Execution.AttemptID != "attempt" {
+				t.Fatalf("original bindings lost: %+v %v", a.Execution, err)
+			}
+		})
+	}
+}

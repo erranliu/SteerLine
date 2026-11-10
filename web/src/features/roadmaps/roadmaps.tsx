@@ -18,6 +18,12 @@ import {
 } from "./workflow";
 import "./roadmaps.css";
 import { DependencyReview } from "./dependency-review";
+import {
+  CopyExecutionInfo,
+  requestExecutionInfo,
+  type ExecutionReference,
+} from "../activities/execution-info";
+import { OperationResult } from "../activities/operation-result";
 
 export type RoadmapSource = {
   id: string;
@@ -52,6 +58,8 @@ type Documents = {
   acceptance: File[];
 };
 export type RoadmapRecord = {
+  request_id?: string;
+  execution_ref?: ExecutionReference;
   id: string;
   purpose?: string;
   parent_id?: string;
@@ -182,6 +190,10 @@ export function Roadmaps() {
       : undefined
     : currentDetail.data;
   const analysis = record?.analysis;
+  const questions = [
+    ...(analysis?.questions || []),
+    ...(record?.document_questions || []),
+  ];
   const belongs = (e: Envelope) =>
     e.project_id === identity.project_id &&
     e.instance_id === identity.instance_id &&
@@ -245,6 +257,15 @@ export function Roadmaps() {
       : awaiting || awaitingStatic
         ? "已受理，正在读取工作信息"
         : "";
+  const copyRequest =
+    sending.find(advancing) ||
+    unresolved?.envelope ||
+    [...originalRows].sort((a, b) =>
+      b.created_at.localeCompare(a.created_at),
+    )[0]?.envelope;
+  const copyReceipt = originalRows.find(
+    (r) => r.envelope.request_id === copyRequest?.request_id,
+  )?.response;
   const actionLabel = (name: string, original: string) =>
     sending.some((e) => e.action === name) ? titles[name] : original;
   const locked =
@@ -517,6 +538,15 @@ export function Roadmaps() {
           ))}
         </ol>
         <p>{guidance}</p>
+        {!viewingHistory && copyRequest && (!record || flowReason) && (
+          <CopyExecutionInfo
+            key={copyRequest.request_id}
+            info={{
+              ...requestExecutionInfo(copyRequest, copyReceipt),
+              project: identity.repository_identity,
+            }}
+          />
+        )}
         <SubmissionStatus
           announce={false}
           label={
@@ -531,12 +561,6 @@ export function Roadmaps() {
           <button type="button" onClick={feedback.open}>
             查看活动
           </button>
-        )}
-        {current?.diagnostic && (
-          <details className="roadmaps-diagnostic">
-            <summary>当前流程问题</summary>
-            <p>{current.diagnostic}</p>
-          </details>
         )}
         {mainAction === "generate" && !value?.documents_available && (
           <p className="notice amber">{value?.documents_reason}</p>
@@ -701,6 +725,59 @@ export function Roadmaps() {
           </div>
         )}
       </section>
+      {record && (
+        <section className="roadmaps-section" aria-label="所选记录结果">
+          <h2>
+            {viewingHistory
+              ? "历史记录"
+              : record.purpose === "documents"
+                ? "本次文档生成"
+                : "本次解析"}{" "}
+            · {roadmapProgress(record).label}
+          </h2>
+          {record && (
+            <CopyExecutionInfo
+              key={record.id}
+              info={{
+                project: identity.repository_identity,
+                title:
+                  (viewingHistory ? "历史 · " : "") +
+                  (record.purpose === "documents"
+                    ? "Spec / Plan 生成"
+                    : "Roadmap 解析"),
+                requestID:
+                  record.execution_ref?.request_id || record.request_id,
+                record: { id: record.id, label: "Roadmap 记录" },
+                runner: record.execution_ref || { run_id: record.run_id },
+              }}
+            />
+          )}
+          {record?.diagnostic && (
+            <p className="notice amber" role="alert">
+              {viewingHistory ? "历史记录问题" : "当前流程问题"}：
+              {record.diagnostic}
+            </p>
+          )}
+          {!!questions.length && (
+            <section aria-label="待澄清问题" className="notice amber">
+              <h3>{viewingHistory ? "历史 · " : ""}待澄清问题</h3>
+              <ul>
+                {questions.map((q, i) => (
+                  <li key={i}>{q}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </section>
+      )}
+      {params.get("request_id") && (
+        <OperationResult
+          key={params.get("request_id")}
+          requestID={params.get("request_id")!}
+          targetID={selectedID || sourceID}
+          sourceID={sourceID}
+        />
+      )}
       <div className="roadmaps-grid">
         <aside className="roadmaps-library">
           <h2>仓库 Markdown</h2>
@@ -861,9 +938,6 @@ export function Roadmaps() {
           {viewingHistory && !history.some((r) => r.id === historicalID) && (
             <p role="alert">当前草稿中未找到该历史记录，请返回当前流程。</p>
           )}
-          {viewingHistory && record?.diagnostic && (
-            <p className="notice amber">{record.diagnostic}</p>
-          )}
         </aside>
       </div>
       {analysis && (
@@ -877,11 +951,6 @@ export function Roadmaps() {
                 : "局部依赖预览，尚未正式入图"}
             {stale && " · 草稿已修改，以下保留原解析快照"}
           </p>
-          {analysis.questions.map((q, i) => (
-            <p key={i} className="notice amber">
-              {q}
-            </p>
-          ))}
           {record && (
             <DependencyReview
               key={JSON.stringify([
@@ -920,11 +989,6 @@ export function Roadmaps() {
           <p key={`${ref.source}:${ref.path}:${index}`}>
             调查依据 · {ref.source === "repository" ? "固定仓库" : "本次输入"}：
             {ref.path} · {ref.sha256.slice(0, 12)} · {ref.reason}
-          </p>
-        ))}
-        {record?.document_questions?.map((q, i) => (
-          <p className="notice amber" key={i}>
-            {q}
           </p>
         ))}
         {!!record?.documents.length && (

@@ -32,6 +32,7 @@ import { CandidateDocuments } from "./candidate-documents";
 import { nativeSessionReason } from "./native-session";
 import { RunTask, taskDependencyReason } from "./run-task";
 import { CopyExecutionInfo } from "./copy-execution-info";
+import { CopyExecutionInfo as CopyInfo } from "../activities/execution-info";
 import { StopCandidate } from "./stop-candidate";
 import { ResolvePRConflict } from "./resolve-pr-conflict";
 import { RunUsage } from "./run-usage";
@@ -701,6 +702,16 @@ export function Runs() {
                   )?.title ||
                   selectedTask}
               </h2>
+              <CopyInfo
+                info={{
+                  title: "任务候选启动",
+                  project: api.identity.repository_identity,
+                  requestID: selectedStart.id,
+                  taskID: selectedStart.taskID,
+                  runner: {},
+                  runnerUnverified: !selectedStart.rejected,
+                }}
+              />
               {selectedStart.rejected ? (
                 <RejectedStart start={selectedStart} />
               ) : (

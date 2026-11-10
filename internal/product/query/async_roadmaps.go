@@ -16,14 +16,18 @@ func projectRoadmapActivity(a api.AsyncActivity, f ports.AsyncActivityFact, inst
 		Revision                                            uint64
 		CreatedAt                                           time.Time `json:"created_at"`
 		RequestID                                           string    `json:"request_id"`
+		RunID                                               string    `json:"run_id"`
 		Cancelled                                           bool
 		Source                                              struct{ Path string }
 		Projection                                          *struct {
 			Status         string
 			UpdatedAt      time.Time `json:"updated_at"`
 			ResumeRequired bool      `json:"resume_required"`
+			Execution      struct {
+				AttemptID string `json:"attempt_id"`
+			}
 		}
-		Operation   *struct{ Status, Instance string }
+		Operation   *struct{ Status, Instance, ID, Action string }
 		Publication *struct{ State, Diagnostic string }
 	}
 	if err := json.Unmarshal(f.Payload, &r); err != nil {
@@ -39,6 +43,15 @@ func projectRoadmapActivity(a api.AsyncActivity, f ports.AsyncActivityFact, inst
 	a.Revision, a.CreatedAt = r.Revision, activityTime(r.CreatedAt)
 	a.RequestIDs = []string{r.RequestID}
 	a.Details = api.AsyncActivityDetails{Kind: "roadmap", Target: r.ID}
+	a.Execution = api.ExecutionReference{RequestID: r.RequestID, RunID: r.RunID}
+	if r.Projection != nil {
+		a.Execution.AttemptID = r.Projection.Execution.AttemptID
+	}
+	if r.Operation != nil && r.Operation.ID != "" {
+		a.Execution.RequestID, a.Execution.Action = r.Operation.ID, r.Operation.Action
+		// Publication/admission are local operations, not a new Runner execution.
+		a.Execution.RunID, a.Execution.AttemptID = "", ""
+	}
 	a.Diagnostic = r.Diagnostic
 	switch r.State {
 	case "queued":

@@ -24,6 +24,15 @@ type AsyncActivity struct {
 	Observation        string                 `json:"observation"`
 	Progress           *AsyncActivityProgress `json:"progress,omitempty"`
 	Details            AsyncActivityDetails   `json:"details_ref"`
+	Execution          ExecutionReference     `json:"execution_ref"`
+}
+
+// ExecutionReference contains only public identities for locating original work.
+type ExecutionReference struct {
+	RequestID string `json:"request_id,omitempty"`
+	RunID     string `json:"run_id,omitempty"`
+	AttemptID string `json:"attempt_id,omitempty"`
+	Action    string `json:"action,omitempty"`
 }
 type AsyncActivityProgress struct {
 	Label      string `json:"label"`
