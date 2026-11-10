@@ -22,7 +22,6 @@ import { Button } from "../shared/ui/button";
 import { ProjectMaintenance } from "../features/project-maintenance/project-maintenance";
 import { Dispatch } from "../features/tasks/dispatch";
 import { requiresAnswer } from "../features/runs/state";
-import { short } from "../shared/ui/status";
 import { SettingsPage } from "../features/settings/settings";
 import { Operations } from "./operations";
 import { ExecutionConfigs } from "../features/execution-configs/execution-configs";
@@ -134,7 +133,7 @@ export function Workspace({
           }
           switcher={switcher}
           questions={counts.questions}
-          footer={`${counts.runs} 个候选 · 业务状态由 Go 服务核验`}
+          footer={undefined}
           connection={
             <div className="connection">
               <span className={"connection-dot " + (online ? "" : "offline")} />
@@ -142,11 +141,6 @@ export function Workspace({
                 {online ? "服务在线" : "连接待核实"}
               </span>
               {!environmentPage && <EnvironmentSummary />}
-              {!environmentPage && (
-                <span className="instance-label">
-                  {short(identity.instance_id)}
-                </span>
-              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -260,6 +254,8 @@ export function Workspace({
             </Routes>
           </Suspense>
           <Operations
+            scope={identity}
+            candidates={page?.runs ?? []}
             compact={environmentPage}
             requests={(requests.data ?? []).filter(
               (r) => r.envelope.project_id === identity.project_id,

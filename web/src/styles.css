@@ -750,31 +750,6 @@ textarea {
   font-size: 10px;
   margin: 6px 0 0;
 }
-.run-meta {
-  display: flex;
-  gap: 13px;
-  font-size: 9px;
-  font-family: monospace;
-  color: #86a592;
-  margin: 15px 0 10px;
-  flex-wrap: wrap;
-}
-.workspace-path {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 9px;
-  flex-wrap: wrap;
-  color: #82a08c;
-  padding: 10px;
-  border: 1px solid #2b4031;
-  border-radius: 5px;
-  background: #111b15;
-  margin-bottom: 19px;
-}
-.branch-name {
-  margin-left: auto;
-}
 .answer-panel {
   border: 1px solid #697047;
   background: #252c1c;
@@ -844,17 +819,6 @@ textarea {
   margin-top: 12px;
   font-family: monospace;
 }
-.output-panel {
-  border: 1px solid #2d4334;
-  background: #111b14;
-  border-radius: 6px;
-  margin-top: 20px;
-  overflow: hidden;
-}
-.output-panel > .toolbar {
-  padding: 10px 12px;
-  border-bottom: 1px solid #2a3d30;
-}
 .activity-list,
 .final-body {
   max-height: 560px;
@@ -906,25 +870,6 @@ textarea {
   margin-top: 22px;
   border-top: 1px solid #2a4232;
   padding-top: 18px;
-}
-.pr-panel {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  border-top: 1px solid #2c4033;
-  margin-top: 20px;
-  padding-top: 17px;
-  flex-wrap: wrap;
-}
-.pr-panel a {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11px;
-}
-.pr-panel h3 {
-  margin-bottom: 5px;
 }
 .operations {
   margin-top: 20px;
@@ -1602,5 +1547,100 @@ textarea {
   }
   .topbar-actions {
     gap: 8px;
+  }
+}
+
+/* Execution overview: business progress first, details remain local. */
+.run-section {
+  min-width: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.run-section:first-child {
+  padding-top: 0;
+}
+.run-section:last-child {
+  border-bottom: 0;
+}
+.run-section > h3 {
+  margin: 0 0 14px;
+  font-size: 14px;
+}
+.run-section .settings-panel {
+  border: 0;
+  padding: 0;
+  margin: 12px 0;
+  background: transparent;
+}
+.run-section p {
+  overflow-wrap: anywhere;
+}
+.run-section details {
+  margin: 10px 0;
+  min-width: 0;
+}
+.run-section summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.run-section pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.run-section .message-preview {
+  line-height: 1.5em;
+  max-height: 9em;
+  overflow: hidden;
+}
+.run-section .last-message {
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.run-section .activity-list {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
+.run-section .activity-item {
+  padding: 8px 0;
+}
+.run-section .activity-item details {
+  margin: 0;
+}
+.run-section progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--color-primary);
+}
+.final-output {
+  margin-top: 16px;
+}
+.maintenance-panel > button {
+  display: inline-flex;
+}
+.operations > .operation {
+  margin: 8px 0;
+}
+@media (max-width: 600px) {
+  .sidebar,
+  .sidebar-collapsed .sidebar {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .sidebar nav {
+    flex-wrap: wrap;
+  }
+  .sidebar-footer {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .candidate-heading {
+    flex-wrap: wrap;
+  }
+  .candidate-actions {
+    flex-wrap: wrap;
   }
 }

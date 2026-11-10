@@ -1,0 +1,8 @@
+{
+  "tests": [
+    "l1.minimum",
+    "smoke.delivery",
+    "web.unit",
+    "runtime.async-activities"
+  ]
+}

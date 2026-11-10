@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { ArrowUpRight, Activity as ActivityIcon, Layers } from "lucide-react";
+import { ArrowUpRight, Layers } from "lucide-react";
 import { useWorkspace } from "../../app/context";
 import type {
   Candidate,
@@ -11,7 +11,7 @@ import type {
 } from "../../shared/api/types";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
-import { SafeLink, Status, short, label } from "../../shared/ui/status";
+import { Status, label } from "../../shared/ui/status";
 import { TaskDetail } from "../tasks/task-detail";
 import { Answer, draftKey } from "./answer";
 import {
@@ -25,8 +25,15 @@ import {
 } from "./state";
 import { LastMessage } from "./last-message";
 import { RunnerWorkflow } from "./runner-workflow";
-import { DeliverySummary } from "./delivery-summary";
-import { executionWaitTitle, preparationWait } from "./execution-wait";
+import { DeliverySummary, deliveryLabel } from "./delivery-summary";
+import { RecentActivity } from "./recent-activity";
+import { FinalOutput } from "./final-output";
+import { commandIssues, currentStage } from "./presentation";
+import {
+  ExecutionWaitSummary,
+  executionWaitTitle,
+  preparationWait,
+} from "./execution-wait";
 import { PlanTests } from "./plan-tests";
 import { CandidateDocuments } from "./candidate-documents";
 import { nativeSessionReason } from "./native-session";
@@ -39,153 +46,6 @@ import { RunUsage } from "./run-usage";
 import { RejectedStart } from "./rejected-start";
 import { MainAgent } from "./main-agent";
 
-function Output({ run }: { run: Candidate }) {
-  const { api, online } = useWorkspace();
-  const [tab, setTab] = useState<"activity" | "final">("activity");
-  const activity = useQuery({
-    ...projectQueries(api).activity(run),
-    enabled:
-      online && tab === "activity" && !!run.execution_id && !!run.attempt_id,
-    refetchInterval: 2500,
-  });
-  const final = useQuery({
-    ...projectQueries(api).final(run),
-    enabled: online && tab === "final" && !!run.attempt_id,
-    refetchInterval: 5000,
-  });
-  const updatedAt =
-    tab === "activity" ? activity.dataUpdatedAt : final.dataUpdatedAt;
-  const recentActivity = [...(activity.data?.page.activity ?? [])].sort(
-    (a, b) => b.seq - a.seq,
-  );
-  return (
-    <section className="output-panel">
-      <div className="toolbar">
-        <div className="segmented">
-          <Button
-            variant={tab === "activity" ? "default" : "ghost"}
-            onClick={() => setTab("activity")}
-          >
-            <ActivityIcon size={14} />
-            近期活动
-          </Button>
-          <Button
-            variant={tab === "final" ? "default" : "ghost"}
-            onClick={() => setTab("final")}
-          >
-            最终回复
-          </Button>
-        </div>
-        <span className="muted">
-          {online ? "查询刷新于" : "最后查询于"} ·{" "}
-          {updatedAt ? new Date(updatedAt).toLocaleTimeString("zh-CN") : "—"}
-        </span>
-      </div>
-      {tab === "activity" ? (
-        <div className="activity-list">
-          {activity.error && (
-            <p className="notice amber">{String(activity.error)}</p>
-          )}
-          {activity.data?.page.diagnostics?.map((d, i) => (
-            <p className="notice amber" key={i}>
-              {d}
-            </p>
-          ))}
-          {recentActivity
-            .filter((event) => event.kind !== "runner_event")
-            .map((event) => (
-              <div className="activity-item" key={event.seq}>
-                <span className="activity-dot" />
-                <time>{new Date(event.ts).toLocaleTimeString("zh-CN")}</time>
-                <div>
-                  <strong>{event.title || event.kind}</strong>
-                  {event.kind === "worker_state" &&
-                    event.meta?.to?.workflow_stage &&
-                    event.meta.from?.workflow_stage ===
-                      event.meta.to.workflow_stage && (
-                      <p className="muted">
-                        Workflow · <code>{event.meta.to.workflow_stage}</code>
-                      </p>
-                    )}
-                  {event.detail && <pre>{event.detail}</pre>}
-                </div>
-              </div>
-            ))}
-          {!activity.data?.page.activity?.length && (
-            <div className="empty">
-              {activity.isPending
-                ? "正在读取近期活动…"
-                : "当前候选没有可用活动"}
-            </div>
-          )}
-          {!!activity.data?.page.activity?.some(
-            (event) => event.kind === "runner_event",
-          ) && (
-            <details>
-              <summary>内部执行事件</summary>
-              {recentActivity
-                .filter((event) => event.kind === "runner_event")
-                .map((event) => (
-                  <p key={event.seq} className="muted">
-                    {new Date(event.ts).toLocaleTimeString("zh-CN")} ·{" "}
-                    {event.title}
-                  </p>
-                ))}
-            </details>
-          )}
-          {!!activity.data?.page.activity?.length &&
-            !activity.data.page.activity.some(
-              (event) => event.kind !== "runner_event",
-            ) && (
-              <p className="muted">
-                暂无已记录的 Workflow 或状态变化；已有内部事件可在详情查看。
-              </p>
-            )}
-          <p className="output-hint">
-            近期有界活动 · 不代表完整工具过程或最终回复
-          </p>
-        </div>
-      ) : (
-        <div className="final-body">
-          {final.data?.page.events
-            .filter((event) => event.type === "gap" || event.diagnostic)
-            .map((event, index) => (
-              <p key={index} className="notice amber">
-                会话采集缺口：{event.diagnostic || "来源未完整确认"}
-              </p>
-            ))}
-          {final.error && <p className="notice amber">{String(final.error)}</p>}
-          <p className="output-hint">以下为本执行的回复历史，包含先前轮次。</p>
-          {run.runner_delivery?.available &&
-            !run.runner_delivery.final_verified && (
-              <p className="muted">本轮尚未取得完整最终回复。</p>
-            )}
-          {final.data?.bodies.map((body) => (
-            <article key={body.item_key + "-" + body.revision}>
-              <p className="eyebrow">
-                最终回复 ·{" "}
-                {body.complete
-                  ? "正文完整"
-                  : "正文不完整：" + body.completeness}
-              </p>
-              <pre>{body.text}</pre>
-            </article>
-          ))}
-          {final.data?.page.has_more && (
-            <p className="notice amber">最终事件页未完整，请继续读取原会话。</p>
-          )}
-          {!final.data?.bodies.length && (
-            <div className="empty">
-              {final.isPending
-                ? "正在读取最终回复…"
-                : "当前轮次尚无完整最终回复"}
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
 function CandidateStatuses({ run, task }: { run: Candidate; task?: Task }) {
   const states = candidateStatuses(run, task);
   return (
@@ -216,126 +76,162 @@ function CandidateDetail({
   const nativeUnavailable = nativeSessionReason(run, online, caps);
   return (
     <>
-      <div className="candidate-heading">
-        <div>
-          <div className="eyebrow">
-            候选 C{run.candidate_number || "—"} ·{" "}
-            {run.execution_profile?.name || run.agent}
+      <section className="run-section" aria-label="当前进度">
+        <div className="candidate-heading">
+          <div>
+            <div className="eyebrow">
+              候选 C{run.candidate_number || "—"} ·{" "}
+              {run.execution_profile?.name || run.agent}
+            </div>
+            <h2>{run.title}</h2>
+            <div className="actions">
+              <CandidateStatuses run={run} task={task} />
+              <span className="muted">{currentStage(run)}</span>
+            </div>
           </div>
-          <h2>{run.title}</h2>
-          <div className="actions">
-            <CandidateStatuses run={run} task={task} />
-            <span className="muted">
-              {run.workflow_stage} · {run.workflow_status}
-            </span>
+          <div className="actions candidate-actions">
+            <CopyExecutionInfo run={run} />
+            <ResolvePRConflict run={run} />
+            {stopControl}
+            <Button
+              disabled={!!nativeUnavailable || busy}
+              title={nativeUnavailable || (busy ? "正在处理上一项操作" : "")}
+              onClick={() =>
+                void send("open_native_session", run.run_id, 0, {
+                  run_id: run.run_id,
+                  execution_id: run.execution_id,
+                  attempt_id: run.attempt_id,
+                  session_id: run.session_id,
+                  session_generation: run.session_generation,
+                })
+              }
+            >
+              在 {run.host === "orca" ? "Orca" : "Codex"} 中查看{" "}
+              <ArrowUpRight size={14} />
+            </Button>
           </div>
         </div>
-        <div className="actions candidate-actions">
-          <CopyExecutionInfo run={run} />
-          <ResolvePRConflict run={run} />
-          {stopControl}
-          <Button
-            disabled={!!nativeUnavailable || busy}
-            title={nativeUnavailable || (busy ? "正在处理上一项操作" : "")}
-            onClick={() =>
-              void send("open_native_session", run.run_id, 0, {
-                run_id: run.run_id,
-                execution_id: run.execution_id,
-                attempt_id: run.attempt_id,
-                session_id: run.session_id,
-                session_generation: run.session_generation,
-              })
+        {nativeUnavailable && <p className="muted">{nativeUnavailable}</p>}
+        {run.participation === "abandoned" && (
+          <p className="notice amber">
+            已停止参与 · 历史只读；底层执行可能仍在运行。
+          </p>
+        )}
+        {preparationWait(run) && (
+          <ExecutionWaitSummary
+            wait={preparationWait(run)!}
+            stale={
+              !online ||
+              !!snapshot?.connection.snapshot.error ||
+              !!snapshot?.connection.snapshot.page?.service.error
             }
-          >
-            在 {run.host === "orca" ? "Orca" : "Codex"} 中查看{" "}
-            <ArrowUpRight size={14} />
-          </Button>
-        </div>
-      </div>
-      <div className="run-meta">
-        <span>Run {short(run.run_id)}</span>
-        <span>Execution {short(run.execution_id)}</span>
-        <span>Attempt {short(run.attempt_id)}</span>
-        <span>Turn {short(run.current_turn_id)}</span>
-        <span>执行事实：{run.execution_status}</span>
-      </div>
-      {run.participation === "abandoned" && (
-        <p className="notice amber">
-          已停止参与 · 历史只读 · 资源保留。执行事实为最后采样，不代表 worker
-          已停止。
-          {run.candidate_stop_reason === "manual" && (
-            <>
-              {" "}
-              人工停止：{run.candidate_stopped_by} ·{" "}
-              {run.candidate_ended_at &&
-                new Date(run.candidate_ended_at).toLocaleString("zh-CN")}
-            </>
+            sampledAt={snapshot?.connection.snapshot.sampled_at}
+          />
+        )}
+        {run.runner_delivery &&
+          (!run.runner_delivery.available ||
+            !["accepted", "pending"].includes(
+              run.runner_delivery.submission,
+            )) && (
+            <p className="notice amber">
+              请求受理 · {deliveryLabel(run.runner_delivery.submission)}
+            </p>
           )}
-        </p>
-      )}
-      <RunUsage key={run.run_id + "/" + run.execution_id} run={run} />
-      <div className="workspace-path">
-        <span>工作区</span>
-        <code>{run.worktree_path || "准备中"}</code>
-        <span className="branch-name">{run.worktree_branch}</span>
-      </div>
-      <RunnerWorkflow run={run} />
-      <DeliverySummary
-        run={run}
-        stale={
-          !online ||
-          !!snapshot?.connection.snapshot.error ||
-          !!snapshot?.connection.snapshot.page?.service.error
-        }
-        sampledAt={snapshot?.connection.snapshot.sampled_at}
-      />
-      <CandidateDocuments run={run} />
-      <MainAgent key={run.run_id} run={run} />
-      <PlanTests run={run} />
-      {run.recovery_required && (
-        <p className="notice amber">
-          原执行需要恢复核验。{run.stage_diagnostic || run.error}
-        </p>
-      )}
-      {run.environment_blocker && (
-        <p className="notice amber">
-          {run.environment_blocker.fact.Reason} ·{" "}
-          {run.environment_blocker.fact.Detail}
-        </p>
-      )}
-      {run.error && <p className="notice amber">{run.error}</p>}
-      {stopApplied && run.participation === "active" && (
-        <p className="notice amber">
-          停止已生效，列表刷新中；可使用页面刷新重取。
-        </p>
-      )}
-      {run.decision && (!stopApplied || !participating(run)) && (
-        <Answer
-          key={draftKey(api.identity.project_id, api.identity.instance_id, run)}
+        {run.runner_delivery?.available &&
+          ["waiting_input", "blocked", "failed", "reconciling"].includes(
+            run.runner_delivery.status ?? "",
+          ) && (
+            <p className="notice amber">
+              执行观察 · {deliveryLabel(run.runner_delivery.status)}
+            </p>
+          )}
+        {run.runner_delivery?.diagnostic && (
+          <p className="notice amber">{run.runner_delivery.diagnostic}</p>
+        )}
+        {run.runner_delivery &&
+          !run.runner_delivery.available &&
+          !run.runner_delivery.diagnostic && (
+            <p className="notice amber">
+              执行观察暂不可核实，保留上次已知状态。
+            </p>
+          )}
+        {commandIssues(run).map((issue) => (
+          <p key={issue} className="notice amber">
+            {issue}
+          </p>
+        ))}
+        {run.runner_delivery?.resume_required && (
+          <p className="notice amber">待处理 · 核验原执行后显式恢复。</p>
+        )}
+        {run.runner_delivery?.controls.reason && (
+          <p className="muted">{run.runner_delivery.controls.reason}</p>
+        )}
+        {run.recovery_required && (
+          <p className="notice amber">
+            原执行需要恢复核验。{run.stage_diagnostic || run.error}
+          </p>
+        )}
+        {run.environment_blocker && (
+          <p className="notice amber">
+            {run.environment_blocker.fact.Reason} ·{" "}
+            {run.environment_blocker.fact.Detail}
+          </p>
+        )}
+        {run.error && (!run.recovery_required || run.stage_diagnostic) && (
+          <p className="notice amber">{run.error}</p>
+        )}
+        {stopApplied && run.participation === "active" && (
+          <p className="notice amber">
+            停止已生效，列表刷新中；可使用页面刷新重取。
+          </p>
+        )}
+        {run.decision && (!stopApplied || !participating(run)) && (
+          <Answer
+            key={draftKey(
+              api.identity.project_id,
+              api.identity.instance_id,
+              run,
+            )}
+            run={run}
+          />
+        )}
+      </section>
+      <section className="run-section" aria-label="最近动态">
+        <h3>最近动态</h3>
+        <LastMessage
+          key={"message/" + run.execution_id + "/" + run.attempt_id}
           run={run}
         />
-      )}
-      <LastMessage
-        key={"message/" + run.execution_id + "/" + run.attempt_id}
-        run={run}
-      />
-      <Output key={run.execution_id + "/" + run.attempt_id} run={run} />
-      <div className="pr-panel">
-        <div>
-          <h3>PR 与交付事实</h3>
-          <SafeLink url={run.pr.url}>
-            {run.pr.url ? "查看 PR" : "尚未观察到 PR"}{" "}
-            <ArrowUpRight size={13} />
-          </SafeLink>
-          <span className="muted"> · {run.pr.state || "未发布"}</span>
-          {run.pr.query_error && (
-            <p className="notice amber">PR 查询失败：{run.pr.query_error}</p>
-          )}
-          {run.pr.merge_commit && (
-            <p className="muted">合并提交 {run.pr.merge_commit}</p>
-          )}
-        </div>
-      </div>
+        <RecentActivity
+          key={"activity/" + run.execution_id + "/" + run.attempt_id}
+          run={run}
+        />
+      </section>
+      <section className="run-section" aria-label="测试与审查">
+        <h3>测试与审查</h3>
+        <PlanTests key={run.execution_id + "/" + run.attempt_id} run={run} />
+        <RunnerWorkflow run={run} />
+        <MainAgent key={run.run_id} run={run} />
+        <CandidateDocuments
+          key={run.execution_id + "/" + run.attempt_id}
+          run={run}
+          showNotice={false}
+        />
+      </section>
+      <section className="run-section" aria-label="交付结果">
+        <h3>交付结果</h3>
+        <DeliverySummary
+          run={run}
+          task={task}
+          stale={
+            !online ||
+            !!snapshot?.connection.snapshot.error ||
+            !!snapshot?.connection.snapshot.page?.service.error
+          }
+        />
+        <FinalOutput key={run.execution_id + "/" + run.attempt_id} run={run} />
+        <RunUsage key={run.run_id + "/" + run.execution_id} run={run} />
+      </section>
     </>
   );
 }
@@ -552,9 +448,7 @@ export function Runs() {
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">PROJECT / EXECUTION</div>
           <h1>执行与待处理</h1>
-          <p>每个候选保留独立输出、问题和交付记录。</p>
         </div>
         <Layers className="heading-icon" size={30} />
       </div>
@@ -730,7 +624,13 @@ export function Runs() {
             </div>
           ) : selected ? (
             <CandidateDetail
-              key={selected.run_id}
+              key={[
+                api.identity.project_id,
+                api.identity.instance_id,
+                selected.run_id,
+                selected.execution_id,
+                selected.attempt_id,
+              ].join("/")}
               run={selected}
               task={selectedTaskRecord}
               stopApplied={stopApplied(selected.run_id)}

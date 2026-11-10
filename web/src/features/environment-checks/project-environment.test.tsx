@@ -58,7 +58,7 @@ async function openHistory() {
   await screen.findByLabelText("历史范围");
 }
 
-it("shows environment readiness directly with lazy details and only the detection ID for debugging", async () => {
+it("shows environment readiness directly with lazy details and execution copying instead of debug ID fields", async () => {
   const { api, record, send } = fixture();
   await loaded();
   expect(
@@ -67,7 +67,10 @@ it("shows environment readiness directly with lazy details and only the detectio
   expect(within(overview()).getByText("缺少工具")).toBeVisible();
   expect(within(currentCard()).getByText("缺少工具")).toBeVisible();
   expect(screen.queryByLabelText("运行环境")).not.toBeInTheDocument();
-  expect(screen.getAllByText(record.id)).toHaveLength(1);
+  expect(screen.queryByText(record.id)).toBeNull();
+  expect(
+    within(currentCard()).getByRole("button", { name: "复制执行信息" }),
+  ).toBeEnabled();
   expect(screen.queryByLabelText("检测所用方案")).not.toBeInTheDocument();
   expect(screen.getByText("更多设置").closest("details")).not.toHaveAttribute(
     "open",
@@ -158,7 +161,7 @@ it("copies the full detection ID and supports manual copying when clipboard acce
     within(currentCard()).getByRole("button", { name: "复制执行信息" }),
   );
   expect(await screen.findByRole("alert")).toBeVisible();
-  expect(screen.getByText(record.id)).toBeVisible();
+  expect(screen.getByRole("alert")).toHaveTextContent(record.id);
 });
 
 it("loads preparation requirements only when opened and excludes protocol metadata", async () => {
@@ -504,7 +507,12 @@ it("keeps collapsed history concise and filters by environment or project", asyn
   const { api, record, send } = fixture();
   await loaded();
   await openHistory();
-  await waitFor(() => expect(screen.getAllByText(record.id)).toHaveLength(2));
+  await waitFor(() =>
+    expect(
+      screen.getAllByRole("button", { name: "复制执行信息" }),
+    ).toHaveLength(2),
+  );
+  expect(screen.queryByText(record.id)).toBeNull();
   expect(screen.getByText("未通过")).toBeVisible();
   expect(
     screen.queryByText("original-run", { exact: false }),
@@ -532,7 +540,10 @@ it("allows reading project history offline and disables stopping", async () => {
   fireEvent.change(screen.getByLabelText("历史范围"), {
     target: { value: "project" },
   });
-  expect(await screen.findByText(record.id)).toBeVisible();
+  expect(
+    (await screen.findAllByRole("button", { name: "复制执行信息" })).length,
+  ).toBeGreaterThan(0);
+  expect(screen.queryByText(record.id)).toBeNull();
   expect(screen.getByRole("button", { name: "停止检测" })).toBeDisabled();
 });
 

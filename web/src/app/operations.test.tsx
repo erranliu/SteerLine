@@ -157,6 +157,83 @@ it("keeps confirming a start whose receipt query timed out", () => {
     />,
   );
   expect(screen.getByText("开始检测：正在确认启动")).toBeVisible();
-  expect(screen.queryByText(/超时/)).not.toBeInTheDocument();
+  expect(screen.getByText(/超时/)).toBeVisible();
   expect(screen.getByRole("button", { name: "重新查询" })).toBeEnabled();
+});
+
+it("names concurrent uncertain actions and binds their trusted business context", () => {
+  const stop = request("stop_candidate", "outcome_unknown"),
+    answer = request("answer_decision", "outcome_unknown"),
+    cancel = request("main_agent_cancel", "outcome_unknown");
+  stop.envelope.payload = { task_id: "42" };
+  answer.envelope.target_id = "question";
+  const reconcile = vi.fn();
+  const candidate = {
+    run_id: "candidate",
+    task_id: "43",
+    domain_task_id: "43",
+    candidate_number: 2,
+    decision: { id: "question" },
+  } as never;
+  const before = structuredClone([stop, answer, cancel]);
+  render(
+    <Operations
+      requests={[stop, answer, cancel]}
+      candidates={[candidate]}
+      scope={{ project_id: "project", instance_id: "opaque-instance" }}
+      online
+      reconcile={reconcile}
+      reconciling={false}
+    />,
+  );
+  expect(screen.getByText("停止候选参与")).toBeVisible();
+  expect(screen.getByText("回答问题")).toBeVisible();
+  expect(screen.getByText("取消提示词建议生成")).toBeVisible();
+  expect(screen.getByText("任务 #42 · 候选待核实")).toBeVisible();
+  expect(screen.getByText("任务 #43 · 候选 C2")).toBeVisible();
+  fireEvent.click(screen.getAllByRole("button", { name: "查询原请求" })[1]);
+  expect(reconcile).toHaveBeenCalledWith(answer);
+  fireEvent.click(screen.getAllByRole("button", { name: "查询原请求" })[2]);
+  expect(reconcile).toHaveBeenLastCalledWith(cancel);
+  expect([stop, answer, cancel]).toEqual(before);
+});
+it("bounds rejected history and keeps only current unresolved requests in the primary view", () => {
+  const old = Array.from({ length: 20 }, (_, i) => {
+    const r = request(
+      "stop_candidate",
+      "rejected",
+      `2026-11-01T00:00:${String(i).padStart(2, "0")}Z`,
+    );
+    r.envelope.request_id += i;
+    r.response!.diagnostic = `历史拒绝 ${i}`;
+    return r;
+  });
+  const applied = request("start_task", "applied", "2026-11-10T00:00:00Z"),
+    pending = request(
+      "pause_dispatch",
+      "outcome_unknown",
+      "2026-11-10T00:00:01Z",
+    ),
+    foreign = request(
+      "resume_dispatch",
+      "outcome_unknown",
+      "2026-11-10T00:00:02Z",
+    );
+  foreign.envelope.instance_id = "old-instance";
+  render(
+    <Operations
+      requests={[...old, applied, pending, foreign]}
+      scope={{ project_id: "project", instance_id: "opaque-instance" }}
+      online
+      reconcile={vi.fn()}
+      reconciling={false}
+    />,
+  );
+  expect(document.querySelectorAll(".operations > .operation")).toHaveLength(1);
+  expect(screen.getByText("暂停派发")).toBeVisible();
+  expect(screen.getByText("历史拒绝 19")).not.toBeVisible();
+  expect(screen.getByText("恢复派发")).not.toBeVisible();
+  expect(document.querySelectorAll(".operations .operation")).toHaveLength(13);
+  fireEvent.click(screen.getByText("操作回执 · 最近 12 项"));
+  expect(screen.getByText("历史拒绝 19")).toBeVisible();
 });

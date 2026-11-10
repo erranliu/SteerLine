@@ -149,12 +149,7 @@ export function AppShell({
           </div>
         </header>
         <main>{children}</main>
-        <footer className="app-footer">
-          <span>
-            <Command size={12} /> SteerLine · 本机 Web
-          </span>
-          <span>{footer}</span>
-        </footer>
+        {footer && <footer className="app-footer">{footer}</footer>}
       </div>
     </div>
   );
