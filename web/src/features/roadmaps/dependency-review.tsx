@@ -10,12 +10,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import type { Dependencies, RoadmapRecord } from "./roadmaps";
-import {
-  dependencyReview,
-  visibleReviewEdges,
-  type ReviewMode,
-  type ReviewNode,
-} from "./dependency-review-model";
+import { dependencyReview, type ReviewNode } from "./dependency-review-model";
 import "@xyflow/react/dist/style.css";
 
 const changeLabels = { kept: "保留", added: "新增", removed: "移除" };
@@ -24,10 +19,7 @@ function PreviewTask({ data }: NodeProps<PreviewNode>) {
   return (
     <div className={`roadmaps-review-node${data.formalID ? " formal" : ""}`}>
       <Handle type="target" position={Position.Left} />
-      <small>
-        {data.formalID ? "已有正式任务" : "草稿任务"}
-        {data.originalOnly && " · 仅原始引用"}
-      </small>
+      <small>{data.formalID ? "已有正式任务" : "草稿任务"}</small>
       <strong>{data.label}</strong>
       <span>{data.title}</span>
       <Handle type="source" position={Position.Right} />
@@ -49,9 +41,8 @@ export function DependencyReview({
     () => dependencyReview(analysis.tasks, existing),
     [analysis.tasks, existing],
   );
-  const [mode, setMode] = useState<ReviewMode>("proposed");
   const [selected, setSelected] = useState("");
-  const visible = visibleReviewEdges(graph.edges, mode);
+  const visible = graph.proposedEdges;
   const node = graph.nodes.find((item) => item.id === selected);
   const task = node?.task;
   const changes = graph.edges.filter((edge) => edge.change !== "kept");
@@ -67,27 +58,25 @@ export function DependencyReview({
       ...value.local.map((key) => `本 Roadmap ${key}`),
       ...value.formal.map((id) => `正式 #${id}`),
     ].join("、") || "无";
-  const nodes: PreviewNode[] = graph.nodes.map((item) => ({
-    id: item.id,
-    type: "review",
-    position: item.position,
-    data: item,
-    selected: item.id === selected,
-    ariaLabel: `${item.formalID ? "已有正式任务" : "草稿任务"} ${item.label} ${item.title}`,
-    className:
-      selected && !neighbors.has(item.id) && selected !== item.id
-        ? "review-dimmed"
-        : undefined,
-  }));
+  const nodes: PreviewNode[] = graph.nodes
+    .filter((item) => !item.originalOnly)
+    .map((item) => ({
+      id: item.id,
+      type: "review",
+      position: item.position,
+      data: item,
+      selected: item.id === selected,
+      ariaLabel: `${item.formalID ? "已有正式任务" : "草稿任务"} ${item.label} ${item.title}`,
+      className:
+        selected && !neighbors.has(item.id) && selected !== item.id
+          ? "review-dimmed"
+          : undefined,
+    }));
   const edges = visible.map((edge) => ({
     ...edge,
     type: "smoothstep",
     markerEnd: { type: MarkerType.ArrowClosed },
-    className: `review-edge ${mode === "diff" ? edge.change : "kept"}${selected && edge.source !== selected && edge.target !== selected ? " review-dimmed" : ""}`,
-    label:
-      mode === "diff" && edge.change !== "kept"
-        ? changeLabels[edge.change]
-        : undefined,
+    className: `review-edge${selected && edge.source !== selected && edge.target !== selected ? " review-dimmed" : ""}`,
     ariaLabel: `${label(edge.source)} → ${label(edge.target)} · ${changeLabels[edge.change]}`,
   }));
   return (
@@ -103,40 +92,9 @@ export function DependencyReview({
         {changes.filter((edge) => edge.change === "removed").length} · 待澄清{" "}
         {analysis.questions.length}
       </p>
-      <div className="roadmaps-actions" role="group" aria-label="依赖视图">
-        {(
-          [
-            ["proposed", "Runner 建议"],
-            ["original", "草稿原始"],
-            ["diff", "差异"],
-          ] as const
-        ).map(([value, text]) => (
-          <button
-            key={value}
-            aria-pressed={mode === value}
-            onClick={() => setMode(value)}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
       <p className="roadmaps-review-legend">
-        前置 → 后继 · 仅显示本次规划的直接依赖
+        前置 → 后继 · 仅显示本次规划的建议直接依赖
       </p>
-      {mode === "diff" && (
-        <p className="roadmaps-review-legend">
-          <span>实线：保留</span>
-          {" · "}
-          <span>长虚线：新增</span>
-          {" · "}
-          <span>点线：移除</span>
-        </p>
-      )}
-      {mode !== "proposed" && (
-        <p className="roadmaps-review-legend">
-          原始/差异是关系对照，可能包含环；确认始终采用整批 Runner 建议。
-        </p>
-      )}
       <div className="roadmaps-review-layout">
         <div className="roadmaps-review-canvas" aria-label="依赖预览图">
           <ReactFlow
@@ -222,7 +180,7 @@ export function DependencyReview({
       </div>
       <section aria-label="依赖变更" className="roadmaps-review-changes">
         <h3>依赖变更</h3>
-        {!changes.length && <p>依赖未调整</p>}
+        {!changes.length && <p>与草稿依赖一致</p>}
         {graph.nodes
           .filter((item) => changes.some((edge) => edge.target === item.id))
           .map((item) => (

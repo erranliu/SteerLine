@@ -48,7 +48,7 @@ test.afterAll(async () => {
   );
 });
 
-test("saved roadmap preview preserves topology, comparison, task details and confirmation scope", async ({
+test("saved roadmap preview shows proposed dependencies with changes, task details and confirmation scope", async ({
   page,
 }, info) => {
   const project = "a".repeat(64);
@@ -83,7 +83,8 @@ test("saved roadmap preview preserves topology, comparison, task details and con
   tasks[0].original_dependencies.formal = ["101"];
   tasks[0].proposed_dependencies.formal = ["101"];
   tasks[3].proposed_dependencies.local = ["tools"];
-  tasks[3].reason = "分支 B 直接消费工具交付，移除起点样本前置";
+  tasks[3].original_dependencies.formal = ["102"];
+  tasks[3].reason = "分支 B 直接消费工具交付，移除起点样本和旧正式任务前置";
   tasks[5].title = "长标题验证".repeat(16);
   const source = {
     id: "b".repeat(32),
@@ -104,6 +105,7 @@ test("saved roadmap preview preserves topology, comparison, task details and con
     cancelled: false,
     existing: [
       { id: "101", title: "已有工具基础" },
+      { id: "102", title: "仅原始引用的前置" },
       { id: "105", title: "未引用任务" },
     ],
     analysis: { tasks, questions: [], overlap: "无重复；固定解析来源供复核" },
@@ -293,13 +295,36 @@ test("saved roadmap preview preserves topology, comparison, task details and con
         transform: (node as HTMLElement).style.transform,
       })),
     );
-  await review.getByRole("button", { name: "差异", exact: true }).click();
-  await expect(review.locator(".react-flow__edge")).toHaveCount(8);
-  await expect(review.locator(".react-flow__edge.added")).toHaveCount(1);
-  await expect(review.locator(".react-flow__edge.removed")).toHaveCount(1);
+  await expect(review.getByRole("group", { name: "依赖视图" })).toHaveCount(0);
+  for (const name of ["Runner 建议", "草稿原始", "差异"]) {
+    await expect(review.getByRole("button", { name, exact: true })).toHaveCount(
+      0,
+    );
+  }
+  await expect(
+    review.locator('.react-flow__node[data-id="formal:102"]'),
+  ).toHaveCount(0);
+  await expect(
+    review.locator('.react-flow__edge[aria-label="tools → right · 新增"]'),
+  ).toHaveCount(1);
+  await expect(
+    review.locator('.react-flow__edge[aria-label="seed → right · 移除"]'),
+  ).toHaveCount(0);
+  await expect(review.locator(".roadmaps-review-summary")).toContainText(
+    "新增 1 / 移除 2",
+  );
+  const changes = review.getByRole("region", { name: "依赖变更" });
+  await expect(changes.getByText("新增：tools → right")).toBeVisible();
+  await expect(changes.getByText("移除：seed → right")).toBeVisible();
+  await expect(changes.getByText("移除：#102 → right")).toBeVisible();
+  await expect(changes.getByText(tasks[3].reason)).toBeVisible();
   await review.getByRole("button", { name: "查看变更 · right" }).click();
   const detail = review.getByRole("region", { name: "所选任务详情" });
   await expect(detail.getByText("草稿原文 right")).toBeVisible();
+  await expect(detail.getByText("本 Roadmap seed、正式 #102")).toBeVisible();
+  await expect(
+    detail.getByText("本 Roadmap tools", { exact: true }),
+  ).toBeVisible();
   const viewport = review.locator(".react-flow__viewport");
   const beforeZoom = await viewport.getAttribute("style");
   await review.locator(".react-flow__controls-zoomin").click();
@@ -338,12 +363,13 @@ test("saved roadmap preview preserves topology, comparison, task details and con
   await expect(detail.getByText("seed → right · 移除")).toBeVisible();
   await review.locator('.react-flow__node[data-id="local:left"]').click();
   await expect(detail.getByText("草稿原文 left")).toBeVisible();
-  await review.locator(".react-flow__edge.removed").dispatchEvent("click");
+  await review
+    .locator('.react-flow__edge[aria-label="tools → right · 新增"]')
+    .dispatchEvent("click");
   await expect(detail.getByText("草稿原文 right")).toBeVisible();
   await expect(
     review.locator(".react-flow__node.review-dimmed"),
   ).not.toHaveCount(0);
-  await review.getByRole("button", { name: "草稿原始", exact: true }).click();
   await expect(review.locator(".react-flow__edge")).toHaveCount(7);
   expect(
     await review.locator(".react-flow__node").evaluateAll((nodes) =>
@@ -353,10 +379,10 @@ test("saved roadmap preview preserves topology, comparison, task details and con
       })),
     ),
   ).toEqual(positions);
+  const beforeRefresh = await viewport.getAttribute("style");
   await page.getByRole("button", { name: "刷新 Markdown 与观察" }).click();
-  await expect(
-    review.getByRole("button", { name: "草稿原始", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(review.locator(".react-flow__edge")).toHaveCount(7);
+  await expect(viewport).toHaveAttribute("style", beforeRefresh!);
   await expect(detail.getByText("草稿原文 right")).toBeVisible();
   for (const width of [1440, 768, 320]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -405,6 +431,8 @@ test("saved roadmap preview preserves topology, comparison, task details and con
   await page.getByText("历史记录（2）", { exact: true }).click();
   await page.getByLabel("查看历史记录").selectOption(historical.id);
   await expect(review.locator(".react-flow__node")).toHaveCount(1);
+  await expect(review.locator(".react-flow__edge")).toHaveCount(0);
+  await expect(changes.getByText("与草稿依赖一致")).toBeVisible();
   await expect(
     review.getByRole("button", { name: "查看 historical · historical 任务" }),
   ).toBeVisible();
@@ -413,13 +441,10 @@ test("saved roadmap preview preserves topology, comparison, task details and con
   ).toHaveCount(0);
   await page.getByRole("button", { name: "返回当前流程", exact: true }).click();
   await expect(review.locator(".react-flow__node")).toHaveCount(7);
-  await expect(
-    review.getByRole("button", { name: "Runner 建议", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(review.locator(".react-flow__edge")).toHaveCount(7);
   await expect(
     detail.getByText("选择图中节点或下方任务，查看范围、依赖与原文依据。"),
   ).toBeVisible();
-  await review.getByRole("button", { name: "草稿原始", exact: true }).click();
   await page.getByRole("button", { name: /确认本次任务与依赖/ }).click();
   await expect.poll(() => writes.length).toBe(1);
   await expect(

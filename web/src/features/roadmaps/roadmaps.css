@@ -252,13 +252,6 @@
 .roadmaps-review .review-dimmed {
   opacity: 0.4;
 }
-.roadmaps-review .review-edge.added .react-flow__edge-path {
-  stroke: var(--color-primary);
-  stroke-dasharray: 9 5;
-}
-.roadmaps-review .review-edge.removed .react-flow__edge-path {
-  stroke-dasharray: 2 5;
-}
 .roadmaps-review button[aria-pressed="true"] {
   border-color: var(--color-primary);
 }

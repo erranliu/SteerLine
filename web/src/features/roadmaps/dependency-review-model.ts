@@ -1,6 +1,5 @@
 import type { Dependencies, RoadmapRecord, RoadmapTask } from "./roadmaps";
 
-export type ReviewMode = "proposed" | "original" | "diff";
 export type ReviewEdge = {
   id: string;
   source: string;
@@ -96,11 +95,15 @@ export function dependencyReview(
   const ordered = [...nodes.values()].sort((a, b) =>
     a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
   );
+  for (const node of ordered) {
+    node.originalOnly = !node.task && !proposedNodes.has(node.id);
+  }
+  const previewNodes = ordered.filter((node) => !node.originalOnly);
   const levels = new Map<string, number>();
-  // Only proposed edges determine columns. The diff union can contain a cycle.
-  for (let pass = 0; pass < ordered.length; pass++) {
+  // Original-only references stay available for details, outside the preview.
+  for (let pass = 0; pass < previewNodes.length; pass++) {
     let changed = false;
-    for (const node of ordered) {
+    for (const node of previewNodes) {
       if (levels.has(node.id)) continue;
       const parents = [...proposed.values()]
         .filter((edge) => edge.target === node.id)
@@ -118,23 +121,17 @@ export function dependencyReview(
     if (!changed) break;
   }
   const offsets = new Map<number, number>();
-  for (const node of ordered) {
+  for (const node of previewNodes) {
     const level = levels.get(node.id) ?? 0;
     const y = offsets.get(level) ?? 0;
     node.position = { x: level * 240, y };
-    node.originalOnly = !node.task && !proposedNodes.has(node.id);
     // Titles occupy two lines; reserve space for full wrapping draft keys.
     offsets.set(level, y + 132 + 24 * Math.ceil(node.label.length / 10));
   }
-  return { nodes: ordered, edges, proposedCount: proposed.size };
-}
-
-export function visibleReviewEdges(edges: ReviewEdge[], mode: ReviewMode) {
-  return edges.filter(
-    (edge) =>
-      mode === "diff" ||
-      (mode === "original"
-        ? edge.change !== "added"
-        : edge.change !== "removed"),
-  );
+  return {
+    nodes: ordered,
+    edges,
+    proposedEdges: edges.filter((edge) => edge.change !== "removed"),
+    proposedCount: proposed.size,
+  };
 }
