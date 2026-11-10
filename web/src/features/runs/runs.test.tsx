@@ -815,9 +815,8 @@ it("preserves the selected answer editor across reordered snapshots and keeps th
   const w = mixedWorkspace();
   fireEvent.click(screen.getByRole("button", { name: "待回答" }));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "打开回答" })).toBeEnabled(),
+    expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "打开回答" }));
   fireEvent.change(screen.getByRole("textbox", { name: "回答内容" }), {
     target: { value: "保留当前回答草稿" },
   });

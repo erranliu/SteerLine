@@ -40,7 +40,9 @@
 
 ## 5. Web 与活动中心
 
-候选详情只读查看状态、本次明确上下文及唯一 prompt，提供复制和显式取消。无生成、编辑、补充生成、采用、执行或材料 PR 入口。查看/切页不产生或取消工作；跨项目/实例/候选/记录隔离响应，历史结果不受原问题可答资格约束。
+2026-11-10 用户确认扩展外部回答 UI：回答区在候选标题及状态下默认展开，当前候选/Attempt/Question 精确匹配且 ready/settled 的建议默认填入可编辑回答框。手写草稿（包括清空）优先；迟到建议、观察版本变化和刷新不覆盖手写内容，home/project/instance/candidate/execution/Attempt/Question 隔离草稿。用户点击“回复并继续”经原资格核验及 answer_decision 提交最终内容；生成/填入不发送，核验/发送中禁止重复点击，失败保留回答。选项、多题原生答案和可稍后回答保留原规则。
+
+原问题、context、Runner 诊断和候选错误的相同正文在回答区只显示一次，独立诊断保留，相同最近消息显示引用提示。生成状态及折叠上下文合入回答区，历史建议仍可查看/复制。新增 candidate_id+occurrence 的只读精确查询，公开详情包含 occurrence，不按最新历史猜测当前来源。业务采用属于生成模块之外的回答 UI 和原回答 owner，不改变 advisory-v1 或模型提示正文。查看/切页不产生或取消工作；跨项目/实例/候选/记录隔离响应，历史结果不受原问题可答资格约束。本次验证单列[回答区验收](../testing/acceptance/default-suggestion-answer.md)。
 
 活动来源为 main_agent_advisory/prompt_suggestion，沿原有只读池、预算、分页、计数、request links 和失败隔离。queued/preparing/running 表示实际阶段；unknown/cancelling/结果未结算为 waiting；经核实唯一结果并结算才 succeeded；已结算失败/取消才终态。成功/失败且源问题仍在时 needs_attention，源解除后不再提醒。导航定位确切候选和 request。
 

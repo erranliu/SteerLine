@@ -67,10 +67,8 @@ test("owned advisory navigation, context, copy and cancellation", async ({
     base.searchParams.set("advisory", id);
     await page.goto(base.href);
   }
-  const panel = page
-    .getByText("对话续作 · 提示词建议", { exact: true })
-    .locator("..");
-  await expect(panel).toHaveAttribute("open", "");
+  const panel = page.getByLabel("回答建议", { exact: true });
+  await expect(panel).toBeVisible();
   await panel.getByText("查看本次已提供的上下文", { exact: true }).click();
   await expect(
     panel.getByRole("heading", { name: "原问题", exact: true }),
@@ -89,7 +87,7 @@ test("owned advisory navigation, context, copy and cancellation", async ({
       0,
     );
   if (mode === "ready") {
-    await expect(panel.getByLabel("提示词建议正文")).toHaveText(
+    await expect(page.getByLabel("回答内容")).toHaveValue(
       e.STEERLINE_ADVISORY_PROMPT!,
     );
     await panel
@@ -100,7 +98,7 @@ test("owned advisory navigation, context, copy and cancellation", async ({
       .toBe(e.STEERLINE_ADVISORY_PROMPT);
     expect(commands).toEqual([]);
     await page.reload();
-    await expect(page.getByLabel("提示词建议正文")).toHaveText(
+    await expect(page.getByLabel("回答内容")).toHaveValue(
       e.STEERLINE_ADVISORY_PROMPT!,
     );
   } else {

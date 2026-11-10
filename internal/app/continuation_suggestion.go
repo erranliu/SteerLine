@@ -127,6 +127,25 @@ func (p *continuationSuggestionPort) context(ctx context.Context, source suggest
 }
 func (p *continuationSuggestionPort) read(ctx context.Context, route string, values url.Values) (any, error) {
 	if route == "/main-agent" {
+		if len(values) == 2 && len(values["candidate_id"]) == 1 && len(values["occurrence"]) == 1 {
+			source := suggestionbridge.Source{CandidateID: values.Get("candidate_id"), Occurrence: values.Get("occurrence"), Revision: 1, Reason: "pending_question"}
+			if !source.Valid() {
+				return nil, errors.New("invalid advisory source")
+			}
+			record, err := p.service.Get(ctx, suggestionbridge.SourceID(p.config.Identity(), source))
+			if errors.Is(err, contract.ErrNotFound) {
+				return struct {
+					Record *suggestionbridge.Detail `json:"record"`
+				}{}, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			detail := suggestionbridge.View(record)
+			return struct {
+				Record *suggestionbridge.Detail `json:"record"`
+			}{&detail}, nil
+		}
 		if len(values) != 1 || len(values["candidate_id"]) != 1 || !contract.ID.MatchString(values.Get("candidate_id")) {
 			return nil, errors.New("exact candidate_id required")
 		}

@@ -28,7 +28,7 @@ import { RunnerWorkflow } from "./runner-workflow";
 import { DeliverySummary, deliveryLabel } from "./delivery-summary";
 import { RecentActivity } from "./recent-activity";
 import { FinalOutput } from "./final-output";
-import { commandIssues, currentStage } from "./presentation";
+import { candidateNotices, commandIssues, currentStage } from "./presentation";
 import {
   ExecutionWaitSummary,
   executionWaitTitle,
@@ -74,6 +74,7 @@ function CandidateDetail({
   const { api, online, send, busy, snapshot } = useWorkspace();
   const caps = snapshot?.connection.snapshot.page?.service.capabilities ?? [];
   const nativeUnavailable = nativeSessionReason(run, online, caps);
+  const answerVisible = !!run.decision && (!stopApplied || !participating(run));
   return (
     <>
       <section className="run-section" aria-label="当前进度">
@@ -112,6 +113,16 @@ function CandidateDetail({
           </div>
         </div>
         {nativeUnavailable && <p className="muted">{nativeUnavailable}</p>}
+        {answerVisible && (
+          <Answer
+            key={draftKey(
+              api.identity.project_id,
+              api.identity.instance_id,
+              run,
+            )}
+            run={run}
+          />
+        )}
         {run.participation === "abandoned" && (
           <p className="notice amber">
             已停止参与 · 历史只读；底层执行可能仍在运行。
@@ -139,15 +150,19 @@ function CandidateDetail({
           )}
         {run.runner_delivery?.available &&
           ["waiting_input", "blocked", "failed", "reconciling"].includes(
-            run.runner_delivery.status ?? "",
+            run.runner_delivery.status === "waiting_input" && run.decision
+              ? ""
+              : (run.runner_delivery.status ?? ""),
           ) && (
             <p className="notice amber">
               执行观察 · {deliveryLabel(run.runner_delivery.status)}
             </p>
           )}
-        {run.runner_delivery?.diagnostic && (
-          <p className="notice amber">{run.runner_delivery.diagnostic}</p>
-        )}
+        {candidateNotices(run, answerVisible).map((text) => (
+          <p key={text} className="notice amber">
+            {text}
+          </p>
+        ))}
         {run.runner_delivery &&
           !run.runner_delivery.available &&
           !run.runner_delivery.diagnostic && (
@@ -163,44 +178,19 @@ function CandidateDetail({
         {run.runner_delivery?.resume_required && (
           <p className="notice amber">待处理 · 核验原执行后显式恢复。</p>
         )}
-        {run.runner_delivery?.controls.reason && (
-          <p className="muted">{run.runner_delivery.controls.reason}</p>
-        )}
-        {run.recovery_required && (
-          <p className="notice amber">
-            原执行需要恢复核验。{run.stage_diagnostic || run.error}
-          </p>
-        )}
-        {run.environment_blocker && (
-          <p className="notice amber">
-            {run.environment_blocker.fact.Reason} ·{" "}
-            {run.environment_blocker.fact.Detail}
-          </p>
-        )}
-        {run.error && (!run.recovery_required || run.stage_diagnostic) && (
-          <p className="notice amber">{run.error}</p>
-        )}
         {stopApplied && run.participation === "active" && (
           <p className="notice amber">
             停止已生效，列表刷新中；可使用页面刷新重取。
           </p>
         )}
-        {run.decision && (!stopApplied || !participating(run)) && (
-          <Answer
-            key={draftKey(
-              api.identity.project_id,
-              api.identity.instance_id,
-              run,
-            )}
-            run={run}
-          />
-        )}
+        {!run.decision && <ContinuationSuggestion key={run.run_id} run={run} />}
       </section>
       <section className="run-section" aria-label="最近动态">
         <h3>最近动态</h3>
         <LastMessage
           key={"message/" + run.execution_id + "/" + run.attempt_id}
           run={run}
+          answerVisible={answerVisible}
         />
         <RecentActivity
           key={"activity/" + run.execution_id + "/" + run.attempt_id}
@@ -211,7 +201,6 @@ function CandidateDetail({
         <h3>测试与审查</h3>
         <PlanTests key={run.execution_id + "/" + run.attempt_id} run={run} />
         <RunnerWorkflow run={run} />
-        <ContinuationSuggestion key={run.run_id} run={run} />
         <CandidateDocuments
           key={run.execution_id + "/" + run.attempt_id}
           run={run}

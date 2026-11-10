@@ -14,7 +14,7 @@
 | `internal/steeragent/suggestion` | 明确输入校验、固定提示词同包组装、唯一 prompt 校验，无外部读取或执行 |
 | `internal/steeragentbridge/suggestion` | 异步作业、冻结请求、共享配额、原请求提交/观察、取消及结算 |
 | app | 从原 owner 的持久候选投影读取明确待答与固定版本材料；组装本地 Codex 模型配置及恢复/停止接线 |
-| SQLite / 查询 / Web | payload/CAS与隔离、纯读活动投影、只读查看/复制/取消，不展示内部执行记录 |
+| SQLite / 查询 / Web | payload/CAS与隔离、纯读活动投影；建议默认填入原问题回答框，用户点击后通过原回答入口提交；历史可查看/复制，不展示内部执行记录 |
 
 调用链固定 SteerLine → Runner 公开 generate/1 → Runner 内部本地 Codex。复用既有 Run、原请求去重、完整 final、停止和资源结算；没有新增 workflow、原生直连或模型 API 旁路。默认 GPT 6.1 Sol / high，复用已有本地执行器，配置在准备新请求时冻结，重启后新设置生效。
 
@@ -34,7 +34,11 @@
 
 启动前冷态检查全部未结算 started 请求：原请求不存在则失败/取消并释放槽，不重发；原失败或取消的停止信封随启动恢复。关闭、构建 namespace 及离线停止证明包含本用途。
 
-候选详情显示上下文、状态与只读 prompt，可复制并显式取消；无生成、编辑、补充、采用或执行入口。未提交的 queued/preparing 和所有未结算记录持续观察。页面与活动 GET 均只读持久事实，不调用模型、Git 或 Runner 对账。
+按 2026-11-10 用户确认的调整，候选详情在标题及状态下默认展开回答区，集中展示原问题、生成状态和可折叠上下文。当前候选、Attempt、Question 精确匹配且 ready/settled 的建议默认填入可编辑回答框；手写草稿（含主动清空）优先，普通 revision、刷新和迟到建议不覆盖手写内容。草稿按 home/project/instance/candidate/execution/Attempt/Question 隔离，不随观察版本变化。
+
+用户点击“回复并继续”后，经既有 eligibility 核验和 answer_decision 入口提交最终框内内容，绑定原问题及最新观察版本；生成和填入不会发送回答。正在核验/提交时禁止重复点击，跟踪原请求回执；明确拒绝后保留内容并恢复编辑，未登记提交失败可重试，已登记未知只核实原请求，已生效业务反馈可显式再次追加。选项、多题原生答案与可稍后回答沿用原回答规则。原问题、context、Runner 诊断和候选错误相同正文只显示一次，独立诊断保留；相同最近消息只指向回答区，历史原文继续保存在原 owner。历史建议仍可查看/复制，当前原建议可从折叠的上下文内复制。
+
+查询新增 candidate_id+occurrence 精确读取持久建议，不从历史列表猜测当前结果；公开详情包含 occurrence。未提交的 queued/preparing 和所有未结算记录持续观察。页面与活动 GET 均只读持久事实，不调用模型、Git 或 Runner 对账。生成核心与 advisory-v1 仍只产出 prompt，业务采用和投递由外部回答 UI 及其原 owner 负责。实现与验证见[回答区验收](../../SteerlineFlow/testing/acceptance/default-suggestion-answer.md)。
 
 活动中心注册 main_agent_advisory/prompt_suggestion，复用原分页、预算、request links 和故障隔离，导航定位候选与精确 request。未知/取消/结果未结算为 waiting；成功只表示提示词已生成并结算，原问题仍在时保留 needs_attention。
 
