@@ -35,6 +35,7 @@ export type Environment = {
   last_passed_activity_id?: string;
 };
 export type EnvironmentOptions = {
+  repair_prompt?: string;
   environment_readiness_required?: boolean;
   profiles: EnvironmentProfile[];
   environments: Environment[];
@@ -97,6 +98,7 @@ export function useEnvironmentReadiness() {
     true;
   return {
     ...query,
+    repairPrompt: configuration.data?.repair_prompt,
     data: query.data ?? configuration.data,
     observed: !!query.data,
     verified,
