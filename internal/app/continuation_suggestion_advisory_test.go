@@ -14,6 +14,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,59 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 )
+
+func TestContinuationSuggestionCurrentQuestionReadIsExactAndReadOnly(t *testing.T) {
+	ctx := context.Background()
+	c, _ := nativeTaskFixture(t)
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "advisory.db"))
+	require(t, err)
+	defer store.Close()
+	source := suggestionbridge.Source{CandidateID: strings.Repeat("b", 32), Occurrence: "attempt:question", Revision: 1, Reason: "pending_question"}
+	id := suggestionbridge.SourceID(c.Identity(), source)
+	record := suggestionbridge.Record{Project: c.Identity(), ID: id, Revision: 1, Source: source, State: "ready", Settled: true, Suggestion: &contract.Suggestion{Prompt: "原建议\r\n保留字节"}}
+	raw, err := json.Marshal(record)
+	require(t, err)
+	require(t, store.SaveAdvisory(ctx, c.Identity(), id, source.CandidateID, raw, 0))
+	p := &continuationSuggestionPort{config: c, service: &suggestionbridge.Service{Project: c.Identity(), Store: store}}
+	for _, test := range []struct {
+		candidate, occurrence string
+		found                 bool
+	}{
+		{source.CandidateID, source.Occurrence, true},
+		{source.CandidateID, "old-attempt:question", false},
+		{source.CandidateID, "attempt:other-question", false},
+		{strings.Repeat("c", 32), source.Occurrence, false},
+	} {
+		out, err := p.read(ctx, "/main-agent", url.Values{"candidate_id": {test.candidate}, "occurrence": {test.occurrence}})
+		require(t, err)
+		encoded, err := json.Marshal(out)
+		require(t, err)
+		var response struct {
+			Record *suggestionbridge.Detail `json:"record"`
+		}
+		require(t, json.Unmarshal(encoded, &response))
+		if (response.Record != nil) != test.found {
+			t.Fatalf("wrong question selected: %s", encoded)
+		}
+		if test.found && (response.Record.Occurrence != source.Occurrence || response.Record.Prompt != record.Suggestion.Prompt) {
+			t.Fatal(response)
+		}
+	}
+	for _, values := range []url.Values{
+		{"candidate_id": {source.CandidateID}, "occurrence": {""}},
+		{"candidate_id": {"bad"}, "occurrence": {source.Occurrence}},
+		{"candidate_id": {source.CandidateID}, "occurrence": {source.Occurrence, source.Occurrence}},
+	} {
+		if _, err := p.read(ctx, "/main-agent", values); err == nil {
+			t.Fatal("invalid source accepted", values)
+		}
+	}
+	after, _, err := store.LoadAdvisory(ctx, c.Identity(), id)
+	require(t, err)
+	if !bytes.Equal(raw, after) {
+		t.Fatal("GET changed advisory")
+	}
+}
 
 func TestContinuationSuggestionConfigurationFreezesAtPreparation(t *testing.T) {
 	ctx := context.Background()

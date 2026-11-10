@@ -717,6 +717,11 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				return err
 			}
 		}
+		if e.ID == "runtime.async-activities" {
+			if err := checkActivityReadingEvidence(filepath.Join(out, "scenarios", e.ID)); err != nil {
+				return err
+			}
+		}
 		if e.ID == "testing.management-local-codex" {
 			if evidence.Testing == nil {
 				return errors.New("missing test management proof")

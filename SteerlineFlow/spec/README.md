@@ -2,6 +2,8 @@
 
 Roadmap 按任务并行生成（2026-11-10，已实现并通过自动验证）：[Spec](roadmap-per-task-generation.spec.md) · [Plan](../plans/roadmap-per-task-generation.plan.md) · [测试安排](../plans/roadmap-per-task-generation.tests.json) · [专属验收](../testing/acceptance/roadmap-per-task-generation.md)。确认前补齐整批任务与协作契约，确认后每任务独立 Run/session，复用共享额度并行生成，失败项单独重生成，程序汇总后整批审阅发布；由当前聊天直接实现，测试及独立审核见专属验收，不启动 roadmap。
 
+活动中心独立阅读页（2026-11-10，已实现，必要验证及独立代码审核修复完成）：[Spec](activity-reading-page.spec.md) · [Plan](../plans/activity-reading-page.plan.md) · [测试选择](../plans/activity-reading-page.tests.json) · [专属验收记录](../testing/acceptance/activity-reading-page.md)。当前项目活动双栏阅读、最近可读快照及历史交互按需索引/正文读取；明确公开来源、采样缺口与只读边界，效率与解耦优先，未部署、不启动 roadmap，人工体验待安排。
+
 SteerAgent 分类收敛（2026-11-10，分类收敛已实施、本期验收完成）：[Spec](steer-agent-classification.spec.md) · [Plan](../plans/steer-agent-classification.plan.md) · [测试选择](../plans/steer-agent-classification.tests.json) · [审计与专属验收](../testing/acceptance/steer-agent-classification.md)。仅收敛分类、命名、配置归属及现有接线，不扩展智能能力或 Runner 协议，不启动 roadmap。
 
 WebUI 信息精简与进度展示（2026-11-10，已实施、自动验收及独立代码审计通过，未部署）：[Spec](web-ui-simplification.spec.md) · [Plan](../plans/web-ui-simplification.plan.md) · [测试安排](../plans/web-ui-simplification.tests.json) · [专属验收与审计](../testing/acceptance/web-ui-simplification.md)。执行详情收敛为进度、动态、测试与审查、交付四区，同步精简 DAG、Roadmap、环境、活动与全局栏；保留等待重试、问题与阻塞、真实计数和陈旧提示，技术定位沿用复制执行信息。文档及代码审计发现均已修复复核；Web 406/406、L1/L2、七项浏览器和活动整链通过，人工体验后置，不启动 roadmap。

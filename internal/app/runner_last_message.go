@@ -31,6 +31,10 @@ func (r *clientReader) LastMessage(ctx context.Context, candidateID, execution, 
 	if !strings.EqualFold(filepath.Clean(candidate.StateDir), filepath.Clean(cli.StateDir)) {
 		return view, errors.New("Runner state directory differs from the fixed candidate")
 	}
+	if config.runtimeMessages != nil {
+		writer, _ := r.store.(messageObservationWriter)
+		return config.runtimeMessages.observe(ctx, candidate, cli, writer, false)
+	}
 	response, err := cli.Call(ctx, "last-message", []string{"--run-id", execution}, nil)
 	if err != nil {
 		return view, err

@@ -166,6 +166,26 @@ func TestRoadmapBrowserRoutes(t *testing.T) {
 	}
 }
 
+func TestActivityReadingBrowserDeepLinkAndReadProxy(t *testing.T) {
+	s, client := fixture(t)
+	if w := request(s, "GET", "/projects/"+client.identity.ProjectID+"/activities?activity=original", "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {
+		t.Fatal("activity reading deep link did not serve SPA", w.Code, w.Body.String())
+	}
+	cookie, _ := login(t, s)
+	base := "/api/v2/application/projects/" + client.identity.ProjectID
+	for _, path := range []string{"/activities?filter=history", "/activities/original", "/activities/original/interactions?limit=50", "/activities/original/changes", "/activities/original/body?item=final&offset=0&sha256=" + strings.Repeat("a", 64)} {
+		if w := request(s, "GET", base+path, "", cookie, ""); w.Code != 200 || client.route != "/projects/"+client.identity.ProjectID+path {
+			t.Fatal("activity read not forwarded", w.Code, w.Body.String(), client.route)
+		}
+		if w := request(s, "GET", base+path, "", nil, ""); w.Code != 401 {
+			t.Fatal("activity read bypassed authentication", w.Code)
+		}
+	}
+	if w := request(s, "GET", "/projects/"+client.identity.ProjectID+"/activities/private", "", nil, ""); w.Code != 404 {
+		t.Fatal("unknown nested activity route served", w.Code)
+	}
+}
+
 func TestLegacyCheckRetirementBrowserRoutes(t *testing.T) {
 	s, client := fixture(t)
 	base := "/projects/" + client.identity.ProjectID

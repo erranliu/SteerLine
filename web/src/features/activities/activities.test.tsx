@@ -413,3 +413,51 @@ it("copies a concise roadmap identity reference without source paths or diagnost
   expect(writeText.mock.calls[0][0]).not.toContain("SteerlineFlow");
   expect(writeText.mock.calls[0][0]).not.toContain("long diagnostic");
 });
+
+it("passes the original activity identity from a drawer card to the independent reading page", async () => {
+  const api = new Api(identity, "csrf", "home");
+  const reads = vi.spyOn(api, "get").mockResolvedValue(page([activity]));
+  const client = testClient();
+  clients.push(client);
+  const router = createMemoryRouter(
+    [
+      {
+        path: "*",
+        element: (
+          <WorkspaceContext.Provider
+            value={
+              { api, identity, online: true } as ReturnType<typeof useWorkspace>
+            }
+          >
+            <Activities />
+            <main>
+              <h1>destination</h1>
+            </main>
+          </WorkspaceContext.Provider>
+        ),
+      },
+    ],
+    { initialEntries: ["/original"] },
+  );
+  render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: /活动 · 1 项进行中/ }),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "在独立页阅读" }));
+  await waitFor(() =>
+    expect(router.state.location.pathname + router.state.location.search).toBe(
+      "/projects/project/activities?activity=formal",
+    ),
+  );
+  expect(screen.queryByRole("region", { name: /活动中心/ })).toBeNull();
+  expect(
+    reads.mock.calls.some(
+      ([path]) => path.includes("/interactions") || path.includes("/body"),
+    ),
+  ).toBe(false);
+  router.dispose();
+});

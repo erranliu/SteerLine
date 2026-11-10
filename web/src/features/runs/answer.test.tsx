@@ -1,6 +1,6 @@
 import { afterEach, it, expect, vi } from "vitest";
 import {
-  render,
+  render as testingRender,
   screen,
   fireEvent,
   waitFor,
@@ -9,10 +9,24 @@ import {
 } from "@testing-library/react";
 import { WorkspaceContext, type Workspace } from "../../app/context";
 import { Api } from "../../shared/api/client";
-import type { Candidate, Identity } from "../../shared/api/types";
+import type { Candidate, Identity, Envelope } from "../../shared/api/types";
 import { readDraft } from "../../shared/api/journal";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactNode } from "react";
+import { testClient } from "../../test/workspace";
 import { Answer, draftKey } from "./answer";
 afterEach(cleanup);
+function render(ui: ReactNode) {
+  const client = testClient();
+  return testingRender(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter>{children}</MemoryRouter>
+      </QueryClientProvider>
+    ),
+  });
+}
 it("submits native multi-question JSON once without duplicating it as a note", async () => {
   const api = new Api(
     { project_id: "native-multi", instance_id: "original" } as Identity,
@@ -20,27 +34,62 @@ it("submits native multi-question JSON once without duplicating it as a note", a
   );
   vi.spyOn(api, "get").mockResolvedValue({});
   const send = vi.fn().mockResolvedValue(true);
-  const workspace = { api, identity: api.identity, online: true, busy: false, send } as unknown as Workspace;
+  const workspace = {
+    api,
+    identity: api.identity,
+    online: true,
+    busy: false,
+    send,
+    submit: async (e: Envelope) => {
+      await send(e.action, e.target_id, e.expected_version, e.payload);
+      return { ...e, original: e, status: "applied", sampled_at: "now" };
+    },
+  } as unknown as Workspace;
   const run = {
-    run_id: "candidate", execution_id: "original-run", attempt_id: "original-attempt",
-    participation: "active", submission_status: "accepted", stop_requested: false,
-    control_revision: 4, recovery_version: 7, workflow_status: "waiting_input", task_status: "in_progress",
-    decision: { id: "native-question", version: 7, status: "pending", request: {
-      question: "回答全部问题", context: "color: 颜色\nred: 红色\ndetails: 说明",
-      options: [], has_native_questions: true,
-    } },
+    run_id: "candidate",
+    execution_id: "original-run",
+    attempt_id: "original-attempt",
+    participation: "active",
+    submission_status: "accepted",
+    stop_requested: false,
+    control_revision: 4,
+    recovery_version: 7,
+    workflow_status: "waiting_input",
+    task_status: "in_progress",
+    decision: {
+      id: "native-question",
+      version: 7,
+      status: "pending",
+      request: {
+        question: "回答全部问题",
+        context: "color: 颜色\nred: 红色\ndetails: 说明",
+        options: [],
+        has_native_questions: true,
+      },
+    },
   } as unknown as Candidate;
-  render(<WorkspaceContext.Provider value={workspace}><Answer run={run} /></WorkspaceContext.Provider>);
-  await waitFor(() => expect(screen.getByRole("button", { name: "打开回答" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "打开回答" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "回答内容" }), { target: { value: '{"color":["red"],"details":["保留原任务"]}' } });
-  fireEvent.click(screen.getByRole("button", { name: "提交回答" }));
+  render(
+    <WorkspaceContext.Provider value={workspace}>
+      <Answer run={run} />
+    </WorkspaceContext.Provider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "回答内容" }), {
+    target: { value: '{"color":["red"],"details":["保留原任务"]}' },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "回复并继续" }));
   await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
   const payload = send.mock.calls[0][3];
-  expect(payload.answers).toEqual({color: ["red"], details: ["保留原任务"]});
+  expect(payload.answers).toEqual({ color: ["red"], details: ["保留原任务"] });
   expect(payload).not.toHaveProperty("note");
   expect(payload).not.toHaveProperty("option_id");
-  expect(payload).toMatchObject({run_id: "candidate", source_attempt_id: "original-attempt", expected_run_revision: 4});
+  expect(payload).toMatchObject({
+    run_id: "candidate",
+    source_attempt_id: "original-attempt",
+    expected_run_revision: 4,
+  });
 });
 it("keeps Chinese composition/Enter separate from explicit submit and original candidate drafts", async () => {
   const api = new Api(
@@ -55,7 +104,10 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
     online: true,
     busy: false,
     send,
-    submit: (envelope) => api.submit(envelope),
+    submit: async (e: Envelope) => {
+      await send(e.action, e.target_id, e.expected_version, e.payload);
+      return { ...e, original: e, status: "applied", sampled_at: "now" };
+    },
     refresh: () => {},
   } as Workspace;
   const candidate = {
@@ -92,13 +144,12 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
   );
   const view = render(draw(candidate));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "打开回答" })).toBeEnabled(),
+    expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "打开回答" }));
   const input = screen.getByRole("textbox", { name: "回答内容" });
   fireEvent.change(input, { target: { value: "中文回答\n第二行" } });
   fireEvent.compositionStart(input);
-  expect(screen.getByRole("button", { name: "提交回答" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "回复并继续" })).toBeDisabled();
   fireEvent.keyDown(input, { key: "Enter", isComposing: true });
   expect(send).not.toHaveBeenCalled();
   fireEvent.compositionEnd(input);
@@ -119,21 +170,19 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
   };
   view.rerender(draw(other));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "打开回答" })).toBeEnabled(),
+    expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "打开回答" }));
   expect(screen.getByRole("textbox", { name: "回答内容" })).toHaveValue("");
   view.rerender(draw(candidate));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "打开回答" })).toBeEnabled(),
+    expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "打开回答" }));
   await waitFor(() =>
     expect(screen.getByRole("textbox", { name: "回答内容" })).toHaveValue(
       "中文回答\n第二行",
     ),
   );
-  fireEvent.click(screen.getByRole("button", { name: "提交回答" }));
+  fireEvent.click(screen.getByRole("button", { name: "回复并继续" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "answer_decision",
@@ -157,11 +206,12 @@ it.each(["unmount", "offline", "revision", "collapse"])(
       "csrf",
     );
     let resolve!: (value: unknown) => void;
-    const get = vi.spyOn(api, "get").mockImplementation(
-      () =>
-        new Promise((done) => {
-          resolve = done;
-        }),
+    const get = vi.spyOn(api, "get").mockImplementation((path) =>
+      path.includes("decision-eligibility")
+        ? (new Promise((done) => {
+            resolve = done;
+          }) as never)
+        : (Promise.resolve({ record: null }) as never),
     );
     const send = vi.fn();
     const workspace = {
@@ -170,6 +220,10 @@ it.each(["unmount", "offline", "revision", "collapse"])(
       online: true,
       busy: false,
       send,
+      submit: async (e: Envelope) => {
+        await send(e.action, e.target_id, e.expected_version, e.payload);
+        return { ...e, original: e, status: "applied", sampled_at: "now" };
+      },
     } as unknown as Workspace;
     const run = {
       run_id: "run",
@@ -201,14 +255,19 @@ it.each(["unmount", "offline", "revision", "collapse"])(
     );
     const view = render(draw());
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "打开回答" })).toBeEnabled(),
+      expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
     );
-    fireEvent.click(screen.getByRole("button", { name: "打开回答" }));
     fireEvent.change(screen.getByRole("textbox", { name: "回答内容" }), {
       target: { value: "保留原候选" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "提交回答" }));
-    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "回复并继续" }));
+    await waitFor(() =>
+      expect(
+        get.mock.calls.filter(([path]) =>
+          path.includes("decision-eligibility"),
+        ),
+      ).toHaveLength(1),
+    );
     if (reason === "unmount") view.unmount();
     else if (reason === "collapse")
       fireEvent.click(screen.getByRole("button", { name: "收起" }));

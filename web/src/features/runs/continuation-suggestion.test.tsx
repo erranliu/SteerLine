@@ -18,6 +18,7 @@ const ready: AdvisoryDetail = {
   id: "a".repeat(32),
   revision: 2,
   candidate_id: candidate.run_id,
+  occurrence: "attempt:question",
   state: "ready",
   settled: true,
   prompt: "请根据已提供的要求，继续讨论缺少的产品决定。",

@@ -61,7 +61,7 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 
 | 格式或事实 | 当前来源 |
 | --- | --- |
-| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 41`；数值只在此表定位，正文不保留旧版本副本 |
+| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 45`；数值只在此表定位，正文不保留旧版本副本 |
 | 项目契约配置 | [app/config.go](../../internal/app/config.go) 要求显式 `task_authority=native`、`workflow_protocol=worker-flow-v2`；后者不代表 Runner 当前 workflow 版本 |
 | 全局执行配置 | [executionconfig](../../internal/executionconfig/config.go) 的严格解码与版本校验；构建选择由 [app](../../internal/app/runner_config.go) 校验 |
 | TaskContract 与 DAG | [taskcontract](../../internal/taskcontract) 的结构及 [task/model](../../internal/task/model) 的规则 |
@@ -75,4 +75,8 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 
 ## 异步活动只读投影
 
-`preparation_batches` 按项目与批次 ID 保存原准备事实和业务结果快照；`maintenance_settings.generation_batch` 只保存当前批次 ID。`preparation_associations` 保存原 TaskID/Inputs/GenerationID，随生成初次登记事务在外部提交前绑定，历史批次不被新引用覆盖。`source_observations` 独立保存最近成功观察及错误，不递增业务版本或赋予执行权限。查询返回来源事实，由产品 query 只读聚合；不存在统一活动业务写表或调度器。完整职责与接入约定见[异步活动中心](async-activities.md)。
+当前活动来源为检测、显式主分支检查、候选、Roadmap 和提示词建议；原测试准备批次及关联已退役。`source_observations` 独立保存最近成功观察及错误，不递增业务版本或赋予执行权限。
+
+独立阅读页的 `reading_fields` 只保存原记录字段指针、来源身份、512 字节预览、长度/摘要和显示元数据，正文仍归原持久记录；其拥有者在原事务维护索引。`reading_versions` 只为跨来源关联的读取索引提供廉价变化标记，不是业务 revision、消息增量流或执行 checkpoint。`message_observations` 仅按候选原 Run/Attempt/session 保存最后一条合法 assistant 样本及错误，不保存采样历史、不授予执行能力。新 schema 拒绝旧格式，不增加迁移或双写。
+
+查询返回来源事实，由产品 query 只读聚合；不存在统一活动业务写表或调度器。完整职责与接入约定见[异步活动中心](async-activities.md)。

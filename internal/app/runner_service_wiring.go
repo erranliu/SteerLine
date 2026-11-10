@@ -69,6 +69,11 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		return config.prepareTestPlan(ctx, work, run)
 	}
 	service.Bridge = &runnerbridge.Bridge{Store: connection, Client: func(string) runnerbridge.CLI { return cli }}
+	if config.runtimeMessages != nil {
+		service.Bridge.Observed = func(ctx context.Context, c runnerbridge.Candidate) {
+			bindMessageObserver(config, connection, cli, c, ctx)
+		}
+	}
 	timeout := positiveDuration(config.CommandTimeout, 30*time.Second)
 	prTimeout := min(timeout, 30*time.Second)
 	pr := publication.QueryClient{Command: commandRunner{Timeout: prTimeout, ProcessHost: config.ProcessHost}, Timeout: prTimeout}

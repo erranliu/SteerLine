@@ -139,3 +139,165 @@ test("activity drawer observes the owned project without driving execution", asy
     ),
   );
 });
+
+test("independent activity page reads conversation and bodies only on demand", async ({
+  page,
+}) => {
+  const web = process.env.STEERLINE_ACTIVITIES_WEB,
+    home = process.env.STEERLINE_ACTIVITIES_HOME,
+    project = process.env.STEERLINE_ACTIVITIES_PROJECT,
+    output = process.env.STEERLINE_WEB_EVIDENCE;
+  if (
+    !web ||
+    !home ||
+    !project ||
+    !output ||
+    !resolve(home, "../..").endsWith("runtime.async-activities")
+  )
+    throw new Error("explicit isolated activities inputs required");
+  const opening = execFileSync(web, ["open", "-print-url"], {
+    env: { ...process.env, STEERLINE_HOME: home },
+    encoding: "utf8",
+    timeout: 30000,
+  }).trim();
+  await page.goto(opening);
+  const response = await page.request.get(
+    new URL(
+      `/api/v2/application/projects/${project}/activities?filter=ongoing`,
+      page.url(),
+    ).href,
+  );
+  expect(response.ok()).toBe(true);
+  const activities = await response.json();
+  const candidate = activities.items.find(
+    (a: { source: string }) => a.source === "task_candidate",
+  );
+  expect(candidate).toBeTruthy();
+  const requests = { indexes: 0, bodies: 0, changes: 0, history: 0 };
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.includes("/activities/") && url.includes("/interactions?"))
+      requests.indexes++;
+    if (url.includes("/activities/") && url.includes("/body?"))
+      requests.bodies++;
+    if (url.includes("/activities/") && url.endsWith("/changes"))
+      requests.changes++;
+    if (url.includes("/activities?filter=history")) requests.history++;
+  });
+  await page.goto(
+    new URL(
+      `/projects/${project}/activities?activity=${encodeURIComponent(candidate.activity_id)}`,
+      page.url(),
+    ).href,
+  );
+  const reader = page.getByRole("region", {
+    name: "活动中心独立页",
+    exact: true,
+  });
+  await expect(
+    reader.getByRole("heading", { name: candidate.title, exact: true }),
+  ).toBeVisible();
+  expect(requests.indexes).toBe(0);
+  expect(requests.bodies).toBe(0);
+  const firstIndex = page.waitForResponse(
+    (r) => r.url().includes("/interactions?") && r.request().method() === "GET",
+  );
+  await reader
+    .getByRole("button", { name: "查看已记录交互", exact: true })
+    .click();
+  const indexResponse = await firstIndex;
+  expect(indexResponse.ok()).toBe(true);
+  const index = await indexResponse.json();
+  await expect(
+    reader.getByRole("region", { name: "已记录的交互", exact: true }),
+  ).toBeVisible();
+  expect(requests.indexes).toBe(1);
+  expect(requests.bodies).toBe(0);
+  await expect
+    .poll(() => requests.changes, { timeout: 15000 })
+    .toBeGreaterThanOrEqual(2);
+  expect(requests.indexes).toBe(1);
+  expect(requests.bodies).toBe(0);
+  const expand = reader.getByRole("button", { name: "展开正文", exact: true });
+  if (await expand.count()) {
+    const bodyResponse = page.waitForResponse(
+      (r) => r.url().includes("/body?") && r.request().method() === "GET",
+    );
+    await expand.first().click();
+    expect((await bodyResponse).ok()).toBe(true);
+    expect(requests.bodies).toBe(1);
+  } else {
+    expect(
+      index.items.every(
+        (item: { preview: string; bytes: number }) =>
+          Buffer.byteLength(item.preview, "utf8") === item.bytes,
+      ),
+    ).toBe(true);
+  }
+  for (const width of [1440, 768, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(
+      reader.getByRole("button", { name: "收起已记录交互", exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: join(output, `activity-reading-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await reader
+    .getByRole("button", { name: "返回活动列表", exact: true })
+    .click();
+  const card = reader
+    .locator(".reading-select")
+    .filter({ hasText: candidate.title })
+    .first();
+  await card.focus();
+  await page.keyboard.press("Enter");
+  const back = reader.getByRole("button", {
+    name: "返回活动列表",
+    exact: true,
+  });
+  await expect(back).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(card).toBeFocused();
+  await reader.getByRole("button", { name: /^历史/ }).click();
+  await expect(reader.getByRole("button", { name: /^历史/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect.poll(() => requests.history).toBeGreaterThan(0);
+  const historyReads = requests.history;
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("blur"));
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(
+    reader.getByRole("heading", { name: "活动中心", exact: true }),
+  ).toBeVisible();
+  expect(requests.history).toBe(historyReads);
+  expect(requests.indexes).toBe(1);
+  writeFileSync(
+    join(output, "activity-reading-proof.json"),
+    JSON.stringify(
+      {
+        passed: true,
+        summary_only_default: true,
+        deep_link_collapsed: true,
+        explicit_index_page: true,
+        no_automatic_index_paging: true,
+        explicit_body_or_complete_preview: true,
+        history_no_focus_refetch: true,
+        narrow_keyboard_navigation: true,
+        viewport_widths: [1440, 768, 320],
+        requests,
+      },
+      null,
+      2,
+    ),
+  );
+});

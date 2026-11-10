@@ -32,6 +32,7 @@ type AsyncActivity struct {
 	Progress           *AsyncActivityProgress    `json:"progress,omitempty"`
 	Details            AsyncActivityDetails      `json:"details_ref"`
 	Execution          ExecutionReference        `json:"execution_ref"`
+	Message            *ReadingPreview           `json:"message,omitempty"`
 }
 
 // ExecutionReference contains only public identities for locating original work.

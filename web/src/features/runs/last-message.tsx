@@ -4,6 +4,7 @@ import { useWorkspace } from "../../app/context";
 import { projectQueries } from "../../shared/api/queries";
 import { useQueryVisibility } from "../../shared/query-visibility";
 import type { Candidate } from "../../shared/api/types";
+import { sameNotice } from "./presentation";
 
 function age(at: string, now: number) {
   const seconds = Math.max(0, Math.floor((now - Date.parse(at)) / 1000));
@@ -16,7 +17,13 @@ function age(at: string, now: number) {
 
 // Mounted only for the selected execution. Visibility controls requests as well
 // as timers, including cancellation of an already in-flight request.
-export function LastMessage({ run }: { run: Candidate }) {
+export function LastMessage({
+  run,
+  answerVisible = !!run.decision,
+}: {
+  run: Candidate;
+  answerVisible?: boolean;
+}) {
   const { api, online } = useWorkspace();
   const [now, setNow] = useState(Date.now());
   const options = projectQueries(api).lastMessage(run);
@@ -75,7 +82,13 @@ export function LastMessage({ run }: { run: Candidate }) {
             · {age(sample.observed_at, now)}
           </p>
           <pre ref={body} className={expanded ? "" : "message-preview"}>
-            {sample.text}
+            {answerVisible &&
+            [
+              run.decision?.request.question,
+              run.decision?.request.context,
+            ].some((text) => sameNotice(text, sample.text))
+              ? "与上方原问题相同，请在回答区查看。"
+              : sample.text}
           </pre>
           {(overflow || expanded) && (
             <button

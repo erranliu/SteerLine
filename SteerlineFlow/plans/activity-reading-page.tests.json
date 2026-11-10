@@ -1,0 +1,10 @@
+{
+  "tests": [
+    "l1.minimum",
+    "smoke.delivery",
+    "go.storage",
+    "go.http",
+    "web.unit",
+    "runtime.async-activities"
+  ]
+}

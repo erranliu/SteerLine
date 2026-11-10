@@ -102,7 +102,7 @@
     "level": "L3",
     "suite": "runtime",
     "package": "./tests/e2e/suites/runtime",
-    "test": "TestAsyncActivities",
+    "test": "TestAsyncActivitiesAndReadingPage",
     "env": "controlled"
   },
   {

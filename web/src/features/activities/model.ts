@@ -3,6 +3,7 @@ import type { CandidateStart } from "../../app/use-candidate-starts";
 import type { ExecutionReference } from "./execution-info";
 
 export type ActivityFilter = "ongoing" | "attention" | "recent";
+export type ActivityListFilter = ActivityFilter | "history";
 export type Activity = {
   activity_id: string;
   project_id: string;
@@ -23,6 +24,14 @@ export type Activity = {
   source_observed_at?: string;
   observation: string;
   provisional?: boolean;
+  message?: {
+    kind: string;
+    text: string;
+    at?: string;
+    observed_at?: string;
+    truncated: boolean;
+    diagnostic?: string;
+  };
   progress?: {
     label: string;
     total: number;
@@ -45,7 +54,7 @@ export type ActivityPage = {
   sampled_at: string;
   items: Activity[];
   request_links: Record<string, Activity>;
-  counts: Record<ActivityFilter, number>;
+  counts: Record<ActivityFilter, number> & { history?: number };
   counts_known: boolean;
   sources: { source: string; complete: boolean; diagnostic?: string }[];
   next_cursor?: string;

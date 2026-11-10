@@ -187,3 +187,9 @@ L1/L2 为实现后的固定必要回归，不因本次文档静态检查而提�
 本轮实际受测版本为 `67a33690` 加上述未提交精简差异，原报告保留 dirty 状态。prompts/roadmap owner 为112项 passed/complete、零失败/零测试跳过；完整 L1 `formal/prompt-slim-l1-20261110-1830/summary.json` 和完整 L2 `formal/prompt-slim-l2-20261110-1830/summary.json` 均已通过。链接检查748份 Markdown / 4653个本地导航链接、0错误，`git diff --check` 通过。测试完成后独立只读子 agent `/root/audit_prompt_slimming` 开始审核，本地批准结论待实际返回。
 
 独立审核实际结论：`/root/audit_prompt_slimming` 只读审阅本轮全部差异、原正文、实际请求组装、schema/服务端验证及上述原报告，未发现可确认问题，本地提示词审核通过。必要职责保留，删减属于重复说明或审计式提醒；两份静态副本逐字节一致，黄金样本与渲染正文一致，摘要及六组字节数匹配，专属差异文件与实际 Git diff 完全一致。独立核实 L2 的 `TestDeliverySmoke` 实际非零执行、组内 passed/complete 且 `cleanup_complete=true`。没有新增规则、测试或框架；此结论不代表 GitHub 平台审批。
+
+## PR494 合并冲突处理
+
+用户要求解决冲突后，将最新 `origin/main`（`9334bef8`，含 PR495/496）合入当前分支，保留已有提交历史。唯一文本冲突是 Spec 索引首部的两条新增记录，完整保留 Roadmap 按任务生成和活动阅读页两项入口。自动合并的 Roadmap 存储同时保留执行历史校验与阅读索引写入，活动最小投影保留 generations 原生状态/恢复标记及 main 新增轻量阅读信息；提示词正文、组装、黄金样本与本地独立审核范围均未改变。
+
+本轮按整合影响补测，不重跑无关完整集合：`diagnostics/merge-main-9334bef8/summary.json` 对 SQLite、产品查询及 Roadmap 的活动、阅读、Roadmap 和 schema 定向用例通过；前端 Roadmap、活动列表和活动阅读页三文件66项通过，生产构建通过。文档链接检查752份 Markdown / 4691个本地导航链接、0错误。原始受测版本为 `d4614273` 加合并中差异；前述 L1/L2、提示词及真实模型证据保留原版本和范围。

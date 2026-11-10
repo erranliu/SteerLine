@@ -12,6 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -22,6 +23,8 @@ import (
 // Its retry semantics match the caller contract: only an unconfirmed stop may
 // repeat, with the same request ID; a failed final read can be read again.
 type applicationRunner struct {
+	messages          *messageObserver
+	readingBodies     *query.ReadingBodyCache
 	native            *runnerclient.ConfigurationSnapshot
 	generations       *runnerbinding.ContentQueue
 	environments      *environmentAdmission
@@ -44,6 +47,8 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	}
 	limit, _ := executionconfig.GenerateConcurrency(g.MaxGenerateConcurrency)
 	r.generations = runnerbinding.NewContentQueue(limit)
+	r.messages = newMessageObserver()
+	r.readingBodies = query.NewReadingBodyCache()
 	r.environments = &environmentAdmission{projects: map[string]Config{}}
 	if err := runnerstatepath.Validate(home); err != nil {
 		return err

@@ -11,6 +11,23 @@ afterEach(() => {
   vi.useRealTimers();
 });
 const at = "2026-10-15T10:00:00Z";
+it("points duplicate messages to the question while retaining a different message", async () => {
+  const api = new Api(identity, "csrf", "dedup-message");
+  const client = testClient();
+  const candidate = {
+    ...run,
+    decision: { request: { question: "原问题\r\n待决定", context: "上下文" } },
+  } as typeof run;
+  vi.spyOn(api, "get").mockResolvedValue(
+    view(run.execution_id, run.attempt_id, "原问题\n待决定"),
+  );
+  mountFeature(<LastMessage run={candidate} />, api, client);
+  expect(
+    await screen.findByText("与上方原问题相同，请在回答区查看。"),
+  ).toBeVisible();
+  expect(screen.queryByText("原问题\n待决定")).toBeNull();
+  client.clear();
+});
 function view(
   execution = run.execution_id,
   attempt = run.attempt_id,

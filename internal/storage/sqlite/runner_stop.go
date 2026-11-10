@@ -58,7 +58,7 @@ func (s *SQLiteStore) StopRunnerCandidate(ctx context.Context, project, id strin
 			return err
 		}
 		result = c
-		return nil
+		return indexCandidateReading(ctx, tx.tx, runnerstate.Candidate{}, c, nil)
 	})
 	if errors.Is(err, errAtomicReplay) {
 		err = nil

@@ -21,6 +21,7 @@ type AsyncActivityRead struct {
 	AfterID    string
 	Limit      int
 	RequestIDs []string
+	SourceID   string
 }
 type AsyncActivityReader interface {
 	// Implementations must honor context during pool waits, SQL and decoding.

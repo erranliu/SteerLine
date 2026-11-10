@@ -156,10 +156,17 @@ export async function recordResult(
   });
 }
 export async function readDraft(key: string) {
-  return transaction<string>("drafts", "readonly", (store, done) => {
-    const req = store.get(key);
-    req.onsuccess = () => done(req.result ?? "");
-  });
+  return (await readDraftValue(key)) ?? "";
+}
+export async function readDraftValue(key: string) {
+  return transaction<string | undefined>(
+    "drafts",
+    "readonly",
+    (store, done) => {
+      const req = store.get(key);
+      req.onsuccess = () => done(req.result);
+    },
+  );
 }
 export async function writeDraft(key: string, value: string) {
   return transaction<void>("drafts", "readwrite", (store, done) => {

@@ -23,6 +23,18 @@ func (s *SQLiteStore) SaveAdvisory(ctx context.Context, project, id, candidate s
 	if s.readOnly || project == "" || !contract.ID.MatchString(id) || !contract.ID.MatchString(candidate) || !json.Valid(raw) {
 		return errors.New("invalid advisory storage identity or payload")
 	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = saveAdvisoryReadingTx(ctx, tx, project, id, candidate, raw, expected); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func saveAdvisoryReadingTx(ctx context.Context, tx *sql.Tx, project, id, candidate string, raw []byte, expected uint64) error {
 	var binding struct {
 		Project  string
 		ID       string
@@ -38,7 +50,7 @@ func (s *SQLiteStore) SaveAdvisory(ctx context.Context, project, id, candidate s
 		return errors.New("advisory storage identity mismatch")
 	}
 	if expected == 0 {
-		result, err := s.db.ExecContext(ctx, `INSERT INTO advisory_jobs(project_identity,request_id,candidate_id,revision,payload) VALUES(?,?,?,?,?) ON CONFLICT(project_identity,request_id) DO NOTHING`, project, id, candidate, binding.Revision, raw)
+		result, err := tx.ExecContext(ctx, `INSERT INTO advisory_jobs(project_identity,request_id,candidate_id,revision,payload) VALUES(?,?,?,?,?) ON CONFLICT(project_identity,request_id) DO NOTHING`, project, id, candidate, binding.Revision, raw)
 		if err != nil {
 			return err
 		}
@@ -46,9 +58,12 @@ func (s *SQLiteStore) SaveAdvisory(ctx context.Context, project, id, candidate s
 		if err == nil && n != 1 {
 			return contract.ErrConflict
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return indexAdvisoryReading(ctx, tx, project, id, raw)
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE advisory_jobs SET revision=?,payload=? WHERE project_identity=? AND request_id=? AND candidate_id=? AND revision=?`, binding.Revision, raw, project, id, candidate, expected)
+	result, err := tx.ExecContext(ctx, `UPDATE advisory_jobs SET revision=?,payload=? WHERE project_identity=? AND request_id=? AND candidate_id=? AND revision=?`, binding.Revision, raw, project, id, candidate, expected)
 	if err != nil {
 		return err
 	}
@@ -56,7 +71,10 @@ func (s *SQLiteStore) SaveAdvisory(ctx context.Context, project, id, candidate s
 	if err == nil && n != 1 {
 		return contract.ErrConflict
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return indexAdvisoryReading(ctx, tx, project, id, raw)
 }
 func (s *SQLiteStore) AdvisoryIDs(ctx context.Context, project, scope string) ([]string, error) {
 	where := ""
