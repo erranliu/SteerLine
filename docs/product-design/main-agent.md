@@ -1,16 +1,18 @@
-# 主 Agent：给定材料的后续对话提示词建议
+# 对话续作：给定材料的后续对话提示词建议
 
-状态：已接入现有 Runner generate/1，本地 Codex 只读生成；未合并、未部署。正式契约见[Spec](../../SteerlineFlow/spec/main-agent-advisory.spec.md)、[Plan](../../SteerlineFlow/plans/main-agent-advisory.plan.md)，实际验证与未验项见[验收](../../SteerlineFlow/testing/acceptance/main-agent-advisory.md)。用户已明确放宽此前严格零工具要求，并选择直接接入开发候选的明确待答问题。
+状态：已随 [PR #478](https://github.com/erranliu/SteerLine/pull/478) 合并，接入现有 Runner generate/1，本地 Codex 只读生成；未部署。正式契约见[Spec](../../SteerlineFlow/spec/main-agent-advisory.spec.md)、[Plan](../../SteerlineFlow/plans/main-agent-advisory.plan.md)，实际验证与未验项见[验收](../../SteerlineFlow/testing/acceptance/main-agent-advisory.md)。用户已明确放宽此前严格零工具要求，并选择直接接入开发候选的明确待答问题。
+
+按 [SteerAgent 长期分类](steer-agent.md)，本文能力归对话续作中的建议生成。当前模块已按建议产物重归，专用设置为平铺 continuation_suggestion；实际分类收敛范围及验证见[分类 Spec](../../SteerlineFlow/spec/steer-agent-classification.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/steer-agent-classification.md)。advisory-v1、原路由/命令/活动来源及提示资产名称保留，不代表具备其他类型能力。
 
 ## 模块和执行边界
 
-主 Agent 唯一业务产物是一段继续对话的提示词。使用者如何采用、修改或执行属于外部行为。核心只处理给定请求与文本结果；不持有 Runner、存储、Git、文件/网络/进程或业务命令。没有答案投递、材料 PR 或采用状态。
+建议模块唯一业务产物是一段继续对话的提示词。使用者如何采用、修改或执行属于外部行为。核心只处理给定请求与文本结果；不持有 Runner、存储、Git、文件/网络/进程或业务命令。没有答案投递、材料 PR 或采用状态。
 
 | 所有者 | 职责与稳定边界 |
 | --- | --- |
-| `internal/mainagent/contract` | stdlib-only advisory-v1 DTO、UTF-8/字段/数量/字节校验 |
-| `internal/mainagent` | 明确输入校验、固定提示词同包组装、唯一 prompt 校验，无外部读取或执行 |
-| `internal/mainagentbridge` | 异步作业、冻结请求、共享配额、原请求提交/观察、取消及结算 |
+| `internal/steeragent/suggestion/contract` | stdlib-only advisory-v1 DTO、UTF-8/字段/数量/字节校验 |
+| `internal/steeragent/suggestion` | 明确输入校验、固定提示词同包组装、唯一 prompt 校验，无外部读取或执行 |
+| `internal/steeragentbridge/suggestion` | 异步作业、冻结请求、共享配额、原请求提交/观察、取消及结算 |
 | app | 从原 owner 的持久候选投影读取明确待答与固定版本材料；组装本地 Codex 模型配置及恢复/停止接线 |
 | SQLite / 查询 / Web | payload/CAS与隔离、纯读活动投影、只读查看/复制/取消，不展示内部执行记录 |
 
@@ -40,4 +42,4 @@
 
 真实 SQLite 待答投影到后台、生成及活动的受控集成，以及一次真实 Runner/本地 Codex generate 已验证；最终全集结果和人工未验项以专属记录为准。真实链验证只做建议生成，不创建开发任务或真实 PR，不宣称严格零工具。SQLite schema 44，不迁移旧开发数据。
 
-后续自主业务执行必须经新契约、授权与验收显式扩展。advisory-v1 不预留 action/executor 或扩权开关，本轮不建设主 Agent 工作台。
+后续自主业务执行必须经新契约、授权与验收显式扩展。advisory-v1 不预留 action/executor 或扩权开关，多轮规划与持续维护按独立业务需求后续建设。

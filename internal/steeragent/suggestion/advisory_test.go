@@ -1,11 +1,11 @@
-package mainagent
+package suggestion
 
 import (
 	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 )
 
 func request() contract.Request {

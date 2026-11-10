@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/mainagent"
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 
@@ -31,7 +31,7 @@ type adviceView struct {
 
 // Only the public peer is scripted. Production APIs, owner observation, storage,
 // admission, asynchronous work and browser code are unchanged.
-func MainAgentAdvisory(s *Scenario) {
+func ContinuationSuggestionAdvisory(s *Scenario) {
 	p := s.NewProject("advisory")
 	var config map[string]any
 	raw, e := os.ReadFile(filepath.Join(p.Home, "execution.json"))
@@ -391,7 +391,7 @@ func MainAgentAdvisory(s *Scenario) {
 			if frozen.Context == nil {
 				s.t.Fatal("missing frozen context")
 			}
-			expected, err := mainagent.Prepare(contract.Request{Protocol: contract.Protocol, RequestID: advisoryID, Capability: contract.Capability, Context: *frozen.Context})
+			expected, err := suggestion.Prepare(contract.Request{Protocol: contract.Protocol, RequestID: advisoryID, Capability: contract.Capability, Context: *frozen.Context})
 			s.Must(err)
 			if instruction != expected.Text {
 				s.t.Fatal("sent instruction differs from complete frozen context and fixed rules")

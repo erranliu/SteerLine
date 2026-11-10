@@ -12,7 +12,7 @@ import (
 
 // Only cancellation remains public. Legacy answer/publish/prepare/analyze
 // commands are rejected before reserving any intent or invoking a business owner.
-func (p *runtimeProjectPort) SubmitMainAgent(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
+func (p *runtimeProjectPort) SubmitContinuationSuggestion(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
 	out := maintenanceResponse(in)
 	if in.Action != "main_agent_cancel" {
 		return out, errors.New("unsupported advisory action")
@@ -20,7 +20,7 @@ func (p *runtimeProjectPort) SubmitMainAgent(ctx context.Context, in httpcontrac
 	if err := in.Validate(httpcontract.ProjectID(p.config.Identity()), p.instance); err != nil {
 		return out, err
 	}
-	if p.config.runtimeMainAgent == nil || p.actor == nil || !p.Server.Identity(ctx).Ready {
+	if p.config.runtimeContinuationSuggestion == nil || p.actor == nil || !p.Server.Identity(ctx).Ready {
 		return out, projectStoppingError()
 	}
 	var payload struct{}
@@ -36,7 +36,7 @@ func (p *runtimeProjectPort) SubmitMainAgent(ctx context.Context, in httpcontrac
 		if old.Kind != "main_agent_command" || string(old.Payload) != string(raw) {
 			return out, errors.New("request_conflict: advisory command differs")
 		}
-		r, e := p.MainAgentReceipt(ctx, in.RequestID)
+		r, e := p.ContinuationSuggestionReceipt(ctx, in.RequestID)
 		if r != nil {
 			return *r, e
 		}
@@ -50,7 +50,7 @@ func (p *runtimeProjectPort) SubmitMainAgent(ctx context.Context, in httpcontrac
 	if !created {
 		return out, errors.New("original advisory cancellation is pending")
 	}
-	_, err = p.config.runtimeMainAgent.service.Cancel(ctx, in.TargetID, in.ExpectedVersion)
+	_, err = p.config.runtimeContinuationSuggestion.service.Cancel(ctx, in.TargetID, in.ExpectedVersion)
 	out.Status = "applied"
 	if err != nil {
 		out.Status = "rejected"
@@ -64,7 +64,7 @@ func (p *runtimeProjectPort) SubmitMainAgent(ctx context.Context, in httpcontrac
 	}
 	return out, nil
 }
-func (p *runtimeProjectPort) MainAgentReceipt(ctx context.Context, id string) (*httpcontract.CommandResponse, error) {
+func (p *runtimeProjectPort) ContinuationSuggestionReceipt(ctx context.Context, id string) (*httpcontract.CommandResponse, error) {
 	old, found, err := p.store.LookupCommand(ctx, p.config.Identity(), id)
 	if err != nil || !found || old.Kind != "main_agent_command" {
 		return nil, err

@@ -101,7 +101,7 @@ func TestAdvisoryEvidenceRejectsMissingFactsAndBrowserProof(t *testing.T) {
 
 func TestAdvisoryRequiresSerialPackageAndFreshWeb(t *testing.T) {
 	entries := []e2eScenario{{ID: "runtime.main-agent-advisory", Suite: "runtime", Level: "L4", Env: "controlled"}}
-	if e2ePackageParallelism(entries) != 1 || !hasMainAgentScenario(entries) {
+	if e2ePackageParallelism(entries) != 1 || !hasContinuationSuggestionScenario(entries) {
 		t.Fatal("advisory requires serial browser scenario with fresh Web assets")
 	}
 }

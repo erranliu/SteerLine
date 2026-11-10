@@ -8,25 +8,25 @@ import (
 	"errors"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/mainagentbridge"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	suggestionbridge "github.com/erranliu/SteerLine/internal/steeragentbridge/suggestion"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-func advisoryRecords(ctx context.Context, store *sqlite.SQLiteStore, project string) ([]mainagentbridge.Record, error) {
+func advisoryRecords(ctx context.Context, store *sqlite.SQLiteStore, project string) ([]suggestionbridge.Record, error) {
 	ids, err := store.AdvisoryIDs(ctx, project, "all")
 	if err != nil {
 		return nil, err
 	}
-	rows := []mainagentbridge.Record{}
+	rows := []suggestionbridge.Record{}
 	for _, id := range ids {
 		raw, revision, e := store.LoadAdvisory(ctx, project, id)
 		if e != nil {
 			return nil, e
 		}
-		var r mainagentbridge.Record
+		var r suggestionbridge.Record
 		if e = json.Unmarshal(raw, &r); e != nil {
 			return nil, e
 		}
@@ -37,7 +37,7 @@ func advisoryRecords(ctx context.Context, store *sqlite.SQLiteStore, project str
 	}
 	return rows, nil
 }
-func saveAdvisoryRecovery(ctx context.Context, store *sqlite.SQLiteStore, r mainagentbridge.Record) (mainagentbridge.Record, error) {
+func saveAdvisoryRecovery(ctx context.Context, store *sqlite.SQLiteStore, r suggestionbridge.Record) (suggestionbridge.Record, error) {
 	expected := r.Revision
 	r.Revision++
 	raw, e := json.Marshal(r)
@@ -59,7 +59,7 @@ func prepareAdvisoryStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 		if r.Submission != "started" || r.Complete() || r.Projection != nil && r.Projection.StopStatus == "stopped" {
 			continue
 		}
-		content := mainagentbridge.Content(r)
+		content := suggestionbridge.Content(r)
 		view, cold, e := inspectOriginalBeforeStart(ctx, *cli, content.StateDir, content.RunID, content.InputDigest, content.Request)
 		if e != nil {
 			var failure *runnerclient.Failure
@@ -92,7 +92,7 @@ func prepareAdvisoryStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 			continue
 		}
 		if r.StopRequest != nil && r.StopState == "unknown" {
-			state, readErr := mainagentbridge.InspectOriginalStop(ctx, r, view.Run, func(ctx context.Context, selector, id string) (runnercontract.Inspection, error) {
+			state, readErr := suggestionbridge.InspectOriginalStop(ctx, r, view.Run, func(ctx context.Context, selector, id string) (runnercontract.Inspection, error) {
 				value, _, err := cli.InspectBeforeStart(ctx, selector, id)
 				return value, err
 			})

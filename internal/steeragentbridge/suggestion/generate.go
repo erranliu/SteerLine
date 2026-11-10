@@ -1,4 +1,4 @@
-package mainagentbridge
+package suggestionbridge
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/mainagent"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion"
 )
 
 func token() string {
@@ -22,7 +22,7 @@ func token() string {
 	return hex.EncodeToString(b[:])
 }
 
-func (s *Service) generateRequest(ctx context.Context, p mainagent.Prepared) (*runnercontract.Request, error) {
+func (s *Service) generateRequest(ctx context.Context, p suggestion.Prepared) (*runnercontract.Request, error) {
 	if s.Prepare == nil || s.Runner == nil {
 		return nil, errors.New("Runner generate 未配置")
 	}
@@ -170,7 +170,7 @@ func (s *Service) observe(ctx context.Context, r Record) error {
 				if run.Final == nil || *run.Final != source || source.Text != result.Text || source.AttemptID == "" || source.Source == "" || source.ItemID == "" || !source.Verified || source.NativeOutcome != "succeeded" || source.CommandID == "" || source.SessionID == "" || source.TurnID == "" || source.AttemptID != run.Execution.AttemptID || source.SessionID != run.Execution.SessionID || source.TurnID != run.Execution.TurnID || result.RepositorySource != nil || len(result.FileMaterials) != 0 || run.RepositorySource != nil || len(run.Materials) != 0 {
 					current.State, current.Diagnostic = "failed", "生成结果完整来源未核实"
 				} else {
-					suggestion, e := mainagent.Accept(mainagent.Prepared{RequestID: current.ID, Text: current.PreparedText, Digest: current.InputDigest}, result.Text)
+					suggestion, e := suggestion.Accept(suggestion.Prepared{RequestID: current.ID, Text: current.PreparedText, Digest: current.InputDigest}, result.Text)
 					if e != nil {
 						current.State, current.Diagnostic = "failed", e.Error()
 					} else {

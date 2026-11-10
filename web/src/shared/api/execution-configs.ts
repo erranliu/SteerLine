@@ -31,7 +31,7 @@ export interface Profile {
   };
 }
 export interface ExecutionConfig {
-  main_agent?: { model: string; reasoning_effort: string };
+  continuation_suggestion?: { model: string; reasoning_effort: string } | null;
   developer?: { skip_environment_readiness?: boolean };
   version: number;
   runner: { executable: string; version: string; sha256: string };

@@ -1,0 +1,49 @@
+{
+  "runs": [
+    {
+      "at": "2026-11-10T07:00:08.0735033Z",
+      "results": [
+        {
+          "test_id": "l1.minimum",
+          "level": "L1",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-10T07:01:43.3647128Z",
+      "results": [
+        {
+          "test_id": "smoke.delivery",
+          "level": "L2",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-10T07:02:15.8970423Z",
+      "results": [
+        {
+          "test_id": "web.unit",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-10T07:05:54.2553904Z",
+      "results": [
+        {
+          "test_id": "go.roadmap",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "failed",
+          "note": "测试集存在实际断言失败；完整性与原始错误见 summary.json"
+        }
+      ]
+    }
+  ]
+}

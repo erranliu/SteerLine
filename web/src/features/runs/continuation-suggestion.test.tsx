@@ -4,7 +4,10 @@ import { Api } from "../../shared/api/client";
 import { Link } from "react-router-dom";
 import { identity, mountFeature, run, testClient } from "../../test/workspace";
 import type { Candidate } from "../../shared/api/types";
-import { MainAgent, type AdvisoryDetail } from "./main-agent";
+import {
+  ContinuationSuggestion,
+  type AdvisoryDetail,
+} from "./continuation-suggestion";
 
 afterEach(() => {
   cleanup();
@@ -46,7 +49,7 @@ function mount(record = ready, value = candidate, navigation = false) {
   vi.stubGlobal("navigator", { clipboard: { writeText: copy } });
   const view = mountFeature(
     <>
-      <MainAgent run={value} />
+      <ContinuationSuggestion run={value} />
       {navigation && <Link to={"?advisory=" + record.id}>打开精确建议</Link>}
     </>,
     api,
@@ -57,13 +60,13 @@ function mount(record = ready, value = candidate, navigation = false) {
   return { fetch, copy, submit, view };
 }
 function open() {
-  const details = screen.getByText("后续对话提示词建议").closest("details")!;
+  const details = screen.getByText("对话续作 · 提示词建议").closest("details")!;
   details.open = true;
   fireEvent(details, new Event("toggle"));
 }
 it("opens the exact advisory when activity navigation updates the mounted candidate", async () => {
   const { fetch, submit } = mount(ready, candidate, true);
-  const panel = screen.getByText("后续对话提示词建议").closest("details")!;
+  const panel = screen.getByText("对话续作 · 提示词建议").closest("details")!;
   expect(panel.open).toBe(false);
   fireEvent.click(screen.getByRole("link", { name: "打开精确建议" }));
   expect(await screen.findByText(ready.prompt!)).toBeInTheDocument();

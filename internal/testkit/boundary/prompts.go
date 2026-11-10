@@ -10,7 +10,7 @@ import (
 // New sinks require a deliberate source-rule and consumer-test change.
 func promptSinkAllowed(file, function string) bool {
 	switch file + ":" + function {
-	case "internal/mainagentbridge/generate.go:generateRequest",
+	case "internal/steeragentbridge/suggestion/generate.go:generateRequest",
 		"internal/roadmap/generation.go:Parse",
 		"internal/roadmap/documents.go:GenerateDocuments",
 		"internal/environmentadaptation/service.go:appendRound",

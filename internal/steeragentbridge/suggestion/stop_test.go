@@ -1,14 +1,14 @@
-package mainagentbridge
+package suggestionbridge
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 )
 
 func TestAdvisoryOriginalStopRequiresBoundReceiptOrPermanentStaleProof(t *testing.T) {
