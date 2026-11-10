@@ -19,10 +19,17 @@ type Selection struct {
 	SHA256     string `json:"sha256"`
 }
 
-func VerifyExecutable(path, expected string) error {
+func validateReleasePin(path, expected string) error {
 	want, err := hex.DecodeString(expected)
 	if !filepath.IsAbs(path) || err != nil || len(want) != sha256.Size {
 		return errors.New("Runner requires an absolute executable and release SHA-256")
+	}
+	return nil
+}
+
+func VerifyExecutable(path, expected string) error {
+	if err := validateReleasePin(path, expected); err != nil {
+		return err
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -49,9 +56,10 @@ func (s Selection) Open(ctx context.Context, stateDir string, timeout time.Durat
 	if s.Version == "" || !filepath.IsAbs(stateDir) {
 		return Client{}, Version{}, errors.New("Runner version and absolute project state directory are required")
 	}
-	if err := VerifyExecutable(s.Executable, s.SHA256); err != nil {
+	if err := validateReleasePin(s.Executable, s.SHA256); err != nil {
 		return Client{}, Version{}, err
 	}
+	// Version uses Client.Call, which verifies the release before invocation.
 	client := Client{Executable: s.Executable, StateDir: stateDir, Timeout: timeout, SHA256: s.SHA256}
 	version, err := client.Version(ctx)
 	if err != nil {
