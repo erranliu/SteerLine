@@ -1,0 +1,69 @@
+diff --git a/SteerlineFlow/Roadmap/document-rules.md b/SteerlineFlow/Roadmap/document-rules.md
+index 4f914080..8e7f86aa 100644
+--- a/SteerlineFlow/Roadmap/document-rules.md
++++ b/SteerlineFlow/Roadmap/document-rules.md
+@@ -1 +1 @@
+-依据固定仓库规范、本次文件材料中的原 Markdown 和 confirmed-planning.json 完整已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，依据已确认的 coordination 和任务范围，只生成本次短指令指定目标任务的完整中文 Spec、Plan、测试选择和专属验收材料；其它任务仅作依赖和交接上下文，不输出其正文。原文与确认以本次文件材料为准，Git 中同名草稿不替代它们。先阅读 SpecGuide 与测试规范。investigation.source 对 Git 源码/规范填 repository，对本次固定输入文件填 input_file；path 分别使用仓库相对路径或材料逻辑路径，说明实际调查原因，不混淆两个来源。仅返回 source、path、reason；文件摘要由平台从固定文件核验并填写，不由模型计算或抄写。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、实施步骤、验收项到测试ID的映射、选择原因、时点及特殊准备，命令/环境/通用断言引用正式清单；每个新任务的 tests 返回项目政策与Plan必跑要求并集及必要影响项的有序唯一ID数组，选择固定正式清单已有ID，或同批严格前置（含传递前置）明确将新增的ID；本任务 provides_tests 必须逐项沿用 confirmed-planning.json 中的已确认声明，不新增、删除或换绑提供者；无新增填空数组。后继Plan须写明提供者、依赖交接及交付后从同一执行提交正式清单核验完整定义；提供者自己的 tests 只能使用已有ID或更早前置提供的ID，不能使用自己尚未新增的ID。不输出JSON字符串、重复定义或结果；平台生成只含tests的同名.tests.json，不提前伪造测试定义。无可用入口或约束冲突时仅在最终JSON返回questions和空documents，不调用交互提问工具；空数组仅限Plan明确说明无需自动测试及原因；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。
++依据固定仓库规范、本次文件材料中的原 Markdown 和 confirmed-planning.json 完整已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，按已确认的 coordination 和任务范围，仅为短指令指定的目标生成完整中文 Spec、Plan、测试选择和验收材料；其它任务仅作依赖和交接上下文。原文与确认以本次文件材料为准，Git 中同名草稿不替代它们。先阅读 SpecGuide 与测试规范。investigation.source 对 Git 源码/规范填 repository，对本次固定输入文件填 input_file；path 分别使用仓库相对路径或材料逻辑路径，说明实际调查原因，不混淆两个来源。仅返回 source、path、reason；文件摘要由平台从固定文件核验并填写，不由模型计算或抄写。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、实施步骤、验收项到测试ID的映射、选择原因、时点及特殊准备，命令/环境/通用断言引用正式清单；tests 返回项目政策与Plan必跑要求并集及必要影响项的有序唯一ID数组，选择固定正式清单已有ID，或同批严格前置（含传递前置）明确将新增的ID；本任务 provides_tests 沿用 confirmed-planning.json 的已确认声明。后继Plan须写明提供者、依赖交接及交付后从同一执行提交正式清单核验完整定义；提供者自己的 tests 只能使用已有ID或更早前置提供的ID，不能使用自己尚未新增的ID。不输出JSON字符串、重复定义或结果；平台生成只含tests的同名.tests.json，不提前伪造测试定义。无可用入口或约束冲突时仅在最终JSON返回questions和空documents，不调用交互提问工具；空数组仅限Plan明确说明无需自动测试及原因；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。
+diff --git a/SteerlineFlow/Roadmap/parse-rules.md b/SteerlineFlow/Roadmap/parse-rules.md
+index b4c32125..d28b846b 100644
+--- a/SteerlineFlow/Roadmap/parse-rules.md
++++ b/SteerlineFlow/Roadmap/parse-rules.md
+@@ -9 +9 @@ original_dependencies 保留作者明确依赖，proposed_dependencies 记录核
+-读取固定项目入口声明的测试清单。返回 coordination 简述必要的共用安排；scope/constraints 写清实际共享修改所有权和交接，不引入额外契约表或全仓代码调查。每个新任务以 provides_tests 有序唯一数组声明负责新增并登记的测试ID，无新增填空数组；已有正式任务不声明新增ID，不覆盖固定清单已有ID，同一ID只能有一个提供者。此阶段只确认任务信息与协作，不生成各任务完整 Spec/Plan 或测试结果；发现关键缺失放入 questions。
++读取固定项目入口声明的测试清单。coordination 说明必要协作，scope/constraints 写清共享修改所有权与交接。新任务用 provides_tests 声明负责新增并登记的测试ID，无新增填空数组；不得覆盖清单已有ID，同一ID仅一个提供者。
+diff --git a/internal/prompts/materials/roadmap-documents.md b/internal/prompts/materials/roadmap-documents.md
+index 4f914080..8e7f86aa 100644
+--- a/internal/prompts/materials/roadmap-documents.md
++++ b/internal/prompts/materials/roadmap-documents.md
+@@ -1 +1 @@
+-依据固定仓库规范、本次文件材料中的原 Markdown 和 confirmed-planning.json 完整已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，依据已确认的 coordination 和任务范围，只生成本次短指令指定目标任务的完整中文 Spec、Plan、测试选择和专属验收材料；其它任务仅作依赖和交接上下文，不输出其正文。原文与确认以本次文件材料为准，Git 中同名草稿不替代它们。先阅读 SpecGuide 与测试规范。investigation.source 对 Git 源码/规范填 repository，对本次固定输入文件填 input_file；path 分别使用仓库相对路径或材料逻辑路径，说明实际调查原因，不混淆两个来源。仅返回 source、path、reason；文件摘要由平台从固定文件核验并填写，不由模型计算或抄写。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、实施步骤、验收项到测试ID的映射、选择原因、时点及特殊准备，命令/环境/通用断言引用正式清单；每个新任务的 tests 返回项目政策与Plan必跑要求并集及必要影响项的有序唯一ID数组，选择固定正式清单已有ID，或同批严格前置（含传递前置）明确将新增的ID；本任务 provides_tests 必须逐项沿用 confirmed-planning.json 中的已确认声明，不新增、删除或换绑提供者；无新增填空数组。后继Plan须写明提供者、依赖交接及交付后从同一执行提交正式清单核验完整定义；提供者自己的 tests 只能使用已有ID或更早前置提供的ID，不能使用自己尚未新增的ID。不输出JSON字符串、重复定义或结果；平台生成只含tests的同名.tests.json，不提前伪造测试定义。无可用入口或约束冲突时仅在最终JSON返回questions和空documents，不调用交互提问工具；空数组仅限Plan明确说明无需自动测试及原因；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。
++依据固定仓库规范、本次文件材料中的原 Markdown 和 confirmed-planning.json 完整已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，按已确认的 coordination 和任务范围，仅为短指令指定的目标生成完整中文 Spec、Plan、测试选择和验收材料；其它任务仅作依赖和交接上下文。原文与确认以本次文件材料为准，Git 中同名草稿不替代它们。先阅读 SpecGuide 与测试规范。investigation.source 对 Git 源码/规范填 repository，对本次固定输入文件填 input_file；path 分别使用仓库相对路径或材料逻辑路径，说明实际调查原因，不混淆两个来源。仅返回 source、path、reason；文件摘要由平台从固定文件核验并填写，不由模型计算或抄写。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、实施步骤、验收项到测试ID的映射、选择原因、时点及特殊准备，命令/环境/通用断言引用正式清单；tests 返回项目政策与Plan必跑要求并集及必要影响项的有序唯一ID数组，选择固定正式清单已有ID，或同批严格前置（含传递前置）明确将新增的ID；本任务 provides_tests 沿用 confirmed-planning.json 的已确认声明。后继Plan须写明提供者、依赖交接及交付后从同一执行提交正式清单核验完整定义；提供者自己的 tests 只能使用已有ID或更早前置提供的ID，不能使用自己尚未新增的ID。不输出JSON字符串、重复定义或结果；平台生成只含tests的同名.tests.json，不提前伪造测试定义。无可用入口或约束冲突时仅在最终JSON返回questions和空documents，不调用交互提问工具；空数组仅限Plan明确说明无需自动测试及原因；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。
+diff --git a/internal/prompts/materials/roadmap-parse.md b/internal/prompts/materials/roadmap-parse.md
+index b4c32125..d28b846b 100644
+--- a/internal/prompts/materials/roadmap-parse.md
++++ b/internal/prompts/materials/roadmap-parse.md
+@@ -9 +9 @@ original_dependencies 保留作者明确依赖，proposed_dependencies 记录核
+-读取固定项目入口声明的测试清单。返回 coordination 简述必要的共用安排；scope/constraints 写清实际共享修改所有权和交接，不引入额外契约表或全仓代码调查。每个新任务以 provides_tests 有序唯一数组声明负责新增并登记的测试ID，无新增填空数组；已有正式任务不声明新增ID，不覆盖固定清单已有ID，同一ID只能有一个提供者。此阶段只确认任务信息与协作，不生成各任务完整 Spec/Plan 或测试结果；发现关键缺失放入 questions。
++读取固定项目入口声明的测试清单。coordination 说明必要协作，scope/constraints 写清共享修改所有权与交接。新任务用 provides_tests 声明负责新增并登记的测试ID，无新增填空数组；不得覆盖清单已有ID，同一ID仅一个提供者。
+diff --git a/internal/prompts/prompts_test.go b/internal/prompts/prompts_test.go
+index 4ae1cc8b..3a30413c 100644
+--- a/internal/prompts/prompts_test.go
++++ b/internal/prompts/prompts_test.go
+@@ -111,2 +111,2 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
+-		{"roadmap-parse", "1d2162134517564ed644f5e655e571ba19ab7c45c98ecabbc353280bfb9f69cd", RoadmapParseRules},
+-		{"roadmap-documents", "6f3f84fa253f40975f53f3f57defc04927230787947e015532c23fdb762e0511", RoadmapDocumentRules},
++		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
++		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},
+diff --git a/internal/prompts/roadmap-documents.md b/internal/prompts/roadmap-documents.md
+index 49e15c90..10408b9f 100644
+--- a/internal/prompts/roadmap-documents.md
++++ b/internal/prompts/roadmap-documents.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照，只为目标内部代号 {{.Key}} 生成完整 Spec/Plan、tests及已确认的provides_tests ID数组和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。只返回原 schema 结果。
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照，只为目标内部代号 {{.Key}} 生成完整 Spec/Plan、测试选择和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。只返回原 schema 结果。
+diff --git a/internal/prompts/roadmap-parse.md b/internal/prompts/roadmap-parse.md
+index 14a3f6a8..70f9da52 100644
+--- a/internal/prompts/roadmap-parse.md
++++ b/internal/prompts/roadmap-parse.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。同时读取固定项目入口 SteerlineFlow/environment-project.json 及其声明的测试材料，补齐coordination和每项provides_tests。只返回原 schema 结果。
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。同时读取固定项目入口 SteerlineFlow/environment-project.json 及其声明的测试材料。只返回原 schema 结果。
+diff --git a/internal/prompts/testdata/roadmap-documents.golden.md b/internal/prompts/testdata/roadmap-documents.golden.md
+index 458f76a5..9d13c390 100644
+--- a/internal/prompts/testdata/roadmap-documents.golden.md
++++ b/internal/prompts/testdata/roadmap-documents.golden.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照，只为目标内部代号 T1 生成完整 Spec/Plan、tests及已确认的provides_tests ID数组和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。只返回原 schema 结果。
+\ No newline at end of file
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照，只为目标内部代号 T1 生成完整 Spec/Plan、测试选择和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。只返回原 schema 结果。
+\ No newline at end of file
+diff --git a/internal/prompts/testdata/roadmap-parse.golden.md b/internal/prompts/testdata/roadmap-parse.golden.md
+index a5e4209b..9970e8cc 100644
+--- a/internal/prompts/testdata/roadmap-parse.golden.md
++++ b/internal/prompts/testdata/roadmap-parse.golden.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。同时读取固定项目入口 SteerlineFlow/environment-project.json 及其声明的测试材料，补齐coordination和每项provides_tests。只返回原 schema 结果。
+\ No newline at end of file
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。同时读取固定项目入口 SteerlineFlow/environment-project.json 及其声明的测试材料。只返回原 schema 结果。
+\ No newline at end of file

@@ -4,16 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
+	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
@@ -270,6 +273,38 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 			if !bytes.Equal(before[path], after) {
 				t.Fatal("blocked upgrade changed original facts", path)
 			}
+		}
+	})
+
+	t.Run("document_batch_requires_every_original_run", func(t *testing.T) {
+		caller := filepath.Join(d.runner.client.StateDir, "caller-fixture.json")
+		require(t, os.WriteFile(caller, []byte(`{"runs":{}}`), 0600))
+		_, err := VerifyApplicationStopped(ctx, exe)
+		require(t, err)
+		writer, err := OpenNativeTaskCommandStore(ctx, &c)
+		require(t, err)
+		batch := roadmap.Record{ID: strings.Repeat("a", 32), RequestID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1, Purpose: "documents", State: "cancelled", Cancelled: true, Runner: d.runner.client.BuildPin()}
+		runs := map[string]runnercontract.Run{}
+		for i := 1; i <= 2; i++ {
+			id := fmt.Sprintf("doc-%d", i)
+			digest := strings.Repeat(fmt.Sprint(i), 64)
+			batch.Generations = append(batch.Generations, roadmap.Generation{ID: fmt.Sprintf("%032x", i), Key: fmt.Sprint(i), CreatedAt: time.Now().UTC(), State: "cancelled", Submission: "started", RunID: id, InputDigest: digest, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: fmt.Sprint(i), Input: json.RawMessage(`{}`)}})
+			runs[id] = runnercontract.Run{RunID: id, InputDigest: digest, Revision: 1, Status: "stopped", StopStatus: "stopped"}
+		}
+		require(t, writer.SaveRoadmap(ctx, batch, 0))
+		require(t, writer.Close())
+		if _, err := VerifyApplicationStopped(ctx, exe); err == nil {
+			t.Fatal("document batch omitted its original Runs")
+		}
+		require(t, os.WriteFile(caller, mustJSON(map[string]any{"runs": map[string]runnercontract.Run{"doc-1": runs["doc-1"]}}), 0600))
+		if _, err := VerifyApplicationStopped(ctx, exe); err == nil {
+			t.Fatal("one settled Run hid the other document execution")
+		}
+		require(t, os.WriteFile(caller, mustJSON(map[string]any{"runs": runs}), 0600))
+		_, err = VerifyApplicationStopped(ctx, exe)
+		require(t, err)
+		if batch.RunID != "" {
+			t.Fatal("test fabricated a batch Run")
 		}
 	})
 

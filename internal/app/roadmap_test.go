@@ -138,6 +138,16 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 }
 
 func TestRoadmapSourceAndMissingDocumentCapability(t *testing.T) {
+	t.Run("public-native-projection", func(t *testing.T) {
+		r := roadmap.Record{Purpose: "documents", Generations: []roadmap.Generation{{ID: "g", State: "accepted", Submission: "started", Request: runnercontract.Request{Input: json.RawMessage(`{"secret":"private request"}`)}, Projection: &runnercontract.Run{Status: "blocked", ResumeRequired: true, Diagnostic: "native execution needs attention"}}}}
+		out := publicRoadmap(r)
+		raw, err := json.Marshal(out)
+		require(t, err)
+		if !out.Generations[0].ResumeRequired || out.Generations[0].RunnerStatus != "blocked" || out.Generations[0].Diagnostic != "native execution needs attention" || strings.Contains(string(raw), "private request") {
+			t.Fatal("public execution status missing or private request exposed")
+		}
+	})
+
 	c, _ := nativeTaskFixture(t)
 	ctx := context.Background()
 	reader, e := OpenNativeTaskProject(ctx, &c)
@@ -178,7 +188,14 @@ func TestRoadmapSourceAndMissingDocumentCapability(t *testing.T) {
 }
 
 func TestRoadmapUnknownReceiptKeepsBusinessEffectPending(t *testing.T) {
+	for _, action := range []string{"roadmap_generate_documents", "roadmap_retry_documents"} {
+		if roadmapEffectPending(action, roadmap.Record{Purpose: "documents", State: "queued", Generations: []roadmap.Generation{{ID: "g", State: "queued", Submission: "pending"}}}) {
+			t.Fatal("durable generation command waits for model completion")
+		}
+	}
+
 	t.Run("combined-generation-recovery", roadmapCombinedGenerationRecovery)
+	t.Run("retry-recovery", roadmapRetryCommandRecovery)
 	r := roadmap.Record{State: "publishing", Submission: "started", Projection: &runnercontract.Run{StopStatus: "stopped"}, Publication: &roadmap.Publication{State: "pr_unknown"}}
 	if !roadmapEffectPending("roadmap_publish", r) {
 		t.Fatal("settled parse incorrectly resolved the unknown PR")
@@ -288,13 +305,14 @@ func TestRoadmapPublicationRejectsAnotherInFlightGeneration(t *testing.T) {
 	store, err := OpenNativeTaskCommandStore(ctx, &c)
 	require(t, err)
 	defer store.Close()
-	a := roadmap.Analysis{Tasks: []roadmap.Node{{Key: "T1", Title: "One"}}}
+	a := roadmap.Analysis{Coordination: "Reuse the declared owners and confirmed dependency handoffs.", Tasks: []roadmap.Node{{Key: "T1", Title: "One"}}}
 	old := roadmap.Record{ID: strings.Repeat("a", 32), RequestID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1,
-		Source: roadmap.Source{ID: strings.Repeat("b", 32)}, Analysis: &a, ConfirmedDigest: roadmap.ValueDigest(a), CodeCommit: commit,
+		Source: roadmap.Source{ID: strings.Repeat("b", 32)}, Analysis: &a, CodeCommit: commit,
 		State: "publishing", DocumentsVerified: true,
 		Documents: []roadmap.Documents{{Key: "T1", Tests: []string{}, Spec: roadmap.Document{Path: "SteerlineFlow/spec/one.md", Body: "# Spec"},
 			Plan: roadmap.Document{Path: "SteerlineFlow/plans/one.plan.md", Body: "# Plan\n无需自动测试：文档"}, Acceptance: []roadmap.Document{{Path: "SteerlineFlow/testing/acceptance/one.md", Body: "# 验收"}}}},
 		Publication: &roadmap.Publication{RequestID: strings.Repeat("e", 32), State: "pr_unknown"}}
+	old.ConfirmedDigest = roadmap.ConfirmationDigest(old)
 	require(t, store.SaveRoadmap(ctx, old, 0))
 	current := old
 	current.ID = strings.Repeat("c", 32)
@@ -319,5 +337,44 @@ func TestRoadmapGeneratedIndexCannotOverwriteAnotherSource(t *testing.T) {
 	other.Source.Path = roadmap.Root + "two.md"
 	if ownedRoadmapMetadata(name, body, other) || ownedRoadmapMetadata("SteerlineFlow/spec/unrelated.md", body, r) || ownedRoadmapMetadata(name, []byte("{}"), r) {
 		t.Fatal("unrelated file treated as owned metadata")
+	}
+}
+
+func roadmapRetryCommandRecovery(t *testing.T) {
+	ctx := context.Background()
+	c, _ := nativeTaskFixture(t)
+	reader, err := OpenNativeTaskProject(ctx, &c)
+	require(t, err)
+	require(t, reader.Close())
+	store, err := OpenNativeTaskCommandStore(ctx, &c)
+	require(t, err)
+	defer store.Close()
+	port := &roadmapPort{config: c, store: store}
+	c.runtimeRoadmaps = port
+	runtime := &runtimeProjectPort{config: c, store: store}
+	r := roadmap.Record{ID: strings.Repeat("a", 32), RequestID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1, Purpose: "documents", State: "failed", Generations: []roadmap.Generation{{ID: strings.Repeat("b", 32), Key: "T1", CreatedAt: time.Now().UTC(), State: "rejected", Submission: "started", Request: runnercontract.Request{RequestID: "original", Input: json.RawMessage(`{}`)}}}}
+	require(t, store.SaveRoadmap(ctx, r, 0))
+	for _, saved := range []bool{false, true} {
+		request := strings.Repeat("c", 32)
+		if saved {
+			request = strings.Repeat("d", 32)
+			r.Generations = append(r.Generations, roadmap.Generation{ID: strings.Repeat("e", 32), Key: "T1", CreatedAt: time.Now().UTC(), RetryRequest: request, State: "queued", Submission: "pending", Request: runnercontract.Request{RequestID: "retry-original", Input: json.RawMessage(`{}`)}})
+			r.Revision++
+			require(t, store.SaveRoadmap(ctx, r, r.Revision-1))
+		}
+		in := httpcontract.CommandEnvelope{RequestID: request, Action: "roadmap_retry_documents", TargetID: r.ID, Payload: json.RawMessage(`{"local_key":"T1"}`)}
+		raw, _ := json.Marshal(in)
+		_, _, err = store.EnqueueCommand(ctx, storageports.CommandRecord{ProjectIdentity: c.Identity(), CommandID: request, Kind: "roadmap_command", TargetID: r.ID, IdempotencyKey: request, RequestedBy: "fixture", Payload: raw, Status: "pending", CreatedAt: time.Now().UTC()})
+		require(t, err)
+		out, err := runtime.roadmapReceipt(ctx, request)
+		require(t, err)
+		if out == nil || saved && out.Status != "applied" || !saved && (out.Status != "rejected" || out.Code != "roadmap_retry_not_submitted") {
+			t.Fatal("retry recovery did not reconcile durable intent", out)
+		}
+		got, err := store.Roadmap(ctx, c.Identity(), r.ID)
+		require(t, err)
+		if len(got.Generations) != len(r.Generations) {
+			t.Fatal("query submitted new generation")
+		}
 	}
 }

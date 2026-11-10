@@ -53,6 +53,8 @@ func TestAsyncActivityRoadmapUsesCurrentPublishAdmitOrResumeCommand(t *testing.T
 }
 
 func TestAsyncActivityRoadmapFactsFiltersLinksAndReopen(t *testing.T) {
+	t.Run("batch settlement", testRoadmapActivityBatchSettlement)
+	t.Run("batch native projection", testRoadmapActivityNativeProjection)
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "domain.db")
 	s, err := OpenSQLiteStore(path)
@@ -105,6 +107,66 @@ func TestAsyncActivityRoadmapFactsFiltersLinksAndReopen(t *testing.T) {
 		require(t, err)
 		if links.Links[request].Source != "roadmap" {
 			t.Fatalf("missing publication/admission link: %s %+v", request, links)
+		}
+	}
+}
+
+func testRoadmapActivityBatchSettlement(t *testing.T) {
+	ctx := context.Background()
+	s, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
+	require(t, err)
+	defer s.Close()
+	id := strings.Repeat("a", 32)
+	r := roadmap.Record{ID: id, Project: "p", RequestID: id, Revision: 1, Purpose: "documents", State: "cancelled", Cancelled: true, CreatedAt: time.Now().UTC(), Source: roadmap.Source{ID: "source"}}
+	for i := 0; i < 2; i++ {
+		r.Generations = append(r.Generations, roadmap.Generation{ID: fmt.Sprintf("%032x", i+1), Key: fmt.Sprint(i), CreatedAt: r.CreatedAt, State: "accepted", Submission: "started", Request: runnercontract.Request{RequestID: fmt.Sprint(i), Input: json.RawMessage(`{"secret":"private input"}`)}, RunID: fmt.Sprint(i), Projection: &runnercontract.Run{Revision: 1, Status: "running", StopStatus: "active"}})
+	}
+	require(t, s.SaveRoadmap(ctx, r, 0))
+	for i := 0; i <= 2; i++ {
+		links, err := query.ReadAsyncActivityLinks(ctx, s, "p", "i", query.AsyncActivityOptions{RequestIDs: []string{id}})
+		require(t, err)
+		a := links.Links[id]
+		want := "waiting"
+		if i == 2 {
+			want = "cancelled"
+		}
+		if a.State != want || a.Execution.RunID != "" || a.Execution.AttemptID != "" {
+			t.Fatalf("incorrect batch settlement %+v", a)
+		}
+		facts, _, err := s.ReadAsyncActivityFacts(ctx, "p", ports.AsyncActivityRead{Source: "roadmap", Limit: 10, RequestIDs: []string{id}})
+		require(t, err)
+		for _, f := range facts {
+			if strings.Contains(string(f.Payload), "private input") {
+				t.Fatal("activity includes original request")
+			}
+		}
+		if i < 2 {
+			r.Generations[i].Projection = &runnercontract.Run{Revision: 2, Status: "stopped", StopStatus: "stopped"}
+			r.Revision++
+			require(t, s.SaveRoadmap(ctx, r, r.Revision-1))
+		}
+	}
+}
+
+func testRoadmapActivityNativeProjection(t *testing.T) {
+	ctx := context.Background()
+	s, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
+	require(t, err)
+	defer s.Close()
+	id := strings.Repeat("a", 32)
+	r := roadmap.Record{ID: id, RequestID: id, Project: "p", Revision: 1, Purpose: "documents", State: "accepted", CreatedAt: time.Now().UTC(), Source: roadmap.Source{ID: "source"}, Generations: []roadmap.Generation{{ID: strings.Repeat("b", 32), Key: "T1", CreatedAt: time.Now().UTC(), State: "accepted", Submission: "started", Request: runnercontract.Request{RequestID: "original", Input: json.RawMessage(`{"secret":"private request"}`)}, RunID: "original", Projection: &runnercontract.Run{Status: "running", ResumeRequired: true}}}}
+	require(t, s.SaveRoadmap(ctx, r, 0))
+	links, err := query.ReadAsyncActivityLinks(ctx, s, "p", "i", query.AsyncActivityOptions{RequestIDs: []string{id}})
+	require(t, err)
+	a := links.Links[id]
+	if a.State != "waiting" || !a.NeedsAttention {
+		t.Fatalf("SQL dropped native resume flag: %+v", a)
+	}
+	facts, _, err := s.ReadAsyncActivityFacts(ctx, "p", ports.AsyncActivityRead{Source: "roadmap", RequestIDs: []string{id}, Limit: 10})
+	require(t, err)
+	for _, f := range facts {
+		if strings.Contains(string(f.Payload), "private request") {
+			t.Fatal("activity exposed execution request")
 		}
 	}
 }

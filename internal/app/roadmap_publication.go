@@ -397,9 +397,22 @@ func (p *roadmapPort) publish(ctx context.Context, r roadmap.Record, request, re
 	if !source.SameContent(r.Source) || roadmap.GraphDigest(graph) != r.GraphDigest || baseline.Commit != r.CodeCommit {
 		return r, errors.New("来源、图材料或代码基线已变化，请重新核对生成文档")
 	}
+	p.generationMu.Lock()
+	rows, gateErr := p.store.Roadmaps(ctx, p.config.Identity())
+	if gateErr != nil {
+		p.generationMu.Unlock()
+		return r, gateErr
+	}
+	for _, other := range rows {
+		if other.ID != r.ID && other.Source.ID == r.Source.ID && (!other.ObservationComplete() || other.Publication != nil && other.State != "admitted") {
+			p.generationMu.Unlock()
+			return r, errors.New("同来源存在其它活动或在途发布")
+		}
+	}
 	r.Publication = &roadmap.Publication{RequestID: request, ReviewDigest: review, Branch: "codex/roadmap-" + r.ID, Base: r.CodeCommit, Merge: merge, State: "preparing"}
 	r.State = "publishing"
 	r, e = p.serviceSave(ctx, r)
+	p.generationMu.Unlock()
 	if e != nil {
 		return r, e
 	}

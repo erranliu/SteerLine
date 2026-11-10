@@ -12,7 +12,7 @@ import (
 var commitPattern = regexp.MustCompile("^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 
 func ValidateDocuments(r Record) error {
-	if !r.DocumentsVerified || r.Analysis == nil || r.ConfirmedDigest != ValueDigest(r.Analysis) {
+	if !r.DocumentsVerified || r.Analysis == nil || r.ConfirmedDigest != ConfirmationDigest(r) {
 		return errors.New("未取得与已确认规划绑定、经核实的 Runner 文档结果")
 	}
 	if !commitPattern.MatchString(r.CodeCommit) {
@@ -30,46 +30,16 @@ func ValidateDocuments(r Record) error {
 	seen := map[string]bool{}
 	paths := map[string]bool{}
 	total := 0
-	check := func(d Document, prefix string) error {
-		total += len(d.Body)
-		if !strings.HasPrefix(d.Path, prefix) || !strings.HasSuffix(d.Path, ".md") || path.Clean(d.Path) != d.Path || strings.ContainsAny(d.Path, "\\:\x00") || strings.TrimSpace(d.Body) == "" || !utf8.ValidString(d.Body) || total > MaxBytes {
-			return errors.New("文档路径、编码、正文或大小无效")
-		}
-		if paths[d.Path] {
-			return errors.New("文档路径重复")
-		}
-		paths[d.Path] = true
-		return nil
-	}
 	for _, d := range r.Documents {
 		if !expected[d.Key] || seen[d.Key] {
 			return errors.New("文档与本批内部代号不匹配")
 		}
 		seen[d.Key] = true
-		if e := check(d.Spec, "SteerlineFlow/spec/"); e != nil {
-			return e
-		}
-		if e := check(d.Plan, "SteerlineFlow/plans/"); e != nil {
-			return e
-		}
-		rawTests, err := TestsJSON(d)
-		if err != nil {
+		if err := validateDocumentContent(d, paths, &total); err != nil {
 			return err
 		}
-		total += len(rawTests)
-		if total > MaxBytes {
-			return errors.New("完整文档与测试选择超过大小上限")
-		}
-
-		if len(d.Acceptance) == 0 {
-			return errors.New("任务缺少专属验收材料")
-		}
-		for _, a := range d.Acceptance {
-			if e := check(a, "SteerlineFlow/testing/acceptance/"); e != nil {
-				return e
-			}
-		}
 	}
+
 	if len(seen) != len(expected) {
 		return errors.New("正式文档集不完整，不能发布")
 	}
@@ -95,4 +65,42 @@ func TestsJSON(d Documents) (string, error) {
 		seen[id] = true
 	}
 	return string(raw) + "\n", nil
+}
+
+func validateDocumentContent(d Documents, paths map[string]bool, total *int) error {
+	check := func(f Document, prefix string) error {
+		*total += len(f.Body)
+		if !strings.HasPrefix(f.Path, prefix) || !strings.HasSuffix(f.Path, ".md") || path.Clean(f.Path) != f.Path || strings.ContainsAny(f.Path, "\\:\x00") || strings.TrimSpace(f.Body) == "" || !utf8.ValidString(f.Body) || *total > MaxBytes || paths[f.Path] {
+			return errors.New("文档路径、编码、正文或大小无效")
+		}
+		paths[f.Path] = true
+		return nil
+	}
+	if err := check(d.Spec, "SteerlineFlow/spec/"); err != nil {
+		return err
+	}
+	if err := check(d.Plan, "SteerlineFlow/plans/"); err != nil {
+		return err
+	}
+	raw, err := TestsJSON(d)
+	if err != nil {
+		return err
+	}
+	*total += len(raw)
+	if len(d.Acceptance) == 0 {
+		return errors.New("任务缺少专属验收材料")
+	}
+	for _, f := range d.Acceptance {
+		if err := check(f, "SteerlineFlow/testing/acceptance/"); err != nil {
+			return err
+		}
+	}
+	if *total > MaxBytes {
+		return errors.New("完整文档与测试选择超过大小上限")
+	}
+	return nil
+}
+func ValidateDocument(d Documents) error {
+	total := 0
+	return validateDocumentContent(d, map[string]bool{}, &total)
 }

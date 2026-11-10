@@ -295,7 +295,9 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	}
 	contents := make([]runnerbinding.Content, 0, len(roadmaps))
 	for _, r := range roadmaps {
-		contents = append(contents, roadmapContent(r))
+		for _, execution := range r.Executions() {
+			contents = append(contents, roadmapContent(execution))
+		}
 	}
 	advisories, err := advisoryRecords(ctx, reader, c.Identity())
 	if err != nil {

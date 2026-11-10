@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -19,12 +21,16 @@ import (
 // This controlled public-protocol fixture returns full, schema-shaped results.
 // All Git, document preparation, publication and Task writes use production owners.
 type promotionRunner struct {
+	runs              map[string]runnercontract.Run
+	requests          map[string]runnercontract.Request
 	t                 *testing.T
 	port              *roadmapPort
 	run               runnercontract.Run
 	request           runnercontract.Request
 	formalPredecessor string
 	futureTests       bool
+	sixTasks          bool
+	holdDocuments     bool
 }
 
 func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) (runnerclient.Receipt, error) {
@@ -51,7 +57,7 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 		if body == "" {
 			f.t.Fatal("original file material absent")
 		}
-		result = roadmap.Analysis{Tasks: []roadmap.Node{
+		result = roadmap.Analysis{Coordination: "Reuse the declared owners and confirmed dependency handoffs.", Tasks: []roadmap.Node{
 			{Key: "T1", KeyOrigin: "markdown", Title: "Sum function", Goal: "Sum two integers", Scope: "Pure function", Acceptance: "Sum(2,3) equals 5", Evidence: strings.Split(body, "\n")[1], Original: roadmap.Dependencies{}, Proposed: roadmap.Dependencies{}},
 			{Key: "T2", KeyOrigin: "markdown", Title: "Difference function", Goal: "Subtract via Sum", Scope: "Pure function", Acceptance: "Difference(5,2) equals 3", Evidence: strings.Split(body, "\n")[2], Original: roadmap.Dependencies{Local: []string{"T1"}}, Proposed: roadmap.Dependencies{Local: []string{"T1"}}},
 		}, Questions: []string{}, Overlap: "No existing Tasks"}
@@ -82,9 +88,32 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 			out.Documents[0].ProvidesTests = []string{"arithmetic.difference"}
 			out.Documents[1].Tests = append(out.Documents[1].Tests, "arithmetic.difference")
 		}
+		key := strings.TrimPrefix(in.Title, "Roadmap Spec / Plan: ")
+		selected := []roadmap.Documents{}
+		for _, d := range out.Documents {
+			if d.Key == key {
+				selected = append(selected, d)
+			}
+		}
+		out.Documents = selected
 		result = out
 	}
 	if a, ok := result.(roadmap.Analysis); ok {
+		if f.sixTasks {
+			for i := 3; i <= 6; i++ {
+				key := fmt.Sprintf("T%d", i)
+				a.Tasks = append(a.Tasks, roadmap.Node{Key: key, KeyOrigin: "markdown", Title: "Arithmetic " + key, Goal: "Pure arithmetic", Scope: "Pure function", Acceptance: "Unit tests", Evidence: strings.Split(instructionSource(in), "\n")[i], Original: roadmap.Dependencies{Local: []string{"T1"}}, Proposed: roadmap.Dependencies{Local: []string{"T1"}}})
+			}
+		}
+
+		if f.futureTests {
+			a.Tasks[0].ProvidesTests = []string{"arithmetic.difference"}
+		}
+		for i := range a.Tasks {
+			if a.Tasks[i].ProvidesTests == nil {
+				a.Tasks[i].ProvidesTests = []string{}
+			}
+		}
 		if f.formalPredecessor != "" {
 			found := false
 			for _, material := range in.Generate.Materials {
@@ -120,11 +149,25 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 	require(f.t, err)
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: f.run.RepositorySource, FileMaterials: f.run.Materials,
 		Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: q.RequestID, TurnID: "controlled-turn"}}
+	if f.runs == nil {
+		f.runs = map[string]runnercontract.Run{}
+		f.requests = map[string]runnercontract.Request{}
+	}
+	if f.holdDocuments && r.Purpose == "documents" {
+		f.run.Status, f.run.StopStatus = "running", "active"
+	}
+	f.run.Execution.AttemptID = "attempt-" + q.RequestID
+	f.run.Execution.SessionID = "session-" + q.RequestID
+	f.runs[f.run.RunID] = f.run
+	f.requests[f.run.RunID] = q
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: q.RequestID, ReceiptStatus: "accepted"}, nil
 }
-func (f *promotionRunner) Inspect(context.Context, string, string) (runnerclient.Inspection, error) {
-	r := f.run
-	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &r.RunID}}, nil
+func (f *promotionRunner) Inspect(_ context.Context, selector, id string) (runnerclient.Inspection, error) {
+	r, ok := f.runs[id]
+	if !ok {
+		return runnerclient.Inspection{}, nil
+	}
+	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: f.requests[id].RequestID, RunID: &r.RunID}}, nil
 }
 func (f *promotionRunner) Call(context.Context, string, []string, *runnercontract.Request) (runnerclient.Response, error) {
 	return runnerclient.Response{}, nil
@@ -190,6 +233,9 @@ func configurePromotionGeneration(t *testing.T, port *roadmapPort, live bool) {
 		})
 		catalog, err = cli.Catalog(context.Background(), version)
 		require(t, err)
+		promotionEvidence(t, "runner-version", version)
+		promotionEvidence(t, "runner-capabilities", catalog.Capabilities)
+		promotionEvidence(t, "runner-build", cli.BuildPin())
 		cli = cli.WithCatalog(catalog)
 		runner, build = cli, cli.BuildPin()
 		codex := os.Getenv("STEERLINE_ROADMAP_CODEX")
@@ -201,7 +247,7 @@ func configurePromotionGeneration(t *testing.T, port *roadmapPort, live bool) {
 
 	}
 	port.config.runtimeCatalog = catalog
-	port.service = &roadmapservice.Service{Project: port.config.Identity(), Repository: port.config.Repository, Store: port.store, Runner: runner, Build: build,
+	port.service = &roadmapservice.Service{Project: port.config.Identity(), Repository: port.config.Repository, Store: port.store, Runner: runner, Build: build, Queue: runnerbinding.NewContentQueue(5),
 		Source: port.source, Graph: port.graph, PrepareDocuments: port.documentContext, ReadCommitted: port.config.runtimeMaintenance.read,
 		Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 			return execution, catalog, nil
@@ -228,27 +274,72 @@ func promotionAction(t *testing.T, p *roadmapPort, action, target, request strin
 		t.Fatalf("unexpected response %T", value)
 	}
 	promotionEvidence(t, action, r)
-	promotionEvidence(t, action+"-runner-request", r.Request)
+	for _, v := range r.Executions() {
+		promotionEvidence(t, action+"-runner-request-"+v.GenerationID, v.Request)
+	}
 	return r
 }
 func awaitPromotion(t *testing.T, p *roadmapPort, r roadmap.Record, want string) roadmap.Record {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Minute)
+	overlapped := false
 	for time.Now().Before(deadline) {
 		var err error
 		r, err = p.service.Observe(context.Background(), r.ID)
 		require(t, err)
+		sessions := map[string]bool{}
+		for _, v := range r.Executions() {
+			if v.Projection != nil && v.Projection.Execution.TurnStarted && v.Projection.Status == "running" && v.Projection.StopStatus != "stopped" && v.Projection.Execution.SessionID != "" {
+				sessions[v.Projection.Execution.SessionID] = true
+			}
+		}
+		if len(sessions) > 1 && !overlapped {
+			overlapped = true
+			promotionEvidence(t, "concurrent-native-sessions", map[string]any{"observed_at": time.Now().UTC(), "record": roadmap.StoreValue(r)})
+		}
 		if r.State == want {
 			promotionEvidence(t, want, r)
-			promotionEvidence(t, want+"-runner-observation", r.Projection)
+			promotionEvidence(t, want+"-runner-observation", roadmap.StoreValue(r))
+			if os.Getenv("STEERRUNNER_EXE") != "" && want == "documents-review" && !overlapped {
+				t.Fatal("native sessions were not observed simultaneously running")
+			}
+			if cli, ok := p.service.Runner.(runnerclient.Client); ok && want == "documents-review" {
+				for _, v := range r.Executions() {
+					cursor := ""
+					events := []runnercontract.Event{}
+					for page := 0; page < 100; page++ {
+						observation, err := cli.Observe(context.Background(), v.RunID, cursor)
+						require(t, err)
+						events = append(events, observation.EventPage.Events...)
+						if !observation.EventPage.HasMore {
+							break
+						}
+						cursor = observation.EventPage.NextCursor
+						if page == 99 {
+							t.Fatal("native event evidence truncated")
+						}
+					}
+					promotionEvidence(t, "events-"+v.GenerationID, events)
+				}
+			}
 			return r
 		}
 		if r.State == "failed" || r.State == "invalid" || r.State == "blocked" || r.State == "documents-blocked" || r.State == "rejected" {
-			promotionEvidence(t, "failed-runner-observation", r.Projection)
+			promotionEvidence(t, "failed-runner-observation", roadmap.StoreValue(r))
 			t.Fatalf("generation %s: %s; questions=%v", r.State, r.Diagnostic, r.Questions)
 		}
 		time.Sleep(time.Second)
 	}
+	promotionEvidence(t, "timeout-runner-observation", roadmap.StoreValue(r))
 	t.Fatal("content generation timeout")
 	return r
+}
+
+func instructionSource(in runnercontract.GenerateRunInput) string {
+	for _, m := range in.Generate.Materials {
+		if m.Path == roadmapservice.SourceInputPath && m.Content != nil {
+			return *m.Content
+		}
+	}
+	return ""
 }

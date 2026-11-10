@@ -10,6 +10,7 @@
 | `<scope-id>` | 一项开发/验证工作的短目录名，例如 `wt-c751-paths`。不同 worktree 或同时推进的工作使用不同值，同一工作后续查证沿用原值。 |
 | `<test-run-id>` | 一次实际测试调用的唯一标识，建议 UTC 时间加随机 UUID；补测生成新值，不覆盖原结果。 |
 | `<release-id>` | 调试生成器返回的 `dev-yyyyMMdd-HHmmss-<短commit>[-dirty]`，其中时间为北京时间；从 stdout/manifest 读取，不自行猜测。 |
+| `generation_id` | 文档批次内一项独立内容执行的身份；用于共享队列、Run/session、停止与历史定位，不能替代批次 record_id 或正式 Task 编号。 |
 | `<test-id>` / `<scenario-id>` | 来自项目机器清单及 E2E manifest 的稳定 ID；不要用表格序号或包执行顺序代替。 |
 | `<home>` | 显式选定的应用 home。调试时为新包自己的 home，不能沿用安装版或另一现场的 `STEERLINE_HOME`。 |
 

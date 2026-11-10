@@ -9,6 +9,9 @@ import (
 
 // Explicit-only native model run; provider and Git remote remain isolated.
 func TestRoadmapLocalCodexPromotion(t *testing.T) {
+	// This entry only sends synthetic arithmetic fixtures to the native model.
+	// Real repository input has a separate, explicitly named entry below.
+	t.Setenv("STEERLINE_ROADMAP_SOURCE_REPOSITORY", "")
 	roadmapPromotionChain(t, true)
 }
 

@@ -351,3 +351,15 @@
     overflow-wrap: anywhere;
   }
 }
+
+.roadmaps-generation {
+  border-block-start: 1px solid var(--border);
+  padding-block: 1rem;
+  overflow-wrap: anywhere;
+}
+.roadmaps-generation pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow: auto;
+}

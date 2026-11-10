@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"fmt"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steeragent"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
@@ -13,6 +14,14 @@ import (
 
 func projectRoadmapActivity(a api.AsyncActivity, f ports.AsyncActivityFact, instance string, settled, current bool) (api.AsyncActivity, error) {
 	var r struct {
+		Generations []struct {
+			Key        string `json:"local_key"`
+			State      string `json:"state"`
+			Projection *struct {
+				Status         string `json:"status"`
+				ResumeRequired bool   `json:"resume_required"`
+			} `json:"projection"`
+		} `json:"generations"`
 		Project, ID, Purpose, State, Diagnostic, Submission string
 		Revision                                            uint64
 		CreatedAt                                           time.Time `json:"created_at"`
@@ -57,6 +66,9 @@ func projectRoadmapActivity(a api.AsyncActivity, f ports.AsyncActivityFact, inst
 	if r.Operation != nil && r.Operation.ID != "" {
 		a.Execution.RequestID, a.Execution.Action = r.Operation.ID, r.Operation.Action
 		// Publication/admission are local operations, not a new Runner execution.
+		a.Execution.RunID, a.Execution.AttemptID = "", ""
+	}
+	if r.Purpose == "documents" {
 		a.Execution.RunID, a.Execution.AttemptID = "", ""
 	}
 	a.Diagnostic = r.Diagnostic
@@ -125,6 +137,70 @@ func projectRoadmapActivity(a api.AsyncActivity, f ports.AsyncActivityFact, inst
 	}
 	if activityTerminal(a.State) && !settled {
 		a.Summary, a.State, a.Phase = a.Phase, "waiting", "原内容生成仍在运行或收尾待核实"
+	}
+	if r.Purpose == "documents" && len(r.Generations) > 0 && (r.State == "accepted" || r.State == "queued") {
+		latest := map[string]int{}
+		for i, g := range r.Generations {
+			latest[g.Key] = i
+		}
+		done := 0
+		running, queued, external, finalizing, unverified, attention := false, false, false, false, false, false
+		for _, i := range latest {
+			g := r.Generations[i]
+			switch g.State {
+			case "documents-review":
+				done++
+				continue
+			case "queued":
+				queued = true
+				continue
+			case "failed", "invalid", "rejected", "documents-blocked", "unknown":
+				attention = true
+				continue
+			}
+			if g.Projection == nil {
+				unverified = true
+				continue
+			}
+			if g.Projection.ResumeRequired {
+				attention = true
+				continue
+			}
+			switch g.Projection.Status {
+			case "running":
+				running = true
+			case "queued":
+				queued = true
+			case "blocked", "waiting_input":
+				attention = true
+			case "waiting_external":
+				external = true
+			case "completed", "failed", "stopped", "closed":
+				finalizing = true
+			default:
+				unverified = true
+			}
+		}
+		a.Phase = fmt.Sprintf("生成文档 %d/%d", done, len(latest))
+		a.State = "waiting"
+		switch {
+		case attention:
+			a.Phase += " · 部分任务需要处理"
+			a.NeedsAttention = current
+		case running:
+			a.State = "running"
+		case external:
+			a.Phase += " · 等待外部结果"
+		case finalizing:
+			a.Phase += " · 结果收尾中"
+		case unverified:
+			a.Phase += " · 执行状态待核实"
+		case queued:
+			a.State = "queued"
+			a.Phase += " · 排队中"
+		default:
+			a.Phase += " · 结果核实中"
+		}
 	}
 	// A Runner timestamp describes content generation only. Later publication
 	// and admission have no authoritative completion timestamp in this record.

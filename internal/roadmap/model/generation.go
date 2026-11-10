@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -63,7 +64,7 @@ func PlannedDocuments(r Record) []Documents {
 			name = "task"
 		}
 		name = r.Source.ID[:12] + "/" + name + "-" + Digest([]byte(n.Key))[:8]
-		out = append(out, Documents{Key: n.Key, Tests: []string{}, ProvidesTests: []string{},
+		out = append(out, Documents{Key: n.Key, Tests: []string{}, ProvidesTests: append([]string{}, n.ProvidesTests...),
 			Spec:       Document{Path: "SteerlineFlow/spec/roadmaps/" + name + ".spec.md"},
 			Plan:       Document{Path: "SteerlineFlow/plans/roadmaps/" + name + ".plan.md"},
 			Acceptance: []Document{{Path: "SteerlineFlow/testing/acceptance/roadmaps/" + name + ".md"}}})
@@ -86,10 +87,13 @@ func DocumentSchema(r Record) json.RawMessage {
 	}
 	entries := []any{}
 	for _, d := range PlannedDocuments(r) {
+		if d.Key != r.TargetKey() {
+			continue
+		}
 		entries = append(entries, object(map[string]any{
 			"local_key": map[string]any{"const": d.Key}, "spec": file(d.Spec.Path), "plan": file(d.Plan.Path),
 			"tests":          map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}},
-			"provides_tests": map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}},
+			"provides_tests": map[string]any{"const": d.ProvidesTests},
 			"acceptance":     map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": []any{file(d.Acceptance[0].Path)}}}))
 	}
 	props := map[string]any{
@@ -114,6 +118,9 @@ func DocumentSchema(r Record) json.RawMessage {
 }
 
 func DecodeDocuments(r Record, raw []byte, source *runnercontract.RepositorySource) (Record, error) {
+	if r.TargetKey() == "" {
+		return r, errors.New("缺少单任务生成身份")
+	}
 	if len(raw) > runnercontract.MaxGenerateResultBytes {
 		return r, errors.New("Runner 文档 JSON 超过 1 MiB")
 	}
@@ -207,7 +214,12 @@ func DecodeDocuments(r Record, raw []byte, source *runnercontract.RepositorySour
 		r.State = "documents-blocked"
 		return r, nil
 	}
-	want := PlannedDocuments(r)
+	want := []Documents{}
+	for _, d := range PlannedDocuments(r) {
+		if d.Key == r.TargetKey() {
+			want = append(want, d)
+		}
+	}
 	if len(want) != len(out.Documents) {
 		return r, errors.New("文档集不完整")
 	}
@@ -217,10 +229,16 @@ func DecodeDocuments(r Record, raw []byte, source *runnercontract.RepositorySour
 			return r, errors.New("文档路径或内部身份与固定 Schema 不符")
 		}
 	}
-	r.Documents, r.DocumentsVerified = out.Documents, true
-	if err = ValidateDocuments(r); err != nil {
-		return r, err
+	r.Documents, r.DocumentsVerified, r.State = out.Documents, true, "documents-review"
+	for _, d := range out.Documents {
+		if err := ValidateDocument(d); err != nil {
+			return r, err
+		}
+		for _, n := range r.Analysis.Tasks {
+			if n.Key == d.Key && !slices.Equal(n.ProvidesTests, d.ProvidesTests) {
+				return r, errors.New("新增测试提供关系与确认规划不符")
+			}
+		}
 	}
-	r.State = "documents-review"
 	return r, nil
 }
