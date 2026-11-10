@@ -354,3 +354,35 @@ it("keeps the drawer open when navigation protection cancels a details jump", as
   expect(screen.queryByRole("region", { name: /活动中心/ })).toBeNull();
   router.dispose();
 });
+
+it("copies a concise roadmap identity reference without source paths or diagnostics", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  setup(async () =>
+    page([
+      {
+        ...activity,
+        source: "roadmap",
+        kind: "roadmap_parse",
+        source_id: "original-record",
+        title: "解析 Roadmap 草稿 · SteerlineFlow/Roadmap/drafts/private.md",
+        diagnostic: "long diagnostic",
+        details_ref: { kind: "roadmap", target: "original-record" },
+        execution_ref: {
+          request_id: "original-record",
+          run_id: "original-run",
+          attempt_id: "original-attempt",
+        },
+      },
+    ]),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: /^活动 · 1 项进行中/ }),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "复制执行信息" }));
+  await screen.findByText("已复制执行信息");
+  expect(writeText.mock.calls[0][0]).toContain("Roadmap 解析");
+  expect(writeText.mock.calls[0][0]).toContain("Runner Run ID：original-run");
+  expect(writeText.mock.calls[0][0]).not.toContain("SteerlineFlow");
+  expect(writeText.mock.calls[0][0]).not.toContain("long diagnostic");
+});

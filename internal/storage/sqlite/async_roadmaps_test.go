@@ -41,6 +41,9 @@ func TestAsyncActivityRoadmapUsesCurrentPublishAdmitOrResumeCommand(t *testing.T
 				if instance == "i" {
 					want = "running"
 				}
+				if a.Execution.RequestID != fmt.Sprintf("command-%s-1", id) || a.Execution.Action != action || a.Execution.RunID != "" {
+					t.Fatalf("operation reference differs: %+v", a.Execution)
+				}
 				if a.State != want || a.NeedsAttention != (instance != "i") {
 					t.Fatalf("%s %s %s: %+v", state, action, instance, a)
 				}

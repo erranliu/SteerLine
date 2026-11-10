@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
@@ -116,6 +117,20 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return result, nil
 }
+
+type publicRoadmapRecord struct {
+	roadmap.Record
+	Execution api.ExecutionReference `json:"execution_ref"`
+}
+
+func publicRoadmap(r roadmap.Record) publicRoadmapRecord {
+	ref := api.ExecutionReference{RequestID: r.RequestID, RunID: r.RunID}
+	if r.Projection != nil {
+		ref.AttemptID = r.Projection.Execution.AttemptID
+	}
+	return publicRoadmapRecord{r, ref}
+}
+
 func (p *roadmapPort) read(ctx context.Context, route string, values url.Values) (any, error) {
 	if len(values) > 0 {
 		return nil, errors.New("roadmap query does not accept parameters")
@@ -146,11 +161,11 @@ func (p *roadmapPort) read(ctx context.Context, route string, values url.Values)
 				return nil, err
 			}
 			return struct {
-				roadmap.Record
+				publicRoadmapRecord
 				Preview any `json:"publication_preview"`
-			}{r, preview}, nil
+			}{publicRoadmap(r), preview}, nil
 		}
-		return r, e
+		return publicRoadmap(r), e
 	}
 	sources, e := roadmapservice.ListSources(p.config.Repository, p.config.Identity())
 	if e != nil {

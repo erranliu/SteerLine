@@ -1,4 +1,9 @@
 import { useState } from "react";
+import { useWorkspace } from "../../app/context";
+import {
+  CopyExecutionInfo,
+  type ExecutionReference,
+} from "../activities/execution-info";
 import { Button } from "../../shared/ui/button";
 import { environmentStage, type Environment } from "./use-readiness";
 
@@ -9,28 +14,30 @@ export type EnvironmentCommand = (
   payload: { [key: string]: unknown },
 ) => Promise<void>;
 
-export function DetectionID({ id }: { id: string }) {
-  const [feedback, setFeedback] = useState("");
+export function DetectionID({
+  id,
+  execution,
+}: {
+  id: string;
+  execution?: ExecutionReference;
+}) {
+  const { identity } = useWorkspace();
   return (
     <div className="detection-id">
       <span>
         检测 ID：<code>{id}</code>
       </span>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(id);
-            setFeedback("已复制");
-          } catch {
-            setFeedback("复制失败，请手动复制检测 ID");
-          }
+      <CopyExecutionInfo
+        key={id}
+        info={{
+          title: "环境检测",
+          project: identity.repository_identity,
+          requestID: execution?.request_id || id,
+          record: { id, label: "检测记录" },
+          runner: execution || {},
+          runnerUnverified: !execution,
         }}
-      >
-        复制
-      </Button>
-      {feedback && <span role="status">{feedback}</span>}
+      />
     </div>
   );
 }
@@ -64,6 +71,7 @@ export function EnvironmentCard({
     revision: number;
     settled: boolean;
     created_at?: string;
+    execution_ref?: ExecutionReference;
   };
   command: EnvironmentCommand;
 }) {
@@ -103,7 +111,13 @@ export function EnvironmentCard({
         </p>
       )}
       {!confirmingStart && activityID && (
-        <DetectionID key={activityID} id={activityID} />
+        <DetectionID
+          key={activityID}
+          id={activityID}
+          execution={
+            activity?.id === activityID ? activity.execution_ref : undefined
+          }
+        />
       )}
       {e.profiles.length > 1 && (
         <label>

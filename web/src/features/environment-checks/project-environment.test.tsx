@@ -145,12 +145,19 @@ it("copies the full detection ID and supports manual copying when clipboard acce
     value: { writeText },
   });
   await loaded();
-  fireEvent.click(within(currentCard()).getByRole("button", { name: "复制" }));
-  expect(await screen.findByText("已复制")).toBeVisible();
-  expect(writeText).toHaveBeenCalledWith(record.id);
+  await within(currentCard()).findByText(/最近检测：/);
+  fireEvent.click(
+    within(currentCard()).getByRole("button", { name: "复制执行信息" }),
+  );
+  expect(await screen.findByText("已复制执行信息")).toBeVisible();
+  expect(writeText.mock.calls[0][0]).toContain(record.id);
+  expect(writeText.mock.calls[0][0]).toContain("Runner Run ID：original-run");
+  expect(writeText.mock.calls[0][0]).toContain("Attempt ID：original-attempt");
   writeText.mockRejectedValue(new Error("denied"));
-  fireEvent.click(within(currentCard()).getByRole("button", { name: "复制" }));
-  expect(await screen.findByText("复制失败，请手动复制检测 ID")).toBeVisible();
+  fireEvent.click(
+    within(currentCard()).getByRole("button", { name: "复制执行信息" }),
+  );
+  expect(await screen.findByRole("alert")).toBeVisible();
   expect(screen.getByText(record.id)).toBeVisible();
 });
 
@@ -873,6 +880,11 @@ function fixture(
     timed_out: false,
     diagnostic: "",
     rounds: [round],
+    execution_ref: {
+      request_id: "a".repeat(32),
+      run_id: "original-run",
+      attempt_id: "original-attempt",
+    },
   };
   vi.spyOn(api, "get").mockImplementation(async (path) => {
     if (path === "/maintenance/readiness")

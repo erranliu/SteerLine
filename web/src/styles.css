@@ -735,6 +735,16 @@ textarea {
 }
 .copy-execution-info {
   min-width: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+.copy-execution-info pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 .copy-execution-info p {
   font-size: 10px;

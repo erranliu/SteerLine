@@ -49,13 +49,13 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		id = "a.roadmap_id"
 		payload = `json_object('project',a.project_identity,'id',a.roadmap_id,'revision',a.revision,
 		'purpose',json_extract(a.payload,'$.purpose'),'state',json_extract(a.payload,'$.state'),
-		'created_at',json_extract(a.payload,'$.created_at'),'request_id',json_extract(a.payload,'$.request_id'),
+		'created_at',json_extract(a.payload,'$.created_at'),'request_id',json_extract(a.payload,'$.request_id'),'run_id',json_extract(a.payload,'$.run_id'),
 		'diagnostic',json_extract(a.payload,'$.diagnostic'),'submission',json_extract(a.payload,'$.submission'),
 		'cancelled',json(CASE WHEN json_extract(a.payload,'$.cancelled') THEN 'true' ELSE 'false' END),'source',json_object('path',json_extract(a.payload,'$.source.path')),
 		'publication',json_extract(a.payload,'$.publication'),
-		'operation',json((SELECT json_object('status',c.status,'instance',json_extract(c.payload,'$.instance_id')) FROM commands c WHERE c.project_identity=a.project_identity AND c.kind='roadmap_command' AND c.target_id=a.roadmap_id AND json_extract(c.payload,'$.action') IN ('roadmap_publish','roadmap_admit','roadmap_resume') ORDER BY c.created_at DESC,c.command_id DESC LIMIT 1)),
+		'operation',json((SELECT json_object('id',c.command_id,'action',json_extract(c.payload,'$.action'),'status',c.status,'instance',json_extract(c.payload,'$.instance_id')) FROM commands c WHERE c.project_identity=a.project_identity AND c.kind='roadmap_command' AND c.target_id=a.roadmap_id AND json_extract(c.payload,'$.action') IN ('roadmap_publish','roadmap_admit','roadmap_resume') ORDER BY c.created_at DESC,c.command_id DESC LIMIT 1)),
 		'projection',CASE WHEN json_type(a.payload,'$.projection')='object' THEN json_object(
-		'status',json_extract(a.payload,'$.projection.status'),'stop_status',json_extract(a.payload,'$.projection.stop_status'),
+		'status',json_extract(a.payload,'$.projection.status'),'stop_status',json_extract(a.payload,'$.projection.stop_status'),'execution',json_object('attempt_id',json_extract(a.payload,'$.projection.execution.attempt_id')),
 		'resume_required',json(CASE WHEN json_extract(a.payload,'$.projection.resume_required') THEN 'true' ELSE 'false' END),'updated_at',json_extract(a.payload,'$.projection.updated_at')) ELSE NULL END)`
 		created = "json_extract(a.payload,'$.created_at')"
 		finished = "CASE WHEN json_type(a.payload,'$.publication') IS NULL THEN json_extract(a.payload,'$.projection.updated_at') ELSE NULL END"

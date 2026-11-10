@@ -18,6 +18,7 @@ import {
   type ActivityLinks,
 } from "./model";
 import "./activities.css";
+import { CopyExecutionInfo, operationNames } from "./execution-info";
 import { useActivityFeedback } from "./feedback/feedback";
 
 export type ActivityUI = {
@@ -338,7 +339,10 @@ export function Activities({
   return (
     <>
       <button
-        ref={(node) => { opener.current = node; if (feedback.entry) feedback.entry.current = node; }}
+        ref={(node) => {
+          opener.current = node;
+          if (feedback.entry) feedback.entry.current = node;
+        }}
         type="button"
         className="button button-ghost activity-entry"
         aria-label={`活动 · ${count("ongoing")} 项进行中 · 需处理 ${count("attention")}${pending ? ` · ${pending} 项提交待确认` : ""}`}
@@ -470,6 +474,8 @@ export function Activities({
                           detection: "检测",
                           task_execution: "任务执行",
                           submission: "提交确认",
+                          roadmap_parse: "Roadmap 解析",
+                          roadmap_documents: "文档生成",
                         } as Record<string, string>
                       )[a.kind] || "活动"}
                       {a.needs_attention && " · 需处理"}
@@ -529,6 +535,49 @@ export function Activities({
                         </Button>
                       </div>
                     )}
+                    <CopyExecutionInfo
+                      info={{
+                        title:
+                          operationNames[a.execution_ref?.action || ""] ||
+                          (
+                            {
+                              roadmap_parse: "Roadmap 解析",
+                              roadmap_documents: "Spec / Plan 生成",
+                              task_execution: "任务候选执行",
+                              detection:
+                                a.source === "baseline_check"
+                                  ? "检查主分支"
+                                  : "环境检测",
+                            } as Record<string, string>
+                          )[a.kind] ||
+                          a.title,
+                        project: projectName || identity.repository_identity,
+                        requestID:
+                          a.execution_ref?.request_id ||
+                          (a.provisional ? a.request_ids[0] : undefined),
+                        record:
+                          a.provisional || a.source === "baseline_check"
+                            ? undefined
+                            : {
+                                id: a.source_id,
+                                label:
+                                  a.source === "roadmap"
+                                    ? "Roadmap 记录"
+                                    : a.source === "environment_detection"
+                                      ? "检测记录"
+                                      : "候选",
+                              },
+                        taskID: a.details_ref.task_id,
+                        runnerUnverified:
+                          !a.execution_ref?.run_id && a.state === "waiting",
+                        runner:
+                          a.source === "task_candidate" ||
+                          a.source === "environment_detection" ||
+                          (a.source === "roadmap" && !a.execution_ref?.action)
+                            ? a.execution_ref || {}
+                            : undefined,
+                      }}
+                    />
                     <Button
                       variant="ghost"
                       size="sm"
