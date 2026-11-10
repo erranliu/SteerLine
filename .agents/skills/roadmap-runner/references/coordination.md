@@ -84,7 +84,7 @@ python <skill>/scripts/state.py apply --state <absolute-state-path> --expect <re
 task 的一级字段按键替换（嵌套对象须提供完整对象）。run 可更新 `phase`、`automation`、`blocker`、`decisions`、`finished_at`；身份字段不可改。用户后来明确补充或撤销授权时可更新完整 `authorization` 对象及新用户来源，助手会保留授权历史。助手仍可保存并补全待核验的 plan:null 记录，但启动正式任务前必须核对实际固定版本的 Plan，已有执行依据不可静默更换。可记录下列证据：
 
 - `session`：thread/client ID、host、worktree、branch、base_commit、model、thinking、cursor。未解析真实 ID 时保持 `creating`；获取真实 ID 后 `running`。不能把 client ID 填进 thread ID。
-- `pr`：url、number、head、base_branch、base_commit；head 更新时助手会使旧 review/validation/merge_gate 失效，并保留历史。
+- `pr`：url、number、head、base_branch、base_commit；候选身份或 head/base 更新时助手会使当前 review/validation/merge_gate 失效，并保留历史，重新确认与复用方式见“合并证据与恢复”。
 - `review`：head、comment_url、findings（问题/位置/影响/fix commit）、scope、base_commit；独立 review subagent 实际核验、协调 session 核对报告与证据后写入；记录审核/修复 agent ID、报告位置及对应 head/base，不能把执行者自查当作独立审核。
 - `validation`：head、status（`passed`、`passed_with_manual_pending` 或已有用户明确授权的 `accepted_exception`）、commands/results；人工补验和授权例外分别记录，失败不属于可合并状态。
 - `merge_gate`：head、base_commit、required_checks（`passed` 或平台已证实 `none`）、mergeable:true、checked_at。API 的 UNKNOWN 或未查询结果不等于 none；none 意味已核对该分支全部保护/规则，无必需检查。
@@ -155,20 +155,22 @@ kind 可为 `create_session / send_prompt / comment_pr / merge_pr / create_heart
 协调 session 尽量保持调度与证据核对职责，不默认亲自解决冲突或补完原任务。判断依据是实际工作内容，不以 diff 大小或出现在哪个文件决定归属：
 
 - **交回原执行 session**：PR/rebase/merge 冲突、最新主干或共同接口集成、Spec 已要求但实现/原测试断言/实际消费者遗漏、验收未接通及需要重新组织原实现。用原 thread、worktree 和 PR，描述具体缺口/冲突与证据、当前 main/head 和必要验证；不另开替代执行 session，不只发“继续”。若原需求/Spec 本身缺失或矛盾，先让原 session 核对原请求、整理范围内修订建议；需要扩大范围或更改验收时仍由用户决定，不能让执行者自行豁免。
-- **独立 review subagent**：每个候选新建只读 reviewer，给固定 Spec/Plan、任务/PR/worktree、精确 head/base、约束和真实证据入口，不复制执行 session 的实现过程或预设“应该通过”。先独立查完整 diff、生产调用路径及最小必要验证；报告问题/位置/影响、可复核证据、验证状态和未解决项。协调者核对结果并分流，不以 reviewer 一句“通过”直接合并。
+- **独立 review subagent**：首次审核新建只读 reviewer，给固定 Spec/Plan、任务/PR/worktree、精确 head/base、约束和真实证据入口，不复制执行 session 的实现过程或预设“应该通过”。首次独立查完整 diff、生产调用路径及最小必要验证；后续给出前次审核身份、原问题、精确新旧 head/base 与新增差异，由未参与实现或修复的原 reviewer 复核问题闭环及受影响路径，并对最终候选形成结论。报告问题/位置/影响、可复核证据、验证状态和未解决项。协调者核对结果并分流，不以 reviewer 一句“通过”直接合并。
 - **独立 fix subagent**：确认的局部缺陷且无需补做原需求时，新建另一个 repair agent，给问题证据、允许修改范围、候选身份与必要验证，在同一 PR 分支修复并提交，报告真实 commit/命令/结果后停止写入。冲突、实质需求遗漏等工作仍优先原 session；原 session 无法继续时先记录原因及交接再选择修复者，不自动创建替代执行聊天。
 
-review/fix 用 `collaboration.spawn_agent` 的 subagent，不用 `create_thread` 制造新的用户执行聊天。它们默认沿用协调 session 模型；仅执行 session 受 Luna/xhigh 固定设置约束，用户另有模型指令时遵守。用最小必要上下文建立独立判断，reviewer 与 fixer 分开；修复或执行者续跑后用新的只读 reviewer 检查最终改动，必要时复用未受影响的真实验证，避免整套重复运行。delegation 不可用时记录具体限制，不能把协调自查或原执行自查伪称为独立 subagent 复审。
+首次 review 与 fix 用 `collaboration.spawn_agent` 的 subagent，原 reviewer 的复核用 `collaboration.followup_task`，不用 `create_thread` 制造新的用户执行聊天。它们默认沿用协调 session 模型；仅执行 session 受 Luna/xhigh 固定设置约束，用户另有模型指令时遵守。reviewer 与 fixer 分开，以是否参与实现或修复判断独立性。范围扩大、重新组织实现或影响无法可靠收窄时扩大审核；原 reviewer 已参与写入、不可用或用户明确要求新独立视角时更换。新 reviewer 须取得前次覆盖范围、问题、报告及新增差异；无法建立可信前次覆盖时重做完整审核，不默认只查修复文件。必要时复用未受影响的真实验证，避免整套重复运行。delegation 不可用时记录具体限制，不能把协调自查或原执行自查伪称为独立 subagent 复审。
 
 每次交接前，协调先在任务 `decisions` 保存候选 head/base、工作分类、目标执行 thread/agent、允许写入范围和意图；subagent 创建返回身份后立即用状态助手补记 agent ID/报告位置。发送原 session 提示仍用 `reserve send_prompt`、固定模型/effort、成功 `apply/settle`；未知发送结果先对账。review/fix agent 不写共享 run 状态，也不自行发送 PR 评论/合并或执行 Git push；修复 commit 由协调核对后统一推送、发表评论和合并。
 
 同一 worktree 只允许一个写入者：原执行 session、fix subagent 与协调不能重叠写入；只读 reviewer也只在候选静止时检查。交回执行者前结束现有 review/fix 工作并收齐报告，记录新写入所有者；修复者停写后才交给终审 reviewer。跨 heartbeat 保存 agent ID、状态与报告，先核对现有工作再恢复；暂时看不到、超时或报告未返回不能重复创建同一轮 agent。
 
-head 或 base 变化后旧审核/门禁失效；冲突解决或需求补做完成的执行者仍须自查、验证和推送原 PR，然后停止写入。协调重新核对真实候选，调度独立审核，保存最终报告及必要验证后才进入原合并门禁。已经合入任务的历史审核方式与模型证据保持原样，新流程只作用于后续工作。
+head 或 base 变化后当前审核/门禁失效；冲突解决或需求补做完成的执行者仍须自查、验证和推送原 PR，然后停止写入。协调重新核对真实候选，按上述范围调度独立复核，保存最终报告及必要验证后才进入原合并门禁。已经合入任务的历史审核方式与模型证据保持原样，新流程只作用于后续工作。
 
 ## 合并证据与恢复
 
-`ready_to_merge` 要求 pr.head、review.head、validation.head、merge_gate.head 相同，review/merge_gate 的 base 与当前记录的 PR base 相同，评论 URL 存在，验证满足上述通过/人工登记/已授权例外条件，平台检查通过。`merged` 额外要求 merge.head 相同、merge commit 及 merged_at 非空。head 或 base 改变会清掉旧证据，退回 pr_ready；不能拿旧审核直接合并。实际合并操作前仍须再次读取平台，JSON 校验不消除竞争窗口。
+`ready_to_merge` 要求 pr.head、review.head、validation.head、merge_gate.head 相同，review/merge_gate 的 base 与当前记录的 PR base 相同，评论 URL 存在，验证满足上述通过/人工登记/已授权例外条件，平台检查通过。`merged` 额外要求 merge.head 相同、merge commit 及 merged_at 非空。head 或 base 改变会把旧记录存入 review_history、清除当前有效记录并退回 pr_ready；不能拿旧审核直接合并。实际合并操作前仍须再次读取平台，JSON 校验不消除竞争窗口。
+
+失效的是对当前候选的有效结论，不是历史报告本身。候选变化后先评估实际新增差异（含 base 变化对共同路径、依赖及测试环境的影响），复核范围按上一节决定。最终审核和验证汇总可引用未受影响的原报告，逐项说明原受测 SHA、报告位置、仍适用的范围及原因，并列本轮新增差异的补测；受影响或无法判断的部分须重新验证。原始报告不改 SHA，不把旧报告复制为新版本通过。新的 review/validation 记录对应当前候选的复核与验证汇总，不宣称引用的测试已在新 SHA 重跑；merge_gate 仍重新查询当前平台事实。本流程沿用现有字段及历史记录，不改状态脚本或增加缓存、认证状态。
 
 恢复每个任务时核对：session 是否仍写入，worktree 的 HEAD/分支/dirty 状态，PR 最新 head/base/状态/检查；记录与现实矛盾时保留旧证据并记录原因。未经复审的外部合并不自动过关；关闭 PR 不自动另开。暂停/完成时都通过工具更新原 heartbeat，不新增替代 automation。最终任务合并后先将 run 标记 complete，再暂停 automation；暂停响应未知时保留 pending，下次只核对/补完成停用，不再次执行任务。
 

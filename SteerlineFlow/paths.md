@@ -182,6 +182,8 @@ roadmap-runner 的仓库外状态目录约定为 `<CODEX_HOME>/task-state/roadma
 
 原 summary、JSONL、managed 报告和必要清理证据保留在本次独占运行目录；Git 中保存任务专属验收摘要、原始路径/版本/命令定位，以及 `SteerlineFlow/testing/records/` 下按受测 SHA 生成的简洁测试历史；不保存完整原始日志。失败与补测分目录保存，资源未确认停止或证据未登记完成时保留原现场。临时目录可能被系统清理，需要长期追溯时先保存完整证据并在验收记录更新实际定位，不仅复制一份“通过”文字。
 
+本清单定义实际执行的路径与隔离，不要求为每次提交新跑测试或为全部源文件、产物制作摘要；证据范围、结果复用与停止条件统一见[测试指南](testing.md#环境与证据)，Git 历史导出的资格见[报告约定](testing/reports.md#写入-git-历史)。
+
 源码中的 `.evidence/` 是已忽略的本地临时证据区，不是本约定的仓库外并行调试根；新建持续现场使用上面的外部 scope。`SteerlineFlow/testing/acceptance/` 和 archive/ 也不放运行中的数据库、认证、服务锁或大体积原始现场。
 
 路径调整应同步本清单、调用说明、实际读取者和相关夹具。当前实现定位：[测试执行器](../cmd/test-feedback/main.go)、[分组日志](../cmd/test-feedback/scoped.go)、[E2E 输出](../cmd/test-feedback/e2e.go)、[受管报告](../cmd/test-feedback/managed.go)、[调试生成器](../scripts/new-debug-release.ps1)、[Runner 短目录](../internal/runnerstatepath/path.go)、[应用 home](../internal/app/config.go)。本次清单整理只统一显式路径和定位规则，不迁移已有运行现场或修改服务状态。
