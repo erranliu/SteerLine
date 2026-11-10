@@ -396,3 +396,24 @@ Web 已开放生成、独立请求历史/停止、代码提交/整体设计/调�
 | 活动 query/App 定向 | passed，非零且无跳过 | `diagnostics/20261106-conflict-activity-query-b/summary.json` |
 | 完整 web.unit | 351 项通过、0 failed/skip，其中 Roadmap 文件 23 项 | `test-results/L4/20261106-conflict-activity-web-b/summary.json` |
 | 构建/静态 | TypeScript/Vite 构建通过；711 文件、4402 链接、0 错误；diff 格式通过 | 本聊天实际命令输出 |
+
+
+### 确认规划与文档生成合并（2026-11-10）
+
+本轮按用户授权直接修改当前工作树（基线 HEAD `3ce94c753f4b610aa3f6c7d70b98d194ad4ecf2e`，未提交差异）：页面将两次点击合并为“确认任务依赖并生成 Spec / Plan”，进度条同步合并阶段。后台仍先校验原 revision、草稿、任务图、解析问题与依赖并保存确认，再建立独立文档请求；生成准备或已结算模型失败后沿原父解析重试，不覆盖确认记录。原请求结果未知时仍先核实；确认已保存而文档请求尚未保存的中断窗口，通过排除活跃生成并核实派生确认记录，持久结算为可重试失败，不由查询重新调用模型。
+
+提示词业务正文与完整材料差异为空，实际 UTF-8 字节前后相同：`internal/prompts/roadmap-documents.md` 547 → 547，`internal/prompts/materials/roadmap-documents.md` 2637 → 2637，`internal/prompts/testdata/roadmap-documents.golden.md` 539 → 539。生成指令、schema 与材料组装保持原实现；本次业务原因是减少确认后的重复点击，并保留失败/中断重试依据。独立只读审核者 `/root/independent_review` 发现并复核修复上述中断窗口后批准最终代码；这是本地独立审核，不代表远端 PR 审批。
+
+本轮证据根为 `C:/SteerlineDebug/wt-70c1-roadmap-combined/`。早期沙箱执行发生报告替换拒绝访问，不计作正式通过；独立目录首次后端回归 `20261110-go-b` 发现恢复分支调用较窄存储接口的编译错误，已改用现有 Roadmap SQLite owner 后另开目录验证，保留原失败报告。
+
+| 验证 | 实际结果 | 证据根内路径 |
+| --- | --- | --- |
+| 完整 L1 | passed=true | `test-results/L1/20261110-a/summary.json` |
+| 完整 L2 | passed=true，cleanup_complete=true | `test-results/L2/20261110-a/summary.json` |
+| 完整 go.roadmap | passed=true，包含单次确认生成、独立请求绑定、模型失败重试及中断/活跃回执核实 | `test-results/L4/20261110-go-c/summary.json` |
+| 完整 web.unit | passed=true，419 项通过、0 failed/skip；Roadmap 文件 37 项 | `test-results/L4/20261110-web-b/summary.json` |
+| 受控生产构建浏览器 | 1 项通过，单次确认生成命令、依赖审阅及历史/布局检查 | `test-results/L4/20261110-browser-a/` |
+| 提示词包完整测试 | 通过；保留原黄金样本 | `diagnostics/20261110-prompts-a/summary.json` |
+| 构建/静态 | TypeScript/Vite 构建通过；本轮文档链接和 diff 格式检查 | 本聊天实际命令输出 |
+
+本轮验证没有调用真实模型或创建外部 PR，没有安装部署；真实 Runner 与实际安装版体验仍未验。受控浏览器使用公开响应夹具，不能代替真实生成链路验收。

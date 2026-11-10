@@ -320,13 +320,23 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 			t.Fatal("actual draft omitted tasks", expected)
 		}
 	}
-	parent := promotionAction(t, port, "roadmap_confirm", parsed.ID, strings.Repeat("1", 32), parsed.Revision, struct{}{})
-	assertRoadmapActivityState(t, store, c.Identity(), parent.ID, "succeeded", false, "current")
 	code = fixtureGit(t, c.Repository, "rev-parse", "HEAD")
 	if !actualProject {
 		require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
 	}
-	r := promotionAction(t, port, "roadmap_generate_documents", parent.ID, strings.Repeat("2", 32), parent.Revision, struct{}{})
+	r := promotionAction(t, port, "roadmap_generate_documents", parsed.ID, strings.Repeat("2", 32), parsed.Revision, struct{}{})
+	parent, e := store.Roadmap(ctx, c.Identity(), parsed.ID)
+	require(t, e)
+	if parent.State != "confirmed" || parent.ConfirmedDigest == "" || parent.ConfirmationRequest == "" || r.ParentID != parent.ID || r.ConfirmedDigest != parent.ConfirmedDigest {
+		t.Fatal("combined generation lost its confirmation", parent, r)
+	}
+	confirmation, e := store.RoadmapRequest(ctx, c.Identity(), parent.ConfirmationRequest)
+	require(t, e)
+	document, e := store.RoadmapRequest(ctx, c.Identity(), strings.Repeat("2", 32))
+	require(t, e)
+	if confirmation.ID != parent.ID || document.ID != r.ID {
+		t.Fatal("confirmation and generation request bindings collided", confirmation.ID, document.ID)
+	}
 	r = awaitPromotion(t, port, r, "documents-review")
 	assertRoadmapActivityState(t, store, c.Identity(), r.ID, "succeeded", true, "current")
 	if r.CodeCommit != code || len(r.Documents) != expectedTasks || len(r.Mapping) != 0 || len(r.Investigation) == 0 {

@@ -391,7 +391,8 @@ export function Roadmaps() {
     hasPending ||
     publicationPending ||
     stale ||
-    generationParent.state !== "confirmed" ||
+    !["review", "confirmed"].includes(generationParent.state) ||
+    !!generationParent.analysis?.questions.length ||
     !value?.documents_available ||
     !value?.preparation.ready;
   const mainAction = roadmapNextAction(
@@ -409,29 +410,29 @@ export function Roadmaps() {
     ? "请按下方待澄清问题在外部补充草稿，再重新解析任务与依赖。"
     : currentStale
       ? "草稿已修改，当前流程保留原快照。采用新内容需重新解析和确认。"
-      : mainAction === "confirm"
-        ? "请核对下方任务范围、原有依赖与拟议依赖，再确认本次规划。"
-        : mainAction === "generate"
-          ? "任务与依赖已确认，下一步生成逐任务 Spec / Plan 和验收材料。"
-          : mainAction === "publish"
-            ? "请审阅下方完整文档与发布差异。发布会创建文档 PR 并按展示内容合并。"
-            : mainAction === "admit"
-              ? "文档合并已核实。入图将创建正式任务并分配编号；自动派发开启时，就绪任务可能启动。"
-              : mainAction === "dag"
-                ? "本次转正已完成，执行状态请查看正式任务 DAG。"
-                : mainAction === "resume" || mainAction === "observe"
-                  ? "沿原请求核实结果，暂不重新提交。"
-                  : mainAction === "wait"
-                    ? "当前内容请求正在处理，结果将在此更新。"
-                    : "解析草稿，核对任务范围、已有正式任务和依赖。";
+      : mainAction === "generate"
+        ? generationParent?.state === "review"
+          ? "请核对下方任务范围、原有依赖与拟议依赖；确认后立即生成逐任务 Spec / Plan 和验收材料。"
+          : "任务与依赖已确认，可重试生成逐任务 Spec / Plan 和验收材料。"
+        : mainAction === "publish"
+          ? "请审阅下方完整文档与发布差异。发布会创建文档 PR 并按展示内容合并。"
+          : mainAction === "admit"
+            ? "文档合并已核实。入图将创建正式任务并分配编号；自动派发开启时，就绪任务可能启动。"
+            : mainAction === "dag"
+              ? "本次转正已完成，执行状态请查看正式任务 DAG。"
+              : mainAction === "resume" || mainAction === "observe"
+                ? "沿原请求核实结果，暂不重新提交。"
+                : mainAction === "wait"
+                  ? "当前内容请求正在处理，结果将在此更新。"
+                  : "解析草稿，核对任务范围、已有正式任务和依赖。";
   return (
     <section className="roadmaps-page" aria-label="Roadmap 草稿">
       <header className="page-header">
         <div>
           <h1>Roadmap 草稿</h1>
           <p>
-            读取 Markdown → 核对任务与依赖 → 确认 → Spec / Plan → 发布合并 → 入
-            DAG 时分配编号
+            读取 Markdown → 确认任务依赖并生成 Spec / Plan → 审阅文档 → 发布合并
+            → 入 DAG 时分配编号
           </p>
         </div>
         <button
@@ -584,27 +585,6 @@ export function Roadmaps() {
                 )}
               </button>
             )}
-            {mainAction === "confirm" && (
-              <button
-                className="roadmaps-primary"
-                disabled={
-                  locked ||
-                  !record ||
-                  record.state !== "review" ||
-                  stale ||
-                  !!analysis?.questions.length
-                }
-                onClick={() =>
-                  record &&
-                  void action("roadmap_confirm", record.id, record.revision)
-                }
-              >
-                {actionLabel(
-                  "roadmap_confirm",
-                  `确认本次任务与依赖（${analysis?.tasks.length ?? 0} 项）`,
-                )}
-              </button>
-            )}
             {mainAction === "generate" && (
               <button
                 className="roadmaps-primary"
@@ -618,7 +598,12 @@ export function Roadmaps() {
                   )
                 }
               >
-                {actionLabel("roadmap_generate_documents", "生成 Spec / Plan")}
+                {actionLabel(
+                  "roadmap_generate_documents",
+                  generationParent?.state === "review"
+                    ? "确认任务依赖并生成 Spec / Plan"
+                    : "重试生成 Spec / Plan",
+                )}
               </button>
             )}
             {mainAction === "wait" && (
