@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"sort"
 	"strings"
@@ -92,15 +93,11 @@ func (p *roadmapPort) publicationPreview(ctx context.Context, r roadmap.Record) 
 			return nil, err
 		}
 		for _, d := range r.Documents {
-			raw, err := roadmap.TestsJSON(d)
+			old, err := roadmapTestPreview(r, d, before)
 			if err != nil {
 				return nil, err
 			}
-			old, err := testmodel.Select([]byte(raw), before)
-			if err != nil {
-				return nil, err
-			}
-			latest, err := testmodel.Select([]byte(raw), after)
+			latest, err := roadmapTestPreview(r, d, after)
 			if err != nil {
 				return nil, err
 			}
@@ -112,6 +109,29 @@ func (p *roadmapPort) publicationPreview(ctx context.Context, r roadmap.Record) 
 		}
 	}
 	return out, nil
+}
+
+// Pending IDs remain visible as promises, never fabricated definitions.
+func roadmapTestPreview(r roadmap.Record, d roadmap.Documents, catalogue testmodel.Catalogue) (any, error) {
+	if err := roadmapservice.ValidateTestIDs(r, catalogue); err != nil {
+		return nil, err
+	}
+	known := map[string]testmodel.Definition{}
+	for _, definition := range catalogue.Tests {
+		known[definition.ID] = definition
+	}
+	view := struct {
+		Definitions []testmodel.Definition `json:"definitions"`
+		Pending     []string               `json:"pending_tests"`
+	}{Definitions: []testmodel.Definition{}, Pending: []string{}}
+	for _, id := range d.Tests {
+		if definition, ok := known[id]; ok {
+			view.Definitions = append(view.Definitions, definition)
+		} else {
+			view.Pending = append(view.Pending, id)
+		}
+	}
+	return view, nil
 }
 
 func (p *roadmapPort) testCatalogueAt(ctx context.Context, commit string) (testmodel.Catalogue, string, error) {

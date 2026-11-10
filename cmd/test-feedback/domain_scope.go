@@ -34,6 +34,8 @@ var appDomainSources = map[string]domainTestSource{
 	"internal/app/roadmap_publication_test.go":         {Suite: "go.roadmap", Roots: []string{"TestRoadmapPublicationAndAdmissionWithRealGit", "TestRoadmapPublicationAndAdmissionWithCRLFCheckout"}},
 	"internal/app/roadmap_preparation_test.go":         {Suite: "go.roadmap", Roots: []string{"TestRoadmapStaticInitializationAndPublication", "TestRoadmapStaticInitializationRejectsGitOperation", "TestRoadmapInitializationPendingReceiptReconcilesWithoutWriting", "TestRoadmapPublishedGuideMustBeValidUTF8AndBounded"}},
 	"internal/app/roadmap_generation_test.go":          {Suite: "go.roadmap"},
+	"internal/app/project_planned_tests_test.go":       {Suite: "go.roadmap"},
+	"internal/app/roadmap_test_preview_test.go":        {Suite: "go.roadmap"},
 	"internal/app/roadmap_live_test.go":                {Suite: "go.roadmap", BuildTag: "e2e", Roots: []string{"TestRoadmapLocalCodexPromotion", "TestRoadmapPreparedSteerlineTestLocalCodexPromotion"}},
 	"internal/app/host/native_state_preflight_test.go": {Suite: "go.roadmap", Roots: []string{"TestRoadmapPublicationStateCanReopenWithoutRelaxingDirectoryGuard"}},
 }

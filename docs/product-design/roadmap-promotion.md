@@ -18,7 +18,11 @@
 
 输出 Schema 固定内部代号、稳定语义路径及完整 Spec/Plan/验收文件集合，同时返回整体设计、调查引用和问题。引用核对公开 manifest 路径/SHA；关键问题回到外部草稿修订并重新解析确认，不靠编辑正文暗改 DAG。
 
+每项文档的 tests 保留有序唯一 ID；provides_tests 声明本任务将新增并登记的 ID，无新增时为空数组。同一 ID 只能有一个批内提供者。当前清单没有的 ID 只允许被该提供者的严格依赖后继（含传递后继）选择；提供者不能用自己尚未交付的 ID 作为自身运行安排。Plan 写清提供者与交接，发布的 generated 索引和审阅摘要保存声明，正式 .tests.json 仍只保存 tests。发布预览区分已登记定义与 pending_tests，不提前伪造定义。生成遇到冲突返回最终 JSON questions 和空 documents，不调用交互提问。
+
 完整最终 JSON 上限 1 MiB，从公开 content_result.json 读取。原生来源已核实、Run completed、stop_status=stopped、仓库 manifest 一致且业务校验通过后进入审阅。页面展示来源提交、整体设计、引用及完整正文，允许修改未发布的文档记录；发布前展示所有原/新文件及目标。
+
+失败保留 ContentResult、Run 和 Final 的具体诊断；human_input_required 另从公开 history 核对原 Run/input/revision、Command/session/turn 和分页，显示原问题正文。详情无法核实时保留失败码及读取诊断，不将其它执行的问题挂到当前记录，也不据历史问题产生回复或恢复资格。
 
 ## 发布与编号
 

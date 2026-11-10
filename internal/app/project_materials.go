@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -94,16 +95,20 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 	if err != nil {
 		return result, err
 	}
-	plan, basis, err := pm.Arrangement(contract.PlanRef.Path, commit, read, protocol)
-	if err != nil {
-		return result, err
-	}
 	if err = verifyTestWriter(read); err != nil {
 		return result, err
 	}
 	if _, err = m.config.projectPolicySlots(ctx, commit); err != nil {
 		if isRetryableMaterialRead(err) {
 			result.Status = "unknown"
+		}
+		return result, err
+	}
+	plan, basis, err := pm.Arrangement(contract.PlanRef.Path, commit, read, protocol)
+	if err != nil {
+		var missing *testmodel.MissingTestIDs
+		if errors.As(err, &missing) {
+			result.MissingTests = append([]string(nil), missing.IDs...)
 		}
 		return result, err
 	}
@@ -315,6 +320,25 @@ func (m *projectMaintenance) taskReadiness(ctx context.Context, id string) (task
 	if err != nil {
 		return taskPreparation{}, err
 	}
+	if latest.Commit == m.current().Commit && len(latest.MissingTests) > 0 {
+		graph, graphErr := m.store.TaskGraphSnapshot(ctx, m.config.Identity())
+		if graphErr != nil {
+			return taskPreparation{}, graphErr
+		}
+		for _, task := range graph.Tasks {
+			if task.TaskID != id {
+				continue
+			}
+			waiting, waitErr := m.waitingForPlannedTests(ctx, task, graph, latest)
+			if waitErr != nil {
+				return taskPreparation{}, waitErr
+			}
+			if waiting {
+				latest.Status = "waiting_tests"
+				latest.Diagnostic = "等待同批前置任务交付并登记测试：" + strings.Join(latest.MissingTests, ", ")
+			}
+		}
+	}
 	return m.preparation(latest), nil
 }
 
@@ -368,8 +392,12 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 		files = append(files, d)
 	}
 
+	preparation, err := m.taskReadiness(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	return struct {
 		taskPreparation
 		Files []document `json:"files"`
-	}{m.preparation(latest), files}, nil
+	}{preparation, files}, nil
 }

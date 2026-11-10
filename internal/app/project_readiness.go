@@ -46,6 +46,14 @@ func (m *projectMaintenance) readinessState(ctx context.Context) (maintenanceSta
 		if material.Commit != "" && (material.Commit != state.Observation.Commit || state.Observation.Diagnostic != "") {
 			material.Status = "unknown"
 		}
+		waiting, err := m.waitingForPlannedTests(ctx, task, graph, material)
+		if err != nil {
+			return state, err
+		}
+		if waiting {
+			material.Status = "waiting_tests"
+			material.Diagnostic = "等待同批前置任务交付并登记测试：" + strings.Join(material.MissingTests, ", ")
+		}
 		state.Materials = append(state.Materials, material)
 	}
 	state.Local = m.localBaseline(ctx)

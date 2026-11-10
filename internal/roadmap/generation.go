@@ -304,7 +304,7 @@ func (s *Service) observe(ctx context.Context, r model.Record) (out model.Record
 		if result := run.ContentResult; result != nil {
 			if result.Status != "succeeded" || !result.Source.Verified || result.Source.NativeOutcome != "succeeded" || result.Source.CommandID == "" || result.Source.TurnID == "" {
 				r.State = "failed"
-				r.Diagnostic = "未取得经核实的完整解析结果"
+				r.Diagnostic = s.contentFailure(ctx, run)
 			} else {
 				if run.Status != "completed" || run.StopStatus != "stopped" {
 					return s.save(ctx, r)
@@ -388,7 +388,7 @@ func (s *Service) observe(ctx context.Context, r model.Record) (out model.Record
 			}
 		} else if run.Status == "failed" || run.Status == "stopped" || run.Status == "completed" {
 			r.State = "failed"
-			r.Diagnostic = "Runner 已结束，没有可核实的解析结果"
+			r.Diagnostic = s.contentFailure(ctx, run)
 		}
 	}
 	return s.save(ctx, r)

@@ -118,6 +118,8 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 		t.Fatal("duplicate document submission", err, f.submits)
 	}
 	out, source := documentResult(r)
+	out.Documents[0].ProvidesTests = []string{"new.content"}
+	out.Documents[1].Tests = []string{"one", "new.content"}
 	source.LocalPath = s.Repository
 	readCommitted := s.ReadCommitted
 	readCode := false
@@ -154,6 +156,56 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	stored, _ := store.Roadmap(ctx, s.Project, r.ID)
 	if stored.Materials[0].Content == nil || *stored.Materials[0].Content != "fixed generation guidelines" {
 		t.Fatal("guideline snapshot lost")
+	}
+}
+
+func TestRoadmapFutureTestsRequireUniqueStrictPredecessor(t *testing.T) {
+	s, _, _, parent := documentSetup(t)
+	r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := documentResult(r)
+	r.Documents = out.Documents
+	catalogue, err := TestCatalogue(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Documents[0].ProvidesTests = []string{"new.content"}
+	r.Documents[1].Tests = []string{"one", "new.content"}
+	if err := ValidateTestIDs(r, catalogue); err != nil {
+		t.Fatal(err)
+	}
+	var input runnercontract.GenerateRunInput
+	if err := json.Unmarshal(r.Request.Input, &input); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(input.Generate.OutputSchema), "\"enum\":[\"one\"]") || !strings.Contains(string(input.Generate.OutputSchema), "\"provides_tests\"") {
+		t.Fatal("future IDs remain excluded by schema")
+	}
+	for _, mutation := range []func(*model.Record){
+		func(v *model.Record) { v.Documents[0].ProvidesTests = nil },
+		func(v *model.Record) { v.Documents[1].ProvidesTests = []string{"new.content"} },
+		func(v *model.Record) { v.Documents[0].ProvidesTests = []string{"new.content", "new.content"} },
+		func(v *model.Record) { v.Documents[0].Tests = []string{"new.content"} },
+		func(v *model.Record) { v.Analysis.Tasks[1].Proposed.Local = nil },
+		func(v *model.Record) {
+			v.Analysis.Tasks[0].Proposed.Local = []string{"Beta"}
+			v.Analysis.Tasks[1].Proposed.Local = nil
+		},
+	} {
+		raw, _ := json.Marshal(r)
+		var changed model.Record
+		_ = json.Unmarshal(raw, &changed)
+		mutation(&changed)
+		if err := ValidateTestIDs(changed, catalogue); err == nil {
+			t.Fatal("invalid provider or dependency accepted", changed.Documents)
+		}
+	}
+	r.Analysis.Tasks = append(r.Analysis.Tasks, model.Node{Key: "Middle", Proposed: model.Dependencies{Local: []string{"Alpha"}}})
+	r.Analysis.Tasks[1].Proposed.Local = []string{"Middle"}
+	if err := ValidateTestIDs(r, catalogue); err != nil {
+		t.Fatal(err)
 	}
 }
 func TestRoadmapDocumentOutputRejectsMismatchesAndSupportsQuestions(t *testing.T) {

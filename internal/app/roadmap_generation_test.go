@@ -24,6 +24,7 @@ type promotionRunner struct {
 	run               runnercontract.Run
 	request           runnercontract.Request
 	formalPredecessor string
+	futureTests       bool
 }
 
 func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) (runnerclient.Receipt, error) {
@@ -76,6 +77,10 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 			out.Documents[i].Tests = []string{"arithmetic.unit"}
 			out.Documents[i].Plan.Body = "# Plan\n## 实施\n扩展 logic.go\n## 测试\n运行 go test ./...，报告保存在独立目录"
 			out.Documents[i].Acceptance[0].Body = "# 验收\n## 自动\n待执行\n## 人工\n无需"
+		}
+		if f.futureTests {
+			out.Documents[0].ProvidesTests = []string{"arithmetic.difference"}
+			out.Documents[1].Tests = append(out.Documents[1].Tests, "arithmetic.difference")
 		}
 		result = out
 	}

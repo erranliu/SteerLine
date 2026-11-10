@@ -1,5 +1,50 @@
 # Roadmap 读取、解析与转正验收计划
 
+## 2026-11-10：同批前置提供测试与失败原因保留
+
+用户授权修复请求 fa922d27a97047dea1908b669ff2bc0f 暴露的问题：草稿后继要使用 N201–N205，但固定提交清单仅有 N101–N105，原生成 schema 的 enum 排除了尚待前置新增的 ID；原 Run 7aec567a58a7898933891638d75dfb7b 在原生提问后以 human_input_required 失败，页面又覆盖成通用诊断。
+
+本次受测源码为 d1fe6f771813259c12ebdbf247021ee5b4de67bb 加当前工作树修改（dirty），未部署。原始证据根固定为 C:/SteerlineDebug/wt-c671-planned-tests/；不将 dirty 报告导出为该 SHA 的 clean 历史通过。
+
+实现与验收边界：
+
+- 每项文档声明 provides_tests，有序唯一且每个 ID 只能有一个批内新任务提供者；后继只能选择现有 ID 或严格前置（含传递前置）提供的新 ID。拒绝自提供、反向、无依赖、未声明及重复提供。生成、编辑、发布、合并复验共用校验，正式 .tests.json 仍只保存 tests。
+- 已入图后，只有普通 open 后继因这些承诺缺少 ID、且当前图中有效前置尚未交付时，投影 waiting_tests；Spec/Plan、项目规范、现有清单、协议和 writer 仍核实。存储材料保持 invalid，后继自己不能启动；提供者交付后仍缺定义则明确阻断。新提交登记真实定义后，仍按相同执行提交严格展开、冻结。
+- 失败保存 ContentResult、Run、Final 的诊断；终态无 ContentResult 也保留。原问题仅从公开 history 分页读取并核对 Run/input/revision 与 Command/session/turn；错误 turn 的正文拒绝采用，失败详情读取异常也保留诊断，不产生恢复资格。
+- 页面展示新增测试声明、waiting_tests 与数量、具体错误及原问题；发布预览区分真实定义和待提供 ID。
+
+### 固定提示词正文与独立审核
+
+实际正文及黄金/摘要差异见 [完整 diff](evidence/roadmap-planned-tests-prompts.diff)，UTF-8/LF 字节如下：
+
+| 文件 | 变更前 | 变更后 |
+| --- | ---: | ---: |
+| internal/prompts/roadmap-documents.md | 530 | 547 |
+| internal/prompts/materials/roadmap-documents.md | 2085 | 2637 |
+| internal/prompts/testdata/roadmap-documents.golden.md | 522 | 539 |
+
+业务原因：短模板增加 provides_tests 字段；完整规则用“现有 ID 或严格前置明确新增 ID”、唯一提供者、依赖交接和执行提交核验，替代原“只选择固定正式清单已有ID”。冲突改为只在最终 JSON 返回 questions 和空 documents，避免一次性 generate 中交互提问导致关闭。规则增长 552 字节用于表达新增的提供者与执行边界；固定行为仍从 prompts 文件读取，业务代码不内联补规则。
+
+独立只读审核 inspect_execution 已检查实际正文、字节数、schema/接线和对应测试，批准提示词变更；其指出的“终态无结果仍覆盖诊断”已修复并加回归，复核通过。黄金和摘要更新未替代批准。
+
+### 本次验证
+
+| 验证 | 命令与结果 / 原始证据 |
+| --- | --- |
+| 固定 L1 | go run ./cmd/test-feedback -level=L1 -out <证据根>/test-results/L1/20261110-final-1；passed/complete=true，准备 0.266s、执行 20.938s |
+| 固定 L2 | go run ./cmd/test-feedback -level=L2 -out <证据根>/test-results/L2/20261110-final-1；passed=true，准备 8.539s、执行 101.757s，停止/清理见原 summary |
+| 相关 owner | go run ./cmd/test-feedback -out <证据根>/diagnostics/owners-20261110-final -- ./internal/runnerclient ./internal/testmanagement/... ./internal/projectmaintenance/... ./internal/prompts -count=1；passed/complete=true，19.333s，零失败/skip |
+| 登记前端全集 | go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit -out <证据根>/test-results/L4/web-20261110-final-1；44 文件 / 392 项通过，零失败/skip，28.650s |
+| 登记 Roadmap | go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.roadmap -out <证据根>/test-results/L4/roadmap-20261110-final-1；passed/complete=true，三组串行、零失败/skip，435.984s；新增 planned-tests 子场景通过（91.750s） |
+| 前端构建 | npm --prefix web run build；TypeScript/Vite 通过，实际工具输出留本聊天 |
+| 静态检查 | python scripts/check_doc_links.py 与 git diff --check；727 份 Markdown、4488 个本地链接，0 错误；diff 空白检查通过 |
+
+首轮诊断保留于 diagnostics/initial-20261110：新增维护 fixture 遗漏固定测试 Materials，导致等待状态断言失败；已补齐夹具并在登记 Roadmap 的 planned-tests 子场景重验，不改生产校验绕过失败。其余首轮诊断不作为最终版本的整体通过。
+
+新增链路回归在既有 TestRoadmapPublicationAndAdmissionWithRealGit/planned-tests 下覆盖受控 Git 发布/合并/入图，以及前置可启动、后继不可启动、未声明 ID 阻断、已交付但缺定义阻断、新提交登记后冻结真实定义；发布预览覆盖 pending→真实定义。不增加正式 App 根数量，仍是 11 根及全部子项。
+
+本次未执行真实模型、真实远端 PR、安装更新或用户人工体验；原关闭 Run 未被重发或改写。
+
 ## 2026-11-06：转正进度与当前流程展示
 
 用户授权首轮界面调整：固定进度区、当前流程与历史分离、集中主操作及左侧草稿状态；不接活动中心。实现仅调整 Web 展示与原命令入口，不修改 Runner 请求、提示词、材料生成、文档发布或 Task/DAG 事务。

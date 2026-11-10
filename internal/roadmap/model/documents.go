@@ -18,6 +18,9 @@ func ValidateDocuments(r Record) error {
 	if !commitPattern.MatchString(r.CodeCommit) {
 		return errors.New("文档未固定完整代码提交")
 	}
+	if _, err := TestProviders(r); err != nil {
+		return err
+	}
 	expected := map[string]bool{}
 	for _, t := range r.Analysis.Tasks {
 		if t.ExistingID == "" {
@@ -86,7 +89,7 @@ func TestsJSON(d Documents) (string, error) {
 	}
 	seen := map[string]bool{}
 	for _, id := range d.Tests {
-		if id == "" || seen[id] {
+		if id == "" || strings.TrimSpace(id) != id || !utf8.ValidString(id) || seen[id] {
 			return "", errors.New("测试ID为空或重复")
 		}
 		seen[id] = true

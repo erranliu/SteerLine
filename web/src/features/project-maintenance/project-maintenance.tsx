@@ -234,6 +234,7 @@ export function ProjectMaintenance() {
       {v?.readiness && (
         <p className="muted">
           {localLabel} · 测试安排 {v.readiness.ready}/{v.readiness.total} 就绪
+          {!!v.readiness.waiting && ` · ${v.readiness.waiting} 项等待前置测试`}
         </p>
       )}
       {v?.observation.last_success && (

@@ -8,6 +8,7 @@ type Readiness struct {
 	Commit   string   `json:"commit"`
 	Total    int      `json:"total"`
 	Ready    int      `json:"ready"`
+	Waiting  int      `json:"waiting"`
 	Blockers []string `json:"blockers"`
 }
 
@@ -16,6 +17,10 @@ type Readiness struct {
 func MaterialsReadiness(commit string, materials []Material) Readiness {
 	r := Readiness{Status: "ready", Commit: commit, Total: len(materials), Blockers: []string{}}
 	for _, material := range materials {
+		if material.Status == "waiting_tests" && material.Commit == commit && commit != "" {
+			r.Waiting++
+			continue
+		}
 		if material.Status == "ready" && material.Commit == commit && commit != "" && material.Digest != "" && len(material.TestPlan) > 0 {
 			r.Ready++
 		} else {

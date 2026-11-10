@@ -1,4 +1,5 @@
 export type ProjectReadiness = {
+  waiting?: number;
   status: "ready" | "not_ready";
   commit: string;
   total: number;
