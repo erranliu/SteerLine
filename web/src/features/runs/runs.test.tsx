@@ -35,7 +35,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it("shows frozen parameters and public audit sources without inventing a pass", () => {
+it("shows business audit evidence without technical sources or invented success", () => {
   const candidate = {
     ...run,
     execution_profile: {
@@ -91,19 +91,17 @@ it("shows frozen parameters and public audit sources without inventing a pass", 
     },
   };
   const view = render(<RunnerWorkflow run={candidate} />);
-  expect(screen.getByText("冻结方案 · 原冻结方案")).toBeVisible();
-  expect(screen.getByText("Workflow · development-audited/2")).toBeVisible();
   expect(
-    screen.getByText("当前轮次请求模型 · audit-model · high"),
-  ).toBeVisible();
-  expect(screen.getByText("audit.code.execute · 未核实")).toBeVisible();
-  expect(screen.getByText("原结果未核实")).toBeVisible();
-  fireEvent.click(screen.getByText("结果来源"));
-  expect(
-    screen.getByText(
-      /实施结果 implementation-result · 命令 audit-command · 轮次 original-turn/,
+    screen.queryByText(
+      /冻结方案|development-audited|audit-model|implementation-result|original-turn/,
     ),
-  ).toBeVisible();
+  ).not.toBeInTheDocument();
+  expect(screen.getByText(/审查 1 · 审查中 · 未核实/)).toBeVisible();
+  expect(screen.getByText("原结果未核实")).toBeVisible();
+  expect(screen.queryByText(/遗留问题 0/)).toBeNull();
+  expect(screen.getByText(/遗留数量待核实/)).toBeVisible();
+  fireEvent.click(screen.getByText("修复说明与验证证据"));
+  expect(screen.getByText(/审计发现 · 修复：修复 · 验证：验证/)).toBeVisible();
   view.rerender(
     <RunnerWorkflow
       run={{
@@ -117,8 +115,8 @@ it("shows frozen parameters and public audit sources without inventing a pass", 
       }}
     />,
   );
-  expect(screen.getByText("audit.code.execute · 已采集")).toBeVisible();
-  expect(screen.getByText("修复数量 · 1")).toBeVisible();
+  expect(screen.getByText(/审查 1 · 审查中 · 已采集/)).toBeVisible();
+  expect(screen.getByText(/修复数量 1/)).toBeVisible();
   view.rerender(
     <RunnerWorkflow
       run={{
@@ -130,7 +128,7 @@ it("shows frozen parameters and public audit sources without inventing a pass", 
       }}
     />,
   );
-  expect(screen.getByText("audit.code.execute · 尚无完整结果")).toBeVisible();
+  expect(screen.getByText(/审查 1 · 审查中 · 尚无完整结果/)).toBeVisible();
   view.rerender(
     <RunnerWorkflow
       run={{
@@ -142,11 +140,11 @@ it("shows frozen parameters and public audit sources without inventing a pass", 
   );
   expect(screen.queryByText("Runner 审计观察")).not.toBeInTheDocument();
   expect(
-    screen.queryByText("audit.code.execute · 已采集"),
+    screen.queryByText(/审查 1 · 审查中 · 已采集/),
   ).not.toBeInTheDocument();
 });
 
-it("keeps cached output visible while refreshing and stops polling the hidden output tab", async () => {
+it("keeps dynamics polling independently and stops final polling when the result is collapsed", async () => {
   vi.useFakeTimers();
   const client = testClient();
   const api = new Api(identity, "csrf", "home");
@@ -223,9 +221,9 @@ it("keeps cached output visible while refreshing and stops polling the hidden ou
   await act(() => vi.advanceTimersByTimeAsync(5200));
   expect(
     get.mock.calls.filter(([path]) => path.includes("/activity?")),
-  ).toHaveLength(activityCalls);
+  ).not.toHaveLength(activityCalls);
   await act(async () => resolve(final));
-  fireEvent.click(screen.getByRole("button", { name: "近期活动" }));
+  fireEvent.click(screen.getByRole("button", { name: "最终回复" }));
   await act(() => vi.advanceTimersByTimeAsync(2600));
   expect(
     get.mock.calls.filter(([path]) => path.includes("/activity?")).length,
@@ -332,19 +330,16 @@ it("shows recent changes newest first and keeps each event's workflow context", 
   );
   expect(items[1]).toHaveTextContent("状态切换：执行中 → 已阻塞");
   expect(
-    within(items[1] as HTMLElement).getByText("implement.report"),
-  ).toBeVisible();
+    within(items[1] as HTMLElement).queryByText("implement.report"),
+  ).toBeNull();
+  fireEvent.click(screen.getByText("状态切换：执行中 → 已阻塞"));
   expect(
     within(items[0] as HTMLElement).queryByText(/状态切换/),
   ).not.toBeInTheDocument();
   expect(screen.getByText(/GitHub HTTP 401/)).toBeVisible();
-  expect(screen.getByText(/operation_committed/)).not.toBeVisible();
-  fireEvent.click(screen.getByText("内部执行事件"));
-  expect(screen.getByText(/operation_committed/)).toBeVisible();
-  const internal = screen.getByText("内部执行事件").closest("details")!;
-  expect(within(internal).getAllByRole("paragraph")[0]).toHaveTextContent(
-    "operation_accepted",
-  );
+  expect(
+    screen.queryByText(/operation_committed|operation_accepted/),
+  ).not.toBeInTheDocument();
   expect(activity.page.activity.map((event) => event.seq)).toEqual([
     1, 2, 3, 4,
   ]);
@@ -381,11 +376,8 @@ it("shows recent changes newest first and keeps each event's workflow context", 
       "最新诊断",
     ),
   );
-  expect(
-    within(
-      document.querySelectorAll(".activity-item")[0] as HTMLElement,
-    ).getByText("audit.execute"),
-  ).toBeVisible();
+  fireEvent.click(screen.getByText("诊断信息更新"));
+  expect(screen.getByText("最新诊断")).toBeVisible();
   client.clear();
 });
 
@@ -554,8 +546,8 @@ it("stops an unknown candidate from its heading using a fixed confirmation and w
   await screen.findByRole("heading", { name: "详情候选3" });
   fireEvent.click(showStopped);
   fireEvent.click(screen.getByRole("button", { name: /候选 C1/ }));
-  expect(screen.getByText(/历史只读 · 资源保留/)).toBeVisible();
-  expect(screen.getByText("执行事实：running")).toBeVisible();
+  expect(screen.getByText(/历史只读；底层执行可能仍在运行/)).toBeVisible();
+  expect(screen.queryByText("执行事实：running")).toBeNull();
   expect(screen.getByText("已退出候选的历史问题")).toBeVisible();
   expect(
     screen.queryByRole("button", { name: "打开回答" }),

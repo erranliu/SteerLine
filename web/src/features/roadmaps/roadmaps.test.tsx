@@ -560,10 +560,11 @@ it("keeps confirmed content at local identities while document capability is una
   expect(
     screen.queryByRole("button", { name: "正式入 DAG · 分配编号" }),
   ).not.toBeInTheDocument();
-  fireEvent.click(
-    screen.getByRole("button", { name: "SteerLine 生成的 JSON" }),
-  );
-  expect(screen.getByText(/"formal_mapping": \{\}/)).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "SteerLine 生成的 JSON" }),
+  ).toBeNull();
+  expect(screen.getByLabelText("Markdown 原文 · 只读")).toBeVisible();
+  expect(screen.queryByRole("link", { name: /#101/ })).toBeNull();
   expect(submit).not.toHaveBeenCalled();
 });
 it("generates documents only after confirmation when the selected Runner publishes repository support", async () => {
@@ -620,7 +621,9 @@ it("shows code evidence, acceptance material and the complete publication target
       },
     ],
   };
-  expect(await screen.findByText(/logic.go/)).toBeVisible();
+  await screen.findByText(/logic.go/);
+  fireEvent.click(screen.getByText("设计与调查依据"));
+  expect(screen.getByText(/logic.go/)).toBeVisible();
   expect(screen.getByText(/本任务将新增测试：N201-CONTENT/)).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "测试安排 JSON" }));
   expect(screen.getByText("plans/control.tests.json")).toBeVisible();
@@ -662,7 +665,9 @@ it("distinguishes repository and input citations with the same logical path", as
       reason: "本次冻结的原草稿",
     },
   ];
-  expect(await screen.findByText(/固定仓库.*仓库中的历史文件/)).toBeVisible();
+  await screen.findByText(/固定仓库.*仓库中的历史文件/);
+  fireEvent.click(screen.getByText("设计与调查依据"));
+  expect(screen.getByText(/固定仓库.*仓库中的历史文件/)).toBeVisible();
   expect(screen.getByText(/本次输入.*本次冻结的原草稿/)).toBeVisible();
 });
 it("disables mutation while offline and does not fall back to file reads or submits", () => {

@@ -28,7 +28,7 @@ export function TaskMaterials({ id }: { id: string }) {
           {q.error && <p role="alert">{String(q.error)}</p>}
           {q.data?.commit && (
             <p>
-              远端版本 {q.data.commit.slice(0, 12)} ·{" "}
+              最新文档 ·{" "}
               {q.data.status === "ready"
                 ? "测试安排已就绪"
                 : q.data.diagnostic || "材料或测试安排待就绪"}

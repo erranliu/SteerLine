@@ -24,9 +24,6 @@ export function DetectionID({
   const { identity } = useWorkspace();
   return (
     <div className="detection-id">
-      <span>
-        检测 ID：<code>{id}</code>
-      </span>
       <CopyExecutionInfo
         key={id}
         info={{

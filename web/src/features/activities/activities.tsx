@@ -468,18 +468,7 @@ export function Activities({
                     data-activity-id={a.activity_id}
                   >
                     <strong>{a.title}</strong>
-                    <small>
-                      {(
-                        {
-                          detection: "检测",
-                          task_execution: "任务执行",
-                          submission: "提交确认",
-                          roadmap_parse: "Roadmap 解析",
-                          roadmap_documents: "文档生成",
-                        } as Record<string, string>
-                      )[a.kind] || "活动"}
-                      {a.needs_attention && " · 需处理"}
-                    </small>
+                    {a.needs_attention && <small>需处理</small>}
                     <p>{a.phase || "状态待核实"}</p>
                     {a.summary && <p className="muted">{a.summary}</p>}
                     {a.progress && (
@@ -508,14 +497,11 @@ export function Activities({
                         ` · 已持续 ${Math.max(0, Math.floor((now - Date.parse(a.created_at)) / 60000))} 分钟`}
                     </small>
                     {a.diagnostic && (
-                      <details>
-                        <summary>查看诊断</summary>
-                        <p>{a.diagnostic}</p>
-                      </details>
+                      <p className="notice amber">{a.diagnostic}</p>
                     )}
                     {expanded === a.activity_id && (
                       <div className="activity-history">
-                        <p>历史批次：{a.source_id}</p>
+                        <p>历史准备记录</p>
                         <p>
                           {a.phase} ·{" "}
                           {a.diagnostic || a.summary || "以上为本批次结果"}

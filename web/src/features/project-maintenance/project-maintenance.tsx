@@ -76,7 +76,6 @@ function CommitDetails({ commit }: { commit: Commit }) {
       </button>
       {expanded && (
         <div>
-          <code>{commit.sha}</code>
           {detail.isFetching && <p>正在查询关联 PR…</p>}
           {detail.error && <p role="alert">{String(detail.error)}</p>}
           {value.prs?.map((url) => (
@@ -231,14 +230,43 @@ export function ProjectMaintenance() {
       <button onClick={() => setOpen(!open)} aria-expanded={open}>
         项目维护 · {ready ? "已就绪" : "未就绪"}
       </button>
-      {v?.readiness && (
+      <span className="muted">
+        {v?.readiness
+          ? ` · ${localLabel} · 测试安排 ${v.readiness.ready}/${v.readiness.total} 就绪${v.readiness.waiting ? ` · ${v.readiness.waiting} 项等待前置测试` : ""}`
+          : " · 状态待核实"}
+      </span>
+      {(open ||
+        !online ||
+        error ||
+        view.error ||
+        v?.observation.diagnostic) && (
         <p className="muted">
-          {localLabel} · 测试安排 {v.readiness.ready}/{v.readiness.total} 就绪
-          {!!v.readiness.waiting && ` · ${v.readiness.waiting} 项等待前置测试`}
+          {v?.observation.last_success ? (
+            <time dateTime={v.observation.last_success}>
+              最近成功检查 {time(v.observation.last_success)}
+            </time>
+          ) : (
+            "上次成功检查时间未知"
+          )}
         </p>
       )}
-      {v?.observation.last_success && (
-        <small> · 最近成功检查 {time(v.observation.last_success)}</small>
+      {!open && (
+        <>
+          {!online && (
+            <p className="notice amber">离线 · 上次已知状态，当前待核实</p>
+          )}
+          {(error || view.error) && (
+            <p role="alert">{error || String(view.error)}</p>
+          )}
+          {v?.readiness.blockers.map((reason) => (
+            <p className="notice amber" key={reason}>
+              {reason}
+            </p>
+          ))}
+          {v?.observation.diagnostic && (
+            <p role="alert">检查远端失败：{v.observation.diagnostic}</p>
+          )}
+        </>
       )}
       {open && (
         <div>

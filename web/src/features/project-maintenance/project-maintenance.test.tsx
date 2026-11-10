@@ -181,8 +181,9 @@ it("keeps a binary project status and follows the server verdict instead of indi
     readiness: {
       status: "ready",
       commit: "base",
-      total: 1,
+      total: 2,
       ready: 1,
+      waiting: 1,
       blockers: [],
     },
   });
@@ -190,7 +191,9 @@ it("keeps a binary project status and follows the server verdict instead of indi
     name: "项目维护 · 已就绪",
   });
   expect(toggle).toHaveAttribute("aria-expanded", "false");
-  expect(screen.getByText(/测试安排 1\/1 就绪/)).toBeVisible();
+  expect(
+    screen.getByText(/测试安排 1\/2 就绪.*1 项等待前置测试/),
+  ).toBeVisible();
   expect(api.submit).not.toHaveBeenCalled();
   view.readiness = {
     ...view.readiness,
@@ -205,13 +208,54 @@ it("keeps a binary project status and follows the server verdict instead of indi
   expect(screen.getByText("任务 #99 的材料与测试安排未就绪")).toBeVisible();
 });
 
-it.each(["unknown test ID","pinned path missing"])("shows committed arrangement errors (%s) without generation controls",async(diagnostic)=>{
- const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"SteerlineFlow/plans/task.plan.md"}},status:"invalid",diagnostic:"task.tests.json: "+diagnostic}]});
- fireEvent.click(await screen.findByRole("button",{name:/项目维护/}));
- expect(screen.getByText("SteerlineFlow/plans/task.tests.json")).toBeVisible();
- expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
- expect(screen.queryByRole("button",{name:"准备材料与测试安排"})).toBeNull();
- expect(screen.queryByRole("button",{name:"重试生成"})).toBeNull();
- expect(screen.queryByLabelText("测试生成方案")).toBeNull();
- expect(submit).not.toHaveBeenCalled();
+it.each(["unknown test ID", "pinned path missing"])(
+  "shows committed arrangement errors (%s) without generation controls",
+  async (diagnostic) => {
+    const { submit } = setup({
+      tasks: [
+        {
+          task_id: "101",
+          contract: { plan_ref: { path: "SteerlineFlow/plans/task.plan.md" } },
+          status: "invalid",
+          diagnostic: "task.tests.json: " + diagnostic,
+        },
+      ],
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /项目维护/ }));
+    expect(
+      screen.getByText("SteerlineFlow/plans/task.tests.json"),
+    ).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
+    expect(
+      screen.queryByRole("button", { name: "准备材料与测试安排" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "重试生成" })).toBeNull();
+    expect(screen.queryByLabelText("测试生成方案")).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  },
+);
+
+it("retains trusted source check time in a collapsed observation error", async () => {
+  const { submit } = setup({
+    observation: {
+      commit: "fixed",
+      last_success: "2026-11-10T01:02:03Z",
+      diagnostic: "network unavailable",
+    },
+  });
+  expect(await screen.findByText(/最近成功检查/)).toHaveAttribute(
+    "datetime",
+    "2026-11-10T01:02:03Z",
+  );
+  expect(screen.getByRole("button", { name: /项目维护/ })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  expect(submit).not.toHaveBeenCalled();
+});
+it("does not invent a check time when the source has none", async () => {
+  setup({
+    observation: { commit: "fixed", diagnostic: "network unavailable" },
+  });
+  expect(await screen.findByText("上次成功检查时间未知")).toBeVisible();
 });

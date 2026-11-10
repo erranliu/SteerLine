@@ -210,7 +210,7 @@ test("all environment readiness remains visible across detail changes, refresh f
   );
   await rows.first().getByRole("button", { name: "收起详情" }).click();
   await expect(detail).toHaveCount(0);
-  for (const width of [1440, 960, 390, 320]) {
+  for (const width of [1440, 800, 375, 960, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(rows).toHaveCount(4);
     const bounds = await page

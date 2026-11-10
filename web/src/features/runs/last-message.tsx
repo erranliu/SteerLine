@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { projectQueries } from "../../shared/api/queries";
@@ -36,6 +36,30 @@ export function LastMessage({ run }: { run: Candidate }) {
     return () => window.clearInterval(timer);
   }, [enabled]);
   const sample = message.data?.message;
+  const body = useRef<HTMLPreElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflow, setOverflow] = useState(false);
+  useEffect(() => {
+    const measure = () => {
+      const node = body.current;
+      if (node && !expanded)
+        setOverflow(
+          node.scrollHeight > node.clientHeight ||
+            (sample?.text.split("\n").length ?? 0) > 6,
+        );
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(measure)
+        : undefined;
+    if (body.current) observer?.observe(body.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [sample?.text, expanded]);
   return (
     <section className="last-message notice" aria-label="最近消息">
       <strong>最后一条消息</strong>
@@ -50,7 +74,17 @@ export function LastMessage({ run }: { run: Candidate }) {
             </time>{" "}
             · {age(sample.observed_at, now)}
           </p>
-          <pre>{sample.text}</pre>
+          <pre ref={body} className={expanded ? "" : "message-preview"}>
+            {sample.text}
+          </pre>
+          {(overflow || expanded) && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              aria-expanded={expanded}
+            >
+              {expanded ? "收起消息" : "展开完整消息"}
+            </button>
+          )}
         </>
       ) : (
         <p className="muted">
@@ -64,10 +98,9 @@ export function LastMessage({ run }: { run: Candidate }) {
           消息读取失败，保留最后观察：{String(message.error)}
         </p>
       )}
-      <p className="output-hint">
-        活动参考，可能遗漏消息；长时间无新消息不表示执行已卡住。
-        {!online ? "服务离线，已暂停刷新。" : ""}
-      </p>
+      {!online && (
+        <p className="muted">服务离线 · 上次已知消息，已暂停刷新。</p>
+      )}
     </section>
   );
 }

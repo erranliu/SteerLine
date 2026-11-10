@@ -126,8 +126,7 @@ export function Roadmaps() {
   const feedback = useActivityFeedback();
   const [params, setParams] = useSearchParams();
   const [profile, setProfile] = useState(""),
-    [error, setError] = useState(""),
-    [tab, setTab] = useState<"source" | "json">("source");
+    [error, setError] = useState("");
   const [documentKey, setDocumentKey] = useState(""),
     [kind, setKind] = useState<"spec" | "plan" | "tests" | "acceptance">(
       "spec",
@@ -821,46 +820,13 @@ export function Roadmaps() {
             {source.data?.modified
               ? "工作树内容（含未提交变化）"
               : "工作树文件"}
-            {source.data?.head && " · HEAD " + source.data.head.slice(0, 8)}
           </p>
-          <div className="roadmaps-actions">
-            <button
-              aria-pressed={tab === "source"}
-              onClick={() => setTab("source")}
-            >
-              Markdown 原文
-            </button>
-            <button
-              aria-pressed={tab === "json"}
-              onClick={() => setTab("json")}
-            >
-              SteerLine 生成的 JSON
-            </button>
-          </div>
-          {tab === "source" ? (
-            <textarea
-              aria-label="Markdown 原文 · 只读"
-              readOnly
-              value={source.data?.body || ""}
-              rows={22}
-            />
-          ) : (
-            <pre>
-              {record
-                ? JSON.stringify(
-                    {
-                      roadmap_id: record.source.id,
-                      source_digest: record.source.digest,
-                      confirmed: !!record.confirmed_digest,
-                      tasks: analysis?.tasks || [],
-                      formal_mapping: record.formal_mapping,
-                    },
-                    null,
-                    2,
-                  )
-                : "尚未解析，无需提供 JSON。"}
-            </pre>
-          )}
+          <textarea
+            aria-label="Markdown 原文 · 只读"
+            readOnly
+            value={source.data?.body || ""}
+            rows={16}
+          />
           {stale && (
             <p className="notice amber">
               来源已变化，旧解析保持原快照。采用新内容前请重新解析和确认。
@@ -971,27 +937,25 @@ export function Roadmaps() {
             <summary>重叠检查与解析依据</summary>
             <p>{analysis.overlap}</p>
             <p>来源：{record?.source.path}</p>
-            <p>来源提交：{record?.source.head}</p>
-            <p>原文摘要：{record?.source.digest}</p>
           </details>
         </section>
       )}
       <section className="roadmaps-section" id="roadmap-documents">
         <h2>{viewingHistory ? "历史 · " : ""}Spec / Plan 与验收材料</h2>
         {mainAction !== "generate" && <p>{value?.documents_reason}</p>}
-        <ul>
-          <li>固定仓库与完整提交下的只读代码调查及实际来源。</li>
-          <li>消费已确认内部任务和依赖，形成整批设计。</li>
-          <li>返回完整逐任务文档和稳定路径，由 SteerLine 审阅发布。</li>
-        </ul>
-        {record?.code_commit && <p>固定代码提交：{record.code_commit}</p>}
-        {record?.design && <p>{record.design}</p>}
-        {record?.investigation?.map((ref, index) => (
-          <p key={`${ref.source}:${ref.path}:${index}`}>
-            调查依据 · {ref.source === "repository" ? "固定仓库" : "本次输入"}：
-            {ref.path} · {ref.sha256.slice(0, 12)} · {ref.reason}
-          </p>
-        ))}
+        {(record?.design || !!record?.investigation?.length) && (
+          <details>
+            <summary>设计与调查依据</summary>
+            {record?.design && <p>{record.design}</p>}
+            {record?.investigation?.map((ref, index) => (
+              <p key={`${ref.source}:${ref.path}:${index}`}>
+                调查依据 ·{" "}
+                {ref.source === "repository" ? "固定仓库" : "本次输入"}：
+                {ref.path} · {ref.reason}
+              </p>
+            ))}
+          </details>
+        )}
         {!!record?.documents.length && (
           <div>
             <div className="roadmaps-actions">
