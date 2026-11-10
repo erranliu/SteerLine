@@ -195,7 +195,7 @@
     "level": "L4",
     "suite": "runtime",
     "package": "./tests/e2e/suites/runtime",
-    "test": "TestMainAgentAdvisory",
+    "test": "TestContinuationSuggestionAdvisory",
     "env": "controlled"
   }
 ]

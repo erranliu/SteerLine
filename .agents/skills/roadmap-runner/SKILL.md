@@ -15,7 +15,7 @@ description: 在 Codex 桌面端直接执行用户确认的 execution-map.md，�
 - “待人工验收”只列实现已结束或所需任务已完整排入的具体人工项，注明交付/准备条件；未完整排入的未来节点留在验收规划。该索引和自动补验导航均不作为 Task 队列。独立自动验收 Task 仍须出现在当前任务表且已核实资格，才可执行。
 - 严守用户选定的范围和顺序；不自行扩大到后续任务。已有 session 仅在用户要求接管时接管，不能因工具超时或列表暂时不可见重复创建。
 - 技能被发现或被要求修改不构成执行授权。执行前从用户请求及历史确认创建 session/worktree、发提示、提 PR、复审修改、PR 留言、合并和定期续跑的授权；已有明确授权直接执行。只问缺失且将影响下一步的授权或信息。
-- 同一 worktree 同时只有一个写入者。PR 冲突、主干/共享接线集成及原需求实现遗漏优先交回原执行 session；协调 session 不默认接手重做。独立复审由新的只读 subagent 检查实际 diff、Spec/Plan 和生产路径，确认的局部修复由另一个独立 subagent 实施。执行 session 自查或 PR 存在不能代替独立复审；具体分流与写入交接见[状态规程](references/coordination.md#工作分流与独立-subagent)。
+- 同一 worktree 同时只有一个写入者。PR 冲突、主干/共享接线集成及原需求实现遗漏优先交回原执行 session；协调 session 不默认接手重做。首次独立复审由新的只读 subagent 检查完整 diff、Spec/Plan 和生产路径，确认的局部修复由另一个独立 subagent 实施。未参与实现或修复的原 reviewer 可继续复核问题闭环、新增差异及受影响路径；扩大范围或更换 reviewer 的条件见[状态规程](references/coordination.md#工作分流与独立-subagent)。执行 session 自查或 PR 存在不能代替独立复审。
 - 验证按项目 AGENTS 和任务最小入口执行。仅余人工补验时按下节登记后继续合入与后续任务；实现缺陷、自动验证失败或产品运行前置能力缺失仍须诊断，无法在范围内修复则记录 `needs_user_decision`。不得伪造通过、削弱断言或把这些阻塞改称人工补验。
 
 ## 人工补验不阻塞推进
@@ -46,9 +46,9 @@ description: 在 Codex 桌面端直接执行用户确认的 execution-map.md，�
 4. 当前 session 活跃：一次 `wait_threads` 紧凑快照，传 host 和已有 cursor，通常 `timeoutMs: 0`。无可执行工作或 PR 尚未出现就结束本轮，等待下一次 heartbeat；不高频轮询、不连续阻塞等待。仅重要进展、失败、完成或需要用户行动时通知。
 5. 接管的 session 只完成实现而未自查提 PR：等当前 turn 完成后发送自查提示一次。用户指定原句时只发送原句，例如 `自己复查并修复后提pr`，不加文字；工具参数仍显式设置 Luna xhigh。新 session 初始提示已包含自查提 PR 时，不再重复发送。
 6. PR 出现且 session 已停写：关联到本聊天（`attach_artifact`），核对 PR/仓库/目标分支/源分支/本地 HEAD 身份。发现冲突或需集成最新主干/共享接线，优先保存交回意图并提示原执行 session 处理、验证和推送同一 PR；等其再次停写、重读 head/base 后才进入复审。
-7. 新建独立只读 review subagent，检查完整实际 diff、Spec/Plan、真实生产路径及最小验证，返回候选 head/base 与可复核证据。协调 session 核对并分流：原需求未实现、原断言/消费者遗漏或需重新组织实现的工作优先交回原执行 session；已经完成需求中的局部缺陷，交给另一个独立 fix subagent 在限定范围修复、验证并提交同一 PR 分支。修改前确认原写入者已停写和工作区身份；实际修复后安排新的只读 review subagent 复核最终候选及受影响验证，不让修复者为自己的改动作唯一终审。详情见[状态规程](references/coordination.md#工作分流与独立-subagent)。
+7. 首次新建独立只读 review subagent，检查完整实际 diff、Spec/Plan、真实生产路径及最小验证，返回候选 head/base 与可复核证据。协调 session 核对并分流：原需求未实现、原断言/消费者遗漏或需重新组织实现的工作优先交回原执行 session；已经完成需求中的局部缺陷，交给另一个独立 fix subagent 在限定范围修复、验证并提交同一 PR 分支。修改前确认原写入者已停写和工作区身份；修复后优先由未参与写入的原 reviewer 复核原问题、新增差异与受影响路径，确认最终候选及必要验证。影响无法可靠收窄时扩大审核，原 reviewer 不再独立或不可用时更换；不让修复者为自己的改动作唯一终审。详情见[状态规程](references/coordination.md#工作分流与独立-subagent)。
 8. 协调 session 核对 subagent 报告、实际 diff/提交与验证证据，在 PR 评论或 review 记录审核/修复 subagent 身份、问题、位置、影响、修复 commit 和实际验证（命令、结果、候选 SHA、人工补验清单及已授权例外）。没有发现问题也如实记录。以评论 URL 和审核 SHA 保存证据；不要仅写“已审核”。
-9. 合并前重新读取最终 head、目标分支最新 base、必需检查和实际 mergeable 状态；head/base 任一改变则复审相关差异并重新验证。确认通过后以**预期 head**调用合并，禁止绕过保护、无 head 约束的合并或仅开启 auto-merge 就标记完成。CLI 如 `gh pr merge <PR> --match-head-commit <SHA>`，合并方式遵循仓库设置。
+9. 合并前重新读取最终 head、目标分支最新 base、必需检查和实际 mergeable 状态；head/base 任一改变则重新评估新增差异并补受影响验证，最终结论可引用未受影响的原报告，保留原受测 SHA，不默认全部重跑。当前候选须重新取得匹配的审核、验证汇总和合并门禁。确认通过后以**预期 head**调用合并，禁止绕过保护、无 head 约束的合并或仅开启 auto-merge 就标记完成。CLI 如 `gh pr merge <PR> --match-head-commit <SHA>`，合并方式遵循仓库设置。
 10. 平台确认真实 `mergedAt`、最终 head 和 merge commit 后保存证据，核对必要验证及 acceptance、execution-map 同步，将任务标为本开发流程的实现完成；验收是否全部完成单独汇总。前置成果进入最新默认主干且无明确先验阻塞后启动下一项。已完成条目从相应草稿移除，清单保留 PR/结果摘要和所有待验链接。全部选定任务完成上述流程后汇总任务/PR/复审问题/验证与待人工项，将 run 标记完成并暂停其 heartbeat，保留审计状态。
 
 ## 异常与用户介入

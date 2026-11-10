@@ -4,7 +4,9 @@
 
 ## 日常执行
 
-每次代码修改后、提交 PR 前运行下面两个固定测试集；根据影响补充 L3 功能测试及 L4 专项。纯文档变更检查链接、清单一致性和 `git diff --check`。L1 目标整体 1 分钟内，L2 目标整体 5 分钟内，实际总耗时包含准备、执行和清理；冷编译或机器争用超出目标时如实记录。
+开发中按需运行定向测试；一批代码改动完成、交付候选稳定后，运行一次下面两个固定测试集，并按“按行为选择测试”补充必要的 L3/L4。后续修复只补受影响验证，不因每次小修重新运行全部集合；仅提交、推送、创建 PR 或更新验收记录不要求在本地重跑。纯文档变更检查链接、相关清单一致性和 `git diff --check`；CI 与任务明确要求的检查仍按各自约定执行。L1 目标整体 1 分钟内，L2 目标整体 5 分钟内，实际总耗时包含准备、执行和清理；冷编译或机器争用超出目标时如实记录。
+
+已有通过结果仅在其覆盖的行为、依赖、测试定义和环境未受后续变化影响时复用；在任务验证汇总中写明范围、原受测版本及报告位置，并补测新增差异。原报告保持原版本，失败或缺证据不作通过复用。已固定的任务要求和 `.tests.json` 仍按其版本执行，不能临时删减已选项或替入口补写进度；确需调整时先修订并固定安排。已完成任务的 Plan 与验收记录保留历史，不作为新任务的通用必跑要求。
 
 ```powershell
 go run ./cmd/test-feedback -level=L1
@@ -31,9 +33,22 @@ go run ./cmd/test-feedback -- ./internal/runnerclient ./internal/runnerbridge -c
 
 Full 仅指全部普通 Go 测试，已登记为 L4 `go.full`，不包含 e2e/runneracceptance 标签或 Web；没有测试文件的包单独枚举为编译项。真实测试 skip 在原 summary/退出码/managed 中均不通过。正式复用集可用 `-level=L4 -suite=go -scenario go.http/go.storage/go.environment/go.deployment/go.roadmap`（每次选一个 ID），前端全集用 `-level=L4 -suite=web -scenario web.unit`。前端与 HTTP 检查用 `scripts/test-web.ps1`，其他浏览器及独立脚本入口见 [L4 列表](testing/l4.md)；未接入受管报告的入口不能凭 Agent 自述登记通过。
 
-go.http 全量执行七个 HTTP/快照/配置/探测/元数据进程 owner，每包必须实际非零；go.environment 串行执行环境/model/remotetest/中性executionconfig四包全量，以及明确的Windows31根/其他平台30根的 App 环境集成组。源清单/正式定义及 package/root 终态须一致，缺失、额外或重复、跳过、一组失败均使整体不通过；其他 App 回归仍在 go.full。新范围须以本次定义报告验证，不继承旧专项通过。部署变更选择go.deployment（host/Windows localservice全量、App11/10根、升级排空明确一根），Roadmap变更选择go.roadmap（owner全量、App11根、host一根）；各组串行、原断言/25m/p1/parallel1不变，live排除与源漂移检查见L4列表。详细选择与本轮证据见[早期反馈验收](testing/acceptance/test-early-feedback.md)。
+选中 go.http 时全量执行七个 HTTP/快照/配置/探测/元数据进程 owner，每包必须实际非零；选中 go.environment 时串行执行环境/model/remotetest/中性executionconfig四包全量，以及明确的Windows31根/其他平台30根的 App 环境集成组。源清单/正式定义及 package/root 终态须一致，缺失、额外或重复、跳过、一组失败均使整体不通过；其他 App 回归仍在 go.full。测试范围或定义变化时须验证新范围，不继承旧专项通过。go.deployment 包含host/Windows localservice全量、App11/10根和升级排空明确一根，go.roadmap 包含owner全量、App11根和host一根；选择依据见下节，选中后各组串行、原断言/25m/p1/parallel1不变，live排除与源漂移检查见L4列表。集合范围及原证据见[早期反馈验收](testing/acceptance/test-early-feedback.md)。
 
 go.http 的 Windows 跨进程快照压力保持原30秒窗口、1000次发布和8读者；本机安排与E2E、Full、其他压力串行，独立通过不代表并行组合已验证。此约束也保留在机器清单，不改变L3自身并行实现。
+
+## 按行为选择测试
+
+下表用于编写或修订测试安排，在固定 L1/L2 基线上选择受影响项；不按页面或目录名称自动扩大范围。定向命令只说明其实际子集通过，不冒称完整登记测试集通过。
+
+| 实际改动 | 默认补充验证 |
+| --- | --- |
+| 局部文案、样式、布局与展示映射 | 相关组件或纯函数测试；布局变化补代表视口、关键状态的浏览器检查，不自动要求 web.unit 或后端 owner 全集。 |
+| 前端状态、查询、操作参数或共享组件 | 相关组件/交互及消费者测试；共享影响跨页面、覆盖难以可靠收窄时选择 web.unit。仅调用既有 API 不自动要求后端 owner 全集。 |
+| HTTP、存储、环境、部署或 Roadmap 业务规则、契约 | 分别选择 go.http、go.storage、go.environment、go.deployment、go.roadmap，并按受影响消费者补功能场景；纯前端展示不因归属这些模块而触发对应后端专项。 |
+| 跨组件核心交付、恢复或生命周期流程 | 在 L2 基础上选择具有独有覆盖的 L3/L4 场景；不重复建设依赖 owner 的内部故障测试。 |
+
+Plan 写清实际变化、测试 ID 与选择原因，定向命令和专属浏览器步骤写入测试计划；`.tests.json` 只保存正式测试 ID，不将未登记的定向命令或专属浏览器步骤冒充正式 ID。所需行为尚无测试入口时安排补齐，不能以收窄范围为由省略必要覆盖。生产构建用于修改涉及构建、类型或打包的验证，浏览器检查用于组件测试无法验证的实际渲染与交互；均不因提交或更新记录单独触发重跑。
 
 ## 环境与证据
 
@@ -45,13 +60,17 @@ go.http 的 Windows 跨进程快照压力保持原30秒窗口、1000次发布和
 
 结果和未验边界写入任务专属 [验收记录](testing/acceptance/README.md)，测试列表只说明测什么。报告格式、Git 历史导出和读取见 [报告约定](testing/reports.md)。历史验收沿用其冻结版本与当时级别，不代表当前代码通过。
 
+默认摘要记录受测版本（含脏状态）、实际命令、结果、原报告位置和未验范围；环境、实际选择及清理事实引用正式报告，不再手工复制一套。截图按代表场景保存；只有任务明确要求或产物传递、现场混用等具体风险需要时，才额外制作逐文件/产物摘要或再次独立审计全部报告与截图。正式入口原有的摘要、报告和清理校验照常执行，纯文档检查无需制作产物清单。
+
+必需验证通过、确认的问题闭环、最终差异已覆盖后结束核验。追加检查须说明尚未覆盖的具体风险或新变化，不因“再确认一下”重复同范围检查；任务明确要求的独立审核、验收场景和真实失败仍按原约定处理。结果复用仅用于开发验证汇总，不改变候选测试进度、Git 历史导出或 PR 审核门禁。
+
 当前 Runner v8 的验证与用户授权安装清理见[专属验收](testing/acceptance/runner-v8-install-reset.md)，此前 v7 升级、启动前取消及同构建重启回归保留在[原验收](testing/acceptance/runner-v7-adaptation.md)：升级须先排空原业务、原生资源及未完成操作；旧目录不迁移，活动任务不跨构建接管。历史三代 Runner 接管修复仅按其[原验收版本](testing/acceptance/install-deployment-generation-20261022.md)追溯；自动测试使用隔离现场，实际安装维护单独记录。
 
 ## 维护
 
-新增测试 ID 或修改测试入口时，验证其进度接线覆盖：开始/重跑清零，完整通过置 true，失败、零匹配、跳过及清理未完成保持 false。该契约归入口维护，普通任务不逐 ID 重查或补改接线；异常保留未完成进度和真实报告。修改测试内容时，同步实现、分级列表、JSON、[E2E 登记](../tests/e2e/suites.json)及执行器选择/证据校验。JSON 使用 `id/name/level/environment/command/check`，可选 `note`，不新增未支持的字段。ID 保持验证目的；改级后旧级别选择明确失败。
+修改测试内容时，同步实现、分级列表、JSON、[E2E 登记](../tests/e2e/suites.json)及执行器选择/证据校验。JSON 使用 `id/name/level/environment/command/check`，可选 `note`，不新增未支持的字段。ID 保持验证目的；改级后旧级别选择明确失败。
 
-材料生成阶段由模型读取固定版本的 Plan、本文与正式清单，按语义选择测试并生成同名 `.tests.json`，随文档审阅入 Git。运行时只校验该 JSON 的有序 ID，并从同提交正式清单展开完整定义，不调用模型或重选。必跑规则保留在本文，各 ID 的完整定义在正式清单中自足。Web 变更必须包含 web.unit；HTTP/存储/环境变更分别选择 go.http/go.storage/go.environment/go.deployment/go.roadmap，并按影响补功能场景。代码变更选择 L1、L2，再按影响补充 L3/L4；无需自动测试的 Plan 必须明确原因。实现 Plan 映射验收项和测试 ID，说明原因、时点、特殊准备和证据位置；已有完整命令/环境/断言引用清单，不重复抄写。
+材料生成阶段由模型读取固定版本的 Plan、本文与正式清单，按“日常执行”和“按行为选择测试”选择测试并生成同名 `.tests.json`，随文档审阅入 Git。运行时只校验该 JSON 的有序 ID，并从同提交正式清单展开完整定义，不调用模型或重选。必跑规则保留在本文，各 ID 的完整定义在正式清单中自足。代码变更选择 L1、L2，再按实际行为影响补充 L3/L4；无需自动测试的 Plan 必须明确原因。实现 Plan 映射验收项和测试 ID，说明原因、时点、特殊准备和证据位置；已有完整命令/环境/断言引用清单，不重复抄写。
 
 ```powershell
 python scripts/check_doc_links.py

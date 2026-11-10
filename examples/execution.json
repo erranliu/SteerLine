@@ -1,6 +1,10 @@
 {
   "version": 3,
   "max_generate_concurrency": 5,
+  "continuation_suggestion": {
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "high"
+  },
   "runner": {
     "executable": "C:/Tools/SteerRunner/steerrunner.exe",
     "version": "0.2.0-dev.2",

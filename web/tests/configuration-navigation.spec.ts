@@ -3,6 +3,15 @@ import { createServer, type Server } from "node:http";
 import { readFileSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { configSnapshot } from "../src/test/execution-config";
+import type { ProjectReadiness } from "../src/shared/api/types";
+
+const projectReadiness: ProjectReadiness = {
+  status: "not_ready",
+  commit: "",
+  total: 0,
+  ready: 0,
+  blockers: ["fixture project not prepared"],
+};
 
 test.setTimeout(120000);
 test.use({ actionTimeout: 10000 });
@@ -45,6 +54,147 @@ test.afterAll(async () => {
   );
 });
 
+test("continuation suggestion settings preserve drafts and unrelated configuration", async ({
+  page,
+}, info) => {
+  let snapshot = structuredClone(configSnapshot);
+  let loaded = snapshot.saved_digest;
+  let rejectSave = true;
+  const writes: unknown[] = [];
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  await page.route("**/auth/status", (route) =>
+    route.fulfill({
+      json: {
+        csrf_token: "csrf",
+        identity: {
+          home_id: "suggestion-browser-home",
+          instance_id: "web",
+          ready: true,
+        },
+      },
+    }),
+  );
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    let data: unknown = {};
+    if (path === "/api/web/execution-config") {
+      if (request.method() === "PUT") {
+        const edit = request.postDataJSON();
+        writes.push(edit);
+        expect(edit.saved_digest).toBe(snapshot.saved_digest);
+        expect(request.headers()["if-match"]).toBe(
+          '"' + snapshot.saved_digest + '"',
+        );
+        if (rejectSave) {
+          await route.fulfill({
+            status: 409,
+            json: { code: "stale_saved_config", reason: "fixture conflict" },
+          });
+          return;
+        }
+        expect(edit.config).not.toHaveProperty("main_agent");
+        expect(edit.config.execution_profiles).toEqual(
+          configSnapshot.config.execution_profiles,
+        );
+        snapshot = {
+          ...snapshot,
+          config: edit.config,
+          saved_digest: "saved-suggestion",
+        };
+      }
+      data = snapshot;
+    } else if (path.endsWith("/projects")) {
+      data = { projects: [], loaded_execution_digest: loaded };
+    } else if (path.endsWith("/status")) {
+      data = { saved_digest: snapshot.saved_digest };
+    } else if (path.endsWith("/discover")) {
+      expect(request.postDataJSON()).toMatchObject({
+        kind: "models",
+        adapter: "codex-app-server",
+        host: "local",
+        agent: "codex",
+      });
+      data = {
+        state: "ready",
+        models: [
+          {
+            id: "browser-chosen",
+            label: "Browser model",
+            default_effort: "high",
+            efforts: [
+              { value: "high", label: "High" },
+              { value: "medium", label: "Medium" },
+            ],
+          },
+        ],
+      };
+    }
+    await route.fulfill({ json: data });
+  });
+  await page.goto(origin + "/settings");
+  await expect(
+    page.getByRole("heading", { name: "对话续作 · 提示词建议", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("当前设置：gpt-6.1-sol / high")).toBeVisible();
+  await page.getByRole("button", { name: "读取本地 Codex 模型" }).click();
+  await page
+    .getByLabel("对话续作 · 提示词建议 模型")
+    .selectOption("browser-chosen");
+  await page
+    .getByLabel("对话续作 · 提示词建议 思考强度")
+    .selectOption("medium");
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await expect(page.getByLabel("对话续作 · 提示词建议 模型")).toHaveValue(
+    "browser-chosen",
+  );
+  const save = page.getByRole("button", {
+    name: "保存对话续作 · 提示词建议 设置",
+  });
+  await save.click();
+  await expect(page.getByText(/fixture conflict/)).toBeVisible();
+  await expect(page.getByLabel("对话续作 · 提示词建议 思考强度")).toHaveValue(
+    "medium",
+  );
+  expect(writes).toHaveLength(1);
+  expect(snapshot.config.continuation_suggestion).toBeUndefined();
+  rejectSave = false;
+  await save.click();
+  await expect(
+    page.getByText("对话续作 · 提示词建议 设置已保存，重启 SteerLine 后生效。"),
+  ).toBeVisible();
+  expect(writes).toHaveLength(2);
+  expect(snapshot.config.continuation_suggestion).toEqual({
+    model: "browser-chosen",
+    reasoning_effort: "medium",
+  });
+  for (const width of [900, 375]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const panel = page.getByRole("region", {
+      name: "对话续作 · 提示词建议 设置",
+    });
+    await expect(panel).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`suggestion-${width}.png`),
+      fullPage: true,
+    });
+  }
+  loaded = snapshot.saved_digest;
+  await page.reload();
+  await expect(
+    page.getByText("当前设置：browser-chosen / medium"),
+  ).toBeVisible();
+  expect(writes).toHaveLength(2);
+  expect(errors).toEqual([]);
+});
+
 test("global developer switches preserve drafts, require restart and disappear in release builds", async ({
   page,
 }, info) => {
@@ -77,9 +227,12 @@ test("global developer switches preserve drafts, require restart and disappear i
         expect(route.request().headers()["if-match"]).toBe(
           '"' + snapshot.saved_digest + '"',
         );
+        const edit = route.request().postDataJSON();
+        expect(edit.saved_digest).toBe(snapshot.saved_digest);
+        expect(edit.profile_edits).toEqual([]);
         snapshot = {
           ...snapshot,
-          config: route.request().postDataJSON(),
+          config: edit.config,
           saved_digest: "saved",
         };
       }
@@ -151,6 +304,7 @@ test("global developer switches preserve drafts, require restart and disappear i
 
 test("runtime environments keep card actions, failed observations and task return scoped", async ({
   page,
+  context,
 }, info) => {
   const projects = ["a".repeat(64), "b".repeat(64)];
   const remoteMachineID = "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8";
@@ -359,8 +513,14 @@ test("runtime environments keep card actions, failed observations and task retur
         },
       };
     else if (path.endsWith("/status")) data = { saved_digest: "same" };
+    else if (path.endsWith("/maintenance/readiness")) data = projectReadiness;
     else if (path.endsWith("/maintenance"))
-      data = { observation: { commit: "" }, tasks: [], profiles: [] };
+      data = {
+        readiness: projectReadiness,
+        observation: { commit: "" },
+        tasks: [],
+        profiles: [],
+      };
     else if (path.endsWith("/presentation"))
       data = { presentation: { profiles, default_profile_id: "default" } };
     else if (/\/tasks(?:\/38)?$/.test(path))
@@ -386,16 +546,22 @@ test("runtime environments keep card actions, failed observations and task retur
     page.getByRole("heading", { name: "项目运行环境", exact: true }),
   ).toBeVisible();
   const first = page.locator(".environment-card").first();
+  const overview = page.getByRole("region", { name: "全部运行环境" });
+  const environmentRow = (index: number) =>
+    overview.getByRole("row").filter({
+      hasText: `关联方案：${environments[index].profiles.map((p) => p.name).join("、")}`,
+    });
+  const selectEnvironment = async (index: number) => {
+    const button = environmentRow(index).getByRole("button");
+    if ((await button.getAttribute("aria-expanded")) !== "true")
+      await button.click();
+    await expect(button).toHaveAttribute("aria-expanded", "true");
+  };
   await expect(
-    page.getByRole("option", {
-      name: "远程工作站 · Orca → Codex",
-      exact: true,
-    }),
+    overview.getByRole("row", { name: /远程工作站 · Orca → Codex/ }),
   ).toHaveCount(1);
-  await expect(
-    page.getByLabel("运行环境", { exact: true }).locator("option"),
-  ).toHaveCount(7);
-  await expect(first.getByRole("heading")).toHaveText("状态待核实");
+  await expect(overview.getByRole("row")).toHaveCount(7);
+  await expect(first.getByRole("heading")).toHaveText("待核实");
   await expect(
     first.getByRole("button", { name: /开始检测|重新检测/ }),
   ).toBeDisabled();
@@ -431,14 +597,10 @@ test("runtime environments keep card actions, failed observations and task retur
     "未准备",
   ];
   for (const [index, label] of labels.entries()) {
-    await page
-      .getByLabel("运行环境", { exact: true })
-      .selectOption(String(index + 1).repeat(64));
+    await selectEnvironment(index);
     await expect(first.getByRole("heading")).toHaveText(label);
   }
-  await page
-    .getByLabel("运行环境", { exact: true })
-    .selectOption("1".repeat(64));
+  await selectEnvironment(0);
   failOptions = true;
   await page.getByRole("button", { name: "刷新环境" }).click();
   await expect(page.getByText(/上次已知状态，当前待核实/)).toBeVisible();
@@ -494,13 +656,24 @@ test("runtime environments keep card actions, failed observations and task retur
       }),
     { project: projects[0] },
   );
-  await expect(page.getByRole("region", { name: "操作结果" })).toHaveText(
-    "开始检测：操作成功",
-  );
-  await expect(first.getByText("d".repeat(32), { exact: true })).toBeVisible();
+  const operationResult = page.getByRole("region", { name: "操作结果" });
+  await expect(
+    operationResult.getByText("开始检测：操作成功", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    operationResult.getByRole("button", { name: "复制执行信息", exact: true }),
+  ).toBeEnabled();
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await first
+    .getByRole("button", { name: "复制执行信息", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toContain("d".repeat(32));
   const bodyText = await page.locator("body").innerText();
   for (const hidden of [
     remoteMachineID,
+    "d".repeat(32),
     "1".repeat(64),
     "c".repeat(40),
     "instance-a",
@@ -565,12 +738,19 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
     const path = new URL(route.request().url()).pathname;
     let data: unknown;
     if (path === "/api/web/execution-config") {
-      if (route.request().method() === "PUT")
+      if (route.request().method() === "PUT") {
+        const edit = route.request().postDataJSON();
+        expect(edit.saved_digest).toBe(snapshot.saved_digest);
+        expect(route.request().headers()["if-match"]).toBe(
+          '"' + snapshot.saved_digest + '"',
+        );
+        expect(edit.profile_edits).toEqual([]);
         snapshot = {
           ...snapshot,
-          config: route.request().postDataJSON(),
+          config: edit.config,
           saved_digest: "saved",
         };
+      }
       data = snapshot;
     } else if (path.endsWith("/discover"))
       data = {
@@ -613,13 +793,20 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
                 revision: 1,
                 dispatch_mode: "manual",
                 dispatch_paused: false,
+                blockers: [],
               },
             },
           },
         },
       };
+    else if (path.endsWith("/maintenance/readiness")) data = projectReadiness;
     else if (path.endsWith("/maintenance"))
-      data = { observation: { commit: "" }, tasks: [], profiles: [] };
+      data = {
+        readiness: projectReadiness,
+        observation: { commit: "" },
+        tasks: [],
+        profiles: [],
+      };
     else if (path.endsWith("/presentation"))
       data = { presentation: { profiles: [], default_profile_id: "" } };
     else data = { tasks: [], runs: [] };

@@ -1,13 +1,16 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/mainagentbridge"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
+	suggestionbridge "github.com/erranliu/SteerLine/internal/steeragentbridge/suggestion"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
@@ -22,7 +25,99 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 )
 
-func TestMainAgentAdvisorySourceIsExplicitAndFreezesOwnerFacts(t *testing.T) {
+func TestContinuationSuggestionConfigurationFreezesAtPreparation(t *testing.T) {
+	ctx := context.Background()
+	c, _ := nativeTaskFixture(t)
+	c.runtimeGenerations = runnerbinding.NewContentQueue(1)
+	raw, err := os.ReadFile("../runnerclient/testdata/content-capabilities.json")
+	require(t, err)
+	var caps runnerclient.Capabilities
+	require(t, json.Unmarshal(raw, &caps))
+	catalog, err := runnerclient.CompileCatalog(caps)
+	require(t, err)
+	c.runtimeNative = &runnerclient.ConfigurationSnapshot{Catalog: catalog, Query: nativefixture.ExecutionConfigurationFixture}
+	c.RunnerExecution.ContinuationSuggestion = &executionconfig.ContinuationSuggestion{Model: "model-before", ReasoningEffort: "high"}
+	profiles, _ := json.Marshal(c.RunnerExecution.Profiles)
+	db := filepath.Join(t.TempDir(), "advisory.db")
+	store, err := sqlite.OpenSQLiteStore(db)
+	require(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	cli := runnerclient.Client{StateDir: t.TempDir()}
+	configure := func(config Config) *continuationSuggestionPort {
+		p := newContinuationSuggestionPort(config, store, cli, nil)
+		p.service.Build = func(_ context.Context, source suggestionbridge.Source, id string) (contract.Request, error) {
+			return contract.Request{Protocol: contract.Protocol, Capability: contract.Capability, RequestID: id, Context: contract.Context{Goal: source.Goal, Materials: []contract.Material{}}}, nil
+		}
+		p.service.Runner = &advisoryPublicRunner{}
+		return p
+	}
+	loaded := configure(c)
+	source := suggestionbridge.Source{CandidateID: strings.Repeat("b", 32), Occurrence: "attempt:original", Revision: 1, Reason: "pending_question", Goal: "Confirm the original requirement"}
+	require(t, loaded.service.Sync(ctx, []suggestionbridge.Source{source}))
+	require(t, loaded.service.ProcessNext(ctx))
+	id := suggestionbridge.SourceID(c.Identity(), source)
+	original, err := loaded.service.Get(ctx, id)
+	require(t, err)
+	if original.RunnerRequest == nil || original.State != "queued" || original.Submission != "pending" {
+		t.Fatal("original request was not prepared and queued", original)
+	}
+	originalRequest, _ := json.Marshal(original.RunnerRequest)
+	// Saving a new configuration does not replace an already loaded host snapshot.
+	saved := c.RunnerExecution
+	saved.ContinuationSuggestion = &executionconfig.ContinuationSuggestion{Model: "model-after", ReasoningEffort: "medium"}
+	configFile := filepath.Join(t.TempDir(), "execution.json")
+	encoded, _ := json.Marshal(saved)
+	require(t, os.WriteFile(configFile, encoded, 0600))
+	stillLoaded, _, err := loaded.service.Prepare(ctx)
+	require(t, err)
+	var settings struct{ Model, ReasoningEffort string }
+	require(t, json.Unmarshal(stillLoaded.Settings, &settings))
+	if settings.Model != "model-before" {
+		t.Fatal("saving changed the loaded host", string(stillLoaded.Settings))
+	}
+	// Reopen persisted records, then construct the owner from the newly loaded file.
+	require(t, store.Close())
+	store, err = sqlite.OpenSQLiteStore(db)
+	require(t, err)
+	encoded, err = os.ReadFile(configFile)
+	require(t, err)
+	reloaded := c
+	require(t, executionconfig.Decode(encoded, &reloaded.RunnerExecution))
+	restarted := configure(reloaded)
+	require(t, restarted.service.ProcessNext(ctx))
+	fake := restarted.service.Runner.(*advisoryPublicRunner)
+	var sent runnercontract.GenerateRunInput
+	require(t, json.Unmarshal(fake.request.Input, &sent))
+	require(t, json.Unmarshal(sent.Execution.Settings, &settings))
+	if settings.Model != "model-before" || fake.request.RequestID != original.RunnerRequest.RequestID {
+		t.Fatal("queued request was rebuilt using new settings", sent.Execution, fake.request)
+	}
+	require(t, restarted.service.ProcessNext(ctx))
+	restored, err := restarted.service.Get(ctx, id)
+	require(t, err)
+	restoredRequest, _ := json.Marshal(restored.RunnerRequest)
+	if !bytes.Equal(originalRequest, restoredRequest) || restored.InputDigest != original.InputDigest || !restored.Complete() {
+		t.Fatal("original request or digest changed across restart", restored)
+	}
+	next := source
+	next.Occurrence = "attempt:next"
+	require(t, restarted.service.Sync(ctx, []suggestionbridge.Source{source, next}))
+	require(t, restarted.service.ProcessNext(ctx))
+	prepared, err := restarted.service.Get(ctx, suggestionbridge.SourceID(c.Identity(), next))
+	require(t, err)
+	if prepared.RunnerRequest == nil {
+		t.Fatal("new request not prepared", prepared)
+	}
+	require(t, json.Unmarshal(prepared.RunnerRequest.Input, &sent))
+	var selected map[string]any
+	require(t, json.Unmarshal(sent.Execution.Settings, &selected))
+	afterProfiles, _ := json.Marshal(reloaded.RunnerExecution.Profiles)
+	if selected["model"] != "model-after" || selected["reasoning_effort"] != "medium" || selected["access_mode"] != "read_only" || !bytes.Equal(profiles, afterProfiles) || fake.submits != 1 {
+		t.Fatal("new snapshot or unrelated profiles changed", selected, fake.submits)
+	}
+}
+
+func TestContinuationSuggestionAdvisorySourceIsExplicitAndFreezesOwnerFacts(t *testing.T) {
 	c := runnerstate.Candidate{ID: strings.Repeat("a", 32), TaskID: "1", Participation: "active", BaseRevision: "fixed", ContractDigest: "contract", Projection: &runnercontract.Run{Revision: 7, Execution: runnercontract.Execution{AttemptID: "attempt"}, Question: &runnercontract.Question{ID: "question", Text: "Conflicting acceptance requirements"}, Controls: runnercontract.Controls{CanReply: true, Reason: "waiting for native answer"}}}
 	s, ok := materialAdviceSource(c)
 	if !ok || s.Occurrence != "attempt:question" || len(s.Facts) != 1 {
@@ -48,11 +143,11 @@ func TestMainAgentAdvisorySourceIsExplicitAndFreezesOwnerFacts(t *testing.T) {
 		t.Fatal("generic attention without question triggered")
 	}
 }
-func TestMainAgentAdvisoryLegacyActionsRejectedBeforeBusinessAccess(t *testing.T) {
+func TestContinuationSuggestionAdvisoryLegacyActionsRejectedBeforeBusinessAccess(t *testing.T) {
 	// No Server, actor, store or Runner: accidental access would panic.
 	p := &runtimeProjectPort{}
 	for _, action := range []string{"main_agent_answer", "main_agent_publish", "main_agent_prepare", "main_agent_analyze", "main_agent_suggest"} {
-		_, err := p.SubmitMainAgent(context.Background(), httpcontract.CommandEnvelope{Action: action, Payload: json.RawMessage(`{}`)})
+		_, err := p.SubmitContinuationSuggestion(context.Background(), httpcontract.CommandEnvelope{Action: action, Payload: json.RawMessage(`{}`)})
 		if err == nil || !strings.Contains(err.Error(), "unsupported") {
 			t.Fatal(action, err)
 		}
@@ -88,7 +183,7 @@ func (*advisoryPublicRunner) Call(context.Context, string, []string, *runnercont
 	return runnerclient.Response{}, errors.New("unexpected execution")
 }
 
-func TestMainAgentAdvisoryPersistedQuestionAutomaticallyGeneratesWithoutWeb(t *testing.T) {
+func TestContinuationSuggestionAdvisoryPersistedQuestionAutomaticallyGeneratesWithoutWeb(t *testing.T) {
 	ctx := context.Background()
 	c, _ := nativeTaskFixture(t)
 	prepareStoppedRunRepository(t, c)
@@ -116,14 +211,14 @@ func TestMainAgentAdvisoryPersistedQuestionAutomaticallyGeneratesWithoutWeb(t *t
 	cat, e := runnerclient.CompileCatalog(caps)
 	require(t, e)
 	frozen.runtimeNative = &runnerclient.ConfigurationSnapshot{Catalog: cat, Query: nativefixture.ExecutionConfigurationFixture}
-	port := newMainAgentPort(frozen, store, runtime.runner.client, nil)
+	port := newContinuationSuggestionPort(frozen, store, runtime.runner.client, nil)
 	fake := &advisoryPublicRunner{}
 	port.service.Runner = fake
 	source, ok := materialAdviceSource(candidate)
 	if !ok {
 		t.Fatal("actual persisted pending question not eligible", candidate.StopRequested)
 	}
-	id := mainagentbridge.SourceID(c.Identity(), source)
+	id := suggestionbridge.SourceID(c.Identity(), source)
 	worker, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() { defer close(done); port.run(worker) }()
@@ -169,7 +264,7 @@ func TestMainAgentAdvisoryPersistedQuestionAutomaticallyGeneratesWithoutWeb(t *t
 	if activity.State != "succeeded" || !activity.NeedsAttention || activity.Details.Target != id || fake.inspects != before {
 		t.Fatal(activity)
 	}
-	restarted := newMainAgentPort(frozen, store, runtime.runner.client, nil)
+	restarted := newContinuationSuggestionPort(frozen, store, runtime.runner.client, nil)
 	restarted.service.Runner = fake
 	require(t, restarted.tick(ctx))
 	if fake.submits != 1 {
@@ -207,7 +302,7 @@ func TestMainAgentAdvisoryPersistedQuestionAutomaticallyGeneratesWithoutWeb(t *t
 	}
 }
 
-func TestMainAgentAdvisoryColdAbsenceAndOriginalStops(t *testing.T) {
+func TestContinuationSuggestionAdvisoryColdAbsenceAndOriginalStops(t *testing.T) {
 	for _, kind := range []string{"absent", "cancelled-absent", "failed-stop", "cancelled-stop", "present"} {
 		t.Run(kind, func(t *testing.T) {
 			c, _ := nativeTaskFixture(t)
@@ -218,7 +313,7 @@ func TestMainAgentAdvisoryColdAbsenceAndOriginalStops(t *testing.T) {
 			defer store.Close()
 			c.runtimeGenerations = runnerbinding.NewContentQueue(1)
 			request := runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-advisory", Input: json.RawMessage(`{}`)}
-			record := mainagentbridge.Record{ID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1, Source: mainagentbridge.Source{CandidateID: strings.Repeat("b", 32)}, Runner: cli.BuildPin(), RunnerRequest: &request, Submission: "started", State: "unknown", CreatedAt: time.Now().UTC(), Settled: false}
+			record := suggestionbridge.Record{ID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1, Source: suggestionbridge.Source{CandidateID: strings.Repeat("b", 32)}, Runner: cli.BuildPin(), RunnerRequest: &request, Submission: "started", State: "unknown", CreatedAt: time.Now().UTC(), Settled: false}
 			record.Cancelled = strings.HasPrefix(kind, "cancelled")
 			if kind == "failed-stop" {
 				record.State = "failed"

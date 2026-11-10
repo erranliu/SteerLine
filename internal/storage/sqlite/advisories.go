@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 )
 
 func (s *SQLiteStore) LoadAdvisory(ctx context.Context, project, id string) ([]byte, uint64, error) {

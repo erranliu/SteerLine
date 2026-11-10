@@ -13,7 +13,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/localservice"
-	"github.com/erranliu/SteerLine/internal/mainagentbridge"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
@@ -21,6 +20,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	suggestionbridge "github.com/erranliu/SteerLine/internal/steeragentbridge/suggestion"
 )
 
 type ApplicationStopVerification struct {
@@ -302,7 +302,7 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 		return proof, err
 	}
 	for _, r := range advisories {
-		contents = append(contents, mainagentbridge.Content(r))
+		contents = append(contents, suggestionbridge.Content(r))
 	}
 	environments, err := reader.Environments(ctx, c.Identity())
 	if err != nil {

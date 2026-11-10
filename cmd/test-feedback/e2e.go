@@ -394,7 +394,7 @@ func runE2E(opts options) (code int) {
 	if remoteInput != nil && selected[0].ID != remotetest.Environment || activityWeb {
 		web = filepath.Join(buildDir, "steerline-web.exe")
 		commands := [][]string{{"go", "build", "-tags=webui", "-o", web, "./cmd/steerline-web"}}
-		if remoteInput != nil || hasMainAgentScenario(selected) {
+		if remoteInput != nil || hasContinuationSuggestionScenario(selected) {
 			commands = append([][]string{{"npm.cmd", "--prefix", "web", "run", "build"}}, commands...)
 		}
 		for i, args := range commands {
@@ -810,7 +810,7 @@ func executeE2EPackages(ctx context.Context, names []string, packages map[string
 	return failures, blocked
 }
 
-func hasMainAgentScenario(entries []e2eScenario) bool {
+func hasContinuationSuggestionScenario(entries []e2eScenario) bool {
 	for _, e := range entries {
 		if e.ID == "runtime.main-agent-advisory" {
 			return true

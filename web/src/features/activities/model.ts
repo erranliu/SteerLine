@@ -9,6 +9,7 @@ export type Activity = {
   source: string;
   source_id: string;
   kind: string;
+  steer_agent?: { type: string; operation: string };
   request_ids: string[];
   execution_ref?: ExecutionReference;
   title: string;
@@ -56,6 +57,18 @@ export type ActivityLinks = Pick<
 >;
 export const ended = (a: Activity) =>
   ["succeeded", "failed", "cancelled"].includes(a.state);
+export function steerAgentLabel(a: Activity): string | undefined {
+  switch (a.steer_agent?.type) {
+    case "material":
+      return "材料生成";
+    case "continuation":
+      return "对话续作";
+    case "planning":
+      return "Roadmap 规划";
+    case "maintenance":
+      return "持续维护";
+  }
+}
 export const matchesActivity = (a: Activity, filter: ActivityFilter) =>
   filter === "attention"
     ? a.needs_attention

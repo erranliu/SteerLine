@@ -1,4 +1,4 @@
-package mainagentbridge
+package suggestionbridge
 
 import (
 	"context"

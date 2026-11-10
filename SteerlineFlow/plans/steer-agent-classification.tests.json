@@ -1,0 +1,14 @@
+{
+  "tests": [
+    "l1.minimum",
+    "smoke.delivery",
+    "go.http",
+    "go.storage",
+    "go.environment",
+    "go.deployment",
+    "go.roadmap",
+    "web.unit",
+    "runtime.main-agent-advisory",
+    "runtime.async-activities"
+  ]
+}

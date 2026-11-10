@@ -1,12 +1,12 @@
-// Package mainagent prepares explicit inputs and validates a single prompt suggestion.
+// Package suggestion prepares explicit inputs and validates a single prompt suggestion.
 // Repository access, model execution, persistence and product actions belong to its host.
-package mainagent
+package suggestion
 
 import (
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
 	"github.com/erranliu/SteerLine/internal/prompts"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 )
 
 type Prepared struct {

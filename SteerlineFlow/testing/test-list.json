@@ -307,11 +307,11 @@
     },
     {
       "id": "runtime.main-agent-advisory",
-      "name": "主 Agent 提示词建议产品行为回归",
+      "name": "对话续作提示词建议产品行为回归",
       "level": "L4",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario runtime.main-agent-advisory",
-      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner协议夹具：持久原问题无需页面自动生成一次；固定上下文/唯一正文与复制、精确活动导航；重复观察/重启/源恢复不重投；未知提交沿原请求查询；失败不重开；显式取消和源解除只停止建议，未结算等待且共享槽不提前释放；原任务/答案/PR/材料无副作用；原生/服务/浏览器完整清理，证据非零且无skip。",
+      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner协议夹具：SteerAgent能力标签及原文案导航；持久原问题无需页面自动生成一次；固定上下文/唯一正文与复制、精确活动导航；重复观察/重启/源恢复不重投；未知提交沿原请求查询；失败不重开；显式取消和源解除只停止建议，未结算等待且共享槽不提前释放；原任务/答案/PR/材料无副作用；原生/服务/浏览器完整清理，证据非零且无skip。",
       "note": "Windows、Go/Git、Node/npm、Edge；无模型/外部PR。会构建共享Web，L4串行，不与Web安装/构建或HTTP压力并发。固定夹具响应与语义屏障，不按真实模型措辞或固定sleep判定。"
     }
   ]

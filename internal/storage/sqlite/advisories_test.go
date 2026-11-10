@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 

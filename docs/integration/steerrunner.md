@@ -2,6 +2,8 @@
 
 SteerLine 通过独立 Runner EXE 的公开 `steerrunner-cli/v1` 使用模型、原生 Agent 和执行工作流。Task、依赖、候选参与及唯一交付由 SteerLine 管理；工作区、会话、逐轮输入和执行资源由 Runner 管理。长期职责见[项目流程](../product-design/project-workflow.md)，异常及恢复见[Worker 生命周期](../product-design/worker-lifecycle.md)。
 
+[SteerAgent](../product-design/steer-agent.md) 维护 SteerLine 的智能工作能力分类及协作边界。业务类型不与 Runner workflow 一一对应，分类不新增执行权限；本页继续维护实际接口与构建要求。
+
 本文说明当前接入。所选构建的公开能力及对应验收决定实际可用范围；源码接通不表示安装版已部署，旧构建通过不表示当前组合已验。首次接入构建、旧接管和历次修复统一从[历史证据入口](../../SteerlineFlow/archive/design/runner-reliability-history.md)追溯。
 
 费用按 Runner 冻结阶段输入的 `step_id/configured_model/configured_reasoning_effort` 分组估算，要求公开能力 `configured_model_attribution=frozen_stage_input`、`observed_model_field=model`（Runner #133，`9243a79b`）。workflow 可编排 execution/audit 模型切换，Runner 不自主降级或换模型。SteerLine 按配置模型和候选创建时间匹配当前价表；实际观测模型与时间缺失不阻断估算，未分配配置模型或价格歧义的用量保留未计价。详见[计费职责](../../SteerlineFlow/spec/billing-ownership.spec.md)及[本次验证](../../SteerlineFlow/testing/acceptance/configured-model-billing.md)。

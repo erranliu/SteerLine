@@ -8,6 +8,7 @@ import { usePageVisible } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
 import {
   activityActions,
+  steerAgentLabel,
   activityDestination,
   ended,
   matchesActivity,
@@ -468,6 +469,11 @@ export function Activities({
                     data-activity-id={a.activity_id}
                   >
                     <strong>{a.title}</strong>
+                    {steerAgentLabel(a) && (
+                      <small aria-label="SteerAgent 能力">
+                        {steerAgentLabel(a)}
+                      </small>
+                    )}
                     {a.needs_attention && <small>需处理</small>}
                     <p>{a.phase || "状态待核实"}</p>
                     {a.summary && <p className="muted">{a.summary}</p>}

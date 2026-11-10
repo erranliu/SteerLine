@@ -44,7 +44,7 @@ import { StopCandidate } from "./stop-candidate";
 import { ResolvePRConflict } from "./resolve-pr-conflict";
 import { RunUsage } from "./run-usage";
 import { RejectedStart } from "./rejected-start";
-import { MainAgent } from "./main-agent";
+import { ContinuationSuggestion } from "./continuation-suggestion";
 
 function CandidateStatuses({ run, task }: { run: Candidate; task?: Task }) {
   const states = candidateStatuses(run, task);
@@ -211,7 +211,7 @@ function CandidateDetail({
         <h3>测试与审查</h3>
         <PlanTests key={run.execution_id + "/" + run.attempt_id} run={run} />
         <RunnerWorkflow run={run} />
-        <MainAgent key={run.run_id} run={run} />
+        <ContinuationSuggestion key={run.run_id} run={run} />
         <CandidateDocuments
           key={run.execution_id + "/" + run.attempt_id}
           run={run}

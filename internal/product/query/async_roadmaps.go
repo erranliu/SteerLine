@@ -7,6 +7,7 @@ import (
 	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/steeragent"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -39,6 +40,12 @@ func projectRoadmapActivity(a api.AsyncActivity, f ports.AsyncActivityFact, inst
 	a.Kind, a.Title = "roadmap_parse", "解析 Roadmap 草稿 · "+r.Source.Path
 	if r.Purpose == "documents" {
 		a.Kind, a.Title = "roadmap_documents", "生成 Spec / Plan / 验收文档 · "+r.Source.Path
+	}
+	switch r.Purpose {
+	case "":
+		a.SteerAgent = &api.SteerAgentClassification{Type: steeragent.Planning, Operation: steeragent.Parse}
+	case "documents":
+		a.SteerAgent = &api.SteerAgentClassification{Type: steeragent.Material, Operation: steeragent.GenerateDocuments}
 	}
 	a.Revision, a.CreatedAt = r.Revision, activityTime(r.CreatedAt)
 	a.RequestIDs = []string{r.RequestID}

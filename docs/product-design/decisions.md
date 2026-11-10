@@ -4,7 +4,7 @@ Runner 拥有原生问题、会话、输入和执行状态。SteerLine 将其公
 
 ## 问题与答案
 
-Runner 在原任务范围内调查和解决问题；需要补充任务依据、改变任务范围或协调其他任务时，按[职责边界](project-workflow.md#4-steerline-与-runner-的职责边界)交回 SteerLine 组织解决。当前通道负责展示问题、保存和投递答案；主 Agent 已收敛为给定上下文中的单一提示词建议，在明确待答问题上自动经 Runner generate 只读生成，详见[主 Agent](main-agent.md)。原题回答、材料修改及跨任务协调属于外部业务，不由建议模块执行。
+Runner 在原任务范围内调查和解决问题；需要补充任务依据、改变任务范围或协调其他任务时，按[职责边界](project-workflow.md#4-steerline-与-runner-的职责边界)交回 SteerLine 组织解决。当前通道负责展示问题、保存和投递答案；按 [SteerAgent 分类](steer-agent.md)，原“主 Agent”归对话续作中的单一提示词建议，在明确待答问题上自动经 Runner generate 只读生成，详见[对话建议](main-agent.md)。原题回答、材料修改及跨任务协调由各自业务所有者办理，不由建议模块执行。
 
 | 输入 | 当前含义与资格 |
 | --- | --- |

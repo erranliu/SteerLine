@@ -7,6 +7,7 @@
 | 设计 | 维护范围 |
 | --- | --- |
 | [项目流程与 Runner 职责](project-workflow.md) | 开发闭环、用户参与和职责；当前能力与未来总体设计 |
+| [SteerAgent 能力与协作边界](steer-agent.md) | 材料生成、对话续作、Roadmap 规划、持续维护的长期分类、解耦与 Runner 契约；当前能力及缺口分别说明 |
 | [项目接入与管理](project-onboarding.md) | 当前项目切换与隔离；拟议添加、结构核验和登记单独成章 |
 | [项目维护](project-maintenance.md) | 显式材料准备、统一就绪、候选冻结与过期保留 |
 | [数据模型](data-model.md) | 实体、身份、事务不变量与格式源码定位 |
@@ -36,7 +37,7 @@
 
 | 方案 | 当前限制 |
 | --- | --- |
-| [主 Agent：给定上下文提示词建议](main-agent.md) | 独立提示词模块；明确待答自动接入 Runner generate，本地只读生成、活动与查看/复制；未部署 |
+| [对话续作：给定上下文提示词建议](main-agent.md) | 原“主 Agent”的现有建议能力；明确待答自动接入 Runner generate，本地只读生成、活动与查看/复制；未部署 |
 | [添加、核验与登记](project-onboarding.md#拟议添加流程) | 角色清单及 PS-01–PS-07；完整 UI、核验器和正式登记尚未实现 |
 | [项目准备提示词](project-onboarding-prompt.md) | 用户自行复制使用；不触发产品 Agent、纳管或 Task |
 
