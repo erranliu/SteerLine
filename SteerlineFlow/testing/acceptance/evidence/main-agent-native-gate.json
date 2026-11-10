@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-09",
+  "scope": "local fake Responses provider; no real model request; not production capability proof",
+  "native_version": "0.166.0",
+  "native_sha256": "9d563ee4e0441ff9d59d612013e0460ddf8e5709735c2d9f6b98b7ef8ca4eb42",
+  "capture_directory": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-advisory-surface-9ivroga_",
+  "raw_files_sha256": {
+    "model-request.json": "93f30a63c1be214bc2dc9641364d378f5aed65752c538319bc5f03961828a43b",
+    "effective-config.json": "9aef9dd88f363b33bf2d851f8fd29c5b94098e8833ccf30c41796da7ad1d98e6",
+    "summary.json": "f8a627e160d868d938bb0c0c95ea3c2c4bc09198116f607bfa97fe8decf79db1",
+    "native-stderr.txt": "3fe3c8805d06699f3e993c95e240309997e6d0a09bd589473da23eaa288d6a3c"
+  },
+  "tool_choice": "auto",
+  "top_level_tools_present": false,
+  "recursive_leaf_tools": [
+    "functions.exec",
+    "functions.wait",
+    "functions.request_user_input",
+    "functions.request_user_input_async",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent"
+  ],
+  "recursive_leaf_count": 10,
+  "injected_material_categories": [
+    "skills metadata",
+    "permissions instructions",
+    "collaboration mode instructions",
+    "multi-agent role/policy",
+    "environment context"
+  ],
+  "limitations": [
+    "include_permissions_instructions/include_collaboration_mode_instructions remained true; skills configuration was null",
+    "Not an exhaustive search of all native configurations",
+    "Final clean capture concerns npm native only; desktop native schemas were checked separately",
+    "No positive Runner capability or real generated suggestion verified"
+  ],
+  "decision": "Strict boundary not proven. No production model sender is installed in this draft."
+}

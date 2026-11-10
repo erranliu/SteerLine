@@ -34,6 +34,7 @@ export type Activity = {
     kind: string;
     target: string;
     task_id?: string;
+    candidate_id?: string;
     historical?: boolean;
   };
 };
@@ -181,6 +182,8 @@ export function provisionalActivities(
 export function activityDestination(project: string, activity: Activity) {
   const root = `/projects/${encodeURIComponent(project)}`;
   const d = activity.details_ref;
+  if (d.kind === "advisory")
+    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.candidate_id || "")}&advisory=${encodeURIComponent(d.target)}`;
   if (d.kind === "roadmap")
     return `${root}/roadmaps?record=${encodeURIComponent(d.target)}${activity.execution_ref?.action && activity.execution_ref.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   if (d.kind === "roadmap-source")

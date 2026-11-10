@@ -1,0 +1,38 @@
+{
+  "runs": [
+    {
+      "at": "2026-11-09T08:58:48.9406032Z",
+      "results": [
+        {
+          "test_id": "web.unit",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-09T09:04:24.2360065Z",
+      "results": [
+        {
+          "test_id": "go.storage",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "failed",
+          "note": "测试集存在实际断言失败；完整性与原始错误见 summary.json"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-09T09:10:01.8571729Z",
+      "results": [
+        {
+          "test_id": "go.deployment",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

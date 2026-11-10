@@ -189,5 +189,13 @@
     "test": "TestLocalProjectEnvironment",
     "env": "live",
     "chain": "local-environment"
+  },
+  {
+    "id": "runtime.main-agent-advisory",
+    "level": "L4",
+    "suite": "runtime",
+    "package": "./tests/e2e/suites/runtime",
+    "test": "TestMainAgentAdvisory",
+    "env": "controlled"
   }
 ]

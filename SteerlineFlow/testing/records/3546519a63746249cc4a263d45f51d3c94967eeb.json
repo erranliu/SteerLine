@@ -1,0 +1,38 @@
+{
+  "runs": [
+    {
+      "at": "2026-11-09T10:04:38.0466665Z",
+      "results": [
+        {
+          "test_id": "l1.minimum",
+          "level": "L1",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-09T10:05:28.7623784Z",
+      "results": [
+        {
+          "test_id": "web.unit",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-09T10:06:13.0695371Z",
+      "results": [
+        {
+          "test_id": "runtime.main-agent-advisory",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "failed",
+          "note": "场景断言失败"
+        }
+      ]
+    }
+  ]
+}

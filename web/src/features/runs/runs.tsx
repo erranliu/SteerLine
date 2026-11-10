@@ -37,6 +37,7 @@ import { StopCandidate } from "./stop-candidate";
 import { ResolvePRConflict } from "./resolve-pr-conflict";
 import { RunUsage } from "./run-usage";
 import { RejectedStart } from "./rejected-start";
+import { MainAgent } from "./main-agent";
 
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
@@ -289,6 +290,7 @@ function CandidateDetail({
         sampledAt={snapshot?.connection.snapshot.sampled_at}
       />
       <CandidateDocuments run={run} />
+      <MainAgent key={run.run_id} run={run} />
       <PlanTests run={run} />
       {run.recovery_required && (
         <p className="notice amber">

@@ -40,7 +40,7 @@ func TestE2EParallelismOnlyAllowsIndependentRuntimeScenes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 5 || e2ePackageParallelism(entries) != 1 {
+	if len(entries) != 6 || e2ePackageParallelism(entries) != 1 {
 		t.Fatal("runtime maintenance must serialize the package")
 	}
 	entries = entries[:4]
@@ -239,7 +239,7 @@ func TestL3AndL4SelectDisjointRegisteredContent(t *testing.T) {
 	}
 	want := map[string][]string{
 		"L3": {"recovery.waiting-merge-restart", "recovery.runner-wait-retry", "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.async-activities"},
-		"L4": {"runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation", "runtime.project-maintenance"},
+		"L4": {"runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation", "runtime.project-maintenance", "runtime.main-agent-advisory"},
 	}
 	for level, ids := range want {
 		suite := "runtime"

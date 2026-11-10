@@ -56,6 +56,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 }
 
 var nativeTaskSchema = []string{
+	`CREATE TABLE advisory_jobs (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
 	`CREATE TABLE maintenance_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, digest TEXT NOT NULL, result BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
 	`CREATE TABLE source_observations (project_identity TEXT NOT NULL, source TEXT NOT NULL, source_id TEXT NOT NULL, source_revision INTEGER NOT NULL, last_success TEXT NOT NULL, diagnostic TEXT NOT NULL, PRIMARY KEY(project_identity,source,source_id))`,
 	`CREATE TABLE project_environment_current (project_identity TEXT NOT NULL, environment_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,environment_key))`,

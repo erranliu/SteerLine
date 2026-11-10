@@ -1,0 +1,26 @@
+{
+  "runs": [
+    {
+      "at": "2026-11-09T08:15:26.6278041Z",
+      "results": [
+        {
+          "test_id": "l1.minimum",
+          "level": "L1",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-09T08:18:08.7587817Z",
+      "results": [
+        {
+          "test_id": "smoke.delivery",
+          "level": "L2",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

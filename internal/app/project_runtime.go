@@ -137,10 +137,14 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	var maintenanceDone chan struct{}
 	var preparationDone chan struct{}
 	var environmentDone chan struct{}
+	var advisoryDone chan struct{}
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
 	defer startupTimer.Stop()
 	defer func() {
 		cancel()
+		if advisoryDone != nil {
+			<-advisoryDone
+		}
 		if environmentDone != nil {
 			<-environmentDone
 		}
@@ -197,6 +201,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
 	r.tests.roadmaps = r.config.runtimeRoadmaps
+	r.config.runtimeMainAgent = newMainAgentPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
@@ -226,6 +231,10 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		}
 		if service.State.Service.Ready {
 			startupTimer.Stop()
+			if advisoryDone == nil {
+				advisoryDone = make(chan struct{})
+				go func() { defer close(advisoryDone); r.config.runtimeMainAgent.run(ctx) }()
+			}
 			if preparationDone == nil {
 				preparationDone = make(chan struct{})
 				go func() { defer close(preparationDone); r.config.runtimeMaintenance.runPreparation(ctx) }()
@@ -252,6 +261,13 @@ func (r *ProjectRuntime) close() {
 		if r.port != nil {
 			r.port.StopAccepting()
 			r.port.drain()
+		}
+		if r.config.runtimeMainAgent != nil {
+			stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if err := r.config.runtimeMainAgent.service.Close(stopCtx); err != nil && r.log != nil {
+				fmt.Fprintf(r.log, "advisory stop unverified: %v\n", err)
+			}
+			cancel()
 		}
 		if r.config.runtimeRoadmaps != nil {
 			stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -307,6 +323,9 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 		return httpcontract.CommandResponse{}, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(in.Action, "main_agent_") {
+		return p.Server.CommandMainAgent(ctx, in, p)
+	}
 	if strings.HasPrefix(in.Action, "roadmap_") {
 		return p.Server.CommandRoadmap(ctx, in, p)
 	}
@@ -410,6 +429,12 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 	if route == "/activities" {
 		return p.readAsyncActivities(ctx, values)
 	}
+	if route == "/main-agent" || strings.HasPrefix(route, "/main-agent/") {
+		if p.config.runtimeMainAgent == nil {
+			return nil, errors.New("main Agent unavailable")
+		}
+		return p.config.runtimeMainAgent.read(ctx, route, values)
+	}
 	if strings.HasPrefix(route, "/roadmaps") {
 		if p.config.runtimeRoadmaps == nil {
 			return nil, errors.New("roadmap unavailable")
@@ -443,6 +468,13 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.maintenanceRead(ctx, route, values.Get("page"), values.Get("scope"))
 	}
 	if strings.HasPrefix(route, "/commands/") {
+		if p.config.runtimeMainAgent != nil {
+			if r, e := p.MainAgentReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
+				return nil, e
+			} else if r != nil {
+				return r, nil
+			}
+		}
 		if p.config.runtimeRoadmaps != nil {
 			if r, e := p.roadmapReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
 				return nil, e

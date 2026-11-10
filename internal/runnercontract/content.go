@@ -7,7 +7,7 @@ type GenerateInput struct {
 	Repository   *GenerateRepository `json:"repository,omitempty"`
 	Instruction  string              `json:"instruction"`
 	Materials    []Document          `json:"materials"`
-	OutputSchema json.RawMessage     `json:"output_schema"`
+	OutputSchema json.RawMessage     `json:"output_schema,omitempty"`
 }
 type GenerateRunInput struct {
 	Title       string            `json:"title"`

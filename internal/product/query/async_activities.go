@@ -15,7 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-var AsyncActivitySources = []string{"environment_detection", "baseline_check", "task_candidate", "roadmap"}
+var AsyncActivitySources = []string{"environment_detection", "baseline_check", "task_candidate", "roadmap", "main_agent_advisory"}
 
 // Private read shapes contain only fields used by the observation projection.
 // Domain qualification/settlement is supplied by the read port, not recreated.
@@ -447,6 +447,12 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 				}
 			}
 			a.Progress = &api.AsyncActivityProgress{Label: "测试已通过", Total: total, Succeeded: passed, Pending: total - passed, Diagnostic: p.Diagnostic}
+		}
+	case "main_agent_advisory":
+		var err error
+		a, err = projectAdvisoryActivity(a, f)
+		if err != nil {
+			return a, err
 		}
 	case "roadmap":
 		var err error

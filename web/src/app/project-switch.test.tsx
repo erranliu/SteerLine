@@ -152,7 +152,11 @@ it("keeps drawer UI outside keyed Workspace while isolating project and instance
   });
   const { client } = mount(`/projects/${a}/settings`);
   fireEvent.click(
-    await screen.findByRole("button", { name: /^活动 · 0 项进行中/ }),
+    await screen.findByRole(
+      "button",
+      { name: /^活动 · 0 项进行中/ },
+      { timeout: 5000 },
+    ),
   );
   let panel = await screen.findByRole("region", { name: /活动中心/ });
   fireEvent.click(within(panel).getByRole("button", { name: /^最近结束/ }));

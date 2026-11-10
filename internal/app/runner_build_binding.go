@@ -44,6 +44,15 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 			return errors.New("Roadmap Runner namespace differs")
 		}
 	}
+	advisories, err := advisoryRecords(ctx, store, c.Identity())
+	if err != nil {
+		return err
+	}
+	for _, r := range advisories {
+		if r.Submission == "started" && !runnerbinding.SamePath(r.Runner.StateDir, pin.StateDir) {
+			return errors.New("advisory Runner namespace differs")
+		}
+	}
 	if checkpoint.Service.RunnerBuild != nil && runnerbinding.SameBuild(*checkpoint.Service.RunnerBuild, pin) {
 		return nil
 	}
