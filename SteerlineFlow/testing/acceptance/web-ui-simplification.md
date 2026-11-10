@@ -138,4 +138,25 @@ WUS-M01：用户观察信息密度、阶段变化的可理解性、长时间运�
 
 ## 9. PR 交付
 
-2026-11-10 用户明确要求提 PR，并再次明确不部署。创建 codex/web-ui-simplification 分支提交本任务变更；提交前核对 38 份已测源码与 11 份产物摘要一致。获取远端 main 后发现其新增主 Agent 与依赖预览精简，PR 将保留这些已合入能力，合并后验证另行登记；前述 d1fe6f77 基线的历史结果不冒充新基线验证。
+2026-11-10 用户明确要求提 PR，并再次明确不部署。创建 codex/web-ui-simplification 分支提交本任务变更；提交前核对 38 份已测源码与 11 份产物摘要一致。获取远端 main 后发现其新增主 Agent 与依赖预览精简，rebase 至 `1827a72a`，产生受测提交 `4bdc423d417e0b87c93d64f08496b6a582acf085`。执行页冲突解决保留上游 MainAgent 入口，组件/测试及单一建议依赖图保持上游内容；前述 d1fe6f77 基线的历史结果不冒充新基线验证。
+
+下列路径仍相对第 7 节证据根，正式命令与该节相同，每次显式指定独立 `-out`；未自动重试。
+
+| 受测提交 | 内容 | 报告/证据相对路径 | 结果 |
+| --- | --- | --- | --- |
+| `4bdc423d` | 生产构建 | `diagnostics/pr-20261110T041140929Z-f1d7e2b4b5c74875a29a322f9e82342b/build.log` | 通过 |
+| `4bdc423d` | Web 全集 | `test-results/L4/pr-20261110T041145889Z-7274e017f2ba4afa81664cf4e873384a/summary.json` | 415/415，零失败/跳过 |
+| `4bdc423d` | L1 | `test-results/L1/pr-20261110T041240857Z-f96c49769b244972997e01933cb3e383/summary.json` | passed=true |
+| `4bdc423d` | L2 | `test-results/L2/pr-20261110T041322853Z-9c6b1f90f933494b8fa1dbc9c25b7701/summary.json` | passed=true，cleanup_complete=true |
+| `4bdc423d` | 浏览器四文件 | `diagnostics/pr-20261110T041140929Z-f1d7e2b4b5c74875a29a322f9e82342b/browser.log` 及同根 browser/ | 7/7，31.3 秒 |
+| `4bdc423d` | runtime.async-activities | `test-results/L3/pr-20261110T041542138Z-719e412a9cf34488b9cfbee1950a24a4/summary.json` | passed=true，执行 334.72 秒，cleanup_complete=true |
+| `f126e651` | Web 全集 | `test-results/L4/pr-final-20261110T042317172Z-af1d03318ed243d2881e92e11ea771fd/summary.json` | 415/415，零失败/跳过 |
+| `f126e651` | L1 | `test-results/L1/pr-final-20261110T042341400Z-185d781339ef4fb1881df2ee48e2825b/summary.json` | passed=true |
+| `f126e651` | L2 | `test-results/L2/pr-final-20261110T042400629Z-9a87860baaec4baf8d8e7828857c5ce2/summary.json` | passed=true，cleanup_complete=true |
+| `f126e651` | 生产构建 | `diagnostics/pr-final-20261110T042555639Z/build.log` | 通过 |
+
+主线整合后 `audit_ui_coverage` 独立只读审计确认上游能力保留、提示词/后端/相关 CI 无差异，并发现一项 P3：新增 main_agent_cancel 回执缺少可读中文名。`f126e651caff1a1d23c7018d5a1f41a74f06320e` 只补“取消提示词建议生成”显示映射并扩展既有并发未知操作用例，验证名称、按原 cancel 信封核实及输入不变。原审计者已复核闭环，无未解决发现，未修改文件或运行测试。该小修复后重跑完整 Web、L1/L2 与构建；浏览器和活动整链仍准确归属 `4bdc423d`，不冒充在新 SHA 重跑。
+
+两份干净提交报告均经 `go run ./cmd/test-feedback record -report-dir <目录>` 正式导出，分别见 [4bdc423d 记录](../records/4bdc423d417e0b87c93d64f08496b6a582acf085.json)与 [f126e651 记录](../records/f126e651caff1a1d23c7018d5a1f41a74f06320e.json)。后续验收记录提交只改变文档和测试历史；受测 SHA 不改名。文档链接检查与 diff 检查通过。
+
+交付 PR：[精简 WebUI 信息并保留真实执行进度 #487](https://github.com/erranliu/SteerLine/pull/487)。仅提交、推送并请求评审，不合并、不部署。第 8 节“没有提交/导出”的描述记录原实施阶段；本节为用户后续授权的实际补充。WUS-M01 人工体验仍后置，受控验证不扩大为真实模型或安装现场验证。
