@@ -224,6 +224,8 @@ async function setup(page: Page) {
         edges: [],
         boundary: { truncated: false, omitted_node_count: 0, reasons: [] },
       };
+    else if (path.endsWith("/main-agent"))
+      data = { record: null, records: [], has_more: false };
     else if (path.endsWith("/presentation"))
       data = { presentation: { profiles: [], default_profile_id: "" } };
     else if (path.endsWith("/environment/options"))
@@ -616,17 +618,148 @@ test("B4 routes, activity, navigation and compact maintenance remain reachable",
 });
 
 if (process.env.STEERLINE_UI_BASELINE === "1") {
-  test("baseline corrected fixture before implementation", async ({ page }, info) => {
+  test("baseline corrected fixture before implementation", async ({
+    page,
+  }, info) => {
     const state = await setup(page);
-    await page.goto(`${origin}/projects/${project}/runs?task=1&run=candidate-one`);
+    await page.goto(
+      `${origin}/projects/${project}/runs?task=1&run=candidate-one`,
+    );
     await expect(page.getByText(/正在验证登录流程/)).toBeVisible();
     await expect(page.getByText(/已通过 8/)).toBeVisible();
-    for (const width of [1440,800,375]) {
-      await page.setViewportSize({width,height:1000});
-      await page.screenshot({path:info.outputPath(`baseline-${width}.png`),fullPage:true});
+    for (const width of [1440, 800, 375]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.screenshot({
+        path: info.outputPath(`baseline-${width}.png`),
+        fullPage: true,
+      });
     }
     expect(state.errors).toEqual([]);
-    expect(state.requests.every(r=>r.startsWith("GET "))).toBe(true);
-    await info.attach("baseline-request-facts", {body:JSON.stringify(state.requests),contentType:"application/json"});
+    expect(state.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    await info.attach("baseline-request-facts", {
+      body: JSON.stringify(state.requests),
+      contentType: "application/json",
+    });
   });
 }
+
+test("B5 current suggestion defaults into one answer panel, preserves edits and replies once", async ({
+  page,
+}, info) => {
+  const state = await setup(page);
+  const run = state.runs[0];
+  const question =
+    "已补充实现与验收记录。部分验证尚未完成，需要确认后续处理方式。";
+  const prompt =
+    "请继续补齐当前任务缺少的验证，记录实际结果；遇到缺失环境时说明原因。";
+  run.workflow_status = "waiting_input";
+  run.recovery_version = 3;
+  run.decision = {
+    id: "question",
+    attempt_id: run.attempt_id,
+    version: 3,
+    status: "pending",
+    request: {
+      question,
+      context: question,
+      options: [],
+      interaction_kind: "blocking",
+      blocks_progress: true,
+      allow_free_text: true,
+    },
+  };
+  run.error = question;
+  run.runner_delivery.status = "waiting_input";
+  run.runner_delivery.diagnostic = question;
+  run.runner_delivery.controls.reason = "当前验证尚未完成";
+  run.runner_delivery.controls.can_reply = true;
+  const record = {
+    id: "a".repeat(32),
+    revision: 2,
+    candidate_id: run.run_id,
+    occurrence: run.attempt_id + ":question",
+    state: "ready",
+    settled: true,
+    prompt,
+    context: { goal: "继续当前问题", user_input: "", materials: [] },
+  };
+  const posts: any[] = [];
+  await page.route("**/main-agent?*", async (route) => {
+    const query = new URL(route.request().url()).searchParams;
+    expect(query.get("candidate_id")).toBe(run.run_id);
+    expect(query.get("occurrence")).toBe(record.occurrence);
+    await route.fulfill({ json: { record } });
+  });
+  await page.route("**/decision-eligibility?*", (route) =>
+    route.fulfill({ json: { eligible: true } }),
+  );
+  await page.route("**/commands", async (route) => {
+    const envelope = route.request().postDataJSON();
+    posts.push(envelope);
+    await route.fulfill({
+      json: {
+        ...envelope,
+        original: envelope,
+        status: "applied",
+        sampled_at: now(),
+      },
+    });
+  });
+  await openRun(page);
+  const input = page.getByRole("textbox", { name: "回答内容" });
+  const reply = page.getByRole("button", { name: "回复并继续", exact: true });
+  await expect(input).toHaveValue(prompt);
+  await expect(reply).toBeEnabled();
+  await expect(page.getByText(question, { exact: true })).toHaveCount(1);
+  await expect(
+    page.getByText("当前验证尚未完成", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("执行观察 · 等待输入", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "打开回答" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "测试与审查" })
+      .getByText("对话续作 · 提示词建议"),
+  ).toHaveCount(0);
+  expect(posts).toEqual([]);
+  await screenshotStates(page, info, "default-answer");
+  const edited = "按当前方案继续。\n请保留实际未验项。";
+  await input.fill(edited);
+  // A native progress revision must not replace an edited draft.
+  run.decision.version++;
+  run.control_revision++;
+  await page.getByRole("button", { name: "刷新查询" }).click();
+  await expect(input).toHaveValue(edited);
+  await page.reload();
+  await expect(input).toHaveValue(edited);
+  await expect(reply).toBeEnabled();
+  await reply.click();
+  await expect(
+    page.getByText("回答已提交，等待状态更新。", { exact: true }),
+  ).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0]).toMatchObject({
+    action: "answer_decision",
+    target_id: "question",
+    expected_version: 4,
+    payload: {
+      run_id: run.run_id,
+      decision_id: "question",
+      source_attempt_id: run.attempt_id,
+      expected_run_revision: 2,
+      expected_recovery_version: 3,
+      note: edited,
+    },
+  });
+  await page.screenshot({
+    path: info.outputPath("replied.png"),
+    fullPage: true,
+  });
+  expect(state.errors).toEqual([]);
+  await info.attach("reply-envelope", {
+    body: JSON.stringify(posts),
+    contentType: "application/json",
+  });
+});

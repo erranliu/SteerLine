@@ -338,6 +338,7 @@ type Detail struct {
 	ID          string            `json:"id"`
 	Revision    uint64            `json:"revision"`
 	CandidateID string            `json:"candidate_id"`
+	Occurrence  string            `json:"occurrence"`
 	State       string            `json:"state"`
 	Context     *contract.Context `json:"context,omitempty"`
 	Prompt      string            `json:"prompt,omitempty"`
@@ -346,7 +347,7 @@ type Detail struct {
 }
 
 func View(r Record) Detail {
-	d := Detail{ID: r.ID, Revision: r.Revision, CandidateID: r.Source.CandidateID, State: r.State, Diagnostic: r.Diagnostic, Settled: r.Settled}
+	d := Detail{ID: r.ID, Revision: r.Revision, CandidateID: r.Source.CandidateID, Occurrence: r.Source.Occurrence, State: r.State, Diagnostic: r.Diagnostic, Settled: r.Settled}
 	if r.Request != nil {
 		d.Context = &r.Request.Context
 	}
