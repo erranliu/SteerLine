@@ -1,6 +1,6 @@
 # 主 Agent 提示词建议模块：generate 接入 Plan
 
-状态：用户已授权实施并更新现有 PR #478，未授权合并或部署。目标见[Spec](../spec/main-agent-advisory.spec.md)，实际结果仅登记[验收](../testing/acceptance/main-agent-advisory.md)。实现基线为 448ddda0，保留纯 contract/core 和最小 Web/活动结构。
+状态：用户已于2026-11-10授权重新审查PR #478，无剩余阻断项即合并；未授权部署。目标见[Spec](../spec/main-agent-advisory.spec.md)，实际结果仅登记[验收](../testing/acceptance/main-agent-advisory.md)。实现基线为 448ddda0，保留纯 contract/core 和最小 Web/活动结构。
 
 ## 1. 复用与取舍
 
