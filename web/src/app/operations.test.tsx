@@ -163,7 +163,8 @@ it("keeps confirming a start whose receipt query timed out", () => {
 
 it("names concurrent uncertain actions and binds their trusted business context", () => {
   const stop = request("stop_candidate", "outcome_unknown"),
-    answer = request("answer_decision", "outcome_unknown");
+    answer = request("answer_decision", "outcome_unknown"),
+    cancel = request("main_agent_cancel", "outcome_unknown");
   stop.envelope.payload = { task_id: "42" };
   answer.envelope.target_id = "question";
   const reconcile = vi.fn();
@@ -174,10 +175,10 @@ it("names concurrent uncertain actions and binds their trusted business context"
     candidate_number: 2,
     decision: { id: "question" },
   } as never;
-  const before = structuredClone([stop, answer]);
+  const before = structuredClone([stop, answer, cancel]);
   render(
     <Operations
-      requests={[stop, answer]}
+      requests={[stop, answer, cancel]}
       candidates={[candidate]}
       scope={{ project_id: "project", instance_id: "opaque-instance" }}
       online
@@ -187,11 +188,14 @@ it("names concurrent uncertain actions and binds their trusted business context"
   );
   expect(screen.getByText("停止候选参与")).toBeVisible();
   expect(screen.getByText("回答问题")).toBeVisible();
+  expect(screen.getByText("取消提示词建议生成")).toBeVisible();
   expect(screen.getByText("任务 #42 · 候选待核实")).toBeVisible();
   expect(screen.getByText("任务 #43 · 候选 C2")).toBeVisible();
   fireEvent.click(screen.getAllByRole("button", { name: "查询原请求" })[1]);
   expect(reconcile).toHaveBeenCalledWith(answer);
-  expect([stop, answer]).toEqual(before);
+  fireEvent.click(screen.getAllByRole("button", { name: "查询原请求" })[2]);
+  expect(reconcile).toHaveBeenLastCalledWith(cancel);
+  expect([stop, answer, cancel]).toEqual(before);
 });
 it("bounds rejected history and keeps only current unresolved requests in the primary view", () => {
   const old = Array.from({ length: 20 }, (_, i) => {

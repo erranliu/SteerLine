@@ -119,6 +119,7 @@ export function Operations({
     pause_dispatch: "暂停派发",
     resume_dispatch: "恢复派发",
     set_dispatch_mode: "切换派发模式",
+    main_agent_cancel: "取消提示词建议生成",
   };
   const target = (row: StoredRequest) => {
     const e = row.envelope;
