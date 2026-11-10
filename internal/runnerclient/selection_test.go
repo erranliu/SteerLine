@@ -23,11 +23,30 @@ func TestSteerRunnerReleasePinBlocksBeforeInvocation(t *testing.T) {
 	if err := os.WriteFile(path, []byte("replacement"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	for _, command := range []string{"version", "capabilities", "service start", "submit"} {
+	for _, command := range []string{"version", "capabilities", "inspect", "observe", "progress-file", "run-usage", "service start", "submit"} {
 		_, err := (Client{Executable: path, SHA256: pin}).Call(context.Background(), command, nil, nil)
 		failure, ok := err.(*Failure)
 		if !ok || failure.Unknown || failure.Exit != 4 {
 			t.Fatalf("%s replacement was not rejected before process startup: %v", command, err)
+		}
+	}
+}
+
+func TestSteerRunnerSelectionRejectsInvalidPinBeforeInvocation(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := filepath.Join(t.TempDir(), "call")
+	t.Setenv("STEERLINE_RUNNER_CLI_FIXTURE", "accepted")
+	t.Setenv("STEERLINE_RUNNER_CLI_CALL", call)
+	for _, pin := range []string{"", "invalid", "00"} {
+		_, _, err := (Selection{Executable: exe, Version: "fixture", SHA256: pin}).Open(context.Background(), t.TempDir(), 0)
+		if err == nil {
+			t.Fatalf("invalid pin %q accepted", pin)
+		}
+		if _, err := os.Stat(call); !os.IsNotExist(err) {
+			t.Fatalf("invalid pin %q invoked CLI: %v", pin, err)
 		}
 	}
 }
