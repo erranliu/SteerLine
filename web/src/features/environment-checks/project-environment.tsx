@@ -13,11 +13,18 @@ import {
 import { DetectionID, EnvironmentCard } from "./environment-card";
 import { EnvironmentOverview } from "./environment-overview";
 import {
+  CopyExecutionInfo,
+  requestExecutionInfo,
+  type ExecutionReference,
+} from "../activities/execution-info";
+import { OperationResult } from "../activities/operation-result";
+import {
   SubmissionStatus,
   useActivityFeedback,
 } from "../activities/feedback/feedback";
 
 type Record = {
+  execution_ref?: ExecutionReference;
   id: string;
   revision: number;
   profile_id: string;
@@ -215,6 +222,15 @@ function EnvironmentWorkspace() {
       (e) =>
         e.action === "environment_start" && e.payload.environment_key === key,
     );
+  const copyStart =
+    (pendingRequests?.() || []).find(
+      (e) =>
+        e.action === "environment_start" &&
+        e.payload.environment_key === environmentKey,
+    ) || latestStart?.envelope;
+  const copyStartReceipt = startRows.find(
+    (r) => r.envelope.request_id === copyStart?.request_id,
+  )?.response;
   const confirmingEnvironment = (current: Environment) => {
     const rows = startRowsFor(current.environment_key);
     const latest = [...rows].sort((a, b) =>
@@ -356,12 +372,21 @@ function EnvironmentWorkspace() {
           <h2>指定检测结果</h2>
           {requestedRecord.data?.id === requestedActivity ? (
             <>
-              <DetectionID id={requestedActivity} />
+              <DetectionID
+                id={requestedActivity}
+                execution={requestedRecord.data.execution_ref}
+              />
               <p>
                 {recordLabel(requestedRecord.data)} ·{" "}
                 {requestedRecord.data.profile_id}
               </p>
               <p>{requestedRecord.data.diagnostic}</p>
+              {params.get("request_id") && (
+                <OperationResult
+                  requestID={params.get("request_id")!}
+                  targetID={requestedActivity}
+                />
+              )}
             </>
           ) : (
             <p>
@@ -411,6 +436,14 @@ function EnvironmentWorkspace() {
             activity={activity.data}
             command={command}
           />
+          {confirmingStart && copyStart && (
+            <CopyExecutionInfo
+              info={{
+                ...requestExecutionInfo(copyStart, copyStartReceipt),
+                project: identity.repository_identity,
+              }}
+            />
+          )}
           {activity.error && (
             <p role="status">检测状态查询失败，请刷新重试。</p>
           )}
@@ -475,7 +508,8 @@ function EnvironmentWorkspace() {
               {r.diagnostic && r.status !== "ready" && (
                 <p className="environment-reason">{r.diagnostic}</p>
               )}
-              <DetectionID id={r.id} />
+              <DetectionID id={r.id} execution={r.execution_ref} />
+              <Link to={`?activity=${encodeURIComponent(r.id)}`}>查看详情</Link>
               {!r.settled && (
                 <Button
                   size="sm"

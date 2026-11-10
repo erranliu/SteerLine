@@ -1,7 +1,12 @@
-import { useState } from "react";
 import type { StoredRequest } from "../shared/api/types";
 import { Button } from "../shared/ui/button";
 import { Status, short } from "../shared/ui/status";
+import { Link } from "react-router-dom";
+import {
+  CopyExecutionInfo,
+  requestExecutionInfo,
+} from "../features/activities/execution-info";
+import { requestDestination } from "../features/activities/model";
 export function Operations({
   requests,
   reconcile,
@@ -15,7 +20,6 @@ export function Operations({
   online: boolean;
   compact?: boolean;
 }) {
-  const [copyFeedback, setCopyFeedback] = useState("");
   if (compact) {
     const rows = requests
       .filter((r) => r.envelope.action.startsWith("environment_"))
@@ -69,6 +73,14 @@ export function Operations({
                     {row.response?.diagnostic || row.error}
                   </p>
                 )}
+              <CopyExecutionInfo
+                info={requestExecutionInfo(row.envelope, row.response)}
+              />
+              {requestDestination(row.envelope, row.response) && (
+                <Link to={requestDestination(row.envelope, row.response)!}>
+                  查看对应记录
+                </Link>
+              )}
             </div>
           );
         })}
@@ -92,7 +104,6 @@ export function Operations({
           项待核实
         </span>
       </summary>
-      {copyFeedback && <p role="status">{copyFeedback}</p>}
       {requests
         .slice()
         .reverse()
@@ -121,23 +132,14 @@ export function Operations({
                   最后核实：{new Date(row.checked_at).toLocaleString("zh-CN")}
                 </p>
               )}
-              <button
-                className="muted"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(
-                      row.envelope.request_id,
-                    );
-                    setCopyFeedback("已复制原请求 ID");
-                  } catch {
-                    setCopyFeedback(
-                      "复制失败，请手动复制：" + row.envelope.request_id,
-                    );
-                  }
-                }}
-              >
-                复制原请求 ID
-              </button>
+              <CopyExecutionInfo
+                info={requestExecutionInfo(row.envelope, row.response)}
+              />
+              {requestDestination(row.envelope, row.response) && (
+                <Link to={requestDestination(row.envelope, row.response)!}>
+                  查看对应记录
+                </Link>
+              )}
               {row.response?.diagnostic && (
                 <p className="muted">{row.response.diagnostic}</p>
               )}

@@ -31,8 +31,12 @@ type activityEnvironment struct {
 		Action string
 	}
 	Rounds []struct {
-		Run *struct {
+		RunID string `json:"run_id"`
+		Run   *struct {
 			UpdatedAt time.Time `json:"updated_at"`
+			Execution struct {
+				AttemptID string `json:"attempt_id"`
+			}
 		}
 	}
 }
@@ -229,6 +233,14 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 			a.Observation = "unavailable"
 		}
 		a.Details = api.AsyncActivityDetails{Kind: "environment", Target: r.ID}
+		a.Execution.RequestID = r.ID
+		if len(r.Rounds) > 0 {
+			round := r.Rounds[len(r.Rounds)-1]
+			a.Execution.RunID = round.RunID
+			if round.Run != nil {
+				a.Execution.AttemptID = round.Run.Execution.AttemptID
+			}
+		}
 		for _, q := range r.Requests {
 			if q.Action == "start" {
 				a.RequestIDs = append(a.RequestIDs, q.ID)
@@ -294,6 +306,7 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		a.CreatedAt = activityTime(r.CreatedAt)
 		a.RequestIDs = []string{f.ID}
 		a.Details = api.AsyncActivityDetails{Kind: "maintenance", Target: f.ID}
+		a.Execution.RequestID = f.ID
 		a.Diagnostic = r.Result.Diagnostic
 		switch r.Status {
 		case "applied":
@@ -334,6 +347,10 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		a.RequestIDs = []string{c.ID}
 		a.Diagnostic = c.Diagnostic
 		a.Details = api.AsyncActivityDetails{Kind: "candidate", Target: c.ID, TaskID: c.TaskID}
+		a.Execution = api.ExecutionReference{RequestID: c.ID, RunID: c.RunID}
+		if c.Projection != nil {
+			a.Execution.AttemptID = c.Projection.Execution.AttemptID
+		}
 		active := c.Participation == "active" && !c.StopRequested && related.Winner == "" && related.TaskStatus != "closed" && related.TaskStatus != "completed" && related.TaskStatus != "discarded"
 		switch c.SubmitState {
 		case "pending":

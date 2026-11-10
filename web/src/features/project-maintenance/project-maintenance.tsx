@@ -6,6 +6,11 @@ import { SafeLink } from "../../shared/ui/status";
 import { testPreparationNames as names } from "../tasks/use-test-readiness";
 import type { ProjectReadiness } from "../../shared/api/types";
 import {
+  CopyExecutionInfo,
+  requestExecutionInfo,
+} from "../activities/execution-info";
+import { OperationResult } from "../activities/operation-result";
+import {
   SubmissionStatus,
   useActivityFeedback,
 } from "../activities/feedback/feedback";
@@ -244,6 +249,14 @@ export function ProjectMaintenance() {
           {(error || view.error) && (
             <p role="alert">{error || String(view.error)}</p>
           )}
+          {new URLSearchParams(location.search).get("request_id") && (
+            <OperationResult
+              requestID={new URLSearchParams(location.search).get(
+                "request_id",
+              )!}
+              targetID={identity.project_id}
+            />
+          )}
           {v?.readiness.blockers.map((reason) => (
             <p className="notice amber" key={reason}>
               {reason}
@@ -309,6 +322,18 @@ export function ProjectMaintenance() {
             busy={checking()}
             showActivity={!!latestCheck}
           />
+          {latestCheck && (
+            <CopyExecutionInfo
+              key={latestCheck.envelope.request_id}
+              info={{
+                ...requestExecutionInfo(
+                  latestCheck.envelope,
+                  latestCheck.response,
+                ),
+                project: identity.repository_identity,
+              }}
+            />
+          )}
           {logs && (
             <section aria-label="提交日志">
               <label>

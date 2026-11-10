@@ -10,13 +10,26 @@ import (
 	"time"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	"github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // Frozen Runner inputs and execution settings stay in storage, not browser DTOs.
+func environmentExecutionReference(r env.Record) api.ExecutionReference {
+	ref := api.ExecutionReference{RequestID: r.ID}
+	if len(r.Rounds) > 0 {
+		round := r.Rounds[len(r.Rounds)-1]
+		ref.RunID = round.RunID
+		if round.Run != nil {
+			ref.AttemptID = round.Run.Execution.AttemptID
+		}
+	}
+	return ref
+}
 func publicEnvironment(r env.Record) any {
 	rounds := []any{}
+	ref := environmentExecutionReference(r)
 	for _, a := range r.Rounds {
 		var run any
 		if a.Run != nil {
@@ -30,7 +43,7 @@ func publicEnvironment(r env.Record) any {
 		}
 		rounds = append(rounds, map[string]any{"number": a.Number, "deadline": a.Deadline, "run_id": a.RunID, "submission": a.Submission, "submission_diagnostic": a.SubmissionDiagnostic, "settled": a.Settled, "timed_out": a.TimedOut, "diagnostic": a.Diagnostic, "result": a.Result, "report": a.Report, "run": run})
 	}
-	return map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": rounds, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.Files[r.Prepared.Manifest.Script], "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
+	return map[string]any{"execution_ref": ref, "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": rounds, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.Files[r.Prepared.Manifest.Script], "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
 }
 func environmentExcerpt(s string) string {
 	r := []rune(s)
@@ -218,7 +231,7 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 			if len(out) == 20 {
 				break
 			}
-			out = append(out, map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": []any{}})
+			out = append(out, map[string]any{"execution_ref": environmentExecutionReference(r), "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": []any{}})
 		}
 		return map[string]any{"records": out}, nil
 	}

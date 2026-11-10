@@ -15,7 +15,7 @@ import { useOriginalRequests } from "../../app/use-original-requests";
 import { currentRoadmapRecord, roadmapProgress } from "./workflow";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
-import type { StoredRequest } from "../../shared/api/types";
+import type { Envelope, StoredRequest } from "../../shared/api/types";
 import { Roadmaps, type RoadmapRecord, type RoadmapView } from "./roadmaps";
 
 // Layout and real canvas interactions are covered by the production-build browser test.
@@ -40,6 +40,7 @@ function setup(
   requests: StoredRequest[] = [],
   configure?: (view: RoadmapView, record: RoadmapRecord) => void,
   observed = false,
+  pendingRequests?: () => Envelope[],
 ) {
   const source = {
     id: "b".repeat(32),
@@ -148,7 +149,7 @@ function setup(
     api,
     client,
     online,
-    { requests },
+    { requests, pendingRequests },
   );
   return { api, get, submit, source, record, view, client };
 }
@@ -483,16 +484,15 @@ it("shows mixed original references separately from proposed formal dependencies
 });
 it("uses one task detail for comparison and confirms the whole proposed snapshot from the original view", async () => {
   const { submit, get } = setup();
-  fireEvent.click(
-    await screen.findByRole("button", { name: "草稿原始" }),
-  );
+  fireEvent.click(await screen.findByRole("button", { name: "草稿原始" }));
   fireEvent.click(screen.getByRole("button", { name: "查看变更 · T1" }));
   const detail = screen.getByRole("region", { name: "所选任务详情" });
   expect(within(detail).getByText("T1 候选控制")).toBeVisible();
   expect(within(detail).getByText("#8 → T1 · 新增")).toBeVisible();
-  expect(
-    screen.getByRole("button", { name: "草稿原始" }),
-  ).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "草稿原始" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   expect(submit).not.toHaveBeenCalled();
   expect(get.mock.calls.some(([path]) => path.startsWith("/graph"))).toBe(
     false,
@@ -523,9 +523,7 @@ it.each(["questions", "stale", "offline"])(
     // Offline has no cached server data in this fixture and therefore no preview.
     if (guard !== "offline") {
       await screen.findByRole("button", { name: "差异" });
-      fireEvent.click(
-        screen.getByRole("button", { name: "差异" }),
-      );
+      fireEvent.click(screen.getByRole("button", { name: "差异" }));
       if (guard === "questions")
         expect(screen.getByText("需要明确依赖范围")).toBeVisible();
     }
@@ -949,4 +947,79 @@ it("tolerates checkout line endings when deciding whether confirmed inputs need 
   });
   await waitFor(() => expect(button).toBeEnabled());
   expect(screen.queryByText(/草稿已修改/)).not.toBeInTheDocument();
+});
+
+it("places actual clarification text by the status and copies the selected historical Run", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  const { record, client } = setup("blocked", true, [], (view, record) => {
+    record.request_id = record.id;
+    record.execution_ref = {
+      request_id: record.id,
+      run_id: "old-run",
+      attempt_id: "old-attempt",
+    };
+    record.analysis!.questions = ["确认调度模式"];
+    view.records.push({
+      ...record,
+      id: "new-record",
+      request_id: "new-record",
+      created_at: "2026-11-09T00:00:00Z",
+      state: "review",
+      execution_ref: { request_id: "new-record", run_id: "new-run" },
+      analysis: { ...record.analysis!, questions: [] },
+    });
+  });
+  await screen.findByRole("button", { name: /确认本次任务与依赖/ });
+  fireEvent.change(screen.getByLabelText("查看历史记录"), {
+    target: { value: record.id },
+  });
+  const questions = await screen.findByRole("region", { name: "待澄清问题" });
+  expect(within(questions).getByText("确认调度模式")).toBeVisible();
+  expect(
+    within(screen.getByRole("region", { name: "所选记录结果" })).getByRole(
+      "region",
+      { name: "待澄清问题" },
+    ),
+  ).toBeVisible();
+  expect(screen.getAllByText("确认调度模式")).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "复制执行信息" }));
+  await screen.findByText("已复制执行信息");
+  expect(writeText.mock.calls[0][0]).toContain("old-run");
+  expect(writeText.mock.calls[0][0]).toContain("old-attempt");
+  expect(writeText.mock.calls[0][0]).not.toContain("new-run");
+  client.clear();
+});
+
+it("copies the in-flight request before a journal row exists instead of a previous request", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  const pending = {
+    project_id: identity.project_id,
+    instance_id: identity.instance_id,
+    request_id: "new-pending",
+    action: "roadmap_parse",
+    target_id: "b".repeat(32),
+    expected_version: 1,
+    payload: {},
+  } as Envelope;
+  const { client } = setup("review", true, [], undefined, false, () => [
+    pending,
+  ]);
+  const progress = await screen.findByRole("region", {
+    name: "当前草稿转正进度",
+  });
+  fireEvent.click(
+    await within(progress).findByRole("button", { name: "复制执行信息" }),
+  );
+  await screen.findByText("已复制执行信息");
+  expect(writeText.mock.calls[0][0]).toContain("请求 ID：new-pending");
+  expect(writeText.mock.calls[0][0]).toContain("Runner 运行待核实");
+  client.clear();
 });

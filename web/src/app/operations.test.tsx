@@ -1,9 +1,17 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render as renderUI,
+  screen,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { Operations } from "./operations";
 import type { Receipt, StoredRequest } from "../shared/api/types";
 
 afterEach(cleanup);
+const render = (ui: ReactNode) => renderUI(ui, { wrapper: MemoryRouter });
 function request(
   action: string,
   status?: Receipt["status"],
@@ -53,7 +61,11 @@ it("shows only the latest concise environment result and preserves the input rec
   expect(screen.queryByText(/开始检测/)).not.toBeInTheDocument();
   expect(screen.queryByText(/opaque/)).not.toBeInTheDocument();
   expect(screen.queryByText(/start_task|操作回执/)).not.toBeInTheDocument();
-  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "复制执行信息" })).toBeEnabled();
+  expect(screen.getByRole("link", { name: "查看对应记录" })).toHaveAttribute(
+    "href",
+    "/projects/project/environment?activity=opaque-target&request_id=opaque-request-environment_stop",
+  );
   expect(requests).toEqual(original);
 });
 it("reconciles an uncertain operation using its exact original record", () => {
