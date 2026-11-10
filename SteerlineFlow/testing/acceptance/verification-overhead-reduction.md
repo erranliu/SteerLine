@@ -47,3 +47,5 @@ Runner owner 29 项通过；正式短根 L1 通过（758 个顶层 Go 用例及�
 创建 PR 前已刷新主干到 `c8feff352d4cbd19c93f6f2f89d2fd283e1c115e`。PR #491 已交付普通任务不逐 ID 重查接线、按触发条件检查接线及相应规则收敛，因此本分支完整采用主干的测试指南、初始化/进度接入文档、正式 testing 规则和摘要，不重复修改它们。上文 3256→2951 B、正文替换与独立审核描述保留为原实现的历史记录，不宣称它们是本 PR 相对最新主干的正文差异。原实现提交为 `9ceeb5c2`。
 
 最终相对最新主干的交付范围为 `internal/runnerclient/selection.go`、`selection_test.go` 及本验收记录：避免首次打开重复哈希，同时保留 pin 格式准入、调用前实际字节核验及返回后复核。提示词实际正文/黄金样本/摘要相对目标主干均无差异，新增提示词字节为 0。原客户端验证可按来源与范围复用，集成后补跑提示词与客户端定向检查；远端 CI 另按本 PR 最终 head 判断。
+
+集成补验已通过：`go test ./internal/prompts ./internal/runnerclient -count=1 -json`，原报告为 `C:/SteerlineDebug/wt-5d04-verification/diagnostics/pr-integration-90bdef97064a4c0c8ccf263c643ce637/go-test.jsonl`，测试源码版本为 `a63c90b5`。独立审核者 `/root/review_steerline` 复审相对最新主干的三文件差异并批准；确认 pin 保护保留、正式提示词和六份规范文件与主干一致。此后仅补充本段结果，代码未变。
