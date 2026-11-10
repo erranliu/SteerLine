@@ -162,3 +162,28 @@ L1/L2 为实现后的固定必要回归，不因本次文档静态检查而提�
 实现与验证阶段仅交付当前工作树的实现、Spec/Plan/治理和验证记录。用户随后已授权提交、推送并创建 PR，后续交付状态以 Git/PR 实际记录为准；未授权合并或部署。测试中的 PR/provider/Git均为隔离本机夹具，原安装现场未改动。
 
 提交前同步：当前实现无冲突 rebase 到 `origin/main` 的 `50b8fdb5c24fa2a3f6dd32fe10e8799d271061f2`。按最新测试指南复用上述正式证据，仅验证整合影响：`diagnostics/pr-integration-20261110-1810/summary.json` 为112项定向测试 passed/complete，覆盖提示词治理、Roadmap 及 Runner 选择；`diagnostics/pr-runner-pin-20261110-1814/summary.json` 的新增发布哈希固定反例通过。生产构建通过，文档链接检查748份 Markdown / 4652个本地导航链接、0错误；本次整合未改业务实现或提示词正文。
+
+## PR494 提示词精简
+
+用户要求保留必要职责、删除重复约束和审计式提醒。本轮以前一提交 `67a336905c8c23fd0fd3628ca4e5c838dd391bb3` 为基线，只改固定短模板、完整规则、两份静态副本及对应黄金样本/摘要；组装函数、业务接线、schema、CI 和源码守卫不变。[本轮实际完整差异](roadmap-per-task-generation.prompt-slimming.diff)采用零上下文 Git diff，包含全部正文、资产及测试期望变化；此前正文差异和字节表保留为历史。
+
+短指令保留固定文件入口与目标事实，字段职责只在完整规则定义；解析保留必要协作、共享修改所有权/交接以及新增测试提供关系，删除重复的阶段禁令、问题出口及“额外契约表/全仓调查”审计式提醒。文档生成保留单目标、其它任务仅作上下文及沿用已确认 provides_tests，合并重复禁止句，tests 改为当前单项表述。空数组、唯一提供者及测试选择约束仍有明确规则和原程序校验；没有以程序校验替代必要模型职责。
+
+字节统计沿用上表口径：短模板去一个末尾换行，黄金样本为实际渲染正文，完整材料为 LF 正文且含末尾换行。
+
+| 正文来源 | 本轮前字节 | 本轮后字节 |
+| --- | ---: | ---: |
+| `internal/prompts/roadmap-parse.md` | 507 | 463 |
+| `internal/prompts/roadmap-documents.md` | 592 | 561 |
+| `internal/prompts/materials/roadmap-parse.md` | 2060 | 1787 |
+| `internal/prompts/materials/roadmap-documents.md` | 2762 | 2626 |
+| `internal/prompts/testdata/roadmap-parse.golden.md` | 500 | 456 |
+| `internal/prompts/testdata/roadmap-documents.golden.md` | 579 | 548 |
+
+按实际短指令加完整规则计：解析 2560→2243（减少317字节），生成 3341→3174（减少167字节）。解析仍较改造前1851字节增加392字节，用于前移确认必要的协作与测试规划；生成已与改造前3176字节基本持平。该统计不是 token 或整次模型输入量，两个阶段及静态副本不叠加到同一次请求。
+
+验证安排：按提示词治理运行 prompts/roadmap owner、完整 L1/L2，再做独立只读子 agent 审核。范围未变的 UI、存储/HTTP/部署、浏览器和真实原生并行链复用此前本条验收中各原受测版本的正式证据；本轮没有业务代码、请求结构或执行生命周期改动，不重跑模型。当前 prompts/roadmap owner `diagnostics/prompt-slim-owner-20261110-1830/summary.json` 已通过；L1/L2 与独立审核以实际完成结果补记，不预填批准。
+
+本轮实际受测版本为 `67a33690` 加上述未提交精简差异，原报告保留 dirty 状态。prompts/roadmap owner 为112项 passed/complete、零失败/零测试跳过；完整 L1 `formal/prompt-slim-l1-20261110-1830/summary.json` 和完整 L2 `formal/prompt-slim-l2-20261110-1830/summary.json` 均已通过。链接检查748份 Markdown / 4653个本地导航链接、0错误，`git diff --check` 通过。测试完成后独立只读子 agent `/root/audit_prompt_slimming` 开始审核，本地批准结论待实际返回。
+
+独立审核实际结论：`/root/audit_prompt_slimming` 只读审阅本轮全部差异、原正文、实际请求组装、schema/服务端验证及上述原报告，未发现可确认问题，本地提示词审核通过。必要职责保留，删减属于重复说明或审计式提醒；两份静态副本逐字节一致，黄金样本与渲染正文一致，摘要及六组字节数匹配，专属差异文件与实际 Git diff 完全一致。独立核实 L2 的 `TestDeliverySmoke` 实际非零执行、组内 passed/complete 且 `cleanup_complete=true`。没有新增规则、测试或框架；此结论不代表 GitHub 平台审批。

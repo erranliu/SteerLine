@@ -108,8 +108,8 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 	}{
 		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
 		{"main-agent", "3a7a447bbe7527bf4c1c46867f9180cab32bc3b61359a92d9db9784172c38189", MainAgentRules},
-		{"roadmap-parse", "1d2162134517564ed644f5e655e571ba19ab7c45c98ecabbc353280bfb9f69cd", RoadmapParseRules},
-		{"roadmap-documents", "6f3f84fa253f40975f53f3f57defc04927230787947e015532c23fdb762e0511", RoadmapDocumentRules},
+		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
+		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
 	}
 	for _, c := range cases {
