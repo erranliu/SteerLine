@@ -162,13 +162,26 @@ test("saved roadmap preview shows proposed dependencies with changes, task detai
       const envelope = route.request().postDataJSON();
       writes.push(envelope);
       expect(envelope).toMatchObject({
-        action: "roadmap_confirm",
+        action: "roadmap_generate_documents",
         target_id: record.id,
         expected_version: 3,
         payload: {},
       });
       record.state = "confirmed";
+      record.confirmed_digest = "confirmed";
+      record.revision++;
+      const document: RoadmapRecord = {
+        ...record,
+        id: envelope.request_id,
+        parent_id: record.id,
+        purpose: "documents",
+        state: "queued",
+        revision: 1,
+        created_at: new Date().toISOString(),
+      };
+      view.records.push(document);
       data = {
+        roadmap: document,
         ...envelope,
         original: envelope,
         status: "applied",
@@ -273,6 +286,8 @@ test("saved roadmap preview shows proposed dependencies with changes, task detai
       else if (path.endsWith("/roadmaps/sources/" + source.id)) data = source;
       else if (path.endsWith("/roadmaps/" + record.id)) data = record;
       else if (path.endsWith("/roadmaps/" + historical.id)) data = historical;
+      else if (path.includes("/roadmaps/"))
+        data = view.records.find((r) => path.endsWith("/" + r.id));
     }
     await route.fulfill({ json: data });
   });
@@ -437,7 +452,7 @@ test("saved roadmap preview shows proposed dependencies with changes, task detai
     review.getByRole("button", { name: "查看 historical · historical 任务" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /确认本次任务与依赖/ }),
+    page.getByRole("button", { name: /确认任务依赖并生成 Spec \/ Plan/ }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "返回当前流程", exact: true }).click();
   await expect(review.locator(".react-flow__node")).toHaveCount(7);
@@ -445,10 +460,12 @@ test("saved roadmap preview shows proposed dependencies with changes, task detai
   await expect(
     detail.getByText("选择图中节点或下方任务，查看范围、依赖与原文依据。"),
   ).toBeVisible();
-  await page.getByRole("button", { name: /确认本次任务与依赖/ }).click();
+  await page
+    .getByRole("button", { name: /确认任务依赖并生成 Spec \/ Plan/ })
+    .click();
   await expect.poll(() => writes.length).toBe(1);
   await expect(
-    page.getByRole("status").filter({ hasText: "任务与依赖已确认" }),
+    page.getByRole("status").filter({ hasText: "生成文档中" }),
   ).toBeVisible();
   expect(errors).toEqual([]);
   writeFileSync(

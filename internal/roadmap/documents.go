@@ -15,7 +15,7 @@ import (
 )
 
 // GenerateDocuments creates another content record with the same lifecycle.
-// It freezes the confirmed planning snapshot; it cannot allocate a Task number.
+// It confirms reviewed planning before freezing it; it cannot allocate a Task number.
 func (s *Service) GenerateDocuments(ctx context.Context, parent, request string, expected uint64) (model.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -34,8 +34,16 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	if err != nil {
 		return r, err
 	}
-	if r.Revision != expected || r.State != "confirmed" || r.Analysis == nil || r.Purpose == "documents" || !r.ObservationComplete() {
-		return r, errors.New("请先核实原解析已结束，并确认当前任务和依赖")
+	if r.Revision != expected || (r.State != "review" && r.State != "confirmed") || r.Analysis == nil || r.Purpose == "documents" || !r.ObservationComplete() {
+		return r, errors.New("请先核实原解析已结束，刷新并核对当前任务和依赖")
+	}
+	if r.State == "review" {
+		// Confirmation and document records need distinct request bindings.
+		confirmation := DocumentConfirmationRequest(request)
+		r, err = s.Confirm(ctx, parent, confirmation, expected)
+		if err != nil {
+			return r, err
+		}
 	}
 	rows, err := s.Store.Roadmaps(ctx, s.Project)
 	if err != nil {
@@ -136,6 +144,11 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	}
 	s.track(r)
 	return s.dispatch(ctx, r)
+}
+
+// DocumentConfirmationRequest binds the confirmation milestone of one generation command.
+func DocumentConfirmationRequest(request string) string {
+	return model.Digest([]byte("roadmap-confirm:" + request))[:32]
 }
 
 func sameRepositoryPath(a, b string) bool {

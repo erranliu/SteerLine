@@ -93,9 +93,8 @@ function setup(
     sources: [{ ...source, body: "" }],
     records: [record],
     profiles: [{ id: "local", name: "本机 Codex" }],
-    documents_available: false,
-    documents_reason:
-      "待 Runner 文档能力接入：固定仓库只读调查、整批设计、多文档输出",
+    documents_available: true,
+    documents_reason: "",
   };
   const api = new Api(identity, "csrf");
   const get = vi
@@ -345,7 +344,9 @@ it.each([false, true])(
     } else {
       await waitFor(() =>
         expect(
-          screen.getByRole("button", { name: /确认本次任务与依赖/ }),
+          screen.getByRole("button", {
+            name: /确认任务依赖并生成 Spec \/ Plan/,
+          }),
         ).toBeEnabled(),
       );
       expect(screen.queryByRole("button", { name: "返回当前流程" })).toBeNull();
@@ -368,10 +369,9 @@ it("follows the current document generation after acting on a parse activity lin
       ) as never,
   );
   submit.mockImplementation(async (envelope) => {
-    if (envelope.action === "roadmap_confirm") {
+    if (envelope.action === "roadmap_generate_documents") {
       record.state = "confirmed";
       record.confirmed_digest = "confirmed";
-    } else if (envelope.action === "roadmap_generate_documents") {
       view.records.push({
         ...record,
         id: "documents-from-activity",
@@ -409,26 +409,21 @@ it("follows the current document generation after acting on a parse activity lin
     </QueryClientProvider>,
   );
   const confirm = await screen.findByRole("button", {
-    name: /确认本次任务与依赖/,
+    name: /确认任务依赖并生成 Spec \/ Plan/,
   });
   await waitFor(() => expect(confirm).toBeEnabled());
   fireEvent.click(confirm);
-  const generate = await screen.findByRole("button", {
-    name: "生成 Spec / Plan",
-  });
-  await waitFor(() => expect(generate).toBeEnabled());
   await waitFor(() =>
     expect(screen.getByTestId("location")).not.toHaveTextContent("record="),
   );
   expect(screen.getByTestId("location")).toHaveTextContent(
     "source=" + record.source.id,
   );
-  fireEvent.click(generate);
   await waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent("生成文档中"),
   );
   expect(screen.queryByRole("button", { name: "返回当前流程" })).toBeNull();
-  expect(submit).toHaveBeenCalledTimes(2);
+  expect(submit).toHaveBeenCalledTimes(1);
   client.clear();
 });
 it("reads Markdown and shows original versus proposed dependencies without allocating or calling a model on mount", async () => {
@@ -441,15 +436,17 @@ it("reads Markdown and shows original versus proposed dependencies without alloc
   ).toHaveAttribute("href", "/projects/" + identity.project_id + "/dag?task=8");
   expect(screen.getByText("建议补充固定调度前置")).toBeVisible();
   expect(
-    screen.queryByRole("button", { name: "生成 Spec / Plan" }),
+    screen.queryByRole("button", { name: "重试生成 Spec / Plan" }),
   ).not.toBeInTheDocument();
   expect(screen.getByText("入 DAG 时分配")).toBeVisible();
   expect(submit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: /确认本次任务与依赖/ }));
+  fireEvent.click(
+    screen.getByRole("button", { name: /确认任务依赖并生成 Spec \/ Plan/ }),
+  );
   await waitFor(() =>
     expect(submit).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "roadmap_confirm",
+        action: "roadmap_generate_documents",
         target_id: "a".repeat(32),
         expected_version: 3,
         payload: {},
@@ -499,27 +496,31 @@ it("keeps dependency comparison in task details and confirms the whole proposed 
   expect(get.mock.calls.some(([path]) => path.startsWith("/graph"))).toBe(
     false,
   );
-  fireEvent.click(screen.getByRole("button", { name: /确认本次任务与依赖/ }));
+  fireEvent.click(
+    screen.getByRole("button", { name: /确认任务依赖并生成 Spec \/ Plan/ }),
+  );
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
   expect(submit.mock.calls[0][0]).toMatchObject({
-    action: "roadmap_confirm",
+    action: "roadmap_generate_documents",
     target_id: "a".repeat(32),
     expected_version: 3,
     payload: {},
   });
 });
-it.each(["questions", "stale", "offline"])(
+it.each(["questions", "stale", "offline", "capability", "preparation"])(
   "keeps the original confirmation guard with a readable %s preview",
   async (guard) => {
     const { submit } = setup(
       "review",
       guard !== "offline",
       [],
-      (_view, record) => {
+      (view, record) => {
         if (guard === "questions")
           record.analysis!.questions = ["需要明确依赖范围"];
         if (guard === "stale")
           record.source = { ...record.source, body: "旧原文", digest: "old" };
+        if (guard === "capability") view.documents_available = false;
+        if (guard === "preparation") view.preparation.ready = false;
       },
     );
     // Offline has no cached server data in this fixture and therefore no preview.
@@ -529,12 +530,73 @@ it.each(["questions", "stale", "offline"])(
         expect(screen.getByText("需要明确依赖范围")).toBeVisible();
     }
     const confirm = screen.queryByRole("button", {
-      name: /确认本次任务与依赖/,
+      name: /确认任务依赖并生成 Spec \/ Plan/,
     });
     if (confirm) expect(confirm).toBeDisabled();
     expect(submit).not.toHaveBeenCalled();
   },
 );
+it("retains confirmation after generation preparation fails and retries once without reconfirming", async () => {
+  const { submit, record, view } = setup("review", true, [], undefined, true);
+  submit.mockImplementation(async (envelope) => {
+    if (record.state === "review") {
+      record.state = "confirmed";
+      record.confirmed_digest = "confirmed";
+      record.revision++;
+      return {
+        request_id: envelope.request_id,
+        status: "rejected",
+        diagnostic: "固定生成规范不可用",
+      } as never;
+    }
+    const document = {
+      ...record,
+      id: envelope.request_id,
+      parent_id: record.id,
+      purpose: "documents",
+      state: "queued",
+      revision: 1,
+      created_at: new Date().toISOString(),
+    };
+    view.records.push(document);
+    return {
+      request_id: envelope.request_id,
+      status: "applied",
+      roadmap: document,
+    } as never;
+  });
+  const confirm = await screen.findByRole("button", {
+    name: "确认任务依赖并生成 Spec / Plan",
+  });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
+  fireEvent.click(confirm);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "固定生成规范不可用",
+  );
+  const retry = await screen.findByRole("button", {
+    name: "重试生成 Spec / Plan",
+  });
+  await waitFor(() => expect(retry).toBeEnabled());
+  expect(submit).toHaveBeenCalledTimes(1);
+  expect(record.confirmed_digest).toBe("confirmed");
+  fireEvent.click(retry);
+  fireEvent.click(retry);
+  await waitFor(() =>
+    expect(screen.getByRole("status")).toHaveTextContent("生成文档中"),
+  );
+  expect(submit).toHaveBeenCalledTimes(2);
+  expect(submit.mock.calls[0][0]).toMatchObject({
+    action: "roadmap_generate_documents",
+    target_id: record.id,
+    expected_version: 3,
+  });
+  expect(submit.mock.calls[1][0]).toMatchObject({
+    action: "roadmap_generate_documents",
+    target_id: record.id,
+    expected_version: 4,
+  });
+});
 it("submits an explicit Runner parse with original request identity and no formal IDs", async () => {
   const { submit, source } = setup();
   await screen.findByDisplayValue(/T1 候选控制/);
@@ -552,10 +614,13 @@ it("submits an explicit Runner parse with original request identity and no forma
   expect(JSON.stringify(envelope)).not.toContain("task_id");
 });
 it("keeps confirmed content at local identities while document capability is unavailable", async () => {
-  const { submit } = setup("confirmed");
+  const { submit } = setup("confirmed", true, [], (view) => {
+    view.documents_available = false;
+    view.documents_reason = "待 Runner 文档能力接入";
+  });
   expect(await screen.findByText(/待 Runner 文档能力接入/)).toBeVisible();
   expect(
-    screen.getByRole("button", { name: "生成 Spec / Plan" }),
+    screen.getByRole("button", { name: "重试生成 Spec / Plan" }),
   ).toBeDisabled();
   expect(
     screen.queryByRole("button", { name: "正式入 DAG · 分配编号" }),
@@ -572,7 +637,7 @@ it("generates documents only after confirmation when the selected Runner publish
   view.documents_available = true;
   view.documents_reason = "";
   const button = await screen.findByRole("button", {
-    name: "生成 Spec / Plan",
+    name: "重试生成 Spec / Plan",
   });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
@@ -806,7 +871,7 @@ it("keeps current progress and source badge while inspecting read-only history, 
   ).toBeVisible();
   expect(screen.getByTestId("location")).toHaveTextContent("record=parent");
   expect(
-    screen.queryByRole("button", { name: "生成 Spec / Plan" }),
+    screen.queryByRole("button", { name: "重试生成 Spec / Plan" }),
   ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "重新解析草稿" }));
   expect(submit).not.toHaveBeenCalled();
@@ -843,14 +908,14 @@ it("keeps the confirmed milestones after a failed document attempt and retries a
     });
   });
   const button = await screen.findByRole("button", {
-    name: "生成 Spec / Plan",
+    name: "重试生成 Spec / Plan",
   });
   await waitFor(() => expect(button).toBeEnabled());
   expect(
     screen
       .getByRole("list", { name: "转正阶段" })
       .querySelectorAll(".complete"),
-  ).toHaveLength(2);
+  ).toHaveLength(1);
   fireEvent.click(button);
   await waitFor(() =>
     expect(submit).toHaveBeenCalledWith(
@@ -895,7 +960,7 @@ it("preserves old progress after a source change and offers an explicit new pars
     "任务与依赖已确认",
   );
   expect(
-    screen.queryByRole("button", { name: "生成 Spec / Plan" }),
+    screen.queryByRole("button", { name: "重试生成 Spec / Plan" }),
   ).not.toBeInTheDocument();
   expect(
     within(progress).getByRole("button", {
@@ -925,7 +990,7 @@ it("does not confuse separate flows or drop unresolved publication facts", () =>
   expect(currentRoadmapRecord([oldParse, oldDoc, newParse])?.id).toBe(
     "old-doc",
   );
-  expect(roadmapProgress(oldDoc).step).toBe(4);
+  expect(roadmapProgress(oldDoc).step).toBe(3);
 });
 
 it("switches the current flow and history scope with the selected draft", async () => {
@@ -946,7 +1011,7 @@ it("switches the current flow and history scope with the selected draft", async 
     screen.getByRole("button", { name: "Runner generate · 解析任务与依赖" }),
   ).toBeEnabled();
   expect(
-    screen.queryByRole("button", { name: "生成 Spec / Plan" }),
+    screen.queryByRole("button", { name: "重试生成 Spec / Plan" }),
   ).not.toBeInTheDocument();
   expect(submit).not.toHaveBeenCalled();
 });
@@ -961,7 +1026,7 @@ it("tolerates checkout line endings when deciding whether confirmed inputs need 
     view.documents_available = true;
   });
   const button = await screen.findByRole("button", {
-    name: "生成 Spec / Plan",
+    name: "重试生成 Spec / Plan",
   });
   await waitFor(() => expect(button).toBeEnabled());
   expect(screen.queryByText(/草稿已修改/)).not.toBeInTheDocument();
@@ -991,7 +1056,9 @@ it("places actual clarification text by the status and copies the selected histo
       analysis: { ...record.analysis!, questions: [] },
     });
   });
-  await screen.findByRole("button", { name: /确认本次任务与依赖/ });
+  await screen.findByRole("button", {
+    name: /确认任务依赖并生成 Spec \/ Plan/,
+  });
   fireEvent.change(screen.getByLabelText("查看历史记录"), {
     target: { value: record.id },
   });

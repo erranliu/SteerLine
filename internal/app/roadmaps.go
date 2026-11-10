@@ -36,6 +36,7 @@ type roadmapPort struct {
 	store            *sqlite.SQLiteStore
 	service          *roadmapservice.Service
 	publicationMu    sync.Mutex
+	generationMu     sync.Mutex
 	initializationMu sync.Mutex
 	preparationMu    sync.Mutex
 	preparationCache *roadmapPreparation
@@ -217,6 +218,10 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 	allowed := map[string]bool{"roadmap_prepare_static": true, "roadmap_parse": true, "roadmap_confirm": true, "roadmap_observe": true, "roadmap_stop": true, "roadmap_generate_documents": true, "roadmap_publish": true, "roadmap_edit_documents": true, "roadmap_admit": true, "roadmap_resume": true}
 	if !allowed[in.Action] {
 		return out, errors.New("unknown roadmap action")
+	}
+	if in.Action == "roadmap_generate_documents" {
+		port.generationMu.Lock()
+		defer port.generationMu.Unlock()
 	}
 	if in.Action == "roadmap_prepare_static" {
 		port.initializationMu.Lock()
@@ -416,6 +421,10 @@ func (p *runtimeProjectPort) roadmapReceipt(ctx context.Context, id string) (*ht
 	if err = json.Unmarshal(old.Payload, &envelope); err != nil {
 		return nil, err
 	}
+	if envelope.Action == "roadmap_generate_documents" {
+		p.config.runtimeRoadmaps.generationMu.Lock()
+		defer p.config.runtimeRoadmaps.generationMu.Unlock()
+	}
 	if envelope.Action == "roadmap_prepare_static" {
 		p.config.runtimeRoadmaps.initializationMu.Lock()
 		defer p.config.runtimeRoadmaps.initializationMu.Unlock()
@@ -452,6 +461,24 @@ func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string
 			}
 		} else if !errors.Is(e, roadmap.ErrNotFound) {
 			return nil, e
+		} else if envelope.Action == "roadmap_generate_documents" {
+			// The generation lock excludes a command still preparing its child.
+			// A saved confirmation without a child proves generation was not submitted.
+			confirmation := roadmapservice.DocumentConfirmationRequest(id)
+			parent, err := p.config.runtimeRoadmaps.store.RoadmapRequest(ctx, p.config.Identity(), confirmation)
+			if err != nil && !errors.Is(err, roadmap.ErrNotFound) {
+				return nil, err
+			}
+			if err == nil && parent.ID == envelope.TargetID && parent.Purpose != "documents" && parent.State == "confirmed" && parent.ConfirmationRequest == confirmation && parent.ConfirmedDigest != "" {
+				out.Status, out.Code = "rejected", "roadmap_generation_not_submitted"
+				out.Diagnostic = "任务与依赖已确认，文档生成尚未提交，请重试生成 Spec / Plan"
+				out.Roadmap, _ = json.Marshal(parent)
+				old.Result, _ = json.Marshal(out)
+				old.Status, old.UpdatedAt = out.Status, time.Now().UTC()
+				if err := p.store.UpdateCommand(ctx, old); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 	return &out, nil

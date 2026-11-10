@@ -9,9 +9,13 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -174,6 +178,7 @@ func TestRoadmapSourceAndMissingDocumentCapability(t *testing.T) {
 }
 
 func TestRoadmapUnknownReceiptKeepsBusinessEffectPending(t *testing.T) {
+	t.Run("combined-generation-recovery", roadmapCombinedGenerationRecovery)
 	r := roadmap.Record{State: "publishing", Submission: "started", Projection: &runnercontract.Run{StopStatus: "stopped"}, Publication: &roadmap.Publication{State: "pr_unknown"}}
 	if !roadmapEffectPending("roadmap_publish", r) {
 		t.Fatal("settled parse incorrectly resolved the unknown PR")
@@ -189,6 +194,88 @@ func TestRoadmapUnknownReceiptKeepsBusinessEffectPending(t *testing.T) {
 	r.State = "admitted"
 	if roadmapEffectPending("roadmap_admit", r) {
 		t.Fatal("original Task receipt remained pending")
+	}
+}
+
+func roadmapCombinedGenerationRecovery(t *testing.T) {
+	for _, active := range []bool{false, true} {
+		t.Run(fmt.Sprintf("active=%t", active), func(t *testing.T) {
+			ctx := context.Background()
+			c, _ := nativeTaskFixture(t)
+			reader, err := OpenNativeTaskProject(ctx, &c)
+			require(t, err)
+			require(t, reader.Close())
+			store, err := OpenNativeTaskCommandStore(ctx, &c)
+			require(t, err)
+			defer store.Close()
+			port := &roadmapPort{config: c, store: store}
+			c.runtimeRoadmaps = port
+			runtime := &runtimeProjectPort{config: c, store: store}
+			request := strings.Repeat("d", 32)
+			parent := roadmap.Record{ID: strings.Repeat("a", 32), RequestID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1, State: "review"}
+			require(t, store.SaveRoadmap(ctx, parent, 0))
+			parent.State, parent.Revision = "confirmed", 2
+			parent.ConfirmationRequest = roadmapservice.DocumentConfirmationRequest(request)
+			parent.ConfirmedDigest = "confirmed-planning"
+			require(t, store.SaveRoadmap(ctx, parent, 1))
+			in := httpcontract.CommandEnvelope{RequestID: request, Action: "roadmap_generate_documents", ProjectID: httpcontract.ProjectID(c.Identity()), InstanceID: "original", TargetID: parent.ID, ExpectedVersion: 1, Payload: json.RawMessage(`{}`)}
+			raw, _ := json.Marshal(in)
+			_, _, err = store.EnqueueCommand(ctx, storageports.CommandRecord{ProjectIdentity: c.Identity(), CommandID: request, Kind: "roadmap_command", TargetID: parent.ID, ExpectedVersion: 1, IdempotencyKey: request, RequestedBy: "local-user", Payload: raw, Status: "pending", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()})
+			require(t, err)
+			if active {
+				port.generationMu.Lock()
+				type result struct {
+					receipt *httpcontract.CommandResponse
+					err     error
+				}
+				resultCh := make(chan result, 1)
+				started := make(chan struct{})
+				go func() {
+					close(started)
+					receipt, e := runtime.roadmapReceipt(ctx, request)
+					resultCh <- result{receipt, e}
+				}()
+				<-started
+				select {
+				case result := <-resultCh:
+					port.generationMu.Unlock()
+					t.Fatal("active generation was reconciled before submission", result)
+				case <-time.After(100 * time.Millisecond):
+				}
+				child := roadmap.Record{ID: request, RequestID: request, Project: c.Identity(), Revision: 1, Purpose: "documents", ParentID: parent.ID, State: "queued", Submission: "pending"}
+				err = store.SaveRoadmap(ctx, child, 0)
+				port.generationMu.Unlock()
+				require(t, err)
+				got := <-resultCh
+				require(t, got.err)
+				var received roadmap.Record
+				require(t, json.Unmarshal(got.receipt.Roadmap, &received))
+				if got.receipt.Status != "applied" || received.ID != child.ID {
+					t.Fatal("active generation was mistaken for interrupted preparation", got.receipt, received)
+				}
+				return
+			}
+			out, err := runtime.roadmapReceipt(ctx, request)
+			require(t, err)
+			if out == nil || out.Status != "rejected" || out.Code != "roadmap_generation_not_submitted" {
+				t.Fatal("interrupted preparation did not become retryable", out)
+			}
+			saved, _, err := store.LookupCommand(ctx, c.Identity(), request)
+			require(t, err)
+			if saved.Status != "rejected" {
+				t.Fatal("recovered result was not durable", saved)
+			}
+			again, err := runtime.roadmapReceipt(ctx, request)
+			require(t, err)
+			if again.Status != out.Status || string(again.Roadmap) != string(out.Roadmap) {
+				t.Fatal("original recovery receipt changed", again)
+			}
+			rows, err := store.Roadmaps(ctx, c.Identity())
+			require(t, err)
+			if len(rows) != 1 || rows[0].ConfirmedDigest != parent.ConfirmedDigest || rows[0].ConfirmationRequest != parent.ConfirmationRequest {
+				t.Fatal("receipt query changed confirmed planning or created generation", rows)
+			}
+		})
 	}
 }
 

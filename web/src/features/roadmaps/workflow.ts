@@ -33,8 +33,7 @@ export function currentRoadmapRecord(records: RoadmapRecord[]) {
 
 export const roadmapSteps = [
   "解析草稿",
-  "确认任务与依赖",
-  "生成文档",
+  "确认任务依赖并生成文档",
   "审阅文档",
   "发布合并",
   "正式入图",
@@ -71,16 +70,16 @@ export function roadmapProgress(record?: RoadmapRecord) {
     : labels[record.state] || record.state;
   const step =
     record.state === "admitted"
-      ? 6
+      ? 5
       : ["awaiting-admission", "admission-unknown"].includes(record.state)
-        ? 5
+        ? 4
         : record.publication ||
             ["publishing", "awaiting-merge"].includes(record.state)
-          ? 4
+          ? 3
           : record.state === "documents-review"
-            ? 3
+            ? 2
             : documents || record.state === "confirmed"
-              ? 2
+              ? 1
               : record.state === "review"
                 ? 1
                 : 0;
@@ -99,7 +98,6 @@ export function roadmapNextAction(record?: RoadmapRecord, restart = false) {
     return "resume";
   switch (record.state) {
     case "review":
-      return "confirm";
     case "confirmed":
       return "generate";
     case "documents-review":

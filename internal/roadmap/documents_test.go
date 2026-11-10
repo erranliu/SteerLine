@@ -37,6 +37,11 @@ func repositoryCatalog(t *testing.T, original *runnerclient.Catalog) *runnerclie
 	return catalog
 }
 func documentSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, model.Record) {
+	t.Helper()
+	return documentPlanningSetup(t, true)
+}
+func documentPlanningSetup(t *testing.T, confirmed bool) (*Service, *memoryRoadmaps, *roadmapRunner, model.Record) {
+	t.Helper()
 	s, store, f, input := generationSetup(t)
 	ctx := context.Background()
 	r, err := s.Parse(ctx, input)
@@ -51,9 +56,11 @@ func documentSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, mod
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err = s.Confirm(ctx, r.ID, strings.Repeat("c", 32), r.Revision)
-	if err != nil {
-		t.Fatal(err)
+	if confirmed {
+		r, err = s.Confirm(ctx, r.ID, strings.Repeat("c", 32), r.Revision)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	prepare := s.Prepare
 	s.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
@@ -75,6 +82,80 @@ func documentSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, mod
 	f.files["quality/cases.json"] = []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)
 	f.files["code.go"] = []byte("fixed code\n")
 	return s, store, f, r
+}
+
+func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *testing.T) {
+	ctx := context.Background()
+	s, store, f, parent := documentPlanningSetup(t, false)
+	prepare := s.PrepareDocuments
+	s.PrepareDocuments = func(context.Context, model.Record) (model.DocumentContext, error) {
+		return model.DocumentContext{}, fmt.Errorf("guideline unavailable")
+	}
+	if _, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
+		t.Fatal("missing generation prerequisite accepted")
+	}
+	confirmed, err := store.Roadmap(ctx, s.Project, parent.ID)
+	if err != nil || confirmed.State != "confirmed" || confirmed.ConfirmedDigest != model.ValueDigest(parent.Analysis) || confirmed.ConfirmationRequest == "" || confirmed.Revision != parent.Revision+1 {
+		t.Fatal("confirmation was not persisted", confirmed, err)
+	}
+	if f.submits != 1 || len(store.rows) != 1 {
+		t.Fatal("failed preparation created a document run")
+	}
+	s.PrepareDocuments = prepare
+	r, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("e", 32), confirmed.Revision)
+	if err != nil || r.ParentID != parent.ID || r.ConfirmedDigest != confirmed.ConfirmedDigest {
+		t.Fatal("retry lost confirmed planning", r, err)
+	}
+	if _, err = s.GenerateDocuments(ctx, parent.ID, r.RequestID, confirmed.Revision); err != nil || f.submits != 2 {
+		t.Fatal("replay submitted duplicate generation", err, f.submits)
+	}
+	// A settled model failure permits a fresh attempt without another confirmation.
+	f.run.Status, f.run.StopStatus = "failed", "stopped"
+	f.run.Revision++
+	r, err = s.Observe(ctx, r.ID)
+	if err != nil || r.State != "failed" || !r.ObservationComplete() {
+		t.Fatal("failed run did not settle", r, err)
+	}
+	if _, err = s.GenerateDocuments(ctx, parent.ID, strings.Repeat("f", 32), confirmed.Revision); err != nil || f.submits != 3 {
+		t.Fatal("failed generation could not be retried", err, f.submits)
+	}
+	after, err := store.Roadmap(ctx, s.Project, parent.ID)
+	if err != nil || after.Revision != confirmed.Revision || after.ConfirmationRequest != confirmed.ConfirmationRequest {
+		t.Fatal("retry replaced confirmation", after, err)
+	}
+}
+
+func TestRoadmapDocumentsConfirmationGuards(t *testing.T) {
+	for _, guard := range []string{"revision", "source", "graph", "questions", "unsettled"} {
+		t.Run(guard, func(t *testing.T) {
+			s, store, f, parent := documentPlanningSetup(t, false)
+			expected := parent.Revision
+			switch guard {
+			case "revision":
+				expected++
+			case "source":
+				s.Source = func(context.Context, string) (model.Source, error) {
+					changed := parent.Source
+					changed.Body, changed.Digest = "changed", "changed"
+					return changed, nil
+				}
+			case "graph":
+				s.Graph = func(context.Context) ([]model.Existing, error) { return nil, nil }
+			case "questions":
+				parent.Analysis.Questions = []string{"clarify dependency"}
+			case "unsettled":
+				parent.Projection.StopStatus = "pending"
+			}
+			store.rows[parent.ID] = model.StoreValue(parent)
+			if _, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), expected); err == nil {
+				t.Fatal("confirmation guard bypassed")
+			}
+			after, err := store.Roadmap(context.Background(), s.Project, parent.ID)
+			if err != nil || after.State != "review" || after.ConfirmationRequest != "" || f.submits != 1 || len(store.rows) != 1 {
+				t.Fatal("guard failure confirmed or submitted", after, err, f.submits)
+			}
+		})
+	}
 }
 func documentResult(r model.Record) (model.GeneratedDocuments, *runnercontract.RepositorySource) {
 	source := &runnercontract.RepositorySource{LocalPath: "", Commit: r.CodeCommit, Tree: r.RepositoryTree,
