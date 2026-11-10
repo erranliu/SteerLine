@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/steeragent"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -31,6 +32,7 @@ func projectAdvisoryActivity(a api.AsyncActivity, f ports.AsyncActivityFact) (ap
 		return a, errors.New("advisory activity identity differs")
 	}
 	a.Kind = "prompt_suggestion"
+	a.SteerAgent = &api.SteerAgentClassification{Type: steeragent.Continuation, Operation: steeragent.Suggest}
 	a.Title = "生成后续对话提示词建议"
 	a.Revision = r.Revision
 	a.CreatedAt = activityTime(r.CreatedAt)

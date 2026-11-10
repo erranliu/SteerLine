@@ -143,7 +143,7 @@ func (s *Store) Snapshot(ctx context.Context) (Snapshot, error) {
 	return out, nil
 }
 func (s *Store) Validate(ctx context.Context, raw []byte) (Config, error) {
-	if err := s.validateMainAgentEdit(ctx, raw); err != nil {
+	if err := s.validateContinuationSuggestionEdit(ctx, raw); err != nil {
 		return Config{}, err
 	}
 	s.mu.Lock()
@@ -161,7 +161,7 @@ func (s *Store) validate(ctx context.Context, raw []byte) (Config, error) {
 		return proposed, failure(400, "invalid_configuration", err.Error())
 	}
 	proposed = edit.Config
-	if _, err := cfg.MainAgentSettings(proposed.MainAgent); err != nil {
+	if _, err := cfg.ContinuationSuggestionSettings(proposed.ContinuationSuggestion); err != nil {
 		return proposed, failure(400, "invalid_main_agent", err.Error())
 	}
 	if err := proposed.Developer.Validate(); err != nil {
@@ -215,7 +215,7 @@ func sameValue(a, b any) bool {
 	return ea == nil && eb == nil && bytes.Equal(ca, cb)
 }
 func (s *Store) Save(ctx context.Context, expected string, raw []byte) (Snapshot, error) {
-	if err := s.validateMainAgentEdit(ctx, raw); err != nil {
+	if err := s.validateContinuationSuggestionEdit(ctx, raw); err != nil {
 		return Snapshot{}, err
 	}
 	s.mu.Lock()

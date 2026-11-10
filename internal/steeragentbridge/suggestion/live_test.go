@@ -1,6 +1,6 @@
 //go:build runneracceptance
 
-package mainagentbridge
+package suggestionbridge
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 )
 
 // Uses only the existing public Runner generate path and an isolated state-dir.

@@ -1,4 +1,4 @@
-package mainagentbridge
+package suggestionbridge
 
 import (
 	"context"
@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 )
 
 type fakeRunner struct {
@@ -87,7 +87,7 @@ func attachFake(s *Service) *fakeRunner {
 	f := &fakeRunner{}
 	s.Runner = f
 	s.RunnerBuild = runnercontract.BuildPin{StateDir: "C:/fixture/runner"}
-	raw, e := os.ReadFile("../runnerclient/testdata/content-capabilities.json")
+	raw, e := os.ReadFile("../../runnerclient/testdata/content-capabilities.json")
 	if e != nil {
 		panic(e)
 	}
@@ -142,6 +142,48 @@ func TestAdvisoryGenerateWireAndSettledOutput(t *testing.T) {
 	r, _ = s.Get(context.Background(), r.ID)
 	if !r.Complete() || r.State != "ready" || r.Suggestion == nil || f.submits != 1 {
 		t.Fatal(r, f.submits)
+	}
+}
+
+func TestAdvisoryGenerateRequiresOnlyItsOwnCapabilities(t *testing.T) {
+	for _, schema := range []bool{true, false} {
+		t.Run(fmt.Sprintf("generate_schema_%t", schema), func(t *testing.T) {
+			s, source, _ := fixture()
+			original := s.Prepare
+			s.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+				execution, catalog, err := original(ctx)
+				if err != nil {
+					return execution, nil, err
+				}
+				capabilities := catalog.Capabilities
+				capabilities.Generate = nil // repository and file metadata are unrelated to this operation.
+				if !schema {
+					capabilities.ConfigurationSchemas.GenerateInput = nil
+				}
+				catalog, err = runnerclient.CompileCatalog(capabilities)
+				return execution, catalog, err
+			}
+			if err := s.Sync(context.Background(), []Source{source}); err != nil {
+				t.Fatal(err)
+			}
+			step(t, s)
+			r, err := s.Get(context.Background(), SourceID(s.Project, source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			fake := s.Runner.(*fakeRunner)
+			if schema {
+				if r.RunnerRequest == nil || r.State != "queued" {
+					t.Fatal("missing unrelated repository/file capabilities blocked suggestion", r)
+				}
+				step(t, s)
+				if fake.submits != 1 {
+					t.Fatal("suggestion was not submitted", fake.submits)
+				}
+			} else if r.State != "failed" || !r.Complete() || fake.submits != 0 {
+				t.Fatal("missing required schema did not reject before submission", r, fake.submits)
+			}
+		})
 	}
 }
 func TestAdvisoryUnknownSubmitRestartOnlyObserves(t *testing.T) {

@@ -24,31 +24,31 @@ type Pin struct {
 type File[P any] struct {
 	Developer developerconfig.Config `json:"developer"`
 
-	Version                int             `json:"version"`
-	Runner                 P               `json:"runner"`
-	DefaultProfile         string          `json:"default_execution_profile"`
-	MaxGenerateConcurrency *int            `json:"max_generate_concurrency,omitempty"`
-	UsagePolicy            json.RawMessage `json:"usage_policy,omitempty"`
-	Profiles               []Profile       `json:"execution_profiles"`
-	MainAgent              *MainAgent      `json:"main_agent,omitempty"`
+	Version                int                     `json:"version"`
+	Runner                 P                       `json:"runner"`
+	DefaultProfile         string                  `json:"default_execution_profile"`
+	MaxGenerateConcurrency *int                    `json:"max_generate_concurrency,omitempty"`
+	UsagePolicy            json.RawMessage         `json:"usage_policy,omitempty"`
+	Profiles               []Profile               `json:"execution_profiles"`
+	ContinuationSuggestion *ContinuationSuggestion `json:"continuation_suggestion,omitempty"`
 }
 
-type MainAgent struct {
+type ContinuationSuggestion struct {
 	Model           string `json:"model"`
 	ReasoningEffort string `json:"reasoning_effort"`
 }
 
-func MainAgentSettings(value *MainAgent) (MainAgent, error) {
+func ContinuationSuggestionSettings(value *ContinuationSuggestion) (ContinuationSuggestion, error) {
 	if value == nil {
-		return MainAgent{Model: "gpt-6.1-sol", ReasoningEffort: "high"}, nil
+		return ContinuationSuggestion{Model: "gpt-6.1-sol", ReasoningEffort: "high"}, nil
 	}
 	if strings.TrimSpace(value.Model) != value.Model || value.Model == "" || strings.ContainsAny(value.Model, "\r\n\x00") {
-		return *value, errors.New("main_agent.model must be an explicit model identifier")
+		return *value, errors.New("continuation_suggestion.model must be an explicit model identifier")
 	}
 	switch value.ReasoningEffort {
 	case "none", "minimal", "low", "medium", "high", "xhigh", "max":
 	default:
-		return *value, errors.New("main_agent.reasoning_effort is invalid")
+		return *value, errors.New("continuation_suggestion.reasoning_effort is invalid")
 	}
 	return *value, nil
 }
@@ -60,10 +60,10 @@ type Profile struct {
 	Workflow  runnercontract.Workflow       `json:"workflow"`
 }
 
-// MainAgentBase reuses only an already configured local Codex transport.
+// ContinuationSuggestionBase reuses only an already configured local Codex transport.
 // Its model and permission are replaced through Runner's public compose API.
 // Remote executables and other agents are never used as a local fallback.
-func MainAgentBase(profiles []Profile) *runnercontract.ExecutionInput {
+func ContinuationSuggestionBase(profiles []Profile) *runnercontract.ExecutionInput {
 	for _, profile := range profiles {
 		if profile.Execution.Adapter == "codex-app-server" && profile.Execution.Target.Kind == "local" {
 			copy := profile.Execution

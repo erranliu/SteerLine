@@ -52,6 +52,7 @@ test("owned advisory navigation, context, copy and cancellation", async ({
     const card = page.locator(
       `[data-activity-id="${e.STEERLINE_ADVISORY_ACTIVITY}"]`,
     );
+    await expect(card.getByLabel("SteerAgent 能力")).toHaveText("对话续作");
     await expect(
       card.getByText("提示词建议已生成", { exact: true }),
     ).toBeVisible();
@@ -67,7 +68,7 @@ test("owned advisory navigation, context, copy and cancellation", async ({
     await page.goto(base.href);
   }
   const panel = page
-    .getByText("后续对话提示词建议", { exact: true })
+    .getByText("对话续作 · 提示词建议", { exact: true })
     .locator("..");
   await expect(panel).toHaveAttribute("open", "");
   await panel.getByText("查看本次已提供的上下文", { exact: true }).click();

@@ -34,7 +34,7 @@ const states: Record<string, string> = {
   ready: "建议已生成",
   cancelled: "已取消",
 };
-export function MainAgent({ run }: { run: Candidate }) {
+export function ContinuationSuggestion({ run }: { run: Candidate }) {
   const { api, online, submit, busy } = useWorkspace();
   const client = useQueryClient();
   const requested =
@@ -117,7 +117,7 @@ export function MainAgent({ run }: { run: Candidate }) {
       open={open}
       onToggle={(e) => setOpen(e.currentTarget.open)}
     >
-      <summary>后续对话提示词建议</summary>
+      <summary>对话续作 · 提示词建议</summary>
       {open && (
         <>
           <p className="muted">

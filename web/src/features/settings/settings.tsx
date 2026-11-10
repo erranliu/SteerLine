@@ -4,7 +4,7 @@ import { Api } from "../../shared/api/client";
 import { short } from "../../shared/ui/status";
 import { DeveloperSettings } from "./developer-settings";
 import { BillingSettings } from "./billing-settings";
-import { MainAgentSettings } from "./main-agent-settings";
+import { ContinuationSuggestionSettings } from "./continuation-suggestion-settings";
 import { UsageSettings } from "./usage-settings";
 import { NavigationGuard } from "../../shared/ui/navigation-guard";
 import {
@@ -27,7 +27,8 @@ export function SettingsPage({
   const [developerDirty, setDeveloperDirty] = useState(false);
   const [billingDirty, setBillingDirty] = useState(false);
   const [usageDirty, setUsageDirty] = useState(false);
-  const [mainAgentDirty, setMainAgentDirty] = useState(false);
+  const [continuationSuggestionDirty, setContinuationSuggestionDirty] =
+    useState(false);
   return (
     <>
       <NavigationGuard
@@ -36,7 +37,7 @@ export function SettingsPage({
           developerDirty ||
           billingDirty ||
           usageDirty ||
-          mainAgentDirty
+          continuationSuggestionDirty
         }
       />
       <div className="page-heading">
@@ -47,7 +48,10 @@ export function SettingsPage({
         </div>
       </div>
       <div className="configuration-panels">
-        <MainAgentSettings {...settings} onDirtyChange={setMainAgentDirty} />
+        <ContinuationSuggestionSettings
+          {...settings}
+          onDirtyChange={setContinuationSuggestionDirty}
+        />
         <GenerationSettings {...settings} onDirtyChange={setGenerationDirty} />
         <DeveloperSettings {...settings} onDirtyChange={setDeveloperDirty} />
         <BillingSettings {...settings} onDirtyChange={setBillingDirty} />

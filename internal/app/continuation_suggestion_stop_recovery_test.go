@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/mainagentbridge"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	suggestionbridge "github.com/erranliu/SteerLine/internal/steeragentbridge/suggestion"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-func TestMainAgentAdvisoryStartupReconcilesOriginalStop(t *testing.T) {
+func TestContinuationSuggestionAdvisoryStartupReconcilesOriginalStop(t *testing.T) {
 	for _, kind := range []string{"missing-stale", "missing-current", "accepted", "foreign", "unavailable", "already-stopped"} {
 		t.Run(kind, func(t *testing.T) {
 			c, _ := nativeTaskFixture(t)
@@ -23,7 +23,7 @@ func TestMainAgentAdvisoryStartupReconcilesOriginalStop(t *testing.T) {
 			store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
 			require(t, err)
 			defer store.Close()
-			r := mainagentbridge.Record{ID: strings.Repeat("a", 32), Project: c.Identity(), Source: mainagentbridge.Source{CandidateID: strings.Repeat("b", 32)}, Runner: cli.BuildPin(), Revision: 1, RunID: "original-run", RunnerDigest: "original-input", RunnerRequest: &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-submit", Input: []byte(`{}`)}, Submission: "started", State: "cancelling", Cancelled: true, CreatedAt: time.Now().UTC(), StopRequest: runnerbinding.ContentStop("original-stop", 3), StopState: "unknown"}
+			r := suggestionbridge.Record{ID: strings.Repeat("a", 32), Project: c.Identity(), Source: suggestionbridge.Source{CandidateID: strings.Repeat("b", 32)}, Runner: cli.BuildPin(), Revision: 1, RunID: "original-run", RunnerDigest: "original-input", RunnerRequest: &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-submit", Input: []byte(`{}`)}, Submission: "started", State: "cancelling", Cancelled: true, CreatedAt: time.Now().UTC(), StopRequest: runnerbinding.ContentStop("original-stop", 3), StopState: "unknown"}
 			run := runnercontract.Run{RunID: r.RunID, Revision: 4, InputDigest: r.RunnerDigest, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Correlation: map[string]string{"steerline_project": r.Project, "steerline_advisory": r.ID}, Status: "running", StopStatus: "active"}
 			if kind == "missing-current" {
 				run.Revision = 3

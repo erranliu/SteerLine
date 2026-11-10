@@ -9,35 +9,35 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/executionconfig"
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
-	"github.com/erranliu/SteerLine/internal/mainagentbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
+	suggestionbridge "github.com/erranliu/SteerLine/internal/steeragentbridge/suggestion"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-type mainAgentPort struct {
+type continuationSuggestionPort struct {
 	config  Config
 	store   *sqlite.SQLiteStore
-	service *mainagentbridge.Service
+	service *suggestionbridge.Service
 }
 
-func newMainAgentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *mainAgentPort {
+func newContinuationSuggestionPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *continuationSuggestionPort {
 	c = bindNativeConfiguration(c, cli)
-	p := &mainAgentPort{config: c, store: store}
-	p.service = &mainagentbridge.Service{Project: c.Identity(), Store: store, Build: p.context, Runner: cli, RunnerBuild: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
+	p := &continuationSuggestionPort{config: c, store: store}
+	p.service = &suggestionbridge.Service{Project: c.Identity(), Store: store, Build: p.context, Runner: cli, RunnerBuild: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		settings, err := executionconfig.MainAgentSettings(c.RunnerExecution.MainAgent)
+		settings, err := executionconfig.ContinuationSuggestionSettings(c.RunnerExecution.ContinuationSuggestion)
 		if err != nil {
 			return runnercontract.ExecutionInput{}, nil, err
 		}
-		resolved, err := c.runtimeNative.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{Operation: "compose", BaseExecution: executionconfig.MainAgentBase(c.RunnerExecution.Profiles), Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Selection: &runnercontract.ExecutionSelection{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex", Model: &settings.Model, ReasoningEffort: &settings.ReasoningEffort, AccessMode: "read_only"}})
+		resolved, err := c.runtimeNative.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{Operation: "compose", BaseExecution: executionconfig.ContinuationSuggestionBase(c.RunnerExecution.Profiles), Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Selection: &runnercontract.ExecutionSelection{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex", Model: &settings.Model, ReasoningEffort: &settings.ReasoningEffort, AccessMode: "read_only"}})
 		if err != nil {
 			return runnercontract.ExecutionInput{}, nil, err
 		}
 		if resolved.Execution == nil {
-			return runnercontract.ExecutionInput{}, nil, errors.New("Runner 未返回主 Agent 执行配置")
+			return runnercontract.ExecutionInput{}, nil, errors.New("Runner 未返回对话续作 · 提示词建议 执行配置")
 		}
 		return *resolved.Execution, c.runtimeNative.Catalog, nil
 	}
@@ -45,12 +45,12 @@ func newMainAgentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Clie
 }
 
 // The source is the persisted public question and reply control, never prose classification.
-func materialAdviceSource(c runnerstate.Candidate) (mainagentbridge.Source, bool) {
+func materialAdviceSource(c runnerstate.Candidate) (suggestionbridge.Source, bool) {
 	r := c.Projection
 	if c.Participation != "active" || c.StopRequested || r == nil || r.Question == nil || r.Question.ID == "" || r.Execution.AttemptID == "" || r.Closed || !r.Controls.CanReply {
-		return mainagentbridge.Source{}, false
+		return suggestionbridge.Source{}, false
 	}
-	source := mainagentbridge.Source{CandidateID: c.ID, TaskID: c.TaskID, Occurrence: r.Execution.AttemptID + ":" + r.Question.ID, Revision: r.Revision, Reason: "pending_question", Goal: r.Question.Text}
+	source := suggestionbridge.Source{CandidateID: c.ID, TaskID: c.TaskID, Occurrence: r.Execution.AttemptID + ":" + r.Question.ID, Revision: r.Revision, Reason: "pending_question", Goal: r.Question.Text}
 	source.BaseRevision, source.ContractDigest = c.BaseRevision, c.ContractDigest
 	q, _ := json.Marshal(r.Question)
 	source.Facts = []contract.Material{{ID: "question", Label: "原问题", Body: string(q), Source: c.ID, Revision: source.Occurrence}}
@@ -62,12 +62,12 @@ func materialAdviceSource(c runnerstate.Candidate) (mainagentbridge.Source, bool
 	}
 	return source, source.Valid()
 }
-func (p *mainAgentPort) tick(ctx context.Context) error {
+func (p *continuationSuggestionPort) tick(ctx context.Context) error {
 	snapshot, err := p.store.ReadRunnerSnapshot(ctx, p.config.Identity())
 	if err != nil {
 		return err
 	}
-	sources := []mainagentbridge.Source{}
+	sources := []suggestionbridge.Source{}
 	for _, c := range snapshot.Candidates {
 		if source, ok := materialAdviceSource(c); ok {
 			sources = append(sources, source)
@@ -78,7 +78,7 @@ func (p *mainAgentPort) tick(ctx context.Context) error {
 	}
 	return p.service.ProcessNext(ctx)
 }
-func (p *mainAgentPort) run(ctx context.Context) {
+func (p *continuationSuggestionPort) run(ctx context.Context) {
 	timer := time.NewTicker(time.Second)
 	defer timer.Stop()
 	for {
@@ -95,7 +95,7 @@ func (p *mainAgentPort) run(ctx context.Context) {
 		}
 	}
 }
-func (p *mainAgentPort) context(ctx context.Context, source mainagentbridge.Source, id string) (contract.Request, error) {
+func (p *continuationSuggestionPort) context(ctx context.Context, source suggestionbridge.Source, id string) (contract.Request, error) {
 	out := contract.Request{Protocol: contract.Protocol, RequestID: id, Capability: contract.Capability, Context: contract.Context{Goal: source.Goal, Materials: []contract.Material{}}}
 	c, err := p.store.Candidate(ctx, p.config.Identity(), source.CandidateID)
 	if err != nil {
@@ -125,7 +125,7 @@ func (p *mainAgentPort) context(ctx context.Context, source mainagentbridge.Sour
 	}
 	return out, contract.Validate(out)
 }
-func (p *mainAgentPort) read(ctx context.Context, route string, values url.Values) (any, error) {
+func (p *continuationSuggestionPort) read(ctx context.Context, route string, values url.Values) (any, error) {
 	if route == "/main-agent" {
 		if len(values) != 1 || len(values["candidate_id"]) != 1 || !contract.ID.MatchString(values.Get("candidate_id")) {
 			return nil, errors.New("exact candidate_id required")
@@ -147,5 +147,5 @@ func (p *mainAgentPort) read(ctx context.Context, route string, values url.Value
 	if err != nil {
 		return nil, err
 	}
-	return mainagentbridge.View(r), nil
+	return suggestionbridge.View(r), nil
 }

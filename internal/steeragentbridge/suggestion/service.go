@@ -1,5 +1,5 @@
-// Package mainagentbridge owns host-side advisory work. The advisory core knows none of these facts.
-package mainagentbridge
+// Package suggestionbridge owns host-side advisory work. The advisory core knows none of these facts.
+package suggestionbridge
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 
-	"github.com/erranliu/SteerLine/internal/mainagent"
-	"github.com/erranliu/SteerLine/internal/mainagent/contract"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion"
+	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 )
 
 type Source struct {
@@ -266,10 +266,10 @@ func (s *Service) ProcessNext(ctx context.Context) error {
 	s.leave()
 	defer cancel()
 	request, buildErr := s.Build(work, r.Source, r.ID)
-	var prepared mainagent.Prepared
+	var prepared suggestion.Prepared
 	var runnerRequest *runnercontract.Request
 	if buildErr == nil {
-		prepared, buildErr = mainagent.Prepare(request)
+		prepared, buildErr = suggestion.Prepare(request)
 	}
 	if buildErr == nil {
 		runnerRequest, buildErr = s.generateRequest(work, prepared)

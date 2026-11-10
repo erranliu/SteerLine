@@ -47,6 +47,33 @@ const activity: Activity = {
   observation: "current",
   details_ref: { kind: "candidate", target: "start", task_id: "1" },
 };
+it("shows content classification without replacing the actual business phase", async () => {
+  const current = {
+    ...activity,
+    source: "roadmap",
+    kind: "roadmap_documents",
+    steer_agent: { type: "material", operation: "generate_documents" },
+    phase: "等待文档 PR 合并",
+  };
+  setup(async () => page([current]));
+  fireEvent.click(await screen.findByRole("button", { name: /^活动 ·/ }));
+  expect(await screen.findByLabelText("SteerAgent 能力")).toHaveTextContent(
+    "材料生成",
+  );
+  expect(screen.getByText("等待文档 PR 合并")).toBeVisible();
+});
+it.each(["future", "constructor", "__proto__", "toString"])(
+  "keeps an unknown classification %s from changing activity rendering",
+  async (type) => {
+    setup(async () =>
+      page([{ ...activity, steer_agent: { type, operation: "future" } }]),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /^活动 ·/ }));
+    expect(await screen.findByText(activity.title)).toBeVisible();
+    expect(screen.getByText("实施中")).toBeVisible();
+    expect(screen.queryByLabelText("SteerAgent 能力")).toBeNull();
+  },
+);
 it.each([
   ["roadmap_parse", "提交 Roadmap 草稿解析", "roadmap-source", "source"],
   [

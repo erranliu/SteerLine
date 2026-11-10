@@ -9,7 +9,7 @@ import {
 import { Button } from "../../shared/ui/button";
 import type { GenerationSettingsProps } from "./generation-settings";
 
-export function MainAgentSettings({
+export function ContinuationSuggestionSettings({
   home,
   csrf,
   loadedDigest,
@@ -33,7 +33,7 @@ export function MainAgentSettings({
   const [message, setMessage] = useState("");
   const base = draft?.base ?? query.data;
   const value = draft ??
-    base?.config.main_agent ?? {
+    base?.config.continuation_suggestion ?? {
       model: "gpt-6.1-sol",
       reasoning_effort: "high",
     };
@@ -74,7 +74,7 @@ export function MainAgentSettings({
         api,
         {
           ...base.config,
-          main_agent: {
+          continuation_suggestion: {
             model: draft.model,
             reasoning_effort: draft.reasoning_effort,
           },
@@ -86,7 +86,7 @@ export function MainAgentSettings({
         queryKey: [home, "execution-config-status"],
       });
       setDraft(undefined);
-      setMessage("主 Agent 设置已保存，重启 SteerLine 后生效。");
+      setMessage("对话续作 · 提示词建议 设置已保存，重启 SteerLine 后生效。");
     } catch (e) {
       setMessage(String(e));
     } finally {
@@ -98,8 +98,8 @@ export function MainAgentSettings({
     catalog?.state === "ready" &&
     !!model?.efforts.some((e) => e.value === value.reasoning_effort);
   return (
-    <section className="settings-panel" aria-label="主 Agent 设置">
-      <h2>主 Agent</h2>
+    <section className="settings-panel" aria-label="对话续作 · 提示词建议 设置">
+      <h2>对话续作 · 提示词建议</h2>
       <p className="muted">
         所有项目共享 · Runner generate · 本地 Codex
         只读生成提示词建议。重启后生效。
@@ -118,7 +118,7 @@ export function MainAgentSettings({
       <label>
         模型
         <select
-          aria-label="主 Agent 模型"
+          aria-label="对话续作 · 提示词建议 模型"
           value={value.model}
           disabled={working || !base?.writable || catalog?.state !== "ready"}
           onChange={(e) =>
@@ -145,7 +145,7 @@ export function MainAgentSettings({
       <label>
         思考强度
         <select
-          aria-label="主 Agent 思考强度"
+          aria-label="对话续作 · 提示词建议 思考强度"
           value={value.reasoning_effort}
           disabled={working || !base?.writable || !model}
           onChange={(e) =>
@@ -175,14 +175,14 @@ export function MainAgentSettings({
           disabled={!draft || !valid || working || !base?.writable}
           onClick={() => void save()}
         >
-          保存主 Agent 设置
+          保存对话续作 · 提示词建议 设置
         </Button>
         <Button
           variant="outline"
           disabled={!draft || working}
           onClick={() => setDraft(undefined)}
         >
-          取消主 Agent 修改
+          取消对话续作 · 提示词建议 修改
         </Button>
       </div>
       {applicationConnected &&

@@ -7,6 +7,6 @@ import (
 	"testing"
 )
 
-func TestMainAgentAdvisory(t *testing.T) {
-	testenv.MainAgentAdvisory(testenv.NewScenario(t, "runtime.main-agent-advisory"))
+func TestContinuationSuggestionAdvisory(t *testing.T) {
+	testenv.ContinuationSuggestionAdvisory(testenv.NewScenario(t, "runtime.main-agent-advisory"))
 }
