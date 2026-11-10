@@ -16,6 +16,7 @@ export type AdvisoryDetail = {
   id: string;
   revision: number;
   candidate_id: string;
+  occurrence: string;
   state: string;
   settled: boolean;
   diagnostic?: string;
@@ -34,7 +35,15 @@ const states: Record<string, string> = {
   ready: "建议已生成",
   cancelled: "已取消",
 };
-export function ContinuationSuggestion({ run }: { run: Candidate }) {
+export function ContinuationSuggestion({
+  run,
+  inline = false,
+  onSuggestion,
+}: {
+  run: Candidate;
+  inline?: boolean;
+  onSuggestion?: (record: AdvisoryDetail) => void;
+}) {
   const { api, online, submit, busy } = useWorkspace();
   const client = useQueryClient();
   const requested =
@@ -53,6 +62,35 @@ export function ContinuationSuggestion({ run }: { run: Candidate }) {
     "advisory",
     run.run_id,
   ];
+  const occurrence = run.attempt_id + ":" + run.decision?.id;
+  const current = useQuery({
+    queryKey: [...key, "current", occurrence],
+    queryFn: ({ signal }) =>
+      api.get<{ record: AdvisoryDetail | null }>(
+        "/main-agent?" +
+          new URLSearchParams({ candidate_id: run.run_id, occurrence }),
+        signal,
+      ),
+    enabled: online && inline,
+    retry: false,
+    refetchInterval: (query) =>
+      online &&
+      inline &&
+      (!query.state.data?.record?.settled ||
+        ["queued", "preparing"].includes(query.state.data.record.state))
+        ? 2500
+        : false,
+  });
+  const currentRecord = current.data?.record;
+  const matched =
+    currentRecord?.candidate_id === run.run_id &&
+    currentRecord.occurrence === occurrence
+      ? currentRecord
+      : undefined;
+  useEffect(() => {
+    if (matched?.state === "ready" && matched.settled && matched.prompt)
+      onSuggestion?.(matched);
+  }, [matched, onSuggestion]);
   const list = useQuery({
     queryKey: [...key, "list"],
     queryFn: ({ signal }) =>
@@ -60,16 +98,16 @@ export function ContinuationSuggestion({ run }: { run: Candidate }) {
         "/main-agent?candidate_id=" + encodeURIComponent(run.run_id),
         signal,
       ),
-    enabled: online && open,
+    enabled: online && open && !inline,
     retry: false,
-    refetchInterval: online && open ? 2500 : false,
+    refetchInterval: online && open && !inline ? 2500 : false,
   });
   const id = target || list.data?.records[0]?.id;
   const detail = useQuery({
     queryKey: [...key, id],
     queryFn: ({ signal }) =>
       api.get<AdvisoryDetail>("/main-agent/" + id, signal),
-    enabled: online && open && !!id,
+    enabled: online && open && !!id && !inline,
     retry: false,
     refetchInterval: (query) =>
       online &&
@@ -80,8 +118,11 @@ export function ContinuationSuggestion({ run }: { run: Candidate }) {
         ? 2500
         : false,
   });
-  const record =
-    detail.data?.candidate_id === run.run_id ? detail.data : undefined;
+  const record = inline
+    ? matched
+    : detail.data?.candidate_id === run.run_id
+      ? detail.data
+      : undefined;
   async function copy() {
     if (!record?.prompt) return;
     try {
@@ -111,6 +152,87 @@ export function ContinuationSuggestion({ run }: { run: Candidate }) {
       setWorking(false);
     }
   }
+  const content = (
+    <>
+      {!inline && (
+        <p className="muted">
+          历史建议可查看、复制；当前问题的建议默认填入上方回答框。
+        </p>
+      )}
+      {(current.error || list.error || detail.error) && (
+        <p role="alert">
+          {String(current.error || list.error || detail.error)}
+        </p>
+      )}
+      {inline && !record && (
+        <p className="muted">
+          {current.isPending
+            ? "正在读取当前问题的建议…"
+            : "当前问题暂无建议，可直接填写回答。"}
+        </p>
+      )}
+      {!inline && !id && !list.isLoading && <p>暂无已登记建议。</p>}
+      {!inline && detail.data && !record && (
+        <p role="alert">建议不属于当前候选，未显示其他范围的结果。</p>
+      )}
+      {record && (
+        <article>
+          <p className="muted">
+            生成状态：{states[record.state] ?? "状态待核实"}
+          </p>
+          {record.diagnostic && <p role="alert">{record.diagnostic}</p>}
+          {record.context && (
+            <details>
+              <summary>查看本次已提供的上下文</summary>
+              <p>{record.context.goal}</p>
+              {record.context.user_input && (
+                <pre>{record.context.user_input}</pre>
+              )}
+              {record.context.materials.map((m) => (
+                <section key={m.id}>
+                  <h4>{m.label}</h4>
+                  <p className="muted">
+                    {m.source} {m.revision}
+                  </p>
+                  <pre>{m.body}</pre>
+                </section>
+              ))}
+              {inline && record.prompt && (
+                <Button onClick={() => void copy()}>复制提示词</Button>
+              )}
+            </details>
+          )}
+          {!inline && record.prompt && (
+            <>
+              <pre aria-label="提示词建议正文">{record.prompt}</pre>
+              <Button onClick={() => void copy()}>复制提示词</Button>
+            </>
+          )}
+          {["queued", "preparing", "running", "unknown", "settling"].includes(
+            record.state,
+          ) && (
+            <Button
+              variant="outline"
+              disabled={!online || busy || working}
+              onClick={() => void cancel()}
+            >
+              取消本次生成
+            </Button>
+          )}
+        </article>
+      )}
+      <p role="status">{message}</p>
+    </>
+  );
+  if (inline)
+    return (
+      <div className="answer-suggestion" aria-label="回答建议">
+        {content}
+        {target && target !== matched?.id && (
+          <ContinuationSuggestion run={run} />
+        )}
+      </div>
+    );
   return (
     <details
       className="detail-section"
@@ -118,75 +240,7 @@ export function ContinuationSuggestion({ run }: { run: Candidate }) {
       onToggle={(e) => setOpen(e.currentTarget.open)}
     >
       <summary>对话续作 · 提示词建议</summary>
-      {open && (
-        <>
-          <p className="muted">
-            收到候选明确待答问题后自动准备建议；仅供外部继续对话使用。
-          </p>
-          {(list.error || detail.error) && (
-            <p role="alert">{String(list.error || detail.error)}</p>
-          )}
-          {!id && !list.isLoading && (
-            <p>
-              暂无已登记建议。候选有明确待答问题时会自动生成，原问题仍通过原入口处理。
-            </p>
-          )}
-          {detail.data && !record && (
-            <p role="alert">建议不属于当前候选，未显示其他范围的结果。</p>
-          )}
-          {record && (
-            <article>
-              <p>生成状态：{states[record.state] ?? "状态待核实"}</p>
-              {record.diagnostic && <p role="alert">{record.diagnostic}</p>}
-              {!record.context && (
-                <p className="muted">
-                  本次未形成完整上下文，请查看失败或阻断原因。
-                </p>
-              )}
-              {record.context && (
-                <details>
-                  <summary>查看本次已提供的上下文</summary>
-                  <p>{record.context.goal}</p>
-                  {record.context.user_input && (
-                    <pre>{record.context.user_input}</pre>
-                  )}
-                  {record.context.materials.map((m) => (
-                    <section key={m.id}>
-                      <h4>{m.label}</h4>
-                      <p className="muted">
-                        {m.source} {m.revision}
-                      </p>
-                      <pre>{m.body}</pre>
-                    </section>
-                  ))}
-                </details>
-              )}
-              {record.prompt && (
-                <>
-                  <pre aria-label="提示词建议正文">{record.prompt}</pre>
-                  <Button onClick={() => void copy()}>复制提示词</Button>
-                </>
-              )}
-              {[
-                "queued",
-                "preparing",
-                "running",
-                "unknown",
-                "settling",
-              ].includes(record.state) && (
-                <Button
-                  variant="outline"
-                  disabled={!online || busy || working}
-                  onClick={() => void cancel()}
-                >
-                  取消本次生成
-                </Button>
-              )}
-            </article>
-          )}
-          <p role="status">{message}</p>
-        </>
-      )}
+      {open && content}
     </details>
   );
 }

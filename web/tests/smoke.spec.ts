@@ -20,7 +20,10 @@ test("web.smoke.billing: isolated settings save, conflict, versions and narrow l
     scheme.scheme !== "simulate"
   )
     throw new Error("isolated ready simulate package required");
-  const env = { ...process.env, STEERLINE_HOME: resolve(dirname(config), "..") };
+  const env = {
+    ...process.env,
+    STEERLINE_HOME: resolve(dirname(config), ".."),
+  };
   let opening = "";
   let openingError = "";
   await expect
@@ -402,18 +405,12 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   await expect(
     page.getByText(/Controlled candidate pushed and PR created/),
   ).toBeVisible({ timeout: 90000 });
-  await expect(
-    page.getByRole("button", { name: "打开回答", exact: true }),
-  ).toBeEnabled();
-  await page.getByRole("button", { name: "打开回答", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "回答内容" })).toBeEnabled();
   await page
     .getByRole("textbox", { name: "回答内容" })
     .fill("中文验收反馈\n保持当前候选，核对 PR 元数据。");
   await page.reload();
-  await expect(
-    page.getByRole("button", { name: "打开回答", exact: true }),
-  ).toBeEnabled();
-  await page.getByRole("button", { name: "打开回答", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "回答内容" })).toBeEnabled();
   await expect(page.getByRole("textbox", { name: "回答内容" })).toHaveValue(
     "中文验收反馈\n保持当前候选，核对 PR 元数据。",
   );
@@ -461,7 +458,9 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
         .first();
       await expect(rejected.getByText("已拒绝", { exact: true })).toBeVisible();
       await page.reload();
-      await page.getByRole("button", { name: "打开回答", exact: true }).click();
+      await expect(
+        page.getByRole("textbox", { name: "回答内容" }),
+      ).toBeEnabled();
       await expect(page.getByRole("textbox", { name: "回答内容" })).toHaveValue(
         "中文验收反馈\n保持当前候选，核对 PR 元数据。",
       );

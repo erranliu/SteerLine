@@ -1,4 +1,39 @@
 import type { Candidate } from "../../shared/api/types";
+export function sameNotice(a?: string, b?: string) {
+  return (
+    !!a?.trim() &&
+    a.replace(/\r\n/g, "\n").trim() === b?.replace(/\r\n/g, "\n").trim()
+  );
+}
+
+// Compare display copies only; retain the original text in the owner and editor.
+export function candidateNotices(
+  run: Candidate,
+  answerVisible = !!run.decision,
+) {
+  const texts = [
+    run.runner_delivery?.diagnostic,
+    run.runner_delivery?.controls.reason,
+    run.recovery_required ? "原执行需要恢复核验。" : undefined,
+    run.recovery_required ? run.stage_diagnostic || run.error : undefined,
+    run.environment_blocker
+      ? run.environment_blocker.fact.Reason +
+        " · " +
+        run.environment_blocker.fact.Detail
+      : undefined,
+    run.error && (!run.recovery_required || run.stage_diagnostic)
+      ? run.error
+      : undefined,
+  ];
+  const seen = answerVisible
+    ? [run.decision?.request.question, run.decision?.request.context]
+    : [];
+  return texts.filter((text): text is string => {
+    if (!text || seen.some((s) => sameNotice(s, text))) return false;
+    seen.push(text);
+    return true;
+  });
+}
 const stages: Record<string, string> = {
   start: "准备执行",
   prepare: "准备执行",
