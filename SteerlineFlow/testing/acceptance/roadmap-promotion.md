@@ -45,6 +45,23 @@
 
 本次未执行真实模型、真实远端 PR、安装更新或用户人工体验；原关闭 Run 未被重发或改写。
 
+### 提 PR 前固定提交验证
+
+已基于 origin/main=122dbdc9 集成，固定受测提交为 2e78c3188b5a0bf38f80848648e6441e5b12fd03。独立审核复核自动集成后的 diff，确认提示词正文、字节数、接线与执行门槛保持批准版本。
+
+四份报告均核实 before/after 为同一 clean 提交，证据仍在上述根目录；完整命令与前表相同，实际输出目录及结果如下：
+
+| 范围 | 输出目录 | 结果 |
+| --- | --- | --- |
+| L1 | test-results/L1/pr-20261110-1 | passed/complete=true；准备 0.262s、执行 33.782s |
+| L2 | test-results/L2/pr-20261110-1 | passed/cleanup_complete=true；准备 14.594s、执行 89.164s |
+| web.unit | test-results/L4/pr-web-20261110-1 | passed/complete=true；401 项通过，零失败/skip，28.068s |
+| go.roadmap | test-results/L4/pr-roadmap-20261110-1 | passed/complete=true；三组、零失败/skip，458.751s |
+
+同提交 TypeScript/Vite 构建通过，733 份 Markdown、4528 个本地链接检查 0 错误。四份登记报告已通过正式 record 入口导出到[固定提交测试历史](../records/2e78c3188b5a0bf38f80848648e6441e5b12fd03.json)。随后仅补充本段、测试历史，并将提示词证据 diff 改为真实 unified=0 输出以避免 context 空格/tab 触发 Git 空白检查；不把记录提交冒充另一次源码执行。
+
+本次源码 PR 不代表产品真实模型/远端业务 PR 链路复验或安装版已更新。
+
 ## 2026-11-06：转正进度与当前流程展示
 
 用户授权首轮界面调整：固定进度区、当前流程与历史分离、集中主操作及左侧草稿状态；不接活动中心。实现仅调整 Web 展示与原命令入口，不修改 Runner 请求、提示词、材料生成、文档发布或 Task/DAG 事务。

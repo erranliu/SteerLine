@@ -1,0 +1,48 @@
+{
+  "runs": [
+    {
+      "at": "2026-11-10T04:20:15.3351283Z",
+      "results": [
+        {
+          "test_id": "l1.minimum",
+          "level": "L1",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-10T04:20:37.2081308Z",
+      "results": [
+        {
+          "test_id": "web.unit",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-10T04:22:42.2861219Z",
+      "results": [
+        {
+          "test_id": "smoke.delivery",
+          "level": "L2",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-10T04:27:14.6502421Z",
+      "results": [
+        {
+          "test_id": "go.roadmap",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}
