@@ -315,7 +315,9 @@ func (s *Service) Cancel(ctx context.Context, id string, expected uint64) (Recor
 	if err != nil {
 		return r, err
 	}
-	if r.Revision != expected {
+	// The immutable job identity scopes cancellation. Observations may advance
+	// its revision after the user reads it without revoking this monotonic intent.
+	if expected == 0 || expected > r.Revision {
 		return r, contract.ErrConflict
 	}
 	if r.Complete() {

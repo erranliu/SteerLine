@@ -25,6 +25,8 @@ import (
 // RunnerFixture is a scripted public CLI peer. It owns no agent, transport,
 // workflow or native recovery state. Calls are evidence of caller side effects.
 type RunnerFixture struct {
+	AdvisoryStopAttempts  map[string][]runnercontract.Request    `json:"advisory_stop_attempts,omitempty"`
+	AdvisoryStopQueries   map[string]int                         `json:"advisory_stop_queries,omitempty"`
 	SubmitCalls           map[string]int                         `json:"submit_calls,omitempty"`
 	AdvisoryQuestions     map[string]string                      `json:"advisory_questions,omitempty"`
 	AdvisoryStops         map[string]bool                        `json:"advisory_stops,omitempty"`
@@ -285,6 +287,16 @@ func RunnerCLI(args []string) (bool, error) {
 		if requestID := argument(args, "--request-id"); requestID != "" {
 			v, ok := s.Requests[requestID]
 			if !ok {
+				for _, attempts := range s.AdvisoryStopAttempts {
+					for _, attempt := range attempts {
+						if attempt.RequestID == requestID {
+							if s.AdvisoryStopQueries == nil {
+								s.AdvisoryStopQueries = map[string]int{}
+							}
+							s.AdvisoryStopQueries[requestID]++
+						}
+					}
+				}
 				return respond(nil, "request_not_found")
 			}
 			cmd = &v
@@ -389,6 +401,24 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	if args[0] == "events" {
 		return respond(s.eventPage(run, argument(args, "--after")), "")
+	}
+
+	if args[0] == "stop" && s.AdvisoryQuestions[runID] != "" {
+		if s.AdvisoryStopAttempts == nil {
+			s.AdvisoryStopAttempts = map[string][]runnercontract.Request{}
+		}
+		s.AdvisoryStopAttempts[runID] = append(s.AdvisoryStopAttempts[runID], request)
+		script, err := readAdvisoryScript(s.Providers[runID])
+		if err != nil {
+			return true, err
+		}
+		if script.Results[s.AdvisoryQuestions[runID]].LoseStaleStopReceipt && len(s.AdvisoryStopAttempts[runID]) == 1 {
+			// Native progress wins the CAS before acceptance. Rejection was not
+			// stored as a command, and its response is lost at the transport.
+			run.Revision++
+			s.Runs[runID] = run
+			return respond(nil, "request_outcome_unknown")
+		}
 	}
 	if previous, ok := s.Requests[request.RequestID]; ok {
 		if s.Bodies[request.RequestID] != string(request.Input) {

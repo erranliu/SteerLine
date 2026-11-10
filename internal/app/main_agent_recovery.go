@@ -37,14 +37,14 @@ func advisoryRecords(ctx context.Context, store *sqlite.SQLiteStore, project str
 	}
 	return rows, nil
 }
-func saveAdvisoryRecovery(ctx context.Context, store *sqlite.SQLiteStore, r mainagentbridge.Record) error {
+func saveAdvisoryRecovery(ctx context.Context, store *sqlite.SQLiteStore, r mainagentbridge.Record) (mainagentbridge.Record, error) {
 	expected := r.Revision
 	r.Revision++
 	raw, e := json.Marshal(r)
 	if e != nil {
-		return e
+		return r, e
 	}
-	return store.SaveAdvisory(ctx, r.Project, r.ID, r.Source.CandidateID, raw, expected)
+	return r, store.SaveAdvisory(ctx, r.Project, r.ID, r.Source.CandidateID, raw, expected)
 }
 func prepareAdvisoryStops(ctx context.Context, c *Config, store *sqlite.SQLiteStore, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
 	rows, err := advisoryRecords(ctx, store, c.Identity())
@@ -72,7 +72,7 @@ func prepareAdvisoryStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 				r.FinishedAt = &now
 				r.ObservedAt = now
 				r.Diagnostic = "Runner 冷态确认原生成请求不存在，未重新提交"
-				if e = saveAdvisoryRecovery(ctx, store, r); e != nil {
+				if r, e = saveAdvisoryRecovery(ctx, store, r); e != nil {
 					return nil, e
 				}
 				if c.runtimeGenerations != nil {
@@ -85,13 +85,32 @@ func prepareAdvisoryStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 		if e = runnerbinding.ValidateContent(content, view); e != nil {
 			return nil, e
 		}
+		if view.Run.StopStatus == "stopped" {
+			continue
+		}
 		if !r.Cancelled && r.State != "failed" && r.StopRequest == nil {
 			continue
+		}
+		if r.StopRequest != nil && r.StopState == "unknown" {
+			state, readErr := mainagentbridge.InspectOriginalStop(ctx, r, view.Run, func(ctx context.Context, selector, id string) (runnercontract.Inspection, error) {
+				value, _, err := cli.InspectBeforeStart(ctx, selector, id)
+				return value, err
+			})
+			if readErr != nil {
+				return nil, readErr
+			}
+			if state != r.StopState {
+				r.StopState = state
+				// Record the original rejection before replacing its envelope.
+				if r, e = saveAdvisoryRecovery(ctx, store, r); e != nil {
+					return nil, e
+				}
+			}
 		}
 		if r.StopRequest == nil || r.StopState == "rejected" {
 			r.StopRequest = runnerbinding.ContentStop(advisoryStopToken(), view.Run.Revision)
 			r.StopState = "unknown"
-			if e = saveAdvisoryRecovery(ctx, store, r); e != nil {
+			if r, e = saveAdvisoryRecovery(ctx, store, r); e != nil {
 				return nil, e
 			}
 		}

@@ -29,6 +29,7 @@ test("owned advisory navigation, context, copy and cancellation", async ({
   )
     throw new Error("isolated advisory inputs required");
   const commands: string[] = [];
+  let cancelAfterProgress = false;
   page.on("request", (r) => {
     if (r.method() === "POST" && r.url().includes("/commands"))
       commands.push(r.postDataJSON()?.action || "unknown");
@@ -102,6 +103,33 @@ test("owned advisory navigation, context, copy and cancellation", async ({
       e.STEERLINE_ADVISORY_PROMPT!,
     );
   } else {
+    await page.route("**/commands", async (route) => {
+      const request = route.request();
+      if (
+        request.method() === "POST" &&
+        request.postDataJSON()?.action === "main_agent_cancel"
+      ) {
+        const displayed = request.postDataJSON().expected_version;
+        expect(displayed).toBeGreaterThan(0);
+        const detailURL = request
+          .url()
+          .replace(/\/commands$/, "/main-agent/" + id);
+        // Hold the real immutable POST until ordinary native progress makes
+        // its displayed revision stale. GET remains an observation only.
+        await expect
+          .poll(async () => {
+            const response = await page.request.get(detailURL);
+            expect(response.ok()).toBe(true);
+            const detail = await response.json();
+            expect(detail.id).toBe(id);
+            expect(detail.candidate_id).toBe(candidate);
+            return detail.revision;
+          })
+          .toBeGreaterThan(displayed);
+        cancelAfterProgress = true;
+      }
+      await route.continue();
+    });
     await panel
       .getByRole("button", { name: "取消本次生成", exact: true })
       .click();
@@ -127,6 +155,7 @@ test("owned advisory navigation, context, copy and cancellation", async ({
         context: true,
         copy: mode === "ready",
         cancel: mode === "cancel",
+        cancel_after_progress: cancelAfterProgress,
         commands,
       },
       null,

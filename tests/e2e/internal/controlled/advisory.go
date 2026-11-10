@@ -17,11 +17,13 @@ type AdvisoryScript struct {
 	Results  map[string]AdvisoryResponse `json:"results"`
 }
 type AdvisoryResponse struct {
-	State       string `json:"state"`
-	Prompt      string `json:"prompt"`
-	LoseReceipt bool   `json:"lose_receipt"`
-	Unavailable bool   `json:"unavailable"`
-	HoldStop    bool   `json:"hold_stop"`
+	Progress             bool   `json:"progress"`
+	LoseStaleStopReceipt bool   `json:"lose_stale_stop_receipt"`
+	State                string `json:"state"`
+	Prompt               string `json:"prompt"`
+	LoseReceipt          bool   `json:"lose_receipt"`
+	Unavailable          bool   `json:"unavailable"`
+	HoldStop             bool   `json:"hold_stop"`
 }
 
 func readAdvisoryScript(provider string) (AdvisoryScript, error) {
@@ -113,6 +115,9 @@ func (s *RunnerFixture) observeAdvisory(id string, offline bool) (runnercontract
 		return r, "fixture_query_unavailable", nil
 	}
 	before, _ := json.Marshal(r)
+	if response.Progress && len(s.AdvisoryStopAttempts[id]) == 0 {
+		r.Summary = fmt.Sprintf("scripted progress %d", s.AdvisoryInspects[id])
+	}
 	if s.AdvisoryStops[id] {
 		if !response.HoldStop {
 			r.Status, r.StopStatus, r.Phase, r.Closed = "stopped", "stopped", "closed", true

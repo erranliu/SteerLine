@@ -35,3 +35,11 @@
 新增现有runtime suite内的 runtime.main-agent-advisory（L4/controlled），映射A07/A08/A11–A14。沿 Scenario/Project/公开CLI peer及Playwright，来源从脚本化公开原Question进入生产观察路径；不构造Source、不改SQLite，不增加测试框架。夹具只补限定建议请求、回执丢失/查询不可用、结果与停止结算脚本及请求计数。Web实际验证活动精确导航、上下文、复制和无执行入口。同步正式JSON、L4说明、manifest、执行器Web构建/串行/必要证据和清理校验。每次新out，完整场景先定向跑通，再在干净提交运行L1/L2及本L4，登记实际证据；对应修改的controller/fixture/driver定向回归，已有活动场景复核防公共夹具回归。提示词资产无变化，提交前独立审核实际请求断言及测试接线。
 
 实际浏览器回归同时修复同一候选已挂载后深链变化不展开建议的问题；仅按有效advisory目标变化展开，不因普通重渲染覆盖用户折叠。Web单测和正式L4覆盖该路径。公共夹具复核明确选择 runtime.async-activities；本次不重跑未改实现的HTTP/存储/部署全集，其原受测版本与本次L4分别登记。
+
+## 5. 合并前复审修复
+
+A07/A08/A14补足普通取消与未知stop恢复：取消作为不可变作业的单调意图接受历史正revision，保留未来/0及终态拒绝；bridge公开查询原stop，missing+单调Run更高版本才可证实旧CAS永久过期，live/startup复用同一核实函数，先保存拒绝后更新信封，已停止Run不重复注入。没有生成重投或新业务执行能力。
+
+先以定向红测复现两项，再补bridge/static和progress版本、终态、同版missing、accepted pending、错绑定及真实SQLite启动恢复测试。正式L4不再冻结取消期间观察：公开peer持续产生正常进度，浏览器暂停真实POST直至其显示版本过期再放行；首次stop脚本化原CAS拒绝但丢回执，必须查原请求后才能换新信封。缺普通进度取消/未知stop恢复证明也使控制器不通过。保持六个作业、原业务零副作用及资源清理断言。
+
+在合入当前main的固定源码验证L1/L2、web.unit、runtime.main-agent-advisory、runtime.async-activities；取消公开语义补go.http，启动恢复补go.deployment及主Agent定向。安排沿原同名tests.json有效ID，不新增测试框架。当前提示词资产/core/contract/Runner均不改，正文0字节差异；实际wire及新测试接线独立复审后才能合并。

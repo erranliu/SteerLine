@@ -197,6 +197,28 @@ func (s *Service) observe(ctx context.Context, r Record) error {
 	if current.Complete() || !current.Cancelled && current.State != "failed" {
 		return nil
 	}
+	if current.StopRequest != nil && current.StopState == "unknown" {
+		state, readErr := InspectOriginalStop(ctx, current, run, s.Runner.Inspect)
+		if readErr != nil {
+			return readErr
+		}
+		if state == "unknown" {
+			return nil
+		}
+		originalID := current.StopRequest.RequestID
+		current, err = s.update(ctx, r.ID, func(c *Record) error {
+			if c.StopRequest == nil || c.StopRequest.RequestID != originalID {
+				return errors.New("original advisory stop changed during inspection")
+			}
+			if !c.Complete() {
+				c.StopState = state
+			}
+			return nil
+		})
+		if err != nil || current.Complete() {
+			return err
+		}
+	}
 	if !runnerbinding.NeedsContentStop(current.StopRequest, current.StopState, run.StopStatus) {
 		return nil
 	}

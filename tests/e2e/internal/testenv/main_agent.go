@@ -183,8 +183,26 @@ func MainAgentAdvisory(s *Scenario) {
 		command.Env = append(command.Env, "STEERLINE_ADVISORY_WEB="+web, "STEERLINE_ADVISORY_HOME="+p.Home, "STEERLINE_ADVISORY_PROJECT="+public, "STEERLINE_ADVISORY_CANDIDATE="+candidate.ID, "STEERLINE_ADVISORY_TASK="+candidate.TaskID, "STEERLINE_ADVISORY_ID="+id, "STEERLINE_ADVISORY_ACTIVITY="+activityID, "STEERLINE_ADVISORY_PROMPT="+prompt, "STEERLINE_ADVISORY_MODE="+mode, "STEERLINE_WEB_EVIDENCE="+output)
 		_, e = s.RunCommand(command, "advisory-browser-"+mode)
 		s.Must(e)
-		if !reflect.DeepEqual(before, deliveryRequestBodies(fixture())) {
-			s.t.Fatal("browser sent a Runner execution input")
+		afterFixture := fixture()
+		after := deliveryRequestBodies(afterFixture)
+		for request, body := range before {
+			if after[request] != body {
+				s.t.Fatal("browser changed an existing execution input")
+			}
+		}
+		added := 0
+		for request := range after {
+			if _, existed := before[request]; existed {
+				continue
+			}
+			command := afterFixture.Requests[request]
+			if mode != "cancel" || command.Command != "stop" || command.RunID == nil || afterFixture.Runs[*command.RunID].Correlation["steerline_advisory"] != id {
+				s.t.Fatal("browser sent an unrelated Runner execution input")
+			}
+			added++
+		}
+		if added > 1 {
+			s.t.Fatal("browser repeated an accepted stop")
 		}
 	}
 	browser("ready", firstID, firstActivity.ID, first.Prompt)
@@ -267,19 +285,21 @@ func MainAgentAdvisory(s *Scenario) {
 	wait(cancelID, "running")
 	assertCount("failed", 1)
 	response = script.Results["cancel"]
-	response.Unavailable, response.HoldStop = true, true
+	response.HoldStop, response.Progress, response.LoseStaleStopReceipt = true, true, true
 	script.Results["cancel"] = response
 	write()
 	cancelRun := bindings()["cancel"]
-	s.Wait("blocked observer before UI cancellation", func() (bool, error) { return fixture().AdvisoryQueryFailures[cancelRun] > 0, nil })
+	observations := fixture().AdvisoryInspects[cancelRun]
+	s.Wait("ordinary progress before UI cancellation", func() (bool, error) { return fixture().AdvisoryInspects[cancelRun] > observations, nil })
 	browser("cancel", cancelID, "", "")
 	if value := wait(cancelID, "cancelling"); value.Settled {
 		s.t.Fatal("cancel prematurely settled")
 	}
-	response.Unavailable = false
-	script.Results["cancel"] = response
-	write()
-	s.Wait("original stop accepted", func() (bool, error) { return fixture().AdvisoryStops[cancelRun], nil })
+	s.Wait("replacement stop accepted after original rejection proof", func() (bool, error) { return fixture().AdvisoryStops[cancelRun], nil })
+	attempts := fixture().AdvisoryStopAttempts[cancelRun]
+	if len(attempts) != 2 || attempts[0].RequestID == attempts[1].RequestID || fixture().AdvisoryStopQueries[attempts[0].RequestID] == 0 {
+		s.t.Fatal("unknown stale stop was not queried before replacement", attempts)
+	}
 	if read(cancelID).Settled {
 		s.t.Fatal("accepted stop treated as settlement")
 	}
@@ -388,7 +408,7 @@ func MainAgentAdvisory(s *Scenario) {
 	}
 	s.Must(controlled.Write(filepath.Join(s.Output, "advisory-public-requests.json"), f))
 	p.StopService()
-	s.Must(controlled.Write(filepath.Join(s.Output, "advisory-proof.json"), map[string]any{"jobs": 6, "automatic_before_browser": true, "immutable_restart_and_return": true, "unknown_only_observed": true, "failure_not_retried": true, "cancel_and_source_settled": true, "shared_slot_held": true, "no_business_side_effects": true, "public_wire_checked": true, "browser_ready": true, "browser_cancel": true}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "advisory-proof.json"), map[string]any{"jobs": 6, "automatic_before_browser": true, "immutable_restart_and_return": true, "unknown_only_observed": true, "failure_not_retried": true, "cancel_and_source_settled": true, "shared_slot_held": true, "no_business_side_effects": true, "public_wire_checked": true, "browser_ready": true, "browser_cancel": true, "cancel_after_progress": true, "unknown_stop_recovered": true}))
 	s.Must(s.FinishBody())
 }
 func startAdvisoryWeb(s *Scenario, p *Project) string {

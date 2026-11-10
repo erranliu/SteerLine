@@ -8,7 +8,7 @@ import (
 )
 
 func TestAdvisoryEvidenceRejectsMissingFactsAndBrowserProof(t *testing.T) {
-	for _, missing := range append(append([]string{"none", "jobs", "browser-ready", "browser-cancel", "commands", "public-missing", "public-empty", "public-malformed", "screenshot-ready", "screenshot-cancel", "submit-replay"}, advisoryProofFacts...), "malformed") {
+	for _, missing := range append(append([]string{"none", "jobs", "browser-ready", "browser-cancel", "commands", "public-missing", "public-empty", "public-malformed", "screenshot-ready", "screenshot-cancel", "submit-replay", "stop-no-query", "stop-no-attempts", "stop-accepted-original"}, advisoryProofFacts...), "malformed") {
 		t.Run(missing, func(t *testing.T) {
 			dir := t.TempDir()
 			write := func(path string, value any) {
@@ -41,8 +41,20 @@ func TestAdvisoryEvidenceRejectsMissingFactsAndBrowserProof(t *testing.T) {
 			if missing == "submit-replay" {
 				calls["unknown"] = 2
 			}
+			stopAttempts := map[string]any{"cancel": []any{map[string]string{"request_id": "old-stop"}, map[string]string{"request_id": "new-stop"}}}
+			stopQueries := map[string]int{"old-stop": 1}
+			requests["new-stop"] = map[string]any{"command": "stop", "run_id": "cancel"}
+			if missing == "stop-no-query" {
+				delete(stopQueries, "old-stop")
+			}
+			if missing == "stop-no-attempts" {
+				delete(stopAttempts, "cancel")
+			}
+			if missing == "stop-accepted-original" {
+				requests["old-stop"] = map[string]any{"command": "stop", "run_id": "cancel"}
+			}
 			if missing != "public-missing" {
-				write("advisory-public-requests.json", map[string]any{"advisory_questions": questions, "submit_calls": calls, "bodies": bodies, "requests": requests})
+				write("advisory-public-requests.json", map[string]any{"advisory_questions": questions, "submit_calls": calls, "bodies": bodies, "requests": requests, "advisory_stop_attempts": stopAttempts, "advisory_stop_queries": stopQueries})
 			}
 			if missing == "public-empty" {
 				write("advisory-public-requests.json", map[string]any{})
@@ -72,7 +84,7 @@ func TestAdvisoryEvidenceRejectsMissingFactsAndBrowserProof(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				write(filepath.Join("browser-"+mode, "proof.json"), map[string]any{"passed": true, "mode": mode, "navigation": true, "context": true, "copy": mode == "ready", "cancel": mode == "cancel", "commands": commands})
+				write(filepath.Join("browser-"+mode, "proof.json"), map[string]any{"passed": true, "mode": mode, "navigation": true, "context": true, "copy": mode == "ready", "cancel": mode == "cancel", "commands": commands, "cancel_after_progress": mode == "cancel"})
 			}
 			if missing == "malformed" {
 				if err := os.WriteFile(filepath.Join(dir, "advisory-proof.json"), []byte("{"), 0600); err != nil {

@@ -231,6 +231,23 @@ func TestMainAgentAdvisoryColdAbsenceAndOriginalStops(t *testing.T) {
 				require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-run-fixture.json"), []byte(`{"fixture_error":"request_not_found"}`), 0600))
 			} else {
 				writeStartupInspection(t, cli, runnercontract.Run{RunID: "original-run", Revision: 3, InputDigest: "original-digest", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Correlation: map[string]string{"steerline_project": c.Identity(), "steerline_advisory": record.ID}}, request.RequestID)
+				if kind == "cancelled-stop" {
+					raw, err := os.ReadFile(filepath.Join(cli.StateDir, "idle-run-fixture.json"))
+					require(t, err)
+					var original runnercontract.Inspection
+					require(t, json.Unmarshal(raw, &original))
+					require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-inspections-fixture.json"), mustJSON(map[string]any{request.RequestID: original}), 0600))
+				}
+				if kind == "failed-stop" {
+					raw, err := os.ReadFile(filepath.Join(cli.StateDir, "idle-run-fixture.json"))
+					require(t, err)
+					var original runnercontract.Inspection
+					require(t, json.Unmarshal(raw, &original))
+					stop := original
+					stop.Command = &runnercontract.Command{CommandID: "stop-command", RequestID: "original-stop", Command: "stop", RunID: &stop.Run.RunID, ReceiptStatus: "accepted", ActionStatus: "pending"}
+					require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-inspections-fixture.json"), mustJSON(map[string]any{request.RequestID: original, "original-stop": stop}), 0600))
+				}
+
 			}
 			stops, e := prepareAdvisoryStops(ctx, &c, store, &cli)
 			require(t, e)

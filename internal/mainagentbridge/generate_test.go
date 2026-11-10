@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -22,6 +23,10 @@ type fakeRunner struct {
 	submitError              error
 	onSubmit                 func(context.Context)
 	keepRunning              bool
+	stopRequests             []runnercontract.Request
+	stopQueries              []string
+	stopAccepted             map[string]bool
+	stopFailure              func(*runnercontract.Request) error
 }
 
 func (f *fakeRunner) Submit(ctx context.Context, r runnercontract.Request) (runnerclient.Receipt, error) {
@@ -44,6 +49,14 @@ func (f *fakeRunner) Submit(ctx context.Context, r runnercontract.Request) (runn
 }
 func (f *fakeRunner) Inspect(_ context.Context, selector, id string) (runnerclient.Inspection, error) {
 	f.inspects++
+	if selector == "request-id" && id != f.request.RequestID {
+		f.stopQueries = append(f.stopQueries, id)
+		if !f.stopAccepted[id] {
+			return runnerclient.Inspection{}, &runnerclient.Failure{Code: "request_not_found", Exit: 5}
+		}
+		runID := f.run.RunID
+		return runnerclient.Inspection{Run: &f.run, Command: &runnercontract.Command{CommandID: "stop-" + id, RequestID: id, Command: "stop", RunID: &runID, ReceiptStatus: "accepted", ActionStatus: "pending"}}, nil
+	}
 	if selector == "request-id" && id != f.request.RequestID || selector == "run-id" && id != f.run.RunID {
 		return runnerclient.Inspection{}, errors.New("wrong original selector")
 	}
@@ -55,6 +68,16 @@ func (f *fakeRunner) Call(_ context.Context, command string, args []string, r *r
 		return runnerclient.Response{}, errors.New("unexpected business action")
 	}
 	f.stops++
+	f.stopRequests = append(f.stopRequests, *r)
+	if f.stopFailure != nil {
+		if err := f.stopFailure(r); err != nil {
+			return runnerclient.Response{}, err
+		}
+	}
+	if f.stopAccepted == nil {
+		f.stopAccepted = map[string]bool{}
+	}
+	f.stopAccepted[r.RequestID] = true
 	f.run.Status, f.run.StopStatus = "stopped", "stopped"
 	f.run.Revision++
 	raw, _ := json.Marshal(runnerclient.Receipt{RunID: f.run.RunID, CommandID: "stop-command", ReceiptStatus: "accepted"})
@@ -286,5 +309,82 @@ func TestAdvisorySourceReappearsWithoutRegenerationOrSnapshotReplacement(t *test
 				t.Fatal("source restoration changed original generation", restored)
 			}
 		})
+	}
+}
+
+func TestAdvisoryCancelIntentSurvivesObservedProgress(t *testing.T) {
+	for _, progress := range []bool{false, true} {
+		t.Run(fmt.Sprint(progress), func(t *testing.T) {
+			s, source, f := prepared(t)
+			f.keepRunning = true
+			step(t, s)
+			f.run.ContentResult, f.run.Final = nil, nil
+			shown, err := s.Get(context.Background(), SourceID(s.Project, source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if progress {
+				f.run.Revision++
+			}
+			step(t, s)
+			latest, _ := s.Get(context.Background(), shown.ID)
+			if latest.Revision <= shown.Revision {
+				t.Fatal("observation did not advance record")
+			}
+			for _, invalid := range []uint64{0, latest.Revision + 1} {
+				if _, err = s.Cancel(context.Background(), shown.ID, invalid); !errors.Is(err, contract.ErrConflict) {
+					t.Fatal("invalid version accepted", invalid, err)
+				}
+			}
+			cancelled, err := s.Cancel(context.Background(), shown.ID, shown.Revision)
+			if err != nil || !cancelled.Cancelled || cancelled.Settled {
+				t.Fatal("observation invalidated cancellation intent", cancelled, err)
+			}
+			step(t, s)
+			step(t, s)
+			settled, _ := s.Get(context.Background(), shown.ID)
+			if settled.State != "cancelled" || !settled.Complete() || f.submits != 1 || f.stops != 1 {
+				t.Fatal(settled, f.submits, f.stops)
+			}
+		})
+	}
+}
+
+func TestAdvisoryUnknownStaleStopIsInspectedBeforeReplacement(t *testing.T) {
+	s, source, f := prepared(t)
+	f.keepRunning = true
+	step(t, s)
+	f.run.ContentResult, f.run.Final = nil, nil
+	shown, _ := s.Get(context.Background(), SourceID(s.Project, source))
+	if _, err := s.Cancel(context.Background(), shown.ID, shown.Revision); err != nil {
+		t.Fatal(err)
+	}
+	f.stopFailure = func(*runnercontract.Request) error {
+		if f.stops == 1 {
+			f.run.Revision++
+			return &runnerclient.Failure{Unknown: true, Code: "lost_stop_receipt"}
+		}
+		return nil
+	}
+	step(t, s)
+	unknown, _ := s.Get(context.Background(), shown.ID)
+	if unknown.StopState != "unknown" || unknown.StopRequest == nil || unknown.Settled {
+		t.Fatal(unknown)
+	}
+	original := *unknown.StopRequest
+	step(t, s)
+	if f.stops != 2 || len(f.stopQueries) != 1 || f.stopQueries[0] != original.RequestID || f.stopRequests[1].RequestID == original.RequestID {
+		t.Fatal("original stale stop not reconciled", f.stops, f.stopQueries, f.stopRequests)
+	}
+	var next struct {
+		ExpectedRevision uint64 `json:"expected_revision"`
+	}
+	if json.Unmarshal(f.stopRequests[1].Input, &next) != nil || next.ExpectedRevision != 2 {
+		t.Fatal("replacement lost current CAS", f.stopRequests[1])
+	}
+	step(t, s)
+	settled, _ := s.Get(context.Background(), shown.ID)
+	if !settled.Complete() || settled.State != "cancelled" || f.submits != 1 {
+		t.Fatal(settled)
 	}
 }
