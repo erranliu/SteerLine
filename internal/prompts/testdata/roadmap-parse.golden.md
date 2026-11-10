@@ -1,1 +1,1 @@
-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。只返回原 schema 结果。
+先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。同时读取固定项目入口 SteerlineFlow/environment-project.json 及其声明的测试材料，补齐coordination和每项provides_tests。只返回原 schema 结果。

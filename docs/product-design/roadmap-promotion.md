@@ -14,19 +14,21 @@
 
 ## 文档生成与审阅
 
-确认后的解析记录派生 purpose=documents 的**独立文档记录**，parent_id 指向原解析；两者分别持有 Run、revision、原请求与停止义务，不混用目标。文档生成固定完整 commit/tree、原规划、SpecGuide 与测试/编写规范，能力按所选 Runner 公开 schema 校验。
+确认后的解析记录派生 purpose=documents 的**独立文档记录**，parent_id 指向原解析；解析持有一个 Run；文档记录的 generations 按任务保留独立原请求、Run、session、创建时间、结果和停止义务，记录外层继续持有一次确认、审阅及发布。文档批次没有根级 Run，不混用目标。文档生成固定完整 commit/tree、原规划、SpecGuide 与测试/编写规范，能力按所选 Runner 公开 schema 校验。
 
-页面使用“确认任务依赖并生成 Spec / Plan”一次提交：后台先按当前 revision 校验草稿、任务图及解析结果，保存确认摘要和独立确认请求，再启动文档生成。确认与生成请求分别绑定各自记录。生成准备或模型执行失败保留已确认规划，页面提供“重试生成 Spec / Plan”，继续以已确认解析为父记录；重试仍核对当前草稿和任务图。结果未知时沿原请求核实，不启动重复生成；待澄清问题仍要求修订草稿并重新解析。
+页面使用“确认任务依赖并生成 Spec / Plan”一次提交：后台先按当前 revision 校验草稿、任务图及解析结果，展示并保存含 coordination、每项 provides_tests 及项目入口声明材料的确认摘要和独立确认请求，再启动文档生成。确认与生成请求分别绑定各自记录。生成准备或模型执行失败保留已确认规划，页面提供“重试生成 Spec / Plan”，继续以已确认解析为父记录；重试仍核对当前草稿和任务图。结果未知时沿原请求核实，不启动重复生成；待澄清问题仍要求修订草稿并重新解析。
 
 应用在确认保存后、文档请求保存前中断时，原请求核实先排除仍在处理的生成，再用本次独立确认记录核实“已确认、生成尚未提交”，保存可重试的失败回执；查询不重新调用模型或改写确认规划。
 
-输出 Schema 固定内部代号、稳定语义路径及完整 Spec/Plan/验收文件集合，同时返回整体设计、调查引用和问题。引用核对公开 manifest 路径/SHA；关键问题回到外部草稿修订并重新解析确认，不靠编辑正文暗改 DAG。
+每任务独立 session，只生成本任务 Schema 固定的内部代号、稳定语义路径及完整 Spec/Plan/验收文件集合；共用已确认任务范围、协作安排、测试提供关系和同一代码/规范快照，各自调查相关代码并返回引用和问题。通过原 home 级内容队列共享默认五槽，逐项短提交后并行运行；保存所有首轮请求后才允许派发。引用核对公开 manifest 路径/SHA；关键问题回到外部草稿修订并重新解析确认，不靠编辑正文暗改 DAG。
 
-每项文档的 tests 保留有序唯一 ID；provides_tests 声明本任务将新增并登记的 ID，无新增时为空数组。同一 ID 只能有一个批内提供者。当前清单没有的 ID 只允许被该提供者的严格依赖后继（含传递后继）选择；提供者不能用自己尚未交付的 ID 作为自身运行安排。Plan 写清提供者与交接，发布的 generated 索引和审阅摘要保存声明，正式 .tests.json 仍只保存 tests。发布预览区分已登记定义与 pending_tests，不提前伪造定义。生成遇到冲突返回最终 JSON questions 和空 documents，不调用交互提问。
+每项文档的 tests 保留有序唯一 ID；provides_tests 在确认前声明本任务将新增并登记的 ID，单项生成必须逐项沿用，不能临时新增或换绑；它，无新增时为空数组。同一 ID 只能有一个批内提供者。当前清单没有的 ID 只允许被该提供者的严格依赖后继（含传递后继）选择；提供者不能用自己尚未交付的 ID 作为自身运行安排。Plan 写清提供者与交接，发布的 generated 索引和审阅摘要保存声明，正式 .tests.json 仍只保存 tests。发布预览区分已登记定义与 pending_tests，不提前伪造定义。生成遇到冲突返回最终 JSON questions 和空 documents，不调用交互提问。
 
-完整最终 JSON 上限 1 MiB，从公开 content_result.json 读取。原生来源已核实、Run completed、stop_status=stopped、仓库 manifest 一致且业务校验通过后进入审阅。页面展示来源提交、整体设计、引用及完整正文，允许修改未发布的文档记录；发布前展示所有原/新文件及目标。
+每任务完整最终 JSON 上限 1 MiB，从各自公开 content_result.json 严格读取，非法尾部不裁剪。完整批次按原 2 MiB 正文业务限额核验，不再次通过单 Run 解码器。原生来源已核实、Run completed、stop_status=stopped、仓库 manifest 一致且业务校验通过后进入审阅。仅全部任务当前执行通过且结算后一次性采用为 Documents，后续观察不覆盖审阅编辑。页面展示来源提交、已确认协作安排、引用及完整正文，允许修改未发布的文档记录；发布前展示所有原/新文件及目标。
 
 失败保留 ContentResult、Run 和 Final 的具体诊断；human_input_required 另从公开 history 核对原 Run/input/revision、Command/session/turn 和分页，显示原问题正文。详情无法核实时保留失败码及读取诊断，不将其它执行的问题挂到当前记录，也不据历史问题产生回复或恢复资格。
+
+失败且 settled 的当前任务可用原文档记录追加一个新执行，复用固定输入，只重生成该任务。其它成功项不重跑；问题要求重新规划，未知原请求仅观察。已取消、发布中/已发布、同来源其它活动或更新文档批次均阻断重生成。状态与进度从每任务最后追加执行推导，保留执行历史。整批停止保存 Cancelled 后停止每个原执行；收尾未结算继续占槽，重启按每项原创建时间恢复队列。
 
 ## 发布与编号
 
@@ -54,6 +56,7 @@ GET 不接受额外查询参数，不启动模型或执行发布。写操作统�
 | roadmap_parse | source_id / 1 | {request_id,path,source_digest,profile}，request_id 等于信封 |
 | roadmap_confirm | 解析 record_id / 当前 revision | {} |
 | roadmap_generate_documents | 待确认或已确认解析 record_id / 当前 revision | {}；待确认时先保存确认记录，再生成；返回新的文档 record_id；失败重试以已确认解析为目标 |
+| roadmap_retry_documents | 当前文档 record_id / 当前 revision | {local_key}；只追加所选失败且已结算任务 |
 | roadmap_edit_documents | 文档 record_id / 当前 revision | {local_key,kind,body}；kind 为 spec/plan/acceptance，仅未发布结果 |
 | roadmap_publish | 文档 record_id / 当前 revision | {review_digest,merge} |
 | roadmap_admit | 文档 record_id / 当前 revision | {} |

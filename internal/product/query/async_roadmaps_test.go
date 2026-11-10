@@ -2,6 +2,7 @@ package query
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +10,40 @@ import (
 )
 
 func TestAsyncActivityRoadmapLifecycles(t *testing.T) {
+	t.Run("per-task-progress", func(t *testing.T) {
+		raw := []byte(`{"project":"p","id":"r","purpose":"documents","state":"accepted","request_id":"batch","generations":[{"generation_id":"old","local_key":"a","state":"failed"},{"generation_id":"current","local_key":"a","state":"documents-review"},{"generation_id":"other","local_key":"b","state":"accepted","projection":{"status":"running"}}]}`)
+		a, err := ProjectAsyncActivity("p", "i", ports.AsyncActivityFact{Source: "roadmap", ID: "r", Payload: raw, Related: []byte(`{"settled":false,"current":1,"requests":["batch","retry"]}`)}, time.Now().UTC())
+		if err != nil || a.State != "running" || a.Phase != "生成文档 1/2" || a.Execution.RunID != "" || a.Execution.AttemptID != "" {
+			t.Fatalf("incorrect batch activity: %+v %v", a, err)
+		}
+	})
+	t.Run("per-task-native-projections", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, status, want, phase string
+			resume, attention         bool
+		}{
+			{"queued", "queued", "queued", "排队中", false, false},
+			{"running", "running", "running", "生成文档", false, false},
+			{"blocked", "blocked", "waiting", "需要处理", false, true},
+			{"input", "waiting_input", "waiting", "需要处理", false, true},
+			{"external", "waiting_external", "waiting", "等待外部结果", false, false},
+			{"completed-not-stopped", "completed", "waiting", "结果收尾中", false, false},
+			{"resume-required", "running", "waiting", "需要处理", true, true},
+			{"unverified", "future-status", "waiting", "执行状态待核实", false, false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				payload := map[string]any{"project": "p", "id": "r", "purpose": "documents", "state": "accepted", "request_id": "batch", "generations": []any{
+					map[string]any{"local_key": "T1", "state": "accepted", "projection": map[string]any{"status": "blocked", "resume_required": true}},
+					map[string]any{"local_key": "T1", "state": "accepted", "projection": map[string]any{"status": tc.status, "stop_status": "active", "resume_required": tc.resume}},
+				}}
+				raw, _ := json.Marshal(payload)
+				a, err := ProjectAsyncActivity("p", "i", ports.AsyncActivityFact{Source: "roadmap", ID: "r", Payload: raw, Related: []byte(`{"settled":false,"current":1,"requests":["batch"]}`)}, time.Now().UTC())
+				if err != nil || a.State != tc.want || a.NeedsAttention != tc.attention || !strings.Contains(a.Phase, tc.phase) {
+					t.Fatalf("incorrect current execution projection: %+v %v", a, err)
+				}
+			})
+		}
+	})
 	for _, tc := range []struct {
 		name, purpose, state, run, stop, want  string
 		settled, cancelled, current, attention bool

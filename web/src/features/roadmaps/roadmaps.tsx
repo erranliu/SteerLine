@@ -12,6 +12,7 @@ import {
   contentPending,
   currentRoadmapRecord,
   roadmapProgress,
+  roadmapGenerationLabel,
   roadmapNextAction,
   roadmapSourceChanged,
   roadmapSteps,
@@ -36,6 +37,7 @@ export type RoadmapSource = {
 };
 export type Dependencies = { local: string[]; formal: string[] };
 export type RoadmapTask = {
+  provides_tests?: string[];
   local_key: string;
   key_origin: "markdown" | "suggested";
   title: string;
@@ -59,6 +61,21 @@ type Documents = {
   acceptance: File[];
 };
 export type RoadmapRecord = {
+  generations?: {
+    generation_id: string;
+    local_key: string;
+    created_at: string;
+    state: string;
+    settled?: boolean;
+    runner_status?: string;
+    resume_required?: boolean;
+    diagnostic?: string;
+    run_id?: string;
+    attempt_id?: string;
+    session_id?: string;
+    retry_request?: string;
+    document?: Documents;
+  }[];
   request_id?: string;
   execution_ref?: ExecutionReference;
   id: string;
@@ -85,7 +102,12 @@ export type RoadmapRecord = {
   existing?: { id: string; title: string; status?: string }[];
   diagnostic?: string;
   run_id?: string;
-  analysis?: { tasks: RoadmapTask[]; questions: string[]; overlap: string };
+  analysis?: {
+    tasks: RoadmapTask[];
+    questions: string[];
+    overlap: string;
+    coordination?: string;
+  };
   confirmed_digest?: string;
   documents: Documents[];
   formal_mapping: Record<string, string>;
@@ -212,6 +234,7 @@ export function Roadmaps() {
   const titles: Record<string, string> = {
     roadmap_parse: "正在提交解析…",
     roadmap_generate_documents: "正在提交文档生成…",
+    roadmap_retry_documents: "正在提交单项重生成…",
     roadmap_publish: "正在提交文档发布…",
     roadmap_admit: "正在提交入图…",
     roadmap_resume: "正在继续原操作…",
@@ -335,6 +358,7 @@ export function Roadmaps() {
         [
           "roadmap_parse",
           "roadmap_generate_documents",
+          "roadmap_retry_documents",
           "roadmap_publish",
           "roadmap_admit",
           "roadmap_resume",
@@ -704,12 +728,97 @@ export function Roadmaps() {
               </button>
             )}
             {analysis && <a href="#roadmap-dependencies">查看任务与依赖</a>}
+            {analysis?.coordination && <p>协作安排：{analysis.coordination}</p>}
             {!!record?.documents?.length && (
               <a href="#roadmap-documents">审阅文档</a>
             )}
           </div>
         )}
       </section>
+      {record?.generations?.length ? (
+        <section className="roadmaps-section" aria-label="逐任务文档生成">
+          <h2>逐任务文档生成</h2>
+          <p>
+            {new Map(record.generations.map((g) => [g.local_key, g])).size}{" "}
+            项任务 · 各自独立生成
+          </p>
+          {[
+            ...new Map(
+              record.generations.map((g) => [g.local_key, g]),
+            ).values(),
+          ].map((g) => (
+            <div key={g.generation_id} className="roadmaps-generation">
+              <h3>{g.local_key}</h3>
+              <p>{roadmapGenerationLabel(g, record.cancelled)}</p>
+              {g.diagnostic && <p className="notice amber">{g.diagnostic}</p>}
+              <CopyExecutionInfo
+                info={{
+                  project: identity.repository_identity,
+                  title: `Spec / Plan · ${g.local_key}`,
+                  generationID: g.generation_id,
+                  runnerUnverified: g.state === "unknown",
+                  requestID: g.retry_request || record.request_id || record.id,
+                  record: { id: record.id, label: "文档批次" },
+                  runner: {
+                    run_id: g.run_id,
+                    attempt_id: g.attempt_id,
+                    session_id: g.session_id,
+                  },
+                }}
+              />
+              {["failed", "invalid", "rejected"].includes(g.state) && (
+                <button
+                  disabled={
+                    locked ||
+                    record.cancelled ||
+                    g.settled !== true ||
+                    !!record.publication ||
+                    !!record.document_questions?.length ||
+                    sending.some(advancing)
+                  }
+                  onClick={() =>
+                    void action(
+                      "roadmap_retry_documents",
+                      record.id,
+                      record.revision,
+                      { local_key: g.local_key },
+                    )
+                  }
+                >
+                  重新生成 {g.local_key}
+                </button>
+              )}
+              {g.document && !record.documents?.length && (
+                <details>
+                  <summary>预览已生成正文</summary>
+                  <h4>Spec</h4>
+                  <pre>{g.document.spec.body}</pre>
+                  <h4>Plan</h4>
+                  <pre>{g.document.plan.body}</pre>
+                  <h4>测试选择</h4>
+                  <pre>
+                    {JSON.stringify({ tests: g.document.tests }, null, 2)}
+                  </pre>
+                  {g.document.acceptance.map((file) => (
+                    <div key={file.path}>
+                      <h4>{file.path}</h4>
+                      <pre>{file.body}</pre>
+                    </div>
+                  ))}
+                </details>
+              )}
+            </div>
+          ))}
+          <details>
+            <summary>执行历史（{record.generations.length}）</summary>
+            {record.generations.map((g) => (
+              <p key={g.generation_id}>
+                {g.local_key} · {g.state} · {g.generation_id}
+              </p>
+            ))}
+          </details>
+        </section>
+      ) : null}
       {record && (
         <section className="roadmaps-section" aria-label="所选记录结果">
           <h2>
@@ -733,7 +842,10 @@ export function Roadmaps() {
                 requestID:
                   record.execution_ref?.request_id || record.request_id,
                 record: { id: record.id, label: "Roadmap 记录" },
-                runner: record.execution_ref || { run_id: record.run_id },
+                runner:
+                  record.purpose === "documents"
+                    ? undefined
+                    : record.execution_ref || { run_id: record.run_id },
               }}
             />
           )}

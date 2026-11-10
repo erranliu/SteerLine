@@ -11,7 +11,7 @@ import (
 
 func roadmapFutureTestPreview(t *testing.T) {
 	t.Helper()
-	r := roadmap.Record{Analysis: &roadmap.Analysis{Tasks: []roadmap.Node{{Key: "tools"}, {Key: "sample", Proposed: roadmap.Dependencies{Local: []string{"tools"}}}}}, Documents: []roadmap.Documents{
+	r := roadmap.Record{Analysis: &roadmap.Analysis{Coordination: "Reuse the declared owners and confirmed dependency handoffs.", Tasks: []roadmap.Node{{Key: "tools", ProvidesTests: []string{"new"}}, {Key: "sample", Proposed: roadmap.Dependencies{Local: []string{"tools"}}}}}, Documents: []roadmap.Documents{
 		{Key: "tools", Tests: []string{"old"}, ProvidesTests: []string{"new"}},
 		{Key: "sample", Tests: []string{"old", "new"}},
 	}}

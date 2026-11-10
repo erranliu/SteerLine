@@ -1,0 +1,375 @@
+diff --git a/internal/prompts/materials/roadmap-documents.md b/internal/prompts/materials/roadmap-documents.md
+index ec0a55cc..4f914080 100644
+--- a/internal/prompts/materials/roadmap-documents.md
++++ b/internal/prompts/materials/roadmap-documents.md
+@@ -1 +1 @@
+-依据固定仓库规范、本次文件材料中的原 Markdown 和 confirmed-planning.json 完整已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，再做整批设计并生成所有新任务的完整中文 Spec、Plan、测试选择和专属验收材料。原文与确认以本次文件材料为准，Git 中同名草稿不替代它们。先阅读 SpecGuide 与测试规范。investigation.source 对 Git 源码/规范填 repository，对本次固定输入文件填 input_file；path 分别使用仓库相对路径或材料逻辑路径，说明实际调查原因，不混淆两个来源。仅返回 source、path、reason；文件摘要由平台从固定文件核验并填写，不由模型计算或抄写。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、实施步骤、验收项到测试ID的映射、选择原因、时点及特殊准备，命令/环境/通用断言引用正式清单；每个新任务的 tests 返回项目政策与Plan必跑要求并集及必要影响项的有序唯一ID数组，选择固定正式清单已有ID，或同批严格前置（含传递前置）明确将新增的ID；每个任务用 provides_tests 有序唯一数组声明自己负责新增并登记的ID，无新增填空数组，同一ID只有一个提供者。后继Plan须写明提供者、依赖交接及交付后从同一执行提交正式清单核验完整定义；提供者自己的 tests 只能使用已有ID或更早前置提供的ID，不能使用自己尚未新增的ID。不输出JSON字符串、重复定义或结果；平台生成只含tests的同名.tests.json，不提前伪造测试定义。无可用入口或约束冲突时仅在最终JSON返回questions和空documents，不调用交互提问工具；空数组仅限Plan明确说明无需自动测试及原因；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。
++依据固定仓库规范、本次文件材料中的原 Markdown 和 confirmed-planning.json 完整已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，依据已确认的 coordination 和任务范围，只生成本次短指令指定目标任务的完整中文 Spec、Plan、测试选择和专属验收材料；其它任务仅作依赖和交接上下文，不输出其正文。原文与确认以本次文件材料为准，Git 中同名草稿不替代它们。先阅读 SpecGuide 与测试规范。investigation.source 对 Git 源码/规范填 repository，对本次固定输入文件填 input_file；path 分别使用仓库相对路径或材料逻辑路径，说明实际调查原因，不混淆两个来源。仅返回 source、path、reason；文件摘要由平台从固定文件核验并填写，不由模型计算或抄写。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、实施步骤、验收项到测试ID的映射、选择原因、时点及特殊准备，命令/环境/通用断言引用正式清单；每个新任务的 tests 返回项目政策与Plan必跑要求并集及必要影响项的有序唯一ID数组，选择固定正式清单已有ID，或同批严格前置（含传递前置）明确将新增的ID；本任务 provides_tests 必须逐项沿用 confirmed-planning.json 中的已确认声明，不新增、删除或换绑提供者；无新增填空数组。后继Plan须写明提供者、依赖交接及交付后从同一执行提交正式清单核验完整定义；提供者自己的 tests 只能使用已有ID或更早前置提供的ID，不能使用自己尚未新增的ID。不输出JSON字符串、重复定义或结果；平台生成只含tests的同名.tests.json，不提前伪造测试定义。无可用入口或约束冲突时仅在最终JSON返回questions和空documents，不调用交互提问工具；空数组仅限Plan明确说明无需自动测试及原因；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。
+diff --git a/internal/prompts/materials/roadmap-parse.md b/internal/prompts/materials/roadmap-parse.md
+index 656da558..b4c32125 100644
+--- a/internal/prompts/materials/roadmap-parse.md
++++ b/internal/prompts/materials/roadmap-parse.md
+@@ -7,0 +8,2 @@ original_dependencies 保留作者明确依赖，proposed_dependencies 记录核
++
++读取固定项目入口声明的测试清单。返回 coordination 简述必要的共用安排；scope/constraints 写清实际共享修改所有权和交接，不引入额外契约表或全仓代码调查。每个新任务以 provides_tests 有序唯一数组声明负责新增并登记的测试ID，无新增填空数组；已有正式任务不声明新增ID，不覆盖固定清单已有ID，同一ID只能有一个提供者。此阶段只确认任务信息与协作，不生成各任务完整 Spec/Plan 或测试结果；发现关键缺失放入 questions。
+diff --git a/internal/prompts/prompts.go b/internal/prompts/prompts.go
+index 6260bfcf..64d1f02c 100644
+--- a/internal/prompts/prompts.go
++++ b/internal/prompts/prompts.go
+@@ -109 +109 @@ func RoadmapParse(source, commit string) (string, error) {
+-func RoadmapDocuments(commit, source string) (string, error) {
++func RoadmapDocuments(commit, source, key string) (string, error) {
+@@ -113 +113,4 @@ func RoadmapDocuments(commit, source string) (string, error) {
+-	return render("roadmap-documents", struct{ Source, Commit string }{source, commit})
++	if strings.TrimSpace(key) == "" {
++		return "", errors.New("target task key is required")
++	}
++	return render("roadmap-documents", struct{ Source, Commit, Key string }{source, commit, key})
+diff --git a/internal/prompts/prompts_test.go b/internal/prompts/prompts_test.go
+index 0ccc1c55..aab0b5a5 100644
+--- a/internal/prompts/prompts_test.go
++++ b/internal/prompts/prompts_test.go
+@@ -33 +33 @@ func TestPromptGovernanceGolden(t *testing.T) {
+-		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md") }},
++		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md", "T1") }},
+@@ -88 +88 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
+-		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md") }},
++		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md", "T1") }},
+@@ -109,2 +109,2 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
+-		{"roadmap-parse", "426c10f34a883e9066d3060bc06723bcf2823989e5cc74d78c50a3a3882738bb", RoadmapParseRules},
+-		{"roadmap-documents", "f7c7324cc046e3d9b44b504e7553b637351384184eb8d3a05c57b0bf796df66c", RoadmapDocumentRules},
++		{"roadmap-parse", "1d2162134517564ed644f5e655e571ba19ab7c45c98ecabbc353280bfb9f69cd", RoadmapParseRules},
++		{"roadmap-documents", "6f3f84fa253f40975f53f3f57defc04927230787947e015532c23fdb762e0511", RoadmapDocumentRules},
+diff --git a/internal/prompts/roadmap-documents.md b/internal/prompts/roadmap-documents.md
+index ba08a968..49e15c90 100644
+--- a/internal/prompts/roadmap-documents.md
++++ b/internal/prompts/roadmap-documents.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照并生成完整 Spec/Plan、tests及provides_tests ID数组和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。只返回原 schema 结果。
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照，只为目标内部代号 {{.Key}} 生成完整 Spec/Plan、tests及已确认的provides_tests ID数组和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。只返回原 schema 结果。
+diff --git a/internal/prompts/roadmap-parse.md b/internal/prompts/roadmap-parse.md
+index ae5410b3..14a3f6a8 100644
+--- a/internal/prompts/roadmap-parse.md
++++ b/internal/prompts/roadmap-parse.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。只返回原 schema 结果。
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 {{.Commit}} 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 {{.Source}}。同时读取固定项目入口 SteerlineFlow/environment-project.json 及其声明的测试材料，补齐coordination和每项provides_tests。只返回原 schema 结果。
+diff --git a/internal/prompts/testdata/roadmap-documents.golden.md b/internal/prompts/testdata/roadmap-documents.golden.md
+index 7361bb88..458f76a5 100644
+--- a/internal/prompts/testdata/roadmap-documents.golden.md
++++ b/internal/prompts/testdata/roadmap-documents.golden.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照并生成完整 Spec/Plan、tests及provides_tests ID数组和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。只返回原 schema 结果。
+\ No newline at end of file
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/confirmed-planning.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/environment-project.json 及其声明的项目材料、SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照，只为目标内部代号 T1 生成完整 Spec/Plan、tests及已确认的provides_tests ID数组和验收材料。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。只返回原 schema 结果。
+\ No newline at end of file
+diff --git a/internal/prompts/testdata/roadmap-parse.golden.md b/internal/prompts/testdata/roadmap-parse.golden.md
+index f45ae3d0..a5e4209b 100644
+--- a/internal/prompts/testdata/roadmap-parse.golden.md
++++ b/internal/prompts/testdata/roadmap-parse.golden.md
+@@ -1 +1 @@
+-先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。只返回原 schema 结果。
+\ No newline at end of file
++先读取本次固定文件材料 roadmap-inputs/source.md、roadmap-inputs/existing-task-graph.json、roadmap-inputs/existing-roadmap-source-map.json，以及固定提交 fixed 的 SteerlineFlow/Roadmap/parse-rules.md，解析任务与依赖。文件材料使用 Runner 给出的 file 路径；原草稿路径为 roadmap.md。同时读取固定项目入口 SteerlineFlow/environment-project.json 及其声明的测试材料，补齐coordination和每项provides_tests。只返回原 schema 结果。
+\ No newline at end of file
+diff --git a/internal/roadmap/documents.go b/internal/roadmap/documents.go
+index e3ca897e..d7aa9ef0 100644
+--- a/internal/roadmap/documents.go
++++ b/internal/roadmap/documents.go
+@@ -8,2 +7,0 @@ import (
+-	"github.com/erranliu/SteerLine/internal/prompts"
+-	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
+@@ -12,0 +11,3 @@ import (
++	"github.com/erranliu/SteerLine/internal/prompts"
++	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
++
+@@ -85,0 +87,3 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
++	if err = s.verifyPlanning(ctx, r, fixed.Commit); err != nil {
++		return r, err
++	}
+@@ -88,3 +92,3 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
+-		State: "queued", Runner: s.Build, Submission: "pending", Analysis: r.Analysis, ConfirmedDigest: r.ConfirmedDigest,
+-		CodeCommit: fixed.Commit, RepositoryTree: fixed.Tree, Materials: fixed.Materials, Documents: []model.Documents{}, Mapping: r.Mapping}
+-	_, err = TestCatalogue(r)
++		State: "queued", Runner: s.Build, Analysis: r.Analysis, ConfirmedDigest: r.ConfirmedDigest,
++		CodeCommit: fixed.Commit, RepositoryTree: fixed.Tree, Materials: fixed.Materials, Documents: []model.Documents{}, Mapping: r.Mapping, PlanningMaterials: r.PlanningMaterials}
++	err = validateProviders(r)
+@@ -122,18 +126,23 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
+-	instruction, err := prompts.RoadmapDocuments(r.CodeCommit, r.Source.Path)
+-	if err != nil {
+-		return r, err
+-	}
+-	input := runnercontract.GenerateRunInput{Title: "Roadmap Spec / Plan: " + r.Source.Path,
+-		Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
+-		Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
+-		Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit},
+-			Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(r)}}
+-	if err = catalog.ValidateRepositoryGenerate(input); err != nil {
+-		return r, err
+-	}
+-	payload, err := json.Marshal(input)
+-	if err != nil {
+-		return r, err
+-	}
+-	if len(payload) > 8<<20 {
+-		return r, errors.New("生成请求超过 Runner 完整输入上限")
++	for _, d := range model.PlannedDocuments(r) {
++		g := model.Generation{ID: Token(), Key: d.Key, CreatedAt: r.CreatedAt, State: "queued", Submission: "pending"}
++		r.Generations = append(r.Generations, g)
++		view := r.Execution(g)
++		instruction, err := prompts.RoadmapDocuments(r.CodeCommit, r.Source.Path, d.Key)
++		if err != nil {
++			return r, err
++		}
++		input := runnercontract.GenerateRunInput{Title: "Roadmap Spec / Plan: " + d.Key,
++			Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
++			Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
++			Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit}, Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(view)}}
++		if err = catalog.ValidateRepositoryGenerate(input); err != nil {
++			return r, err
++		}
++		payload, err := json.Marshal(input)
++		if err != nil {
++			return r, err
++		}
++		if len(payload) > 8<<20 {
++			return r, errors.New("生成请求超过 Runner 完整输入上限")
++		}
++		r.Generations[len(r.Generations)-1].Request = runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}
+@@ -141 +150 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
+-	r.Request = runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}
++
+@@ -146 +155 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
+-	return s.dispatch(ctx, r)
++	return r, nil
+diff --git a/internal/roadmap/documents_test.go b/internal/roadmap/documents_test.go
+index 0a7cd53a..7ef25d1c 100644
+--- a/internal/roadmap/documents_test.go
++++ b/internal/roadmap/documents_test.go
+@@ -51 +51,3 @@ func documentPlanningSetup(t *testing.T, confirmed bool) (*Service, *memoryRoadm
+-	raw, _ := json.Marshal(sampleAnalysis())
++	analysis := sampleAnalysis()
++	analysis.Tasks[0].ProvidesTests = []string{"new.content"}
++	raw, _ := json.Marshal(analysis)
+@@ -94 +96 @@ func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *
+-	if _, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
++	if _, err := startDocumentTest(s, ctx, parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
+@@ -98 +100 @@ func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *
+-	if err != nil || confirmed.State != "confirmed" || confirmed.ConfirmedDigest != model.ValueDigest(parent.Analysis) || confirmed.ConfirmationRequest == "" || confirmed.Revision != parent.Revision+1 {
++	if err != nil || confirmed.State != "confirmed" || confirmed.ConfirmedDigest != model.ConfirmationDigest(parent) || confirmed.ConfirmationRequest == "" || confirmed.Revision != parent.Revision+1 {
+@@ -105 +107 @@ func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *
+-	r, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("e", 32), confirmed.Revision)
++	r, err := startDocumentTest(s, ctx, parent.ID, strings.Repeat("e", 32), confirmed.Revision)
+@@ -109 +111 @@ func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *
+-	if _, err = s.GenerateDocuments(ctx, parent.ID, r.RequestID, confirmed.Revision); err != nil || f.submits != 2 {
++	if _, err = startDocumentTest(s, ctx, parent.ID, r.RequestID, confirmed.Revision); err != nil || f.submits != 3 {
+@@ -119 +121 @@ func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *
+-	if _, err = s.GenerateDocuments(ctx, parent.ID, strings.Repeat("f", 32), confirmed.Revision); err != nil || f.submits != 3 {
++	if _, err = startDocumentTest(s, ctx, parent.ID, strings.Repeat("f", 32), confirmed.Revision); err != nil || f.submits != 5 {
+@@ -129 +131 @@ func TestRoadmapDocumentsConfirmationGuards(t *testing.T) {
+-	for _, guard := range []string{"revision", "source", "graph", "questions", "unsettled"} {
++	for _, guard := range []string{"revision", "source", "graph", "questions", "unsettled", "materials"} {
+@@ -133,0 +136,2 @@ func TestRoadmapDocumentsConfirmationGuards(t *testing.T) {
++			case "materials":
++				f.files["quality/cases.json"] = append(f.files["quality/cases.json"], ' ')
+@@ -150 +154 @@ func TestRoadmapDocumentsConfirmationGuards(t *testing.T) {
+-			if _, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), expected); err == nil {
++			if _, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), expected); err == nil {
+@@ -168,0 +173,9 @@ func documentResult(r model.Record) (model.GeneratedDocuments, *runnercontract.R
++	if r.GenerationID != "" {
++		selected := []model.Documents{}
++		for _, d := range out.Documents {
++			if d.Key == r.TargetKey() {
++				selected = append(selected, d)
++			}
++		}
++		out.Documents = selected
++	}
+@@ -180 +193 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
+-	r, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
++	r, err := startDocumentTest(s, ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
+@@ -198 +211 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
+-	if _, err = s.GenerateDocuments(ctx, parent.ID, r.RequestID, parent.Revision); err != nil || f.submits != 2 {
++	if _, err = startDocumentTest(s, ctx, parent.ID, r.RequestID, parent.Revision); err != nil || f.submits != 3 {
+@@ -245 +258 @@ func TestRoadmapFutureTestsRequireUniqueStrictPredecessor(t *testing.T) {
+-	r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
++	r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+@@ -261 +274 @@ func TestRoadmapFutureTestsRequireUniqueStrictPredecessor(t *testing.T) {
+-	if err := json.Unmarshal(r.Request.Input, &input); err != nil {
++	if err := json.Unmarshal(r.Generations[0].Request.Input, &input); err != nil {
+@@ -294 +307 @@ func TestRoadmapDocumentOutputRejectsMismatchesAndSupportsQuestions(t *testing.T
+-	r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
++	r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+@@ -297,0 +311 @@ func TestRoadmapDocumentOutputRejectsMismatchesAndSupportsQuestions(t *testing.T
++	r = r.Execution(r.Generations[0])
+@@ -299 +313 @@ func TestRoadmapDocumentOutputRejectsMismatchesAndSupportsQuestions(t *testing.T
+-		func(o *model.GeneratedDocuments, _ *runnercontract.RepositorySource) { o.Documents = o.Documents[:1] },
++		func(o *model.GeneratedDocuments, _ *runnercontract.RepositorySource) { o.Documents = o.Documents[:0] },
+@@ -336 +350 @@ func TestRoadmapDocumentsUnknownAndLateStopNeverResubmits(t *testing.T) {
+-	r, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
++	r, err := startDocumentTest(s, ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
+@@ -355,0 +370,11 @@ func TestRoadmapDocumentsDoNotSubmitWithoutCapabilityOrGuidelines(t *testing.T)
++	t.Run("changed-confirmed-material", func(t *testing.T) {
++		s, store, f, parent := documentSetup(t)
++		f.files["quality/cases.json"] = append(f.files["quality/cases.json"], ' ')
++		if _, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
++			t.Fatal("changed planning material accepted")
++		}
++		if f.submits != 1 || len(store.rows) != 1 {
++			t.Fatal("material conflict created work")
++		}
++	})
++
+@@ -371 +396 @@ func TestRoadmapDocumentsDoNotSubmitWithoutCapabilityOrGuidelines(t *testing.T)
+-			if _, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
++			if _, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
+@@ -383 +408 @@ func TestRoadmapDocumentInvestigationSeparatesInputFiles(t *testing.T) {
+-	r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
++	r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+@@ -386,0 +412 @@ func TestRoadmapDocumentInvestigationSeparatesInputFiles(t *testing.T) {
++	r = r.Execution(r.Generations[0])
+@@ -424 +450 @@ func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
+-			r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
++			r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+@@ -481,0 +508,8 @@ func TestRoadmapDocumentTestsUseFrozenCatalogue(t *testing.T) {
++
++func startDocumentTest(s *Service, ctx context.Context, parent, request string, version uint64) (model.Record, error) {
++	r, err := s.GenerateDocuments(ctx, parent, request, version)
++	if err != nil {
++		return r, err
++	}
++	return s.Observe(ctx, r.ID)
++}
+diff --git a/internal/roadmap/generation.go b/internal/roadmap/generation.go
+index ee373e64..396eb983 100644
+--- a/internal/roadmap/generation.go
++++ b/internal/roadmap/generation.go
+@@ -66,0 +67,3 @@ func (s *Service) save(ctx context.Context, r model.Record) (model.Record, error
++	if r.GenerationID != "" {
++		return s.saveGeneration(ctx, r)
++	}
+@@ -77 +80,3 @@ func (s *Service) track(r model.Record) {
+-		s.Queue.UpdateContent(s.Project, "roadmap:"+r.ID, r.CreatedAt, r.Submission != "pending", r.Settled())
++		for _, v := range r.Executions() {
++			s.Queue.UpdateContent(s.Project, queueID(v), v.CreatedAt, v.Submission != "pending", v.Settled())
++		}
+@@ -148,0 +154,5 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
++	planning, err := s.planningMaterials(ctx, source.Head)
++	if err != nil {
++		return model.Record{}, err
++	}
++	materials = append(materials, planning...)
+@@ -167 +177 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
+-	r := model.Record{ID: in.RequestID, RequestID: in.RequestID, Project: s.Project, Revision: 1, Source: source, Existing: graph, GraphDigest: model.GraphDigest(graph), Profile: in.Profile, CreatedAt: time.Now().UTC(), State: "queued", Runner: s.Build, Submission: "pending", CodeCommit: source.Head, Materials: materials, Documents: []model.Documents{}, Mapping: mapping, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}}
++	r := model.Record{ID: in.RequestID, RequestID: in.RequestID, Project: s.Project, Revision: 1, Source: source, Existing: graph, GraphDigest: model.GraphDigest(graph), Profile: in.Profile, CreatedAt: time.Now().UTC(), State: "queued", Runner: s.Build, Submission: "pending", CodeCommit: source.Head, Materials: materials, PlanningMaterials: materials, Documents: []model.Documents{}, Mapping: mapping, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}}
+@@ -186 +196 @@ func (s *Service) dispatch(ctx context.Context, r model.Record) (model.Record, e
+-	if s.Queue != nil && !s.Queue.AcquireContent(s.Project, "roadmap:"+r.ID) {
++	if s.Queue != nil && !s.Queue.AcquireContent(s.Project, queueID(r)) {
+@@ -195,0 +206,3 @@ func (s *Service) dispatch(ctx context.Context, r model.Record) (model.Record, e
++	if r.Cancelled {
++		return r, nil
++	}
+@@ -223,2 +236,4 @@ func (s *Service) ObserveNext(ctx context.Context) error {
+-		if !r.ObservationComplete() {
+-			pending = append(pending, r)
++		for _, v := range r.Executions() {
++			if !v.ObservationComplete() {
++				pending = append(pending, v)
++			}
+@@ -249,0 +265,3 @@ func (s *Service) Observe(ctx context.Context, id string) (model.Record, error)
++	if r.Purpose == "documents" {
++		return s.driveDocuments(ctx, r)
++	}
+@@ -382,0 +401,5 @@ func (s *Service) observe(ctx context.Context, r model.Record) (out model.Record
++					if err := validateProviders(r); err != nil {
++						r.State = "invalid"
++						r.Diagnostic = err.Error()
++						return s.save(ctx, r)
++					}
+@@ -417,0 +441,3 @@ func (s *Service) Confirm(ctx context.Context, id, request string, expected uint
++	if e = s.verifyPlanning(ctx, r, source.Head); e != nil {
++		return r, e
++	}
+@@ -487 +513 @@ func ParseSchema() json.RawMessage {
+-	required := []string{"local_key", "key_origin", "title", "goal", "scope", "constraints", "acceptance", "evidence", "original_dependencies", "proposed_dependencies", "reason", "existing_task_id"}
++	required := []string{"local_key", "key_origin", "title", "goal", "scope", "constraints", "acceptance", "evidence", "original_dependencies", "proposed_dependencies", "reason", "existing_task_id", "provides_tests"}
+@@ -494,0 +521 @@ func ParseSchema() json.RawMessage {
++	properties["provides_tests"] = map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}}
+@@ -497 +524 @@ func ParseSchema() json.RawMessage {
+-	schema := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"tasks", "questions", "overlap"}, "properties": map[string]any{"tasks": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}}, "questions": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "overlap": map[string]string{"type": "string"}}}
++	schema := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"tasks", "questions", "overlap", "coordination"}, "properties": map[string]any{"tasks": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}}, "questions": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "overlap": map[string]string{"type": "string"}, "coordination": map[string]any{"type": "string", "minLength": 1}}}
+diff --git a/internal/roadmap/roadmap_test.go b/internal/roadmap/roadmap_test.go
+index cf86353c..08a3c45f 100644
+--- a/internal/roadmap/roadmap_test.go
++++ b/internal/roadmap/roadmap_test.go
+@@ -21 +21 @@ func sampleAnalysis() model.Analysis {
+-	return model.Analysis{Tasks: []model.Node{
++	return model.Analysis{Coordination: "Reuse the declared owners and confirmed dependency handoffs.", Tasks: []model.Node{
+@@ -158 +158,2 @@ func TestRoadmapDocumentsRequireCompleteVerifiedSafeSet(t *testing.T) {
+-		r := model.Record{Analysis: &a, ConfirmedDigest: model.ValueDigest(a), CodeCommit: strings.Repeat("a", 40), DocumentsVerified: true}
++		r := model.Record{Analysis: &a, CodeCommit: strings.Repeat("a", 40), DocumentsVerified: true}
++		r.ConfirmedDigest = model.ConfirmationDigest(r)
+@@ -241,0 +243 @@ type roadmapRunner struct {
++	requestsByRun            map[string]runnercontract.Request
+@@ -322,0 +325,7 @@ func (f *roadmapRunner) Submit(_ context.Context, r runnercontract.Request) (run
++	if f.requestsByRun == nil {
++		f.requestsByRun = map[string]runnercontract.Request{}
++	}
++	if strings.HasPrefix(in.Title, "Roadmap Spec / Plan:") {
++		f.run.RunID = "doc-run-" + r.RequestID
++	}
++	f.requestsByRun[f.run.RunID] = r
+@@ -333 +342,14 @@ func (f *roadmapRunner) Inspect(_ context.Context, selector, id string) (runnerc
+-	if selector == "request-id" && id != f.request.RequestID {
++	request := f.request
++	runID := id
++	if selector == "request-id" {
++		runID = ""
++		for key, q := range f.requestsByRun {
++			if q.RequestID == id {
++				runID = key
++				request = q
++			}
++		}
++	} else if q, ok := f.requestsByRun[id]; ok {
++		request = q
++	}
++	if runID == "" {
+@@ -336,0 +359 @@ func (f *roadmapRunner) Inspect(_ context.Context, selector, id string) (runnerc
++	r.RunID = runID
+@@ -344,0 +368,15 @@ func (f *roadmapRunner) Inspect(_ context.Context, selector, id string) (runnerc
++		var input runnercontract.GenerateRunInput
++		_ = json.Unmarshal(request.Input, &input)
++		if strings.HasPrefix(input.Title, "Roadmap Spec / Plan:") && len(copy.JSON) > 0 {
++			var out model.GeneratedDocuments
++			_ = json.Unmarshal(copy.JSON, &out)
++			key := strings.TrimPrefix(input.Title, "Roadmap Spec / Plan: ")
++			docs := []model.Documents{}
++			for _, d := range out.Documents {
++				if d.Key == key {
++					docs = append(docs, d)
++				}
++			}
++			out.Documents = docs
++			copy.JSON, _ = json.Marshal(out)
++		}
+@@ -347 +385 @@ func (f *roadmapRunner) Inspect(_ context.Context, selector, id string) (runnerc
+-	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &r.RunID}}, nil
++	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: request.RequestID, RunID: &r.RunID}}, nil
+@@ -350 +388 @@ func (f *roadmapRunner) Call(_ context.Context, command string, args []string, _
+-	if command != "stop" || len(args) != 2 || args[1] != f.run.RunID {
++	if command != "stop" || len(args) != 2 || f.requestsByRun[args[1]].RequestID == "" {
+@@ -354 +392 @@ func (f *roadmapRunner) Call(_ context.Context, command string, args []string, _
+-	b, _ := json.Marshal(runnerclient.Receipt{RunID: f.run.RunID, CommandID: "stop", ReceiptStatus: "accepted"})
++	b, _ := json.Marshal(runnerclient.Receipt{RunID: args[1], CommandID: "stop", ReceiptStatus: "accepted"})
+@@ -380 +418,3 @@ func generationSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, P
+-	files := map[string][]byte{ParseRulesPath: rules}
++	files := map[string][]byte{ParseRulesPath: rules,
++		"SteerlineFlow/environment-project.json": []byte(`{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`),
++		"quality/cases.json":                     []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)}
+@@ -436 +476 @@ func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
+-				len(request.Generate.Repository.Paths) != 1 || request.Generate.Repository.Paths[0] != ParseRulesPath {
++				len(request.Generate.Repository.Paths) != 3 || request.Generate.Repository.Paths[0] != ParseRulesPath {
+@@ -452 +492 @@ func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
+-			if len(peer.files) != 1 {
++			if len(peer.files) != 3 {

@@ -18,7 +18,7 @@ import (
 )
 
 func sampleAnalysis() model.Analysis {
-	return model.Analysis{Tasks: []model.Node{
+	return model.Analysis{Coordination: "Reuse the declared owners and confirmed dependency handoffs.", Tasks: []model.Node{
 		{Key: "Alpha", KeyOrigin: "markdown", Title: "控制候选", Goal: "控制", Scope: "当前候选", Acceptance: "停止完成", Evidence: "Alpha 控制候选", Original: model.Dependencies{Local: []string{}, Formal: []string{"8"}}, Proposed: model.Dependencies{Local: []string{}, Formal: []string{"8"}}},
 		{Key: "Beta", KeyOrigin: "markdown", Title: "显示状态", Goal: "显示", Scope: "状态面板", Acceptance: "归属正确", Evidence: "Beta 显示状态", Original: model.Dependencies{Local: []string{"Alpha"}, Formal: []string{}}, Proposed: model.Dependencies{Local: []string{"Alpha"}, Formal: []string{}}},
 	}, Questions: []string{}, Overlap: "不与已有调度重复"}
@@ -155,7 +155,8 @@ func TestRoadmapPublishedLocalIdentityCannotBeReallocated(t *testing.T) {
 func TestRoadmapDocumentsRequireCompleteVerifiedSafeSet(t *testing.T) {
 	makeRecord := func() model.Record {
 		a := sampleAnalysis()
-		r := model.Record{Analysis: &a, ConfirmedDigest: model.ValueDigest(a), CodeCommit: strings.Repeat("a", 40), DocumentsVerified: true}
+		r := model.Record{Analysis: &a, CodeCommit: strings.Repeat("a", 40), DocumentsVerified: true}
+		r.ConfirmedDigest = model.ConfirmationDigest(r)
 		for _, n := range a.Tasks {
 			r.Documents = append(r.Documents, model.Documents{Key: n.Key, Tests: []string{},
 				Spec:       model.Document{Path: "SteerlineFlow/spec/" + n.Key + ".spec.md", Body: "# Spec"},
@@ -239,6 +240,7 @@ func (m *memoryRoadmaps) SaveRoadmap(_ context.Context, r model.Record, expected
 }
 
 type roadmapRunner struct {
+	requestsByRun            map[string]runnercontract.Request
 	request                  runnercontract.Request
 	run                      runnercontract.Run
 	submits, stops, inspects int
@@ -320,6 +322,13 @@ func (f *roadmapRunner) Submit(_ context.Context, r runnercontract.Request) (run
 		}
 		f.run.RepositorySource = source
 	}
+	if f.requestsByRun == nil {
+		f.requestsByRun = map[string]runnercontract.Request{}
+	}
+	if strings.HasPrefix(in.Title, "Roadmap Spec / Plan:") {
+		f.run.RunID = "doc-run-" + r.RequestID
+	}
+	f.requestsByRun[f.run.RunID] = r
 	if f.lost {
 		return runnerclient.Receipt{}, &runnerclient.Failure{Unknown: true}
 	}
@@ -330,10 +339,24 @@ func (f *roadmapRunner) Inspect(_ context.Context, selector, id string) (runnerc
 	if f.hidden {
 		return runnerclient.Inspection{}, nil
 	}
-	if selector == "request-id" && id != f.request.RequestID {
+	request := f.request
+	runID := id
+	if selector == "request-id" {
+		runID = ""
+		for key, q := range f.requestsByRun {
+			if q.RequestID == id {
+				runID = key
+				request = q
+			}
+		}
+	} else if q, ok := f.requestsByRun[id]; ok {
+		request = q
+	}
+	if runID == "" {
 		return runnerclient.Inspection{}, errors.New("replacement request observed")
 	}
 	r := f.run
+	r.RunID = runID
 	if r.ContentResult != nil {
 		copy := *r.ContentResult
 		if copy.RepositorySource == nil {
@@ -342,16 +365,31 @@ func (f *roadmapRunner) Inspect(_ context.Context, selector, id string) (runnerc
 		if copy.FileMaterials == nil {
 			copy.FileMaterials = r.Materials
 		}
+		var input runnercontract.GenerateRunInput
+		_ = json.Unmarshal(request.Input, &input)
+		if strings.HasPrefix(input.Title, "Roadmap Spec / Plan:") && len(copy.JSON) > 0 {
+			var out model.GeneratedDocuments
+			_ = json.Unmarshal(copy.JSON, &out)
+			key := strings.TrimPrefix(input.Title, "Roadmap Spec / Plan: ")
+			docs := []model.Documents{}
+			for _, d := range out.Documents {
+				if d.Key == key {
+					docs = append(docs, d)
+				}
+			}
+			out.Documents = docs
+			copy.JSON, _ = json.Marshal(out)
+		}
 		r.ContentResult = &copy
 	}
-	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &r.RunID}}, nil
+	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: request.RequestID, RunID: &r.RunID}}, nil
 }
 func (f *roadmapRunner) Call(_ context.Context, command string, args []string, _ *runnercontract.Request) (runnerclient.Response, error) {
-	if command != "stop" || len(args) != 2 || args[1] != f.run.RunID {
+	if command != "stop" || len(args) != 2 || f.requestsByRun[args[1]].RequestID == "" {
 		return runnerclient.Response{}, errors.New("wrong stop")
 	}
 	f.stops++
-	b, _ := json.Marshal(runnerclient.Receipt{RunID: f.run.RunID, CommandID: "stop", ReceiptStatus: "accepted"})
+	b, _ := json.Marshal(runnerclient.Receipt{RunID: args[1], CommandID: "stop", ReceiptStatus: "accepted"})
 	return runnerclient.Response{Data: b}, nil
 }
 func generationSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, ParseInput) {
@@ -377,7 +415,9 @@ func generationSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, P
 	if e != nil {
 		t.Fatal(e)
 	}
-	files := map[string][]byte{ParseRulesPath: rules}
+	files := map[string][]byte{ParseRulesPath: rules,
+		"SteerlineFlow/environment-project.json": []byte(`{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`),
+		"quality/cases.json":                     []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)}
 	runner.files = files
 	s := &Service{Project: "p", Repository: t.TempDir(), ReadCommitted: func(_ context.Context, commit, path string) ([]byte, error) {
 		body, ok := files[path]
@@ -433,7 +473,7 @@ func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
 				t.Fatal(err)
 			}
 			if request.Generate.Repository == nil || len(request.Generate.Materials) != 3 ||
-				len(request.Generate.Repository.Paths) != 1 || request.Generate.Repository.Paths[0] != ParseRulesPath {
+				len(request.Generate.Repository.Paths) != 3 || request.Generate.Repository.Paths[0] != ParseRulesPath {
 				t.Fatal("static Git and dynamic files were mixed")
 			}
 			source := request.Generate.Materials[0]
@@ -449,7 +489,7 @@ func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
 			if request.Generate.Materials[1].Path != GraphPath || request.Generate.Materials[2].Path != MappingPath {
 				t.Fatal("dynamic owner data absent")
 			}
-			if len(peer.files) != 1 {
+			if len(peer.files) != 3 {
 				t.Fatal("dynamic data written to Git fixture")
 			}
 		})

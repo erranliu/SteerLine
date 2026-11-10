@@ -31,7 +31,7 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		}},
 		{"environment-repair", func() (string, error) { return EnvironmentRepair("SteerlineFlow/environment.md") }},
 		{"roadmap-parse", func() (string, error) { return RoadmapParse("roadmap.md", "fixed") }},
-		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md") }},
+		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md", "T1") }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -87,7 +87,7 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
 		{"missing-entry", func() (string, error) { return EnvironmentInvoke("powershell.exe", "") }},
 		{"missing-environment-document", func() (string, error) { return EnvironmentRepair("") }},
 		{"unsupported-interpreter", func() (string, error) { return EnvironmentInvoke("other", "entry") }},
-		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md") }},
+		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md", "T1") }},
 		{"missing-roadmap-source", func() (string, error) { return RoadmapParse("", "fixed") }},
 	}
 	for _, c := range cases {
@@ -108,8 +108,8 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 	}{
 		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
 		{"main-agent", "3a7a447bbe7527bf4c1c46867f9180cab32bc3b61359a92d9db9784172c38189", MainAgentRules},
-		{"roadmap-parse", "426c10f34a883e9066d3060bc06723bcf2823989e5cc74d78c50a3a3882738bb", RoadmapParseRules},
-		{"roadmap-documents", "f7c7324cc046e3d9b44b504e7553b637351384184eb8d3a05c57b0bf796df66c", RoadmapDocumentRules},
+		{"roadmap-parse", "1d2162134517564ed644f5e655e571ba19ab7c45c98ecabbc353280bfb9f69cd", RoadmapParseRules},
+		{"roadmap-documents", "6f3f84fa253f40975f53f3f57defc04927230787947e015532c23fdb762e0511", RoadmapDocumentRules},
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
 	}
 	for _, c := range cases {

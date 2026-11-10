@@ -147,6 +147,8 @@ export function DependencyReview({
                 <dd>{task.scope}</dd>
                 <dt>约束</dt>
                 <dd>{task.constraints || "未另列约束"}</dd>
+                <dt>新增测试提供</dt>
+                <dd>{task.provides_tests?.join("、") || "无新增"}</dd>
                 <dt>通过条件</dt>
                 <dd>{task.acceptance}</dd>
                 <dt>草稿原有依赖</dt>

@@ -119,7 +119,17 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 	return result, nil
 }
 
+type publicRoadmapGeneration struct {
+	roadmap.Generation
+	Settled        bool   `json:"settled"`
+	RunnerStatus   string `json:"runner_status,omitempty"`
+	ResumeRequired bool   `json:"resume_required"`
+	AttemptID      string `json:"attempt_id,omitempty"`
+	SessionID      string `json:"session_id,omitempty"`
+}
+
 type publicRoadmapRecord struct {
+	Generations []publicRoadmapGeneration `json:"generations,omitempty"`
 	roadmap.Record
 	Execution api.ExecutionReference `json:"execution_ref"`
 }
@@ -129,7 +139,20 @@ func publicRoadmap(r roadmap.Record) publicRoadmapRecord {
 	if r.Projection != nil {
 		ref.AttemptID = r.Projection.Execution.AttemptID
 	}
-	return publicRoadmapRecord{r, ref}
+	out := publicRoadmapRecord{Record: r, Execution: ref}
+	for _, g := range r.Generations {
+		v := publicRoadmapGeneration{Generation: g, Settled: r.Execution(g).Settled()}
+		if g.Projection != nil {
+			v.RunnerStatus = g.Projection.Status
+			v.ResumeRequired = g.Projection.ResumeRequired
+			if v.Diagnostic == "" {
+				v.Diagnostic = g.Projection.Diagnostic
+			}
+			v.AttemptID, v.SessionID = g.Projection.Execution.AttemptID, g.Projection.Execution.SessionID
+		}
+		out.Generations = append(out.Generations, v)
+	}
+	return out
 }
 
 func (p *roadmapPort) read(ctx context.Context, route string, values url.Values) (any, error) {
@@ -190,6 +213,16 @@ func (p *roadmapPort) read(ctx context.Context, route string, values url.Values)
 		records[i].Result = nil
 		records[i].Documents = nil
 		records[i].Materials = nil
+		records[i].PlanningMaterials = nil
+		for j := range records[i].Generations {
+			records[i].Generations[j].Result = nil
+			records[i].Generations[j].Document = nil
+			records[i].Generations[j].Investigation = nil
+		}
+	}
+	publicRecords := []publicRoadmapRecord{}
+	for _, r := range records {
+		publicRecords = append(publicRecords, publicRoadmap(r))
 	}
 	profiles := []map[string]string{}
 	for _, profile := range p.config.RunnerExecution.Profiles {
@@ -198,13 +231,13 @@ func (p *roadmapPort) read(ctx context.Context, route string, values url.Values)
 		}
 	}
 	return struct {
-		Sources            []roadmap.Source    `json:"sources"`
-		Records            []roadmap.Record    `json:"records"`
-		Profiles           []map[string]string `json:"profiles"`
-		DocumentsAvailable bool                `json:"documents_available"`
-		DocumentsReason    string              `json:"documents_reason"`
-		Preparation        roadmapPreparation  `json:"preparation"`
-	}{sources, records, profiles, p.config.runtimeCatalog.FileMaterialGenerationUnavailable() == "", p.config.runtimeCatalog.FileMaterialGenerationUnavailable(), p.preparation(ctx)}, nil
+		Sources            []roadmap.Source      `json:"sources"`
+		Records            []publicRoadmapRecord `json:"records"`
+		Profiles           []map[string]string   `json:"profiles"`
+		DocumentsAvailable bool                  `json:"documents_available"`
+		DocumentsReason    string                `json:"documents_reason"`
+		Preparation        roadmapPreparation    `json:"preparation"`
+	}{sources, publicRecords, profiles, p.config.runtimeCatalog.FileMaterialGenerationUnavailable() == "", p.config.runtimeCatalog.FileMaterialGenerationUnavailable(), p.preparation(ctx)}, nil
 }
 func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
 	out := maintenanceResponse(in)
@@ -215,11 +248,11 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 	if port == nil || p.actor == nil || !p.Server.Identity(ctx).Ready {
 		return out, projectStoppingError()
 	}
-	allowed := map[string]bool{"roadmap_prepare_static": true, "roadmap_parse": true, "roadmap_confirm": true, "roadmap_observe": true, "roadmap_stop": true, "roadmap_generate_documents": true, "roadmap_publish": true, "roadmap_edit_documents": true, "roadmap_admit": true, "roadmap_resume": true}
+	allowed := map[string]bool{"roadmap_prepare_static": true, "roadmap_parse": true, "roadmap_confirm": true, "roadmap_observe": true, "roadmap_stop": true, "roadmap_generate_documents": true, "roadmap_publish": true, "roadmap_edit_documents": true, "roadmap_admit": true, "roadmap_resume": true, "roadmap_retry_documents": true}
 	if !allowed[in.Action] {
 		return out, errors.New("unknown roadmap action")
 	}
-	if in.Action == "roadmap_generate_documents" {
+	if in.Action == "roadmap_generate_documents" || in.Action == "roadmap_retry_documents" {
 		port.generationMu.Lock()
 		defer port.generationMu.Unlock()
 	}
@@ -260,11 +293,21 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 		out.Status = "rejected"
 		out.Code = "roadmap_rejected"
 		out.Diagnostic = actionErr.Error()
-		if record, e := port.store.RoadmapRequest(context.WithoutCancel(ctx), port.config.Identity(), in.RequestID); e == nil && roadmapEffectPending(in.Action, record) {
-			out.Status = "outcome_unknown"
-			out.Code = "outcome_unknown"
+		if record, e := port.store.RoadmapRequest(context.WithoutCancel(ctx), port.config.Identity(), in.RequestID); e == nil {
+			if in.Action == "roadmap_generate_documents" || in.Action == "roadmap_retry_documents" {
+				// A read-back binding proves the atomic work intent was saved,
+				// even if its write receipt failed. Generation finishes separately.
+				out.Status, out.Code, out.Diagnostic = "applied", "", ""
+				out.Roadmap, _ = json.Marshal(publicRoadmap(record))
+			} else if roadmapEffectPending(in.Action, record) {
+				out.Status = "outcome_unknown"
+				out.Code = "outcome_unknown"
+			}
 		}
 	} else {
+		if record, ok := result.(roadmap.Record); ok {
+			result = publicRoadmap(record)
+		}
 		out.Roadmap, _ = json.Marshal(result)
 	}
 	command.Result, _ = json.Marshal(out)
@@ -346,6 +389,14 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 			return nil, e
 		}
 		return p.service.GenerateDocuments(ctx, r.ID, in.RequestID, in.ExpectedVersion)
+	case "roadmap_retry_documents":
+		var input struct {
+			Key string `json:"local_key"`
+		}
+		if e := decodeStrictJSON(in.Payload, &input); e != nil {
+			return nil, e
+		}
+		return p.service.RetryDocuments(ctx, r.ID, input.Key, in.RequestID, in.ExpectedVersion)
 	case "roadmap_edit_documents":
 		if r.State != "documents-review" || r.Publication != nil {
 			return nil, errors.New("只有未发布的文档生成结果可以修改")
@@ -421,7 +472,7 @@ func (p *runtimeProjectPort) roadmapReceipt(ctx context.Context, id string) (*ht
 	if err = json.Unmarshal(old.Payload, &envelope); err != nil {
 		return nil, err
 	}
-	if envelope.Action == "roadmap_generate_documents" {
+	if envelope.Action == "roadmap_generate_documents" || envelope.Action == "roadmap_retry_documents" {
 		p.config.runtimeRoadmaps.generationMu.Lock()
 		defer p.config.runtimeRoadmaps.generationMu.Unlock()
 	}
@@ -453,7 +504,7 @@ func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string
 	if out.Status == "outcome_unknown" || old.Status == "pending" {
 		r, e := p.config.runtimeRoadmaps.store.RoadmapRequest(ctx, p.config.Identity(), id)
 		if e == nil {
-			out.Roadmap, _ = json.Marshal(r)
+			out.Roadmap, _ = json.Marshal(publicRoadmap(r))
 			if !roadmapEffectPending(envelope.Action, r) {
 				out.Status = "applied"
 				out.Code = ""
@@ -461,6 +512,15 @@ func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string
 			}
 		} else if !errors.Is(e, roadmap.ErrNotFound) {
 			return nil, e
+		} else if envelope.Action == "roadmap_retry_documents" {
+			// generationMu excludes an append still being committed. No request
+			// binding proves this retry created no executable work.
+			out.Status, out.Code, out.Diagnostic = "rejected", "roadmap_retry_not_submitted", "单任务重生成尚未提交，请刷新后重试"
+			old.Result, _ = json.Marshal(out)
+			old.Status, old.UpdatedAt = out.Status, time.Now().UTC()
+			if err := p.store.UpdateCommand(ctx, old); err != nil {
+				return nil, err
+			}
 		} else if envelope.Action == "roadmap_generate_documents" {
 			// The generation lock excludes a command still preparing its child.
 			// A saved confirmation without a child proves generation was not submitted.
@@ -472,7 +532,7 @@ func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string
 			if err == nil && parent.ID == envelope.TargetID && parent.Purpose != "documents" && parent.State == "confirmed" && parent.ConfirmationRequest == confirmation && parent.ConfirmedDigest != "" {
 				out.Status, out.Code = "rejected", "roadmap_generation_not_submitted"
 				out.Diagnostic = "任务与依赖已确认，文档生成尚未提交，请重试生成 Spec / Plan"
-				out.Roadmap, _ = json.Marshal(parent)
+				out.Roadmap, _ = json.Marshal(publicRoadmap(parent))
 				old.Result, _ = json.Marshal(out)
 				old.Status, old.UpdatedAt = out.Status, time.Now().UTC()
 				if err := p.store.UpdateCommand(ctx, old); err != nil {
@@ -486,6 +546,9 @@ func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string
 
 func roadmapEffectPending(action string, r roadmap.Record) bool {
 	switch action {
+	case "roadmap_generate_documents", "roadmap_retry_documents":
+		// The original command creates durable work; model completion is observed separately.
+		return false
 	case "roadmap_publish":
 		return r.Publication != nil && r.State != "awaiting-merge" && r.State != "awaiting-admission" && r.State != "admitted"
 	case "roadmap_admit":

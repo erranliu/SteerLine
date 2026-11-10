@@ -12,7 +12,11 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { WorkspaceContext, type Workspace } from "../../app/context";
 import { useWorkspace } from "../../app/context";
 import { useOriginalRequests } from "../../app/use-original-requests";
-import { currentRoadmapRecord, roadmapProgress } from "./workflow";
+import {
+  contentPending,
+  currentRoadmapRecord,
+  roadmapProgress,
+} from "./workflow";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
 import type { Envelope, StoredRequest } from "../../shared/api/types";
@@ -1107,4 +1111,163 @@ it("copies the in-flight request before a journal row exists instead of a previo
   expect(writeText.mock.calls[0][0]).toContain("请求 ID：new-pending");
   expect(writeText.mock.calls[0][0]).toContain("Runner 运行待核实");
   client.clear();
+});
+
+it("retries only the settled current task and blocks duplicate clicks while siblings run", async () => {
+  const { submit, record } = setup(
+    "accepted",
+    true,
+    [],
+    (_view, r) => {
+      r.purpose = "documents";
+      r.analysis!.coordination = "T1 固定接口，T2 按依赖消费";
+      r.generations = [
+        {
+          generation_id: "old",
+          local_key: "T1",
+          created_at: r.created_at,
+          state: "failed",
+          settled: true,
+        },
+        {
+          generation_id: "current",
+          local_key: "T1",
+          created_at: r.created_at,
+          state: "invalid",
+          settled: true,
+          diagnostic: "invalid_json: trailing",
+        },
+        {
+          generation_id: "sibling",
+          local_key: "T2",
+          created_at: r.created_at,
+          state: "accepted",
+          settled: false,
+          runner_status: "running",
+        },
+        {
+          generation_id: "completed",
+          local_key: "T4",
+          created_at: r.created_at,
+          state: "documents-review",
+          settled: true,
+          document: {
+            local_key: "T4",
+            spec: { path: "spec.md", body: "# 成功项 Spec" },
+            plan: { path: "plan.md", body: "# 成功项 Plan" },
+            tests: ["fixture.unit"],
+            provides_tests: [],
+            acceptance: [{ path: "acceptance.md", body: "# 成功项验收待执行" }],
+          },
+        },
+        {
+          generation_id: "closing",
+          local_key: "T3",
+          created_at: r.created_at,
+          state: "failed",
+          settled: false,
+        },
+      ];
+    },
+    true,
+  );
+  submit.mockImplementation(() => new Promise(() => {}) as never);
+  const section = await screen.findByRole("region", { name: "逐任务文档生成" });
+  expect(within(section).getAllByRole("heading", { level: 3 })).toHaveLength(4);
+  expect(within(section).getByText("生成中")).toBeVisible();
+  expect(screen.getByText(/协作安排：T1 固定接口/)).toBeVisible();
+  fireEvent.click(within(section).getByText("预览已生成正文"));
+  expect(within(section).getByText("# 成功项验收待执行")).toBeVisible();
+  expect(within(section).getByText(/fixture.unit/)).toBeVisible();
+  const retry = within(section).getByRole("button", { name: "重新生成 T1" });
+  expect(
+    within(section).getByRole("button", { name: "重新生成 T3" }),
+  ).toBeDisabled();
+  await waitFor(() => expect(retry).toBeEnabled());
+  fireEvent.click(retry);
+  fireEvent.click(retry);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  expect(submit.mock.calls[0][0]).toMatchObject({
+    action: "roadmap_retry_documents",
+    target_id: record.id,
+    expected_version: 3,
+    payload: { local_key: "T1" },
+  });
+  expect(retry).toBeDisabled();
+});
+
+it("continues observing a cancelled batch until every original execution settles", () => {
+  const r = {
+    state: "cancelled",
+    cancelled: true,
+    generations: [{ state: "failed", settled: false }],
+  } as RoadmapRecord;
+  expect(contentPending(r)).toBe(true);
+  r.generations![0].settled = true;
+  expect(contentPending(r)).toBe(false);
+});
+
+it("shows adopted review text throughout publication without redisplaying original generation bodies", async () => {
+  setup("publishing", true, [], (_view, r) => {
+    r.purpose = "documents";
+    const document = {
+      local_key: "T1",
+      spec: { path: "spec.md", body: "# 审阅后正文" },
+      plan: { path: "plan.md", body: "# Plan" },
+      tests: [],
+      provides_tests: [],
+      acceptance: [{ path: "acceptance.md", body: "# 验收" }],
+    };
+    r.documents = [document];
+    r.generations = [
+      {
+        generation_id: "generation",
+        local_key: "T1",
+        created_at: r.created_at,
+        state: "documents-review",
+        settled: true,
+        document: {
+          ...document,
+          spec: { path: "spec.md", body: "# 原始生成正文" },
+        },
+      },
+    ];
+  });
+  const section = await screen.findByRole("region", { name: "逐任务文档生成" });
+  expect(within(section).queryByText("预览已生成正文")).toBeNull();
+  expect(await screen.findByText("# 审阅后正文")).toBeVisible();
+  expect(screen.queryByText("# 原始生成正文")).toBeNull();
+});
+
+it("distinguishes accepted native queue, blocked, external, finalizing and resume states", async () => {
+  setup("accepted", true, [], (_view, r) => {
+    r.purpose = "documents";
+    r.generations = [
+      "queued",
+      "blocked",
+      "waiting_input",
+      "waiting_external",
+      "completed",
+      "running",
+    ].map((runner_status, i) => ({
+      generation_id: `g-${i}`,
+      local_key: `T${i}`,
+      created_at: r.created_at,
+      state: "accepted",
+      settled: false,
+      runner_status,
+      resume_required: i === 5,
+    }));
+  });
+  const section = await screen.findByRole("region", { name: "逐任务文档生成" });
+  for (const label of [
+    "排队中",
+    "生成受阻，需处理",
+    "等待输入处理",
+    "等待外部结果",
+    "结果收尾中",
+    "执行需要恢复核实",
+  ])
+    expect(within(section).getByText(label, { exact: true })).toBeVisible();
+  expect(within(section).queryByText("生成中", { exact: true })).toBeNull();
 });

@@ -49,23 +49,25 @@ type Dependencies struct {
 	Formal []string `json:"formal"`
 }
 type Node struct {
-	Key         string       `json:"local_key"`
-	KeyOrigin   string       `json:"key_origin"`
-	Title       string       `json:"title"`
-	Goal        string       `json:"goal"`
-	Scope       string       `json:"scope"`
-	Constraints string       `json:"constraints"`
-	Acceptance  string       `json:"acceptance"`
-	Evidence    string       `json:"evidence"`
-	Original    Dependencies `json:"original_dependencies"`
-	Proposed    Dependencies `json:"proposed_dependencies"`
-	Reason      string       `json:"reason"`
-	ExistingID  string       `json:"existing_task_id"`
+	ProvidesTests []string     `json:"provides_tests"`
+	Key           string       `json:"local_key"`
+	KeyOrigin     string       `json:"key_origin"`
+	Title         string       `json:"title"`
+	Goal          string       `json:"goal"`
+	Scope         string       `json:"scope"`
+	Constraints   string       `json:"constraints"`
+	Acceptance    string       `json:"acceptance"`
+	Evidence      string       `json:"evidence"`
+	Original      Dependencies `json:"original_dependencies"`
+	Proposed      Dependencies `json:"proposed_dependencies"`
+	Reason        string       `json:"reason"`
+	ExistingID    string       `json:"existing_task_id"`
 }
 type Analysis struct {
-	Tasks     []Node   `json:"tasks"`
-	Questions []string `json:"questions"`
-	Overlap   string   `json:"overlap"`
+	Coordination string   `json:"coordination"`
+	Tasks        []Node   `json:"tasks"`
+	Questions    []string `json:"questions"`
+	Overlap      string   `json:"overlap"`
 }
 type Document struct {
 	Path string `json:"path"`
@@ -92,6 +94,10 @@ type Publication struct {
 	Diagnostic   string `json:"diagnostic,omitempty"`
 }
 type Record struct {
+	Generations []Generation `json:"generations,omitempty"`
+	// GenerationID selects a transient single-execution view, never stored.
+	GenerationID        string                    `json:"-"`
+	PlanningMaterials   []runnercontract.Document `json:"planning_materials,omitempty"`
 	Purpose             string                    `json:"purpose"`
 	ParentID            string                    `json:"parent_id,omitempty"`
 	RepositoryTree      string                    `json:"repository_tree,omitempty"`
@@ -137,6 +143,7 @@ type Record struct {
 // Stored keeps transport bindings private while public records remain readable.
 type Stored struct {
 	Record
+	Generations []StoredGeneration      `json:"generations,omitempty"`
 	Runner      runnercontract.BuildPin `json:"runner"`
 	Request     runnercontract.Request  `json:"runner_request"`
 	Submission  string                  `json:"submission"`
@@ -145,7 +152,11 @@ type Stored struct {
 }
 
 func StoreValue(r Record) Stored {
-	return Stored{r, r.Runner, r.Request, r.Submission, r.Projection, r.StopRequest}
+	s := Stored{Record: r, Runner: r.Runner, Request: r.Request, Submission: r.Submission, Projection: r.Projection, StopRequest: r.StopRequest}
+	for _, g := range r.Generations {
+		s.Generations = append(s.Generations, StoredGeneration{Generation: g, Result: g.Result, Request: g.Request, Projection: g.Projection, StopRequest: g.StopRequest})
+	}
+	return s
 }
 func (s Stored) Value() Record {
 	r := s.Record
@@ -154,6 +165,13 @@ func (s Stored) Value() Record {
 	r.Submission = s.Submission
 	r.Projection = s.Projection
 	r.StopRequest = s.StopRequest
+	r.Generations = nil
+	for _, g := range s.Generations {
+		v := g.Generation
+		v.Result = g.Result
+		v.Request, v.Projection, v.StopRequest = g.Request, g.Projection, g.StopRequest
+		r.Generations = append(r.Generations, v)
+	}
 	return r
 }
 func Digest(b []byte) string                   { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
@@ -213,6 +231,9 @@ func DecodeAnalysis(raw []byte, source Source, graph []Existing) (Analysis, erro
 // ValidateAnalysis also resolves local aliases of formal Tasks before admission.
 // Original references remain available for review; only proposed edges normalize.
 func ValidateAnalysis(a Analysis, source Source, graph []Existing) (Analysis, error) {
+	if strings.TrimSpace(a.Coordination) == "" {
+		return a, errors.New("缺少整批协作安排")
+	}
 	a.Tasks = append([]Node(nil), a.Tasks...)
 	if len(a.Tasks) == 0 {
 		return a, errors.New("未识别到可独立交付的任务，请在外部补充 Markdown")
@@ -415,6 +436,14 @@ func ValidateSourceMapping(a Analysis, mapping map[string]string) error {
 	return nil
 }
 func (r Record) Settled() bool {
+	if r.Purpose == "documents" && r.GenerationID == "" {
+		for _, g := range r.Generations {
+			if !r.Execution(g).Settled() {
+				return false
+			}
+		}
+		return true
+	}
 	if r.Submission == "pending" {
 		return r.Cancelled || r.State == "rejected"
 	}
@@ -422,6 +451,14 @@ func (r Record) Settled() bool {
 }
 func (r Record) ObservationComplete() bool {
 	if r.Purpose == "documents" {
+		if r.GenerationID == "" {
+			for _, g := range r.Generations {
+				if !r.Execution(g).ObservationComplete() {
+					return false
+				}
+			}
+			return true
+		}
 		return r.Settled() && (r.Cancelled || len(r.Result) > 0 || r.State == "failed" || r.State == "invalid" || r.State == "rejected")
 	}
 	return r.Settled() && (r.Cancelled || r.Analysis != nil || r.State == "failed" || r.State == "invalid" || r.State == "rejected")
@@ -436,7 +473,7 @@ func Confirm(r Record, source Source, graph []Existing, request string) (Record,
 	if _, err := ValidateAnalysis(*r.Analysis, r.Source, graph); err != nil {
 		return r, err
 	}
-	r.ConfirmedDigest = ValueDigest(r.Analysis)
+	r.ConfirmedDigest = ConfirmationDigest(r)
 	r.ConfirmationRequest = request
 	r.State = "confirmed"
 	return r, nil
