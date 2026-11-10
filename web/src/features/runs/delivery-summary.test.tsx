@@ -40,33 +40,33 @@ const observation: NonNullable<Candidate["runner_delivery"]> = {
   ],
 };
 
-it("separates accepted commands, PR readiness and unsettled resources with no I/O", () => {
-  const request = vi.spyOn(globalThis, "fetch");
+it("keeps PR, native completion, command acceptance and cleanup independent without I/O", () => {
+  const fetch = vi.spyOn(globalThis, "fetch");
   const original = { ...run, runner_delivery: structuredClone(observation) };
   const before = JSON.stringify(original);
   const view = render(<DeliverySummary run={original} />);
-  expect(screen.getByText("请求受理 · 已受理")).toBeVisible();
-  expect(screen.getByText("业务结果 · PR 已就绪")).toBeVisible();
+  expect(screen.getByText("待合并")).toBeVisible();
+  expect(
+    screen.getByText("原生执行 · 本轮成功 · 最终输出已核实"),
+  ).toBeVisible();
   expect(screen.getByText("资源停止 · 未取得停止证明")).toBeVisible();
-  expect(screen.getByText("当前可用操作 · 停止")).toBeVisible();
-  expect(screen.getByText(/original-reply/)).toBeInTheDocument();
+  expect(
+    screen.queryByText(/original-reply|观察 revision|当前可用操作/),
+  ).toBeNull();
   expect(view.container.querySelector("time")).toHaveAttribute(
     "datetime",
     observation.pr_checked_at,
   );
-  expect(screen.getByText(/PR 缓存观察/)).toHaveTextContent(
-    "非实时状态，本页刷新不查询外部 PR",
-  );
+  expect(screen.getByText(/PR 缓存观察/)).toHaveTextContent("非实时状态");
+  expect(screen.queryByText("任务已交付")).toBeNull();
   view.rerender(<DeliverySummary run={original} />);
-  expect(request).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
   expect(JSON.stringify(original)).toBe(before);
-  request.mockRestore();
 });
-
 it.each([undefined, "provider unavailable"])(
-  "does not invent a missing PR query time or refresh a cached result (%s)",
+  "does not invent missing PR query time (%s)",
   (pr_query_error) => {
-    const request = vi.spyOn(globalThis, "fetch");
+    const fetch = vi.spyOn(globalThis, "fetch");
     const view = render(
       <DeliverySummary
         run={{
@@ -79,18 +79,14 @@ it.each([undefined, "provider unavailable"])(
         }}
       />,
     );
-    expect(screen.getByText(/未记录查询时间/)).toBeVisible();
+    expect(screen.getByText(/核实时间未知/)).toBeVisible();
     expect(view.container.querySelector("time")).toBeNull();
-    expect(screen.getByText("PR 观察 · 待合并")).toBeVisible();
-    if (pr_query_error) {
-      expect(screen.getByText(/PR 查询未核实/)).toBeVisible();
-    }
-    expect(request).not.toHaveBeenCalled();
-    request.mockRestore();
+    expect(screen.getByText("待合并")).toBeVisible();
+    if (pr_query_error) expect(screen.getByText(/PR 查询未核实/)).toBeVisible();
+    expect(fetch).not.toHaveBeenCalled();
   },
 );
-
-it("retains the last verified time alongside a failed PR query", () => {
+it("retains last verified time alongside failed PR queries", () => {
   render(
     <DeliverySummary
       run={{
@@ -109,26 +105,21 @@ it("retains the last verified time alongside a failed PR query", () => {
   expect(
     screen.getByText("PR 查询未核实 · provider unavailable"),
   ).toBeVisible();
-  expect(screen.getByText(/非实时状态/)).toBeVisible();
 });
-
-it.each([
-  ["running", "当前步骤 · publish.verify · 执行中"],
-  ["waiting_input", "待处理 · 等待明确用户输入。"],
-  ["reconciling", "当前步骤 · publish.verify · 对账中"],
-  ["cancelled", "业务结果 · 已取消"],
-])("renders %s without promoting it to completion", (status, text) => {
+it.each(["running", "waiting_input", "reconciling", "cancelled"])(
+  "does not promote %s to task delivery",
+  (status) => {
+    render(
+      <DeliverySummary
+        run={{ ...run, runner_delivery: { ...observation, status } }}
+      />,
+    );
+    expect(screen.queryByText("任务已交付")).toBeNull();
+    expect(screen.getByText("资源停止 · 未取得停止证明")).toBeVisible();
+  },
+);
+it("shows generated success independently from cleanup", () => {
   render(
-    <DeliverySummary
-      run={{ ...run, runner_delivery: { ...observation, status } }}
-    />,
-  );
-  expect(screen.getByText(text)).toBeVisible();
-  expect(screen.getByText("资源停止 · 未取得停止证明")).toBeVisible();
-});
-
-it("shows generated success independently from cleanup and conversation waiting", () => {
-  const view = render(
     <DeliverySummary
       run={{
         ...run,
@@ -136,36 +127,16 @@ it("shows generated success independently from cleanup and conversation waiting"
           ...observation,
           content_status: "succeeded",
           status: "settling",
-          step: "closed",
           closed: true,
         },
       }}
     />,
   );
-  expect(screen.getByText("业务结果 · 成功")).toBeVisible();
+  expect(screen.getByText("业务结果 · 本轮成功")).toBeVisible();
   expect(screen.getByText("资源停止 · 未取得停止证明")).toBeVisible();
-  view.rerender(
-    <DeliverySummary
-      run={{
-        ...run,
-        runner_delivery: {
-          ...observation,
-          status: "waiting_input",
-          step: "input",
-          controls: {
-            ...observation.controls,
-            can_stop: false,
-            can_message: true,
-          },
-        },
-      }}
-    />,
-  );
-  expect(screen.getByText("当前可用操作 · 发送消息")).toBeVisible();
-  expect(screen.getByText("待处理 · 等待明确用户输入。")).toBeVisible();
+  expect(screen.queryByText("任务已交付")).toBeNull();
 });
-
-it("keeps missing or conflicting observation unverified", () => {
+it("does not consume unavailable Runner observations", () => {
   render(
     <DeliverySummary
       run={{
@@ -178,7 +149,25 @@ it("keeps missing or conflicting observation unverified", () => {
       }}
     />,
   );
-  expect(screen.getByText("原 Run 身份冲突")).toBeVisible();
-  expect(screen.queryByText(/业务结果/)).not.toBeInTheDocument();
-  expect(screen.queryByText(/当前可用操作/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/本轮成功|待合并|当前可用操作/)).toBeNull();
+  expect(screen.getByText("未核实")).toBeVisible();
+});
+it("keeps conflicting PR observations unverified and only trusts actual TaskDelivery", () => {
+  const original = {
+    ...run,
+    pr: { state: "merged", url: "https://example.com/pr" },
+    runner_delivery: observation,
+  };
+  const view = render(<DeliverySummary run={original} />);
+  expect(screen.getByText("PR 状态待核实")).toBeVisible();
+  expect(screen.queryByText("任务已交付")).toBeNull();
+  view.rerender(
+    <DeliverySummary
+      run={{
+        ...original,
+        runner_delivery: { ...observation, pr_state: "merged" },
+      }}
+    />,
+  );
+  expect(screen.getByText("已合并，交付待核实")).toBeVisible();
 });

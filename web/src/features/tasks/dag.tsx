@@ -125,9 +125,7 @@ export function Dag() {
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">PROJECT / TASKS</div>
           <h1>任务 DAG</h1>
-          <p>依赖、交付与执行资格，一处查看。</p>
         </div>
         <GitBranch className="heading-icon" size={30} />
       </div>
@@ -149,10 +147,7 @@ export function Dag() {
           </Button>
         </div>
         {view === "graph" && (
-          <span className="muted">
-            {graph.data?.nodes.length ?? 0} 个节点 · 图 v
-            {graph.data?.graph_revision ?? "—"}
-          </span>
+          <span className="muted">{graph.data?.nodes.length ?? 0} 个任务</span>
         )}
       </div>
       <div className="dag-layout">

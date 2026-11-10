@@ -39,7 +39,19 @@ test("activity drawer observes the owned project without driving execution", asy
   });
   await panel.getByRole("button", { name: /^最近结束/ }).click();
   await expect(panel.getByText("测试准备", { exact: true })).toHaveCount(0);
-  await expect(panel.getByText("检测", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/^检测开发环境 ·/)).toBeVisible();
+  const recent = await page.request.get(
+    new URL(
+      `/api/v2/application/projects/${project}/activities?filter=recent`,
+      page.url(),
+    ).href,
+  );
+  expect(recent.ok()).toBe(true);
+  expect(
+    (await recent.json()).items.every(
+      (item: { kind: string }) => item.kind !== "test_preparation",
+    ),
+  ).toBe(true);
   await panel.getByRole("button", { name: /^进行中/ }).click();
   await page.route("**/activities?**", (route) => route.abort());
   await panel.getByRole("button", { name: "重新读取活动" }).click();

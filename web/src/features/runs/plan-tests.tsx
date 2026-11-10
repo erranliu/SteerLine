@@ -13,8 +13,8 @@ export type TestRow = {
   status: string;
 };
 export type PlanTestsView = {
- material_status?:string;
- association_available?:boolean;
+  material_status?: string;
+  association_available?: boolean;
   progress_version?: number;
   observed_at?: string;
   collection_status?: string;
@@ -40,11 +40,25 @@ export function PlanTests({ run }: { run: Candidate }) {
     refetchInterval: online ? 5000 : false,
   });
   const view = result.data;
+  const material = [run.material_status, view?.material_status].includes(
+    "outdated",
+  )
+    ? "outdated"
+    : [run.material_status, view?.material_status].includes("unknown")
+      ? "unknown"
+      : "current";
   return (
     <section className="settings-panel" aria-label="计划测试">
       <h3>计划测试</h3>
-      {view?.material_status==="outdated"&&<p className="notice amber">已过期 · 保留候选。当前测试关联不可用，以下仅为历史；此候选 PR 合入仍可完成任务。</p>}
-      {view?.material_status==="unknown"&&<p className="notice amber">材料当前性待核实；历史结果保留。</p>}
+      {material === "outdated" && (
+        <p className="notice amber">
+          已过期 · 保留候选。当前测试关联不可用，以下仅为历史；此候选 PR
+          合入仍可完成任务。
+        </p>
+      )}
+      {material === "unknown" && (
+        <p className="notice amber">材料当前性待核实；历史结果保留。</p>
+      )}
       {!online && (
         <p className="notice amber">离线 · 以下为最后观察，当前结果待核实</p>
       )}
@@ -63,36 +77,52 @@ export function PlanTests({ run }: { run: Candidate }) {
       {view?.diagnostic && <p className="muted">{view.diagnostic}</p>}
       {view?.status === "ready" && (
         <>
-          <p className="muted">
-            {view.plan_path}
-            {view.commit && (
-              <>
-                {" "}
-                · 固定版本 <code>{view.commit.slice(0, 12)}</code>
-              </>
-            )}
-          </p>
-          {view.association_available===false ? (<p>历史测试安排 · 共 {view.total} 项 · 当前关联不可用</p>) : view.total === 0 ? (
+          {view.association_available === false || material === "outdated" ? (
+            <p>历史测试安排 · 共 {view.total} 项 · 当前关联不可用</p>
+          ) : view.total === 0 ? (
             <p>未安排自动测试</p>
           ) : (
             <p>
               共 {view.total} 项 ·{" "}
-              {online && !result.error && (!view.diagnostic || !view.progress_version) ? "已通过" : "上次通过"} {view.passed} · 未完成 {view.pending}
+              {online &&
+              !result.error &&
+              (!view.diagnostic || !view.progress_version)
+                ? "已通过"
+                : "上次通过"}{" "}
+              {view.passed} · 未完成 {view.pending}
             </p>
           )}
-          {view.observed_at && <p className="muted">进度版本 {view.progress_version} · 上次观察 {new Date(view.observed_at).toLocaleString()}</p>}
-          {view.collection_status === "closed" && <p className="muted">本次运行的进度采集已结束，保留最终快照。</p>}
-          {view.rows.map((row) => (
-            <details key={row.id} className="test-plan-row">
-              <summary>
-                {row.name} · {row.level} / {row.environment} ·{" "}
-                {labels[row.status] || "待核实"}
-              </summary>
-              <p className="muted">{row.id}</p>
-              <pre>{row.command}</pre>
-              <p>{row.check}</p>
+          {view.observed_at && (
+            <p className="muted">
+              上次观察 {new Date(view.observed_at).toLocaleString()}
+            </p>
+          )}
+
+          {view.total > 0 &&
+            view.association_available !== false &&
+            material !== "outdated" && (
+              <progress
+                aria-label="测试通过进度"
+                value={view.passed}
+                max={view.total}
+              />
+            )}
+          {!!view.rows.length && (
+            <details>
+              <summary>查看测试明细</summary>
+              {view.rows.map((row) => (
+                <details key={row.id} className="test-plan-row">
+                  <summary>
+                    {row.name} · {row.level} / {row.environment} ·{" "}
+                    {labels[row.status] || "待核实"}
+                  </summary>
+                  <p className="muted">{row.id}</p>
+                  <pre>{row.command}</pre>
+                  <p>{row.check}</p>
+                </details>
+              ))}
             </details>
-          ))}
+          )}
         </>
       )}
     </section>

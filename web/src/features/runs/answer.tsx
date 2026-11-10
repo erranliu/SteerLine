@@ -225,10 +225,6 @@ export function Answer({ run }: { run: Candidate }) {
           {error || storageError}
         </p>
       )}
-      <p className="target-note">
-        Decision {decision.id.slice(0, 8)} · v{decision.version} · Attempt{" "}
-        {run.attempt_id.slice(0, 8)}
-      </p>
     </section>
   );
 }

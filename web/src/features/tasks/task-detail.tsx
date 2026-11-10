@@ -156,39 +156,40 @@ export function TaskDetail({
       <div className="eyebrow">正式任务 · #{task.task_id}</div>
       <h2>{task.title}</h2>
       <Status value={task.status} />
-      <div className="detail-section">
-        <h3>依赖与阻塞</h3>
-        {task.predecessors?.length ? (
-          task.predecessors.map((p) => (
-            <div className="dependency" key={p.task_id}>
-              <span>#{p.task_id}</span>
-              <span>
-                {p.delivered ? "前置已交付" : p.blocker || "等待前置交付"}
-              </span>
-            </div>
-          ))
-        ) : (
-          <p className="muted">没有前置依赖</p>
-        )}
-        {blockers?.map((b) => (
-          <p className="notice amber" key={b}>
-            {b}
-          </p>
-        ))}
-        {task.stop_pending?.map((b) => (
-          <p className="notice amber" key={b}>
-            停止待核实 · {b}
-          </p>
-        ))}
-      </div>
+      {(!!task.predecessors?.length ||
+        !!blockers?.length ||
+        !!task.stop_pending?.length) && (
+        <div className="detail-section">
+          <h3>依赖与阻塞</h3>
+          {task.predecessors?.length ? (
+            task.predecessors.map((p) => (
+              <div className="dependency" key={p.task_id}>
+                <span>#{p.task_id}</span>
+                <span>
+                  {p.delivered ? "前置已交付" : p.blocker || "等待前置交付"}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="muted">没有前置依赖</p>
+          )}
+          {blockers?.map((b) => (
+            <p className="notice amber" key={b}>
+              {b}
+            </p>
+          ))}
+          {task.stop_pending?.map((b) => (
+            <p className="notice amber" key={b}>
+              停止待核实 · {b}
+            </p>
+          ))}
+        </div>
+      )}
       <div className="detail-section">
         <h3>任务文档</h3>
         <p className="path">{task.spec_path || "未关联规格"}</p>
         <RoadmapTaskSource task={id} />
         <TaskMaterials id={id} />
-        <p className="muted">
-          Task v{task.version} · 图 v{detail.data?.graph_revision}
-        </p>
       </div>
       <div className="detail-section">
         <h3>交付与执行</h3>
@@ -219,9 +220,7 @@ export function TaskDetail({
             </SafeLink>
             <p className="muted">{task.delivery.merged_at}</p>
           </>
-        ) : (
-          <p className="muted">尚未核实任务交付</p>
-        )}
+        ) : null}
         {hasCandidates && (
           <Button asChild>
             <Link
@@ -270,9 +269,6 @@ export function TaskDetail({
               </option>
             ))}
           </select>
-          <p className="muted">
-            使用服务已保存的冻结方案。本次选择不改变全局默认。
-          </p>
           {selected?.details?.map((d, i) => (
             <p key={i} className="muted">
               {d}

@@ -384,7 +384,7 @@ test("saved roadmap preview shows proposed dependencies with changes, task detai
   await expect(review.locator(".react-flow__edge")).toHaveCount(7);
   await expect(viewport).toHaveAttribute("style", beforeRefresh!);
   await expect(detail.getByText("草稿原文 right")).toBeVisible();
-  for (const width of [1440, 768, 320]) {
+  for (const width of [1440, 800, 375, 768, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     const taskButton = review.getByRole("button", {
       name: `查看 independent · ${tasks[5].title}`,
