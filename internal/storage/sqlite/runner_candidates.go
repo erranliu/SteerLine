@@ -128,7 +128,7 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 				return err
 			}
 		}
-		return nil
+		return indexCandidateReading(ctx, tx.tx, old, c, events)
 	})
 }
 
@@ -381,6 +381,9 @@ func (tx *sqliteTx) requestRunnerTaskStops(project, taskID string) error {
 		}
 		result, err := tx.tx.ExecContext(tx.ctx, `UPDATE runner_candidates SET revision=?,payload=? WHERE project_identity=? AND candidate_id=? AND revision=?`, c.Revision, body, project, c.ID, c.Revision-1)
 		if err := requireIdentityWrite(result, err, "stale_version: terminal candidate changed"); err != nil {
+			return err
+		}
+		if err := indexCandidateReading(tx.ctx, tx.tx, runnerstate.Candidate{}, c, nil); err != nil {
 			return err
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -135,5 +136,8 @@ func (tx *sqliteTx) completeRunnerDeliveryCandidate(project, taskID string) erro
 	}
 	body, _ := json.Marshal(c)
 	result, err := tx.tx.ExecContext(tx.ctx, `UPDATE runner_candidates SET revision=?,payload=? WHERE project_identity=? AND candidate_id=? AND revision=?`, c.Revision, body, project, c.ID, c.Revision-1)
-	return requireIdentityWrite(result, err, "stale_version: delivered candidate changed")
+	if err := requireIdentityWrite(result, err, "stale_version: delivered candidate changed"); err != nil {
+		return err
+	}
+	return indexCandidateReading(tx.ctx, tx.tx, runnerstate.Candidate{}, c, nil)
 }

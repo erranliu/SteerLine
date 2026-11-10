@@ -18,6 +18,10 @@
 | `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务 |
 | `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
 | `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
+| `/activities/{activity_id}` | 精确活动摘要；仍只读本地事实和有界消息预览 |
+| `/activities/{activity_id}/interactions` | 显式读取已记录交互一页，默认 50、最多 200、1 MiB；游标绑定项目/实例/活动/原成员范围与读取版本，变化失效后显式刷新 |
+| `/activities/{activity_id}/changes` | 原持久 revision 与读取索引版本组成的轻量标记，无交互或正文；不推进分页 |
+| `/activities/{activity_id}/body` | 按 item、sha256、offset 显式读取该条原正文一段，最多 256 KiB；原正文上限 16 MiB，原归属/摘要/UTF-8 校验及应用级有界内存复用 |
 | `/runs/{run_id}` | 精确候选、参与/提交状态、Runner 观察、PR 与交付 |
 | `/runs/{run_id}/activity`、`/last-message`、`/usage` | 原执行的活动、最近消息和用量 |
 | `/runs/{run_id}/conversation`、`/final`、`/body` | 公开会话事件、final 和原正文分段 |

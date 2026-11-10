@@ -141,6 +141,9 @@ func (s *SQLiteStore) SaveRoadmap(ctx context.Context, r roadmap.Record, expecte
 			return errors.New("roadmap request conflict")
 		}
 	}
+	if err := indexRoadmapReading(ctx, tx, r); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 func (s *SQLiteStore) RoadmapRequest(ctx context.Context, project, id string) (roadmap.Record, error) {

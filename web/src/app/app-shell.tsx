@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
+  Activity,
   Command,
   FlaskConical,
   GitBranch,
@@ -44,6 +45,7 @@ export function AppShell({
         tests: "测试管理",
         settings: "配置",
         environment: "项目运行环境",
+        activities: "活动中心",
       }[location.pathname.split("/").pop() ?? ""] ?? "规划与执行");
   return (
     <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>
@@ -91,6 +93,13 @@ export function AppShell({
               >
                 <FlaskConical size={17} />
                 <span>测试管理</span>
+              </NavLink>
+              <NavLink
+                aria-label="活动中心"
+                to={`/projects/${projectId}/activities`}
+              >
+                <Activity size={17} />
+                <span>活动中心</span>
               </NavLink>
             </>
           ) : (

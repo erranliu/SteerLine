@@ -55,6 +55,11 @@ func observationOnly(c Candidate) bool {
 func (b *Bridge) observe(ctx context.Context, cli CLI, c *Candidate) (err error) {
 	committedRevision := c.Revision
 	defer func() {
+		if err == nil && b.Observed != nil {
+			b.Observed(ctx, *c)
+		}
+	}()
+	defer func() {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return
 		}
@@ -104,7 +109,10 @@ func (b *Bridge) observe(ctx context.Context, cli CLI, c *Candidate) (err error)
 type Bridge struct {
 	Store  Store
 	Client func(string) CLI
-	locks  sync.Map
+	// Observed is a nonblocking, read-only observation notification. It cannot
+	// affect the committed result or grant input/dispatch rights.
+	Observed func(context.Context, Candidate)
+	locks    sync.Map
 }
 
 // WithCandidate serializes caller withdrawal with the exact candidate's dispatch.

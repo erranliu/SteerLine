@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Activity as ActivityIcon, X, AlertCircle } from "lucide-react";
 import { useWorkspace } from "../../app/context";
@@ -19,6 +19,7 @@ import {
   type ActivityLinks,
 } from "./model";
 import "./activities.css";
+import { useActivityList } from "./use-activity-list";
 import { CopyExecutionInfo, operationNames } from "./execution-info";
 import { useActivityFeedback } from "./feedback/feedback";
 
@@ -104,37 +105,21 @@ export function Activities({
     .map((r) => r.envelope.request_id)
     .sort();
   const idsKey = ids.join(",");
-  const query = useInfiniteQuery({
+  const readingPage = location.pathname.endsWith("/activities");
+  const query = useActivityList(
+    api,
+    queriedFilter,
+    online && visible && (!readingPage || ui.open),
+    readingPage ? 0 : ui.open ? 2000 : 10000,
+  );
+  const sharedCounts = useQuery<ActivityPage>({
     queryKey: [
       api.home,
       identity.project_id,
       identity.instance_id,
-      "async-activities",
-      queriedFilter,
+      "activity-counts",
     ],
-    initialPageParam: "",
-    queryFn: async ({ signal, pageParam }) => {
-      const params = new URLSearchParams({
-        filter: queriedFilter,
-        limit: "50",
-      });
-      if (pageParam) params.set("cursor", pageParam);
-      const page = await api.get<ActivityPage>("/activities?" + params, signal);
-      if (
-        !Array.isArray(page.items) ||
-        !Array.isArray(page.sources) ||
-        !page.request_links ||
-        !page.counts ||
-        page.project_id !== identity.project_id ||
-        page.instance_id !== identity.instance_id
-      )
-        throw new Error("活动范围已变化，等待重新读取");
-      return page;
-    },
-    getNextPageParam: (last) => (last.has_more ? last.next_cursor : undefined),
-    enabled: online && visible,
-    retry: false,
-    refetchInterval: visible && online ? (ui.open ? 2000 : 10000) : false,
+    enabled: false,
   });
   // Request associations change independently of the paginated list. A new
   // journal request must not discard pages already loaded in the drawer.
@@ -241,15 +226,19 @@ export function Activities({
     associationQuery.isError ||
     !!faults.length ||
     !page?.counts_known;
+  const countPage = readingPage ? sharedCounts.data || page : page;
+  const countUnavailable = readingPage
+    ? !!countPage?.sources.some((source) => source.diagnostic)
+    : query.isError || !!faults.length;
   const count = (f: ActivityFilter) =>
-    page && page.counts_known && online && !query.isError && !faults.length
-      ? page.counts[f]
+    countPage && countPage.counts_known && online && !countUnavailable
+      ? countPage.counts[f]
       : "待核实";
   const pending = provisional.filter((a) => !ended(a)).length;
 
   useEffect(() => {
-    if (visible && online) void query.refetch();
-  }, [visible, online]); // refetch only the read observation on visibility return
+    if (visible && online && !readingPage) void query.refetch().catch(() => {});
+  }, [visible, online, readingPage]); // refetch only the read observation on visibility return
   useEffect(() => {
     if (!destination.current) return;
     const actual = location.pathname + location.search + location.hash;
@@ -354,7 +343,7 @@ export function Activities({
         <ActivityIcon size={17} />
         <span>活动</span>
         <span className="activity-entry-count">{count("ongoing")}</span>
-        {page?.counts_known && page.counts.attention > 0 && (
+        {countPage?.counts_known && countPage.counts.attention > 0 && (
           <span className="activity-attention">
             <AlertCircle size={14} />
             需处理 {count("attention")}
@@ -402,6 +391,16 @@ export function Activities({
                   <X size={18} />
                 </Button>
               </header>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const target = `/projects/${encodeURIComponent(identity.project_id)}/activities`;
+                  destination.current = target;
+                  navigate(target);
+                }}
+              >
+                打开独立页
+              </Button>
               <div className="activity-filters" aria-label="活动筛选">
                 {(
                   [
@@ -582,6 +581,18 @@ export function Activities({
                           ? "去处理"
                           : "查看详情"}
                     </Button>
+                    {!a.provisional && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          destination.current = `/projects/${identity.project_id}/activities?activity=${encodeURIComponent(a.activity_id)}`;
+                          navigate(destination.current);
+                        }}
+                      >
+                        在独立页阅读
+                      </Button>
+                    )}
                   </article>
                 ))}
                 {query.hasNextPage && (
@@ -597,7 +608,7 @@ export function Activities({
                 <Button
                   variant="ghost"
                   disabled={!online || query.isFetching}
-                  onClick={() => void query.refetch()}
+                  onClick={() => void query.refetch().catch(() => {})}
                 >
                   重新读取活动
                 </Button>
