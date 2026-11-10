@@ -232,7 +232,7 @@ export function ProjectMaintenance() {
       </button>
       <span className="muted">
         {v?.readiness
-          ? ` · ${localLabel} · 测试安排 ${v.readiness.ready}/${v.readiness.total} 就绪`
+          ? ` · ${localLabel} · 测试安排 ${v.readiness.ready}/${v.readiness.total} 就绪${v.readiness.waiting ? ` · ${v.readiness.waiting} 项等待前置测试` : ""}`
           : " · 状态待核实"}
       </span>
       {(open ||

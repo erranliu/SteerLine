@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"strings"
@@ -78,7 +79,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		Source: r.Source, Existing: r.Existing, GraphDigest: r.GraphDigest, Profile: r.Profile, CreatedAt: time.Now().UTC(),
 		State: "queued", Runner: s.Build, Submission: "pending", Analysis: r.Analysis, ConfirmedDigest: r.ConfirmedDigest,
 		CodeCommit: fixed.Commit, RepositoryTree: fixed.Tree, Materials: fixed.Materials, Documents: []model.Documents{}, Mapping: r.Mapping}
-	testCatalogue, err := TestCatalogue(r)
+	_, err = TestCatalogue(r)
 	if err != nil {
 		return r, err
 	}
@@ -118,7 +119,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
 		Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
 		Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit},
-			Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(r, testIDs(testCatalogue))}}
+			Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(r)}}
 	if err = catalog.ValidateRepositoryGenerate(input); err != nil {
 		return r, err
 	}
@@ -162,27 +163,32 @@ func TestCatalogue(r model.Record) (tm.Catalogue, error) {
 	return tm.ParseCatalogue(raw)
 }
 func ValidateTestIDs(r model.Record, catalogue tm.Catalogue) error {
+	providers, err := model.TestProviders(r)
+	if err != nil {
+		return err
+	}
 	for _, d := range r.Documents {
 		raw, err := model.TestsJSON(d)
 		if err != nil {
 			return err
 		}
-		definitions, err := tm.Select([]byte(raw), catalogue)
-		if err != nil {
+		var selection tm.Arrangement
+		if err = tm.Decode([]byte(raw), &selection); err != nil {
 			return err
 		}
-		if len(definitions) == 0 && !tm.AllowsNoTests(d.Plan.Body) {
+		known := map[string]bool{}
+		for _, definition := range catalogue.Tests {
+			known[definition.ID] = true
+		}
+		for _, id := range selection.Tests {
+			if !known[id] && !model.IsPredecessor(r.Analysis, providers[id], d.Key) {
+				return fmt.Errorf("任务 %s 的测试 %s 不在固定清单中，也没有同批前置任务声明提供", d.Key, id)
+			}
+		}
+		if len(selection.Tests) == 0 && !tm.AllowsNoTests(d.Plan.Body) {
 			return errors.New("空测试安排需要 Plan 明确说明无需自动测试")
 		}
 
 	}
 	return nil
-}
-
-func testIDs(c tm.Catalogue) []string {
-	ids := []string{}
-	for _, d := range c.Tests {
-		ids = append(ids, d.ID)
-	}
-	return ids
 }

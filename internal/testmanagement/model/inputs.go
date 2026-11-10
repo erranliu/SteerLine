@@ -12,6 +12,12 @@ import (
 
 const MaxDocumentBytes = 1 << 20
 
+// MissingTestIDs is distinct from malformed selections. Maintenance may defer
+// only promised predecessor outputs; execution always rejects this error.
+type MissingTestIDs struct{ IDs []string }
+
+func (e *MissingTestIDs) Error() string { return "unknown test IDs: " + strings.Join(e.IDs, ", ") }
+
 type Arrangement struct {
 	Tests []string `json:"tests"`
 }
@@ -68,13 +74,21 @@ func Select(raw []byte, c Catalogue) ([]Definition, error) {
 	}
 	result := []Definition{}
 	seen := map[string]bool{}
+	missing := []string{}
 	for _, id := range a.Tests {
 		d, ok := index[id]
-		if !ok || seen[id] {
+		if id == "" || strings.TrimSpace(id) != id || seen[id] {
 			return nil, fmt.Errorf("unknown or duplicate test ID: %s", id)
 		}
 		seen[id] = true
+		if !ok {
+			missing = append(missing, id)
+			continue
+		}
 		result = append(result, d)
+	}
+	if len(missing) > 0 {
+		return nil, &MissingTestIDs{IDs: missing}
 	}
 	return result, nil
 }

@@ -24,6 +24,11 @@ import (
 func TestRoadmapPublicationAndAdmissionWithRealGit(t *testing.T) {
 	t.Run("draft-dependencies", func(t *testing.T) { roadmapPromotionChain(t, false) })
 	t.Run("mixed-formal-dependencies", func(t *testing.T) { roadmapPromotionChainWithDependencies(t, false, false, true) })
+	t.Run("planned-tests", func(t *testing.T) {
+		roadmapFutureTestPreview(t)
+		roadmapPromotionChainWithDependencies(t, false, false, false, true)
+		plannedTestsWaitWithoutBlockingProviderAndRequireDeliveredDefinitions(t)
+	})
 }
 
 func roadmapPromotionChain(t *testing.T, live bool) {
@@ -38,7 +43,7 @@ func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
 	roadmapPromotionChainWithDependencies(t, live, crlf, false)
 }
 
-func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool) {
+func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool, planned ...bool) {
 	c, _ := nativeTaskFixture(t)
 	ctx := context.Background()
 	if crlf {
@@ -182,6 +187,9 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
 	port := &roadmapPort{config: c, store: store}
 	configurePromotionGeneration(t, port, live)
+	if len(planned) > 0 && planned[0] {
+		port.service.Runner.(*promotionRunner).futureTests = true
+	}
 	seedCount := 0
 	if formal {
 		// A real pre-existing Task in this project's SQLite DAG, without copying

@@ -181,8 +181,9 @@ it("keeps a binary project status and follows the server verdict instead of indi
     readiness: {
       status: "ready",
       commit: "base",
-      total: 1,
+      total: 2,
       ready: 1,
+      waiting: 1,
       blockers: [],
     },
   });
@@ -190,7 +191,9 @@ it("keeps a binary project status and follows the server verdict instead of indi
     name: "项目维护 · 已就绪",
   });
   expect(toggle).toHaveAttribute("aria-expanded", "false");
-  expect(screen.getByText(/测试安排 1\/1 就绪/)).toBeVisible();
+  expect(
+    screen.getByText(/测试安排 1\/2 就绪.*1 项等待前置测试/),
+  ).toBeVisible();
   expect(api.submit).not.toHaveBeenCalled();
   view.readiness = {
     ...view.readiness,

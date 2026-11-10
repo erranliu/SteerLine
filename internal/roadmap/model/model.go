@@ -72,11 +72,12 @@ type Document struct {
 	Body string `json:"body"`
 }
 type Documents struct {
-	Key        string     `json:"local_key"`
-	Spec       Document   `json:"spec"`
-	Plan       Document   `json:"plan"`
-	Tests      []string   `json:"tests"`
-	Acceptance []Document `json:"acceptance"`
+	Key           string     `json:"local_key"`
+	Spec          Document   `json:"spec"`
+	Plan          Document   `json:"plan"`
+	Tests         []string   `json:"tests"`
+	ProvidesTests []string   `json:"provides_tests"`
+	Acceptance    []Document `json:"acceptance"`
 }
 type Publication struct {
 	RequestID    string `json:"request_id"`

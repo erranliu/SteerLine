@@ -55,6 +55,7 @@ type Documents = {
   spec: File;
   plan: File;
   tests: string[];
+  provides_tests: string[];
   acceptance: File[];
 };
 export type RoadmapRecord = {
@@ -1003,6 +1004,12 @@ export function Roadmaps() {
               验收材料
             </button>
             <p>{file?.path}</p>
+            {!!currentDocument?.provides_tests?.length && (
+              <p>
+                本任务将新增测试：{currentDocument.provides_tests.join("、")}
+                ；依赖后继可在交付后使用。
+              </p>
+            )}
             {editing ? (
               <>
                 <textarea

@@ -604,6 +604,7 @@ it("shows code evidence, acceptance material and the complete publication target
     {
       local_key: "T1",
       tests: ["arithmetic.unit"],
+      provides_tests: ["N201-CONTENT"],
       spec: { path: "spec/control.md", body: "# 完整 Spec" },
       plan: { path: "plans/control.plan.md", body: "# 完整 Plan" },
       acceptance: [{ path: "acceptance/control.md", body: "# 验收待执行" }],
@@ -623,6 +624,7 @@ it("shows code evidence, acceptance material and the complete publication target
   await screen.findByText(/logic.go/);
   fireEvent.click(screen.getByText("设计与调查依据"));
   expect(screen.getByText(/logic.go/)).toBeVisible();
+  expect(screen.getByText(/本任务将新增测试：N201-CONTENT/)).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "测试安排 JSON" }));
   expect(screen.getByText("plans/control.tests.json")).toBeVisible();
   expect(screen.getByText(/"arithmetic.unit"/)).toBeVisible();
@@ -636,6 +638,16 @@ it("shows code evidence, acceptance material and the complete publication target
     screen.getByText("SteerlineFlow/Roadmap/execution-map.md"),
   ).toBeVisible();
   expect(submit).not.toHaveBeenCalled();
+});
+it("shows the specific generation failure and original question", async () => {
+  setup("failed", true, [], (_view, record) => {
+    record.purpose = "documents";
+    record.diagnostic =
+      "未取得经核实的完整生成结果；human_input_required；测试 N201-CONTENT 尚未登记，无法满足当前约束";
+  });
+  expect(
+    await screen.findByText(/human_input_required.*N201-CONTENT 尚未登记/),
+  ).toBeVisible();
 });
 it("distinguishes repository and input citations with the same logical path", async () => {
   const { record } = setup("documents-review");
