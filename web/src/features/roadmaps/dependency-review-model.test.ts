@@ -1,9 +1,6 @@
 import { expect, it } from "vitest";
 import type { RoadmapTask } from "./roadmaps";
-import {
-  dependencyReview,
-  visibleReviewEdges,
-} from "./dependency-review-model";
+import { dependencyReview } from "./dependency-review-model";
 
 function task(
   local_key: string,
@@ -69,6 +66,7 @@ it("preserves every direct fork/join/independent edge and excludes unrelated for
     expect(edge.change).toBe("kept");
   }
   expect(graph.proposedCount).toBe(7);
+  expect(graph.proposedEdges).toEqual(graph.edges);
   expect(JSON.stringify(tasks)).toBe(before);
   expect(
     dependencyReview([...tasks].reverse(), [{ id: "101", title: "基础" }])
@@ -113,17 +111,16 @@ it("keeps reversed and removed-only relations out of proposed layout while retai
     true,
   );
   expect(
-    visibleReviewEdges(graph.edges, "proposed").map((edge) => [
-      edge.source,
-      edge.target,
-      edge.change,
-    ]),
+    graph.proposedEdges.map((edge) => [edge.source, edge.target, edge.change]),
   ).toEqual([["local:B", "local:A", "added"]]);
-  expect(visibleReviewEdges(graph.edges, "original")).toHaveLength(2);
-  expect(visibleReviewEdges(graph.edges, "diff")).toHaveLength(3);
+  expect(graph.edges.filter((edge) => edge.change === "removed")).toHaveLength(
+    2,
+  );
+  expect(graph.edges).toHaveLength(3);
   expect(
     graph.nodes.find((node) => node.id === "local:B")!.position.x,
   ).toBeLessThan(graph.nodes.find((node) => node.id === "local:A")!.position.x);
+  expect(graph.nodes.find((node) => node.id === "local:B")!.position.y).toBe(0);
 });
 
 it("uses unambiguous edge identities even when keys contain separators", () => {

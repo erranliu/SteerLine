@@ -480,19 +480,21 @@ it("shows mixed original references separately from proposed formal dependencies
   expect(within(detail).getByText("本 Roadmap T0、正式 #8")).toBeVisible();
   expect(within(detail).getByText("正式 #8", { exact: true })).toBeVisible();
   expect(within(detail).getByText(task.reason)).toBeVisible();
-  expect(screen.getByText("依赖未调整")).toBeVisible();
+  expect(screen.getByText("与草稿依赖一致")).toBeVisible();
 });
-it("uses one task detail for comparison and confirms the whole proposed snapshot from the original view", async () => {
+it("keeps dependency comparison in task details and confirms the whole proposed snapshot without view switches", async () => {
   const { submit, get } = setup();
-  fireEvent.click(await screen.findByRole("button", { name: "草稿原始" }));
-  fireEvent.click(screen.getByRole("button", { name: "查看变更 · T1" }));
+  fireEvent.click(await screen.findByRole("button", { name: "查看变更 · T1" }));
   const detail = screen.getByRole("region", { name: "所选任务详情" });
   expect(within(detail).getByText("T1 候选控制")).toBeVisible();
   expect(within(detail).getByText("#8 → T1 · 新增")).toBeVisible();
-  expect(screen.getByRole("button", { name: "草稿原始" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  expect(within(detail).getByText("草稿原有依赖")).toBeVisible();
+  expect(within(detail).getByText("无", { exact: true })).toBeVisible();
+  expect(within(detail).getByText("正式 #8", { exact: true })).toBeVisible();
+  expect(screen.queryByRole("group", { name: "依赖视图" })).toBeNull();
+  for (const name of ["Runner 建议", "草稿原始", "差异"]) {
+    expect(screen.queryByRole("button", { name })).toBeNull();
+  }
   expect(submit).not.toHaveBeenCalled();
   expect(get.mock.calls.some(([path]) => path.startsWith("/graph"))).toBe(
     false,
@@ -522,8 +524,7 @@ it.each(["questions", "stale", "offline"])(
     );
     // Offline has no cached server data in this fixture and therefore no preview.
     if (guard !== "offline") {
-      await screen.findByRole("button", { name: "差异" });
-      fireEvent.click(screen.getByRole("button", { name: "差异" }));
+      expect(await screen.findByLabelText("依赖预览图")).toBeVisible();
       if (guard === "questions")
         expect(screen.getByText("需要明确依赖范围")).toBeVisible();
     }
