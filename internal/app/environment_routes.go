@@ -12,6 +12,7 @@ import (
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -210,7 +211,10 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 	}
 	key := values.Get("environment_key")
 	if route == "/environment/options" && len(values) == 1 && len(values["configuration"]) == 1 && values.Get("configuration") == "true" {
-		return port.configurationOptions(), nil
+		options := port.configurationOptions()
+		var err error
+		options.RepairPrompt, err = prompts.EnvironmentRepair(env.DocumentPath())
+		return options, err
 	}
 	if len(values) > 0 && (len(values) != 1 || len(values["environment_key"]) != 1 || !env.ValidKey(key) || route != "/environment" && route != "/environment/materials") {
 		return nil, errors.New("invalid environment query")

@@ -1,4 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   cleanup,
   act,
@@ -30,6 +32,10 @@ const optionsKey = [
   "options",
 ];
 const remoteMachineID = "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8";
+const repairPrompt = readFileSync(
+  resolve("../internal/prompts/testdata/environment-repair.golden.md"),
+  "utf8",
+);
 const currentCard = () => screen.getByRole("region", { name: "当前运行环境" });
 const overview = () => screen.getByRole("region", { name: "全部运行环境" });
 const environmentRow = (name: string) =>
@@ -57,6 +63,32 @@ async function openHistory() {
   fireEvent.click(screen.getByText("检测历史", { selector: "summary" }));
   await screen.findByLabelText("历史范围");
 }
+
+it("copies the canonical preparation prompt without submitting a detection and offers manual copying on failure", async () => {
+  const { send } = fixture(true, undefined, false, "", true);
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  const button = await screen.findByRole("button", {
+    name: "复制修正环境提示词",
+  });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  expect(await screen.findByText("已复制修正环境提示词")).toBeVisible();
+  expect(writeText).toHaveBeenCalledWith(repairPrompt);
+  writeText.mockRejectedValue(new Error("denied"));
+  fireEvent.click(button);
+  const alert = await screen.findByRole("alert");
+  expect(alert.querySelector("pre")?.textContent).toBe(repairPrompt);
+  expect(send).not.toHaveBeenCalled();
+});
+
+it("disables prompt copying when configuration cannot supply the canonical text", async () => {
+  fixture(true, undefined, false, "", false, true);
+  await loaded();
+  expect(
+    screen.getByRole("button", { name: "复制修正环境提示词" }),
+  ).toBeDisabled();
+});
 
 it("shows environment readiness directly with lazy details and execution copying instead of debug ID fields", async () => {
   const { api, record, send } = fixture();
@@ -916,6 +948,9 @@ function fixture(
     const response = (
       path.startsWith("/environment/options")
         ? {
+            repair_prompt: path.includes("configuration=true")
+              ? repairPrompt
+              : undefined,
             default_profile_id: "remote",
             profiles: [
               {

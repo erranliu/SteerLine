@@ -100,6 +100,12 @@ func EnvironmentInvoke(interpreter, script string) (string, error) {
 	}
 	return render("environment-invoke", struct{ Interpreter, Script string }{interpreter, script})
 }
+func EnvironmentRepair(documentPath string) (string, error) {
+	if documentPath == "" {
+		return "", errors.New("environment preparation document path is required")
+	}
+	return render("environment-repair", struct{ DocumentPath string }{documentPath})
+}
 func RoadmapParse(source, commit string) (string, error) {
 	if source == "" || commit == "" {
 		return "", errors.New("fixed roadmap source and commit are required")
