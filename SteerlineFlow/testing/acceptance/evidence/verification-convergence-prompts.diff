@@ -1,0 +1,82 @@
+diff --git a/.agents/skills/roadmap-runner/SKILL.md b/.agents/skills/roadmap-runner/SKILL.md
+index cb18a973..ac632838 100644
+--- a/.agents/skills/roadmap-runner/SKILL.md
++++ b/.agents/skills/roadmap-runner/SKILL.md
+@@ -18 +18 @@ description: 在 Codex 桌面端直接执行用户确认的 execution-map.md，
+-- 同一 worktree 同时只有一个写入者。PR 冲突、主干/共享接线集成及原需求实现遗漏优先交回原执行 session；协调 session 不默认接手重做。独立复审由新的只读 subagent 检查实际 diff、Spec/Plan 和生产路径，确认的局部修复由另一个独立 subagent 实施。执行 session 自查或 PR 存在不能代替独立复审；具体分流与写入交接见[状态规程](references/coordination.md#工作分流与独立-subagent)。
++- 同一 worktree 同时只有一个写入者。PR 冲突、主干/共享接线集成及原需求实现遗漏优先交回原执行 session；协调 session 不默认接手重做。首次独立复审由新的只读 subagent 检查完整 diff、Spec/Plan 和生产路径，确认的局部修复由另一个独立 subagent 实施。未参与实现或修复的原 reviewer 可继续复核问题闭环、新增差异及受影响路径；扩大范围或更换 reviewer 的条件见[状态规程](references/coordination.md#工作分流与独立-subagent)。执行 session 自查或 PR 存在不能代替独立复审。
+@@ -49 +49 @@ description: 在 Codex 桌面端直接执行用户确认的 execution-map.md，
+-7. 新建独立只读 review subagent，检查完整实际 diff、Spec/Plan、真实生产路径及最小验证，返回候选 head/base 与可复核证据。协调 session 核对并分流：原需求未实现、原断言/消费者遗漏或需重新组织实现的工作优先交回原执行 session；已经完成需求中的局部缺陷，交给另一个独立 fix subagent 在限定范围修复、验证并提交同一 PR 分支。修改前确认原写入者已停写和工作区身份；实际修复后安排新的只读 review subagent 复核最终候选及受影响验证，不让修复者为自己的改动作唯一终审。详情见[状态规程](references/coordination.md#工作分流与独立-subagent)。
++7. 首次新建独立只读 review subagent，检查完整实际 diff、Spec/Plan、真实生产路径及最小验证，返回候选 head/base 与可复核证据。协调 session 核对并分流：原需求未实现、原断言/消费者遗漏或需重新组织实现的工作优先交回原执行 session；已经完成需求中的局部缺陷，交给另一个独立 fix subagent 在限定范围修复、验证并提交同一 PR 分支。修改前确认原写入者已停写和工作区身份；修复后优先由未参与写入的原 reviewer 复核原问题、新增差异与受影响路径，确认最终候选及必要验证。影响无法可靠收窄时扩大审核，原 reviewer 不再独立或不可用时更换；不让修复者为自己的改动作唯一终审。详情见[状态规程](references/coordination.md#工作分流与独立-subagent)。
+@@ -51 +51 @@ description: 在 Codex 桌面端直接执行用户确认的 execution-map.md，
+-9. 合并前重新读取最终 head、目标分支最新 base、必需检查和实际 mergeable 状态；head/base 任一改变则复审相关差异并重新验证。确认通过后以**预期 head**调用合并，禁止绕过保护、无 head 约束的合并或仅开启 auto-merge 就标记完成。CLI 如 `gh pr merge <PR> --match-head-commit <SHA>`，合并方式遵循仓库设置。
++9. 合并前重新读取最终 head、目标分支最新 base、必需检查和实际 mergeable 状态；head/base 任一改变则重新评估新增差异并补受影响验证，最终结论可引用未受影响的原报告，保留原受测 SHA，不默认全部重跑。当前候选须重新取得匹配的审核、验证汇总和合并门禁。确认通过后以**预期 head**调用合并，禁止绕过保护、无 head 约束的合并或仅开启 auto-merge 就标记完成。CLI 如 `gh pr merge <PR> --match-head-commit <SHA>`，合并方式遵循仓库设置。
+diff --git a/.agents/skills/roadmap-runner/references/coordination.md b/.agents/skills/roadmap-runner/references/coordination.md
+index bd92ca5f..ae5f338e 100644
+--- a/.agents/skills/roadmap-runner/references/coordination.md
++++ b/.agents/skills/roadmap-runner/references/coordination.md
+@@ -87 +87 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run
+-- `pr`：url、number、head、base_branch、base_commit；head 更新时助手会使旧 review/validation/merge_gate 失效，并保留历史。
++- `pr`：url、number、head、base_branch、base_commit；候选身份或 head/base 更新时助手会使当前 review/validation/merge_gate 失效，并保留历史，重新确认与复用方式见“合并证据与恢复”。
+@@ -158 +158 @@ kind 可为 `create_session / send_prompt / comment_pr / merge_pr / create_heart
+-- **独立 review subagent**：每个候选新建只读 reviewer，给固定 Spec/Plan、任务/PR/worktree、精确 head/base、约束和真实证据入口，不复制执行 session 的实现过程或预设“应该通过”。先独立查完整 diff、生产调用路径及最小必要验证；报告问题/位置/影响、可复核证据、验证状态和未解决项。协调者核对结果并分流，不以 reviewer 一句“通过”直接合并。
++- **独立 review subagent**：首次审核新建只读 reviewer，给固定 Spec/Plan、任务/PR/worktree、精确 head/base、约束和真实证据入口，不复制执行 session 的实现过程或预设“应该通过”。首次独立查完整 diff、生产调用路径及最小必要验证；后续给出前次审核身份、原问题、精确新旧 head/base 与新增差异，由未参与实现或修复的原 reviewer 复核问题闭环及受影响路径，并对最终候选形成结论。报告问题/位置/影响、可复核证据、验证状态和未解决项。协调者核对结果并分流，不以 reviewer 一句“通过”直接合并。
+@@ -161 +161 @@ kind 可为 `create_session / send_prompt / comment_pr / merge_pr / create_heart
+-review/fix 用 `collaboration.spawn_agent` 的 subagent，不用 `create_thread` 制造新的用户执行聊天。它们默认沿用协调 session 模型；仅执行 session 受 Luna/xhigh 固定设置约束，用户另有模型指令时遵守。用最小必要上下文建立独立判断，reviewer 与 fixer 分开；修复或执行者续跑后用新的只读 reviewer 检查最终改动，必要时复用未受影响的真实验证，避免整套重复运行。delegation 不可用时记录具体限制，不能把协调自查或原执行自查伪称为独立 subagent 复审。
++首次 review 与 fix 用 `collaboration.spawn_agent` 的 subagent，原 reviewer 的复核用 `collaboration.followup_task`，不用 `create_thread` 制造新的用户执行聊天。它们默认沿用协调 session 模型；仅执行 session 受 Luna/xhigh 固定设置约束，用户另有模型指令时遵守。reviewer 与 fixer 分开，以是否参与实现或修复判断独立性。范围扩大、重新组织实现或影响无法可靠收窄时扩大审核；原 reviewer 已参与写入、不可用或用户明确要求新独立视角时更换。新 reviewer 须取得前次覆盖范围、问题、报告及新增差异；无法建立可信前次覆盖时重做完整审核，不默认只查修复文件。必要时复用未受影响的真实验证，避免整套重复运行。delegation 不可用时记录具体限制，不能把协调自查或原执行自查伪称为独立 subagent 复审。
+@@ -167 +167 @@ review/fix 用 `collaboration.spawn_agent` 的 subagent，不用 `create_thread`
+-head 或 base 变化后旧审核/门禁失效；冲突解决或需求补做完成的执行者仍须自查、验证和推送原 PR，然后停止写入。协调重新核对真实候选，调度独立审核，保存最终报告及必要验证后才进入原合并门禁。已经合入任务的历史审核方式与模型证据保持原样，新流程只作用于后续工作。
++head 或 base 变化后当前审核/门禁失效；冲突解决或需求补做完成的执行者仍须自查、验证和推送原 PR，然后停止写入。协调重新核对真实候选，按上述范围调度独立复核，保存最终报告及必要验证后才进入原合并门禁。已经合入任务的历史审核方式与模型证据保持原样，新流程只作用于后续工作。
+@@ -171 +171,3 @@ head 或 base 变化后旧审核/门禁失效；冲突解决或需求补做完
+-`ready_to_merge` 要求 pr.head、review.head、validation.head、merge_gate.head 相同，review/merge_gate 的 base 与当前记录的 PR base 相同，评论 URL 存在，验证满足上述通过/人工登记/已授权例外条件，平台检查通过。`merged` 额外要求 merge.head 相同、merge commit 及 merged_at 非空。head 或 base 改变会清掉旧证据，退回 pr_ready；不能拿旧审核直接合并。实际合并操作前仍须再次读取平台，JSON 校验不消除竞争窗口。
++`ready_to_merge` 要求 pr.head、review.head、validation.head、merge_gate.head 相同，review/merge_gate 的 base 与当前记录的 PR base 相同，评论 URL 存在，验证满足上述通过/人工登记/已授权例外条件，平台检查通过。`merged` 额外要求 merge.head 相同、merge commit 及 merged_at 非空。head 或 base 改变会把旧记录存入 review_history、清除当前有效记录并退回 pr_ready；不能拿旧审核直接合并。实际合并操作前仍须再次读取平台，JSON 校验不消除竞争窗口。
++
++失效的是对当前候选的有效结论，不是历史报告本身。候选变化后先评估实际新增差异（含 base 变化对共同路径、依赖及测试环境的影响），复核范围按上一节决定。最终审核和验证汇总可引用未受影响的原报告，逐项说明原受测 SHA、报告位置、仍适用的范围及原因，并列本轮新增差异的补测；受影响或无法判断的部分须重新验证。原始报告不改 SHA，不把旧报告复制为新版本通过。新的 review/validation 记录对应当前候选的复核与验证汇总，不宣称引用的测试已在新 SHA 重跑；merge_gate 仍重新查询当前平台事实。本流程沿用现有字段及历史记录，不改状态脚本或增加缓存、认证状态。
+diff --git a/.agents/skills/roadmap-runner/references/prompts.md b/.agents/skills/roadmap-runner/references/prompts.md
+index 61653d44..ae866175 100644
+--- a/.agents/skills/roadmap-runner/references/prompts.md
++++ b/.agents/skills/roadmap-runner/references/prompts.md
+@@ -27 +27 @@ PR 冲突、主干/共享接线集成及原需求遗漏优先交回原执行 ses
+-> 继续本任务 `{task_id}`、原 worktree `{worktree}` 和 PR `{url}`：以最新 `{default_branch}` / `{base_sha}` 为基线，处理 `{冲突文件/原需求遗漏及具体证据}`，保持原 Spec/Plan 的验收要求。完成后复查修复、跑 `{必要验证}`，推送同一 PR `{url}`，报告最终 head 和验证后停止写入；由协调 session 调度新的独立 subagent 复审并按门禁合并。
++> 继续本任务 `{task_id}`、原 worktree `{worktree}` 和 PR `{url}`：以最新 `{default_branch}` / `{base_sha}` 为基线，处理 `{冲突文件/原需求遗漏及具体证据}`，保持原 Spec/Plan 的验收要求。完成后复查修复、跑 `{必要验证}`，推送同一 PR `{url}`，报告最终 head 和验证后停止写入；由协调 session 按新增差异及受影响范围安排独立复核，再按门禁合并。
+@@ -33 +33 @@ PR 冲突、主干/共享接线集成及原需求遗漏优先交回原执行 ses
+-reviewer 使用新 subagent、只读，并沿用协调模型：
++首次 reviewer 使用新 subagent、只读，并沿用协调模型；后续复核按[状态规程](coordination.md#工作分流与独立-subagent)复用仍独立的原 reviewer，影响扩大时扩展范围，必要时更换。
+@@ -36,0 +37,4 @@ reviewer 使用新 subagent、只读，并沿用协调模型：
++修复或候选变化后的复核提示（原 reviewer 用 followup_task；更换时一并提供可信的前次覆盖与报告）：
++
++> 复核任务 `{task_id}`、PR `{url}`、worktree `{worktree}`：前次 head/base `{old_head}/{old_base}`、报告 `{previous_report}`，当前 head/base `{sha}/{base_sha}`。核对 `{原问题及修复、新增差异}` 和受影响生产路径，确认前次覆盖仍适用；影响无法收窄、范围扩大或重新组织实现时扩大审核，前次覆盖不可信时完整审核。保持只读，报告最终候选结论、问题闭环、未解决项、复用报告的原 SHA/位置/适用原因及本轮补测，不宣称旧测试已在新 SHA 重跑。不要修改文件、run 状态、评论或合并 PR。
++
+@@ -39 +43 @@ fixer 使用另一个新 subagent；先确认当前唯一写入者已停写：
+-> 修复任务 `{task_id}` 在独立审核中确认的 `{问题/证据}`，限定 worktree `{worktree}`、PR `{url}`、head `{sha}`、base `{base_sha}` 和修改范围 `{scope}`。保持固定 Spec/Plan 和原断言；跑 `{最小必要验证}`，在原分支提交并报告实际 commit/命令/结果，然后停止写入。不要自行 push、评论/合并 PR、改 run 状态或提示其他聊天。出现冲突、实质需求遗漏或需扩大验收时报告给协调，优先交回原执行 session。你的报告不是最终独立审核，由新的只读 reviewer 复核改动。
++> 修复任务 `{task_id}` 在独立审核中确认的 `{问题/证据}`，限定 worktree `{worktree}`、PR `{url}`、head `{sha}`、base `{base_sha}` 和修改范围 `{scope}`。保持固定 Spec/Plan 和原断言；跑 `{最小必要验证}`，在原分支提交并报告实际 commit/命令/结果，然后停止写入。不要自行 push、评论/合并 PR、改 run 状态或提示其他聊天。出现冲突、实质需求遗漏或需扩大验收时报告给协调，优先交回原执行 session。你的报告不是最终独立审核，由未参与写入的独立 reviewer 复核改动。
+@@ -45 +49 @@ fixer 使用另一个新 subagent；先确认当前唯一写入者已停写：
+-> 继续本聊天用户已授权的 roadmap-runner 流程，run `{run_id}`，状态文件 `{state_path}`，仓库 `{repository}`、主项目路径 `{repo_root}`、Codex 项目 `{project_id}`。先读该项目的 roadmap-runner 技能、AGENTS、状态中绑定的 roadmap 和当前任务 Spec/Plan。范围严格为 `{ordered_task_ids}`，不启动范围外任务。协调 session 保持当前模型；创建执行 session 和给它发送后续提示都显式设置 gpt-6-luna、xhigh，每项新任务使用新 session + worktree。每轮先核对execution-map范围、状态、依赖和明确前置，再核run、session历史和真实PR；退出范围、前置未满足或事实未知时只对账原动作，不新派发。未知动作先核对，不能重复创建或发送。冲突、主干集成和原需求遗漏优先交回原执行 session；协调新建独立只读 review subagent，局部修复交给另一独立 fix subagent，修复后再独立复核。上一个任务独立复审、修复、在 PR 记录 agent 身份/报告、问题和验证、以预期head合并且真实确认，同步acceptance/execution-map且前置成果进入最新默认主干后，才启动下一项。活跃 session 用紧凑 wait_threads 快照，无可操作进展就结束本轮。不与执行 session 同时写同一 worktree。仅余允许后置的少量人工补验时登记当前任务acceptance明细并同步execution-map待人工链接，不加入尚未完整排入的未来阶段；自动补验不改称人工，归档通过不当成本次通过，记录 passed_with_manual_pending 后正常合入推进，不重复申请单项批准；真实失败或缺环境/权限/能力仍保留阻塞，不伪造验收通过。保持安静，仅重要进展、完成、真实失败或需要用户行动时通知。全部选定任务完成实现、独立复审、必要验证、真实合并及acceptance/execution-map同步后，汇总PR/实现交付与待人工项，将run标记完成并暂停本heartbeat；保留交付记录与待验链接，不等待允许后置的人工结果。用户明确的先验收再合入要求、授权及其他例外以状态内原始指令为准。
++> 继续本聊天用户已授权的 roadmap-runner 流程，run `{run_id}`，状态文件 `{state_path}`，仓库 `{repository}`、主项目路径 `{repo_root}`、Codex 项目 `{project_id}`。先读该项目的 roadmap-runner 技能、AGENTS、状态中绑定的 roadmap 和当前任务 Spec/Plan。范围严格为 `{ordered_task_ids}`，不启动范围外任务。协调 session 保持当前模型；创建执行 session 和给它发送后续提示都显式设置 gpt-6-luna、xhigh，每项新任务使用新 session + worktree。每轮先核对execution-map范围、状态、依赖和明确前置，再核run、session历史和真实PR；退出范围、前置未满足或事实未知时只对账原动作，不新派发。未知动作先核对，不能重复创建或发送。冲突、主干集成和原需求遗漏优先交回原执行 session；首次审核新建独立只读 review subagent，局部修复交给另一独立 fix subagent；未参与写入的原 reviewer 按新增差异及受影响路径复核，必要时扩大范围或更换 reviewer。候选变化后重新确认，未受影响报告按原 SHA 引用，不默认全套重跑；当前 head/base 的审核、验证汇总和合并门禁仍须齐备。上一个任务独立复审、修复、在 PR 记录 agent 身份/报告、问题和验证、以预期head合并且真实确认，同步acceptance/execution-map且前置成果进入最新默认主干后，才启动下一项。活跃 session 用紧凑 wait_threads 快照，无可操作进展就结束本轮。不与执行 session 同时写同一 worktree。仅余允许后置的少量人工补验时登记当前任务acceptance明细并同步execution-map待人工链接，不加入尚未完整排入的未来阶段；自动补验不改称人工，归档通过不当成本次通过，记录 passed_with_manual_pending 后正常合入推进，不重复申请单项批准；真实失败或缺环境/权限/能力仍保留阻塞，不伪造验收通过。保持安静，仅重要进展、完成、真实失败或需要用户行动时通知。全部选定任务完成实现、独立复审、必要验证、真实合并及acceptance/execution-map同步后，汇总PR/实现交付与待人工项，将run标记完成并暂停本heartbeat；保留交付记录与待验链接，不等待允许后置的人工结果。用户明确的先验收再合入要求、授权及其他例外以状态内原始指令为准。
+@@ -55 +59 @@ fixer 使用另一个新 subagent；先确认当前唯一写入者已停写：
+-> 实际验证：`{command}`，`{result}`，候选 `{sha}`。待人工补验 `{验收项及roadmap定位}` / 无人工残留。已授权例外 `{来源及限制}` / 无例外。人工登记不表示通过；其余验证完成后正常合入推进。合并前另核对最终 head、base 和必需检查。
++> 实际验证：本轮 `{command/result}`；复用 `{原受测SHA/报告位置/未受影响范围及原因}` / 无复用，最终候选 `{sha}`，不将原测试报告归属改为新 SHA。待人工补验 `{验收项及roadmap定位}` / 无人工残留。已授权例外 `{来源及限制}` / 无例外。人工登记不表示通过；其余验证完成后正常合入推进。合并前另核对最终 head、base 和必需检查。
+diff --git a/SteerlineFlow/testing/runtime-progress.md b/SteerlineFlow/testing/runtime-progress.md
+index ac482272..95e3b889 100644
+--- a/SteerlineFlow/testing/runtime-progress.md
++++ b/SteerlineFlow/testing/runtime-progress.md
+@@ -5 +5 @@ SteerLine 固定测试安排与进度协议：
+-测试安排已固定。仅按 Plan 执行登记入口，不自动增加或修改测试。运行时环境变量 STEERLINE_PROGRESS_FILE 指向本次唯一测试进度文件，只允许固定安排声明的 test.<测试ID> 布尔字段；不得加入 publication、PR、报告或其它字段，也不得将它用于最终回复。开始或重跑先将对应字段置 false，完整通过（实际选择非零、无失败/意外跳过且输入和清理核验通过）才置 true；失败、跳过、未完成不得置 true。并行写入须加锁合并并原子替换，不覆盖其它字段。原始日志及报告仍按项目入口保存，不要用 Agent 自述或单独一个命令 exit 0 替代入口的完整核验。执行前逐项核对固定安排中每个测试 ID 与其真实入口的进度接线；写入器文件已存在或只有部分入口已接线，都不代表其它 ID 已汇报。未接线的原入口先补齐开始/重跑清零及完整成功分支的写入，再实际执行该入口；按它在固定安排中对应的 ID 汇报，不遗漏定向或聚合入口。不修改固定测试定义、选择或通过要求。保留登记入口与测试语义；允许按入口文档准备并传入必需的环境、输入、输出定位参数，不得借参数缩窄测试选择。进度文件缺失或接入失败应明确报告并保留未完成，不能读取既往报告后补写或事后手填 true。正式 writer：tools/testing/RuntimeProgress.ps1。逐 ID 核对真实入口接线。
++测试安排已固定。仅按 Plan 执行登记入口，不自动增加或修改测试。运行时环境变量 STEERLINE_PROGRESS_FILE 指向本次唯一测试进度文件，只允许固定安排声明的 test.<测试ID> 布尔字段；不得加入 publication、PR、报告或其它字段，也不得将它用于最终回复。开始或重跑先将对应字段置 false，完整通过（实际选择非零、无失败/意外跳过且输入和清理核验通过）才置 true；失败、跳过、未完成不得置 true。并行写入须加锁合并并原子替换，不覆盖其它字段。原始日志及报告仍按项目入口保存，不要用 Agent 自述或单独一个命令 exit 0 替代入口的完整核验。不修改固定测试定义、选择或通过要求。保留登记入口与测试语义；允许按入口文档准备并传入必需的环境、输入、输出定位参数，不得借参数缩窄测试选择。进度文件缺失或接入失败应明确报告并保留未完成，不能读取既往报告后补写或事后手填 true。正式 writer：tools/testing/RuntimeProgress.ps1。
+@@ -8 +8,3 @@ SteerLine 固定测试安排与进度协议：
+-正式 PowerShell 写入器（支持 Windows PowerShell 5.1）为同版本 tools/testing/RuntimeProgress.ps1，由原登记测试入口 dot-source。只有逐项确认入口已覆盖本轮对应的全部 ID 才直接沿用；仅检查文件存在或 dot-source 语句不足以证明接线完整。入口开始调用 Set-RuntimeProgress -Name 'test.<原ID>' -Completed $false -IfDeclared；仅在该入口原始报告、实际非零选择、输入和清理全部核验通过后调用同函数 -Completed $true -IfDeclared。保留真实入口接线作为项目改动；没有注入变量时函数无操作。非 PowerShell 入口可实现同一协议，不能让模型事后代填。
++仅在首次接入、测试入口或进度逻辑变更、实际进度异常时，按受影响 ID 检查入口接线；其它任务直接执行固定安排的登记入口，不逐项重查源码。协议及 writer 同源只证明文件来源，不证明入口已接线；触发检查时须核对开始/重跑清零和完整成功分支更新，不能仅凭文件存在、dot-source 或部分聚合项推断全部覆盖。发现缺口时报告具体入口、ID 和原因，按任务范围修复；需扩大范围时报告待决，缺口未闭合保留未完成。修复后真实执行原入口，不用旧报告回填。
++
++正式 PowerShell 写入器（支持 Windows PowerShell 5.1）为同版本 tools/testing/RuntimeProgress.ps1，由原登记测试入口 dot-source。接线由入口维护者及其契约测试保证：入口开始调用 Set-RuntimeProgress -Name 'test.<原ID>' -Completed $false -IfDeclared；仅在该入口原始报告、实际非零选择、输入和清理全部核验通过后调用同函数 -Completed $true -IfDeclared。没有注入变量时函数无操作。非 PowerShell 入口可实现同一协议，不能让模型事后代填。
+diff --git a/internal/prompts/materials/testing.md b/internal/prompts/materials/testing.md
+index ac482272..95e3b889 100644
+--- a/internal/prompts/materials/testing.md
++++ b/internal/prompts/materials/testing.md
+@@ -5 +5 @@ SteerLine 固定测试安排与进度协议：
+-测试安排已固定。仅按 Plan 执行登记入口，不自动增加或修改测试。运行时环境变量 STEERLINE_PROGRESS_FILE 指向本次唯一测试进度文件，只允许固定安排声明的 test.<测试ID> 布尔字段；不得加入 publication、PR、报告或其它字段，也不得将它用于最终回复。开始或重跑先将对应字段置 false，完整通过（实际选择非零、无失败/意外跳过且输入和清理核验通过）才置 true；失败、跳过、未完成不得置 true。并行写入须加锁合并并原子替换，不覆盖其它字段。原始日志及报告仍按项目入口保存，不要用 Agent 自述或单独一个命令 exit 0 替代入口的完整核验。执行前逐项核对固定安排中每个测试 ID 与其真实入口的进度接线；写入器文件已存在或只有部分入口已接线，都不代表其它 ID 已汇报。未接线的原入口先补齐开始/重跑清零及完整成功分支的写入，再实际执行该入口；按它在固定安排中对应的 ID 汇报，不遗漏定向或聚合入口。不修改固定测试定义、选择或通过要求。保留登记入口与测试语义；允许按入口文档准备并传入必需的环境、输入、输出定位参数，不得借参数缩窄测试选择。进度文件缺失或接入失败应明确报告并保留未完成，不能读取既往报告后补写或事后手填 true。正式 writer：tools/testing/RuntimeProgress.ps1。逐 ID 核对真实入口接线。
++测试安排已固定。仅按 Plan 执行登记入口，不自动增加或修改测试。运行时环境变量 STEERLINE_PROGRESS_FILE 指向本次唯一测试进度文件，只允许固定安排声明的 test.<测试ID> 布尔字段；不得加入 publication、PR、报告或其它字段，也不得将它用于最终回复。开始或重跑先将对应字段置 false，完整通过（实际选择非零、无失败/意外跳过且输入和清理核验通过）才置 true；失败、跳过、未完成不得置 true。并行写入须加锁合并并原子替换，不覆盖其它字段。原始日志及报告仍按项目入口保存，不要用 Agent 自述或单独一个命令 exit 0 替代入口的完整核验。不修改固定测试定义、选择或通过要求。保留登记入口与测试语义；允许按入口文档准备并传入必需的环境、输入、输出定位参数，不得借参数缩窄测试选择。进度文件缺失或接入失败应明确报告并保留未完成，不能读取既往报告后补写或事后手填 true。正式 writer：tools/testing/RuntimeProgress.ps1。
+@@ -8 +8,3 @@ SteerLine 固定测试安排与进度协议：
+-正式 PowerShell 写入器（支持 Windows PowerShell 5.1）为同版本 tools/testing/RuntimeProgress.ps1，由原登记测试入口 dot-source。只有逐项确认入口已覆盖本轮对应的全部 ID 才直接沿用；仅检查文件存在或 dot-source 语句不足以证明接线完整。入口开始调用 Set-RuntimeProgress -Name 'test.<原ID>' -Completed $false -IfDeclared；仅在该入口原始报告、实际非零选择、输入和清理全部核验通过后调用同函数 -Completed $true -IfDeclared。保留真实入口接线作为项目改动；没有注入变量时函数无操作。非 PowerShell 入口可实现同一协议，不能让模型事后代填。
++仅在首次接入、测试入口或进度逻辑变更、实际进度异常时，按受影响 ID 检查入口接线；其它任务直接执行固定安排的登记入口，不逐项重查源码。协议及 writer 同源只证明文件来源，不证明入口已接线；触发检查时须核对开始/重跑清零和完整成功分支更新，不能仅凭文件存在、dot-source 或部分聚合项推断全部覆盖。发现缺口时报告具体入口、ID 和原因，按任务范围修复；需扩大范围时报告待决，缺口未闭合保留未完成。修复后真实执行原入口，不用旧报告回填。
++
++正式 PowerShell 写入器（支持 Windows PowerShell 5.1）为同版本 tools/testing/RuntimeProgress.ps1，由原登记测试入口 dot-source。接线由入口维护者及其契约测试保证：入口开始调用 Set-RuntimeProgress -Name 'test.<原ID>' -Completed $false -IfDeclared；仅在该入口原始报告、实际非零选择、输入和清理全部核验通过后调用同函数 -Completed $true -IfDeclared。没有注入变量时函数无操作。非 PowerShell 入口可实现同一协议，不能让模型事后代填。
