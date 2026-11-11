@@ -146,3 +146,17 @@ RM-A11 不要求将测试 PR 合入业务主线。专用测试 base、PR 状态�
 | 活动中心浏览器回归 | `test-results/pr-main-l3-01` 首次使用陈旧 Web 产物。重新构建后，`test-results/pr-main-l3-02` 的抽屉与独立阅读页通过，额外的活动反馈用例等待两次候选启动提交时仅观察到一次，整项 `runtime.async-activities` 仍失败。该用例及候选启动前端代码与整合基线一致，未在纯主线单独复现。 |
 
 本次 PR 整理未再次运行真实模型或写入测试远端。真实联验证据仍以 `native-09` 为准。
+
+## 启动前的运行环境复验
+
+受测源码为 `e694d7963fe19335772144d2943ea72bdbd964d5` 加本次工作树改动。正式证据位于 `C:\SteerlineDebug\wt-5144-refactoring-readiness\test-results`，各报告保存实际测试范围与工作树状态。
+
+| 验证 | 结果及证据 |
+| --- | --- |
+| 维护表单定向测试及生产构建 | 7 项通过。核对未就绪原因、处理入口、点击和回车阻断、配置切换、查询失败及后端拒绝后保留表单。生产构建通过。 |
+| L1 `l1.minimum` | 通过，`L1/1502631e6e884f5e90c86bb4758b8900/summary.json`。 |
+| L2 `smoke.delivery` | 通过，`L2/1502631e6e884f5e90c86bb4758b8900/summary.json`。 |
+| L3 `runtime.refactoring-maintenance` | 通过，`L3/1502631e6e884f5e90c86bb4758b8900/summary.json`。公开接口读到就绪后撤销资格，启动被拒且行动和 Runner 提交均未增加。重新检测通过后从浏览器启动并完成原受控交付流程。 |
+| L4 `go.http` | 通过，`L4/27259a70509044b09ab10bb604b6d129/summary.json`。 |
+
+本次复验覆盖组件和受控流程。真实模型联验沿用上文历史记录的受测版本。

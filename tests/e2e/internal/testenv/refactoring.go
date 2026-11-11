@@ -2,20 +2,24 @@ package testenv
 
 import (
 	"encoding/json"
+	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
-	"os"
-	"os/exec"
-	"path/filepath"
 )
 
 func RefactoringMaintenance(s *Scenario) {
+	const profile = "controlled"
 	p := s.NewProject("refactoring")
-	p.PrepareControlledEnvironment("controlled")
+	p.PrepareControlledEnvironment(profile)
 	p.CreateTasks()
 	project, e := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
 	s.Must(e)
@@ -43,7 +47,7 @@ func RefactoringMaintenance(s *Scenario) {
 		DirectionName   string `json:"direction_name"`
 		DirectionPrompt string `json:"direction_prompt"`
 	}
-	stale := ref.Start{Direction: "custom:shared-fixtures", DirectionRevision: ref.Digest([]byte("old")), Profile: "local", Strategy: "cautious", Budget: ref.Budget{Rounds: 1}}
+	stale := ref.Start{Direction: "custom:shared-fixtures", DirectionRevision: ref.Digest([]byte("old")), Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 1}}
 	body, e := json.Marshal(stale)
 	s.Must(e)
 	staleRequest := httpcontract.CommandEnvelope{RequestID: ref.ID(), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "refactoring_start", TargetID: identity.RepositoryIdentity, ExpectedVersion: 1, Payload: body}
@@ -52,6 +56,65 @@ func RefactoringMaintenance(s *Scenario) {
 	if rejected.Status != "rejected" || rejected.Diagnostic != "重构提示词已更新，请刷新并查看最新正文后重新启动" {
 		s.t.Fatal("stale preview did not reject before launch", rejected)
 	}
+	readiness := func(want string) {
+		s.t.Helper()
+		s.Wait("maintenance environment "+want, func() (bool, error) {
+			var view struct {
+				Project     struct{ Status string }
+				Environment string
+				Reason      string
+			}
+			err := client.Get(s.Context, prefix+"/refactoring/readiness?profile="+profile, &view)
+			if err == nil && view.Project.Status == "ready" && view.Environment == want {
+				if want == "not_ready" && !strings.Contains(view.Reason, "controlled qualification revoked") {
+					s.t.Fatal("missing environment reason", view)
+				}
+				return true, nil
+			}
+			return false, err
+		})
+	}
+	readiness("ready")
+	var current EnvironmentOption
+	for _, option := range p.EnvironmentOptions() {
+		if option.ID == profile {
+			current = option
+			break
+		}
+	}
+	if current.Key == "" || current.Status != "ready" {
+		s.t.Fatal("missing the qualification to revoke", current)
+	}
+	invalidated := p.EnvironmentCommand("environment_invalidate", map[string]any{
+		"environment_key": current.Key, "expected_current_revision": current.CurrentRevision, "reason": "controlled qualification revoked",
+	})
+	if invalidated.Status != "applied" {
+		s.t.Fatal("could not revoke the observed qualification", invalidated)
+	}
+	fixturePath := filepath.Join(runnerstatepath.Directory(p.Home), "caller-fixture.json")
+	before, e := os.ReadFile(fixturePath)
+	s.Must(e)
+	stale.DirectionRevision = ref.Digest([]byte(directionPrompt))
+	staleRequest.RequestID = ref.ID()
+	staleRequest.Payload, e = json.Marshal(stale)
+	s.Must(e)
+	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &rejected))
+	if rejected.Status != "rejected" || !strings.Contains(rejected.Diagnostic, "controlled qualification revoked") {
+		s.t.Fatal("the start command accepted a revoked qualification", rejected)
+	}
+	readiness("not_ready")
+	var empty struct{ Records []json.RawMessage }
+	s.Must(client.Get(s.Context, prefix+"/refactoring", &empty))
+	after, e := os.ReadFile(fixturePath)
+	s.Must(e)
+	var beforeRunner, afterRunner controlled.RunnerFixture
+	s.Must(json.Unmarshal(before, &beforeRunner))
+	s.Must(json.Unmarshal(after, &afterRunner))
+	if len(empty.Records) != 0 || !maps.Equal(beforeRunner.SubmitCalls, afterRunner.SubmitCalls) {
+		s.t.Fatal("a revoked qualification created an action or submitted a Runner request")
+	}
+	p.ValidateDeclaredControlledEnvironment(profile)
+	readiness("ready")
 	command := func(action, target string, revision uint64, payload any) httpcontract.CommandEnvelope {
 		body, e := json.Marshal(payload)
 		s.Must(e)

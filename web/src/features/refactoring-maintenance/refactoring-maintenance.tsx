@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { SafeLink } from "../../shared/ui/status";
 import type { ProjectReadiness } from "../../shared/api/types";
 import "./refactoring-maintenance.css";
 import { useActivityFeedback } from "../activities/feedback/feedback";
+import { environmentLink } from "../environment-checks/use-readiness";
 
 type Input = {
   direction: string;
@@ -64,6 +65,12 @@ type Index = {
   profiles: { id: string; name: string }[];
   default_profile: string;
 };
+type StartReadiness = {
+  branch: string;
+  project: ProjectReadiness;
+  environment: "ready" | "not_ready" | "unverified" | "bypassed";
+  reason?: string;
+};
 type DirectionCatalogue = {
   directions: { id: string; name: string; prompt: string; revision: string }[];
   diagnostics?: string[];
@@ -96,6 +103,7 @@ export function RefactoringMaintenance() {
   const [rounds, setRounds] = useState("1");
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
+  const [startError, setStartError] = useState("");
   const key = [
     api.home,
     identity.project_id,
@@ -122,11 +130,21 @@ export function RefactoringMaintenance() {
     enabled: online && /^[a-f0-9]{32}$/.test(selected),
     refetchInterval: 1500,
   });
+  const working =
+    (index.data?.records.some((r) => r.active) ?? false) ||
+    (pendingRequests?.().some((r) => r.action === "refactoring_start") ??
+      false);
+  const selectedProfile = index.data?.profiles.find((p) => p.id === profile);
   const readiness = useQuery({
-    queryKey: [...key, "readiness"],
+    queryKey: [...key, "readiness", profile],
     queryFn: ({ signal }) =>
-      api.get<ProjectReadiness>("/maintenance/readiness", signal),
-    enabled: online,
+      api.get<StartReadiness>(
+        "/refactoring/readiness" +
+          (profile ? "?" + new URLSearchParams({ profile }) : ""),
+        signal,
+      ),
+    enabled: online && !working,
+    retry: false,
     refetchInterval: 10000,
   });
   useEffect(() => {
@@ -146,10 +164,6 @@ export function RefactoringMaintenance() {
   const current = detail.data;
   const directions = catalogue.data?.directions ?? [];
   const selectedDirection = directions.find(({ id }) => id === direction);
-  const working =
-    (index.data?.records.some((r) => r.active) ?? false) ||
-    (pendingRequests?.().some((r) => r.action === "refactoring_start") ??
-      false);
   async function command(
     action: string,
     target: string,
@@ -157,14 +171,23 @@ export function RefactoringMaintenance() {
     payload: Record<string, unknown>,
   ) {
     setError("");
+    const starting = action === "refactoring_start";
+    if (starting) setStartError("");
     feedback.notify("重构与维护");
     try {
       const receipt = await submit(
         api.envelope(action, target, revision, payload),
       );
       if (receipt?.status === "rejected") {
-        setError(receipt.diagnostic ?? "操作被拒绝");
-        if (action === "refactoring_start") void catalogue.refetch();
+        const reason = receipt.diagnostic ?? "操作被拒绝";
+        if (starting) {
+          setStartError(reason);
+          void readiness.refetch();
+          void catalogue.refetch();
+          void index.refetch();
+        } else {
+          setError(reason);
+        }
         return;
       }
       const result = receipt?.refactoring as { id?: string } | undefined;
@@ -172,10 +195,30 @@ export function RefactoringMaintenance() {
       await index.refetch();
       if (selected) await detail.refetch();
     } catch (e) {
-      setError(String(e));
+      if (starting) setStartError(String(e));
+      else setError(String(e));
     }
   }
   const disabled = !online || busy;
+  const qualification =
+    online && readiness.isSuccess ? readiness.data : undefined;
+  const projectReady = qualification?.project.status === "ready";
+  const environmentReady = qualification?.environment === "ready";
+  const environmentBypassed = qualification?.environment === "bypassed";
+  const canStart =
+    !disabled &&
+    !working &&
+    index.isSuccess &&
+    !!selectedDirection &&
+    catalogue.isSuccess &&
+    !catalogue.isFetching &&
+    !!selectedProfile &&
+    projectReady &&
+    (environmentReady || environmentBypassed) &&
+    !readiness.isFetching &&
+    !!(dollars || minutes || rounds);
+  const maintenanceParams = new URLSearchParams(params);
+  maintenanceParams.set("maintenance", "preparation");
   return (
     <div className="refactoring-page">
       <header className="page-heading">
@@ -199,22 +242,11 @@ export function RefactoringMaintenance() {
             已有维护行动在进行，启动配置已冻结；结束或停止后可发起新的维护。
           </p>
         )}
-        <p
-          className={
-            readiness.data?.status === "ready" ? "muted" : "notice amber"
-          }
-        >
-          {readiness.data?.status === "ready"
-            ? "项目维护已就绪"
-            : "项目维护未就绪"}{" "}
-          {readiness.data?.blockers?.join("；")}
-        </p>
         <form
           hidden={working}
           onSubmit={(e) => {
             e.preventDefault();
-            if (!selectedDirection || catalogue.isError || catalogue.isFetching)
-              return;
+            if (!canStart || !selectedDirection) return;
             void command("refactoring_start", identity.repository_identity, 1, {
               direction: selectedDirection.id,
               direction_revision: selectedDirection.revision,
@@ -280,9 +312,12 @@ export function RefactoringMaintenance() {
               <select
                 required
                 value={profile}
-                onChange={(e) => setProfile(e.target.value)}
+                onChange={(e) => {
+                  setProfile(e.target.value);
+                  setStartError("");
+                }}
               >
-                <option value="">选择已就绪配置</option>
+                <option value="">选择执行配置</option>
                 {index.data?.profiles.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name || p.id}
@@ -347,20 +382,58 @@ export function RefactoringMaintenance() {
             至少设置一项预算；任一项耗尽后自动收尾，已有成果仍推进至 PR
             和报告，不因预算等待人工。
           </p>
-          <Button
-            variant="default"
-            disabled={
-              disabled ||
-              working ||
-              !selectedDirection ||
-              catalogue.isError ||
-              catalogue.isFetching ||
-              !profile ||
-              readiness.data?.status !== "ready" ||
-              !(dollars || minutes || rounds)
+          <p className={projectReady ? "muted" : "notice amber"}>
+            {qualification
+              ? `项目基线${projectReady ? "已就绪" : "未就绪"} · ${qualification.branch}${qualification.project.commit ? " · " + qualification.project.commit.slice(0, 12) : ""}`
+              : "项目基线待核实"}
+            {!!qualification?.project.blockers.length &&
+              " · " + qualification.project.blockers.join("；")}
+            {!projectReady && (
+              <>
+                {" "}
+                ·{" "}
+                <Link to={{ search: "?" + maintenanceParams }}>
+                  打开项目维护
+                </Link>
+              </>
+            )}
+          </p>
+          <p
+            role="status"
+            className={
+              environmentReady || environmentBypassed ? "muted" : "notice amber"
             }
-            type="submit"
           >
+            {!selectedProfile
+              ? index.isSuccess && index.data.profiles.length === 0
+                ? "没有可用于维护的本地 Codex 执行配置"
+                : "请选择执行配置以核实运行环境"
+              : environmentReady
+                ? "所选运行环境已就绪"
+                : environmentBypassed
+                  ? "环境就绪检查已关闭"
+                  : qualification?.reason ||
+                    (readiness.isError
+                      ? "运行环境状态查询失败，请刷新重试"
+                      : "所选运行环境状态待核实")}
+            {selectedProfile && !environmentReady && !environmentBypassed && (
+              <>
+                {" "}
+                ·{" "}
+                <Link
+                  to={environmentLink(identity.project_id, selectedProfile.id)}
+                >
+                  打开项目运行环境
+                </Link>
+              </>
+            )}
+          </p>
+          {startError && (
+            <p className="notice amber" role="alert">
+              {startError}
+            </p>
+          )}
+          <Button variant="default" disabled={!canStart} type="submit">
             开始维护
           </Button>
         </form>

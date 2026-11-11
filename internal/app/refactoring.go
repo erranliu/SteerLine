@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/billingconfig"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/product/query"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/refactoring"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -251,7 +252,76 @@ func (p *refactoringPort) verify(ctx context.Context, r ref.Record, result ref.R
 	}
 	return fact, nil
 }
+
+type refactoringReadiness struct {
+	Branch      string       `json:"branch"`
+	Project     pm.Readiness `json:"project"`
+	Environment string       `json:"environment"`
+	Reason      string       `json:"reason,omitempty"`
+}
+
+func supportsRefactoringProfile(profile RunnerProfile) bool {
+	return profile.Execution.Adapter == "codex-app-server" && profile.Execution.Target.Kind == "local"
+}
+
+func (p *refactoringPort) readiness(ctx context.Context, id string) (refactoringReadiness, error) {
+	c := p.config
+	m := c.runtimeMaintenance
+	if m == nil {
+		return refactoringReadiness{}, errors.New("项目维护状态不可用")
+	}
+	project, err := m.projectReadiness(ctx)
+	if err != nil {
+		return refactoringReadiness{}, err
+	}
+	out := refactoringReadiness{Branch: c.Branch, Project: project, Environment: "unverified"}
+	if id == "" {
+		return out, nil
+	}
+	profile, err := c.RunnerExecution.Profile(id, "")
+	if err != nil || !supportsRefactoringProfile(profile) {
+		out.Environment, out.Reason = "not_ready", "所选执行配置不可用于本地 Codex 维护"
+		return out, nil
+	}
+	if !c.environmentPolicy.RequireReadiness() {
+		out.Environment = "bypassed"
+		return out, nil
+	}
+	if c.runtimeEnvironment == nil || c.runtimeNative == nil || project.Commit == "" {
+		out.Reason = "项目运行环境状态待核实"
+		return out, nil
+	}
+	// Use the observed baseline, without starting a remote check or preparing an environment.
+	source := func(ctx context.Context) (string, error) {
+		commit, err := c.runtimeEnvironment.observedSource(ctx, false)
+		if err == nil && commit != project.Commit {
+			err = errors.New("项目基线已变化，请重新核实运行环境")
+		}
+		return commit, err
+	}
+	_, record, err := c.runtimeEnvironment.qualifyEnvironment(ctx, id, "", source)
+	if err != nil {
+		out.Environment, out.Reason = "not_ready", err.Error()
+		if record.ID != "" && record.Status() != "ready" && record.DiagnosticText() != "" {
+			out.Reason += " · " + record.DiagnosticText()
+		}
+		return out, nil
+	}
+	if _, err = source(ctx); err != nil {
+		out.Reason = err.Error()
+		return out, nil
+	}
+	out.Environment = "ready"
+	return out, nil
+}
+
 func (p *refactoringPort) read(ctx context.Context, route string, values url.Values) (any, error) {
+	if route == "/refactoring/readiness" {
+		if len(values) == 0 || len(values) == 1 && len(values["profile"]) == 1 {
+			return p.readiness(ctx, values.Get("profile"))
+		}
+		return nil, errors.New("维护就绪查询只接受一个执行配置")
+	}
 	if len(values) > 0 {
 		return nil, errors.New("维护查询不接受额外参数")
 	}
@@ -276,7 +346,7 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 		}
 		profiles := []map[string]string{}
 		for _, profile := range p.config.RunnerExecution.Profiles {
-			if profile.Execution.Adapter == "codex-app-server" && profile.Execution.Target.Kind == "local" {
+			if supportsRefactoringProfile(profile) {
 				profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
 			}
 		}
