@@ -92,15 +92,19 @@ it("PMS keeps expired progress as history and explains old PR completion", async
     ...view,
     material_status: "outdated",
     association_available: false,
-    passed: 0,
-    rows: view.rows.map((r) => ({ ...r, status: "stale" })),
+    passed: 1,
+    pending: 0,
+    progress_version: 28,
+    rows: view.rows.map((r) => ({ ...r, status: "passed" })),
   });
   mountFeature(<PlanTests run={run} />, api, testClient());
   expect(await screen.findByText(/此候选 PR 合入仍可完成任务/)).toBeVisible();
-  expect(await screen.findByText(/历史测试安排/)).toBeVisible();
-  expect(screen.queryByText(/共 1 项 · 通过/)).toBeNull();
+  expect(
+    screen.getByText("旧版本测试结果 · 已通过 1/1 · 未完成 0"),
+  ).toBeVisible();
+  expect(screen.queryByRole("progressbar")).toBeNull();
   fireEvent.click(screen.getByText("查看测试明细"));
-  fireEvent.click(screen.getByText(/规则验证 · L1/));
+  fireEvent.click(screen.getByText("规则验证 · L1 / isolated · 通过"));
   expect(screen.queryByText("report:original")).toBeNull();
 });
 
@@ -127,12 +131,13 @@ it.each(["outdated", "unknown"] as const)(
       client.setQueryData(projectQueries(api).planTests(run).queryKey, {
         ...view,
         material_status: "current",
-        passed: 1,
       }),
     );
     expect(screen.getByText(text)).toBeVisible();
     if (material_status === "outdated") {
-      expect(await screen.findByText(/历史测试安排/)).toBeVisible();
+      expect(
+        await screen.findByText("旧版本测试结果 · 尚无进度记录 · 共 1 项"),
+      ).toBeVisible();
       expect(screen.queryByRole("progressbar")).toBeNull();
     }
     client.clear();

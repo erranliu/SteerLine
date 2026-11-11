@@ -47,13 +47,14 @@ export function PlanTests({ run }: { run: Candidate }) {
     : [run.material_status, view?.material_status].includes("unknown")
       ? "unknown"
       : "current";
+  const historical =
+    material === "outdated" && view?.material_status !== "unknown";
   return (
     <section className="settings-panel" aria-label="计划测试">
       <h3>计划测试</h3>
       {material === "outdated" && (
         <p className="notice amber">
-          已过期 · 保留候选。当前测试关联不可用，以下仅为历史；此候选 PR
-          合入仍可完成任务。
+          已过期 · 保留候选。此候选 PR 合入仍可完成任务。
         </p>
       )}
       {material === "unknown" && (
@@ -77,7 +78,15 @@ export function PlanTests({ run }: { run: Candidate }) {
       {view?.diagnostic && <p className="muted">{view.diagnostic}</p>}
       {view?.status === "ready" && (
         <>
-          {view.association_available === false || material === "outdated" ? (
+          {historical ? (
+            <p>
+              旧版本测试结果 ·{" "}
+              {view.progress_version
+                ? `已通过 ${view.passed}/${view.total} · 未完成 ${view.pending}`
+                : `尚无进度记录 · 共 ${view.total} 项`}
+            </p>
+          ) : view.association_available === false ||
+            material === "outdated" ? (
             <p>历史测试安排 · 共 {view.total} 项 · 当前关联不可用</p>
           ) : view.total === 0 ? (
             <p>未安排自动测试</p>

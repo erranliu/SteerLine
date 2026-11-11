@@ -51,7 +51,7 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 		freshness = p.maintenance.freshness(ctx, c)
 	}
 	encode := func(v testmanagement.View) (json.RawMessage, error) {
-		if freshness != "current" {
+		if freshness == "unknown" {
 			v.Passed = 0
 			v.Pending = 0
 			v.Diagnostic = "当前测试关联不可用：" + freshness + "；以下为原候选历史"
