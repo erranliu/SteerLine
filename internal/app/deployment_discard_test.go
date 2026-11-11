@@ -17,6 +17,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
+	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -26,7 +27,7 @@ import (
 
 func TestDeploymentDiscardRuns(t *testing.T) {
 	t.Run("offline-flow", testDiscardOfflineFlow)
-	for _, schema := range []string{"current", "schema40"} {
+	for _, schema := range []string{"current", "schema44"} {
 		t.Run("task-graph-"+schema, func(t *testing.T) {
 			c, _ := nativeTaskFixture(t)
 			prepareStoppedRunRepository(t, c)
@@ -65,24 +66,13 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 			})
 			require(t, err)
 			require(t, store.Close())
-			if schema == "schema40" {
-				makeDiscardSchema40(t, c)
+			if schema == "schema44" {
+				makeDiscardSchema44(t, c)
 			}
 			beforeFile, err := os.ReadFile(filepath.Join(c.RunDir, "steerline.db"))
 			require(t, err)
 			dir := filepath.Join(t.TempDir(), "prepared-project")
 			counts, err := prepareDiscardedTasks(ctx, c, dir)
-			if schema == "schema40" {
-				if err == nil {
-					t.Fatal("retired schema admitted for discard")
-				}
-				afterFile, readErr := os.ReadFile(filepath.Join(c.RunDir, "steerline.db"))
-				require(t, readErr)
-				if !bytes.Equal(beforeFile, afterFile) {
-					t.Fatal("rejected schema modified original database")
-				}
-				return
-			}
 			require(t, err)
 			if counts.Tasks != 2 || counts.Dependencies != 1 {
 				t.Fatal(counts)
@@ -116,14 +106,14 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 			if !bytes.Equal(beforeFile, afterFile) {
 				t.Fatal("discard preparation modified original database")
 			}
-			if schema == "schema40" {
+			if schema == "schema44" {
 				if normal, err := OpenNativeTaskReader(ctx, &c); err == nil {
 					normal.Close()
-					t.Fatal("normal reader admitted schema 40")
+					t.Fatal("normal reader admitted schema 44")
 				}
 				if writer, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db")); err == nil {
 					writer.Close()
-					t.Fatal("normal writer admitted schema 40")
+					t.Fatal("normal writer admitted schema 44")
 				}
 			}
 			original, err := openDiscardTaskReader(ctx, &c)
@@ -191,7 +181,7 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 }
 
 func testDiscardOfflineFlow(t *testing.T) {
-	for _, fault := range []string{"original", "schema40", "schema40-missing-shutdown", "schema40-wrong-host", "schema40-invalid-definition", "unsupported-schema", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown"} {
+	for _, fault := range []string{"original", "schema44", "schema44-missing-shutdown", "schema44-wrong-host", "schema44-invalid-definition", "schema44-unbound-roadmap", "unsupported-schema", "future-schema", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown"} {
 		t.Run(fault, func(t *testing.T) { testDiscardOfflineConfiguration(t, fault) })
 	}
 }
@@ -231,12 +221,12 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	require(t, err)
 	process.Created = "previous-os-generation"
 	cp.Service.ProcessIdentity.Created = process.Created
-	interrupted := strings.HasPrefix(fault, "interrupted") || fault == "missing-shutdown" || fault == "schema40-missing-shutdown"
+	interrupted := strings.HasPrefix(fault, "interrupted") || fault == "missing-shutdown" || fault == "schema44-missing-shutdown"
 	if strings.HasPrefix(fault, "interrupted") {
 		cp.Service.Status, cp.Service.Ready = "ready", true
 	}
 	switch fault {
-	case "interrupted-wrong-host", "schema40-wrong-host":
+	case "interrupted-wrong-host", "schema44-wrong-host":
 		cp.Service.ProcessIdentity.Created = "foreign-host"
 	case "interrupted-wrong-repository":
 		cp.Repository.Branch = "foreign"
@@ -275,30 +265,41 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	}
 	saved, err := os.ReadFile(GlobalExecutionConfigPath())
 	require(t, err)
-	if strings.HasPrefix(fault, "schema40") || fault == "unsupported-schema" {
-		makeDiscardSchema40(t, c)
-		if fault == "schema40-invalid-definition" || fault == "unsupported-schema" {
-			rawDB, err := sql.Open("sqlite", filepath.Join(c.RunDir, "steerline.db"))
-			require(t, err)
-			stmt := `ALTER TABLE tasks ADD COLUMN unexpected TEXT`
-			if fault == "unsupported-schema" {
-				stmt = `UPDATE schema_migrations SET version=39`
-			}
-			_, err = rawDB.Exec(stmt)
-			require(t, err)
-			require(t, rawDB.Close())
-		}
+	if strings.HasPrefix(fault, "schema44") {
+		makeDiscardSchema44(t, c)
 	}
+	switch fault {
+	case "schema44-invalid-definition":
+		execDiscardFixtureSQL(t, c, `ALTER TABLE tasks ADD COLUMN unexpected TEXT`)
+	case "unsupported-schema":
+		execDiscardFixtureSQL(t, c, `DELETE FROM schema_migrations`)
+	case "future-schema":
+		execDiscardFixtureSQL(t, c, `UPDATE schema_migrations SET version=?`, sqlite.SchemaVersion+1)
+	case "schema44-unbound-roadmap":
+		// A schema 44 document batch bound its sole execution on the parent.
+		r := roadmap.Record{Purpose: "documents", ID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1,
+			Runner: *cp.Service.RunnerBuild, Request: runnercontract.Request{RequestID: "original"},
+			Submission: "started", RunID: "missing-run", InputDigest: "original-input"}
+		execDiscardFixtureSQL(t, c, `INSERT INTO roadmaps(project_identity,roadmap_id,revision,payload) VALUES(?,?,?,?)`,
+			r.Project, r.ID, r.Revision, mustJSON(roadmap.StoreValue(r)))
+	}
+	originalDB, err := os.ReadFile(filepath.Join(c.RunDir, "steerline.db"))
+	require(t, err)
 	result, err := prepareApplicationDiscard(ctx, exe, strings.Repeat("c", 32), func() error {
 		if fault == "changed-during-preparation" {
 			require(t, os.WriteFile(GlobalExecutionConfigPath(), append(saved, '\n'), 0600))
 		}
 		return nil
 	})
-	blocked := strings.HasPrefix(fault, "schema40") || fault == "changed-during-preparation" || fault == "changed-runner" || strings.HasPrefix(fault, "interrupted-") || fault == "corrupt-shutdown" || fault == "stale-shutdown" || fault == "schema40-wrong-host" || fault == "schema40-invalid-definition" || fault == "unsupported-schema"
+	blocked := fault == "changed-during-preparation" || fault == "changed-runner" || strings.HasPrefix(fault, "interrupted-") ||
+		fault == "corrupt-shutdown" || fault == "stale-shutdown" || fault == "schema44-wrong-host" ||
+		fault == "schema44-invalid-definition" || fault == "schema44-unbound-roadmap" || fault == "unsupported-schema" || fault == "future-schema"
 	if blocked {
 		if err == nil {
 			t.Fatal("discard accepted changed ownership or concurrent configuration", fault)
+		}
+		if fault == "schema44-unbound-roadmap" && !strings.Contains(err.Error(), "original generation resource settlement unverified") {
+			t.Fatal("discard did not check the original document batch binding", err)
 		}
 		if _, err := os.Stat(filepath.Join(c.RunDir, "steerline.db")); err != nil {
 			t.Fatal("blocked discard moved original state", err)
@@ -325,8 +326,10 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	if result.Outcome != "prepared" || result.Discard == nil || result.Discard.Phase != "complete" || result.Facts.NativeResources != "verified" || len(result.Discard.Projects) != 1 {
 		t.Fatal(result)
 	}
-	if _, err := os.Stat(filepath.Join(result.Discard.Archive, "project-state", filepath.Base(c.RunDir), "steerline.db")); err != nil {
-		t.Fatal(err)
+	archivedDB, err := os.ReadFile(filepath.Join(result.Discard.Archive, "project-state", filepath.Base(c.RunDir), "steerline.db"))
+	require(t, err)
+	if !bytes.Equal(archivedDB, originalDB) {
+		t.Fatal("discard changed the archived database")
 	}
 	fresh, err := OpenNativeTaskReader(ctx, &c)
 	require(t, err)
@@ -341,17 +344,21 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	require(t, err)
 }
 
-// Reproduce the actual pre-activity-center layout, including its BLOB setting
-// and absent tables/indexes, rather than only changing the version stamp.
-func makeDiscardSchema40(t *testing.T, c Config) {
+// Schema 45 added three observation tables and their indexes.
+func makeDiscardSchema44(t *testing.T, c Config) {
+	t.Helper()
+	execDiscardFixtureSQL(t, c, `DROP TABLE reading_fields;
+		DROP TABLE reading_versions;
+		DROP TABLE message_observations;
+		UPDATE schema_migrations SET version=44`)
+}
+
+func execDiscardFixtureSQL(t *testing.T, c Config, stmt string, args ...any) {
 	t.Helper()
 	db, err := sql.Open("sqlite", filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
-	defer db.Close()
-	for _, stmt := range []string{`UPDATE schema_migrations SET version=40`} {
-		_, err = db.Exec(stmt)
-		require(t, err)
-	}
+	_, err = db.Exec(stmt, args...)
+	require(t, errors.Join(err, db.Close()))
 }
 
 func testDiscardStopProtocol(t *testing.T) {
