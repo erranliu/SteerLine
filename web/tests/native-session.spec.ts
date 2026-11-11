@@ -68,11 +68,9 @@ test("native session: original candidate viewer and replay through product HTTP"
   const provider = JSON.parse(readFileSync(providerPath, "utf8"));
   provider.hold = true;
   writeFileSync(providerPath, JSON.stringify(provider));
-  if (
-    await page.getByRole("button", { name: "恢复派发", exact: true }).count()
-  ) {
-    await page.getByRole("button", { name: "恢复派发", exact: true }).click();
-  }
+  await expect(
+    page.getByRole("switch", { name: "自动派发" }),
+  ).toHaveAttribute("aria-checked", "false");
   await page.getByRole("button", { name: "任务列表", exact: true }).click();
   await page
     .getByRole("button")

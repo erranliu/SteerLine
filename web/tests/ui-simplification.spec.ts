@@ -199,7 +199,6 @@ async function setup(page: Page) {
               control: {
                 revision: 1,
                 dispatch_mode: "manual",
-                dispatch_paused: false,
                 blockers: [],
               },
             },

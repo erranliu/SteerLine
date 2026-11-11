@@ -165,7 +165,6 @@ test("all environment readiness remains visible across detail changes, refresh f
               control: {
                 revision: 1,
                 dispatch_mode: "manual",
-                dispatch_paused: true,
                 blockers: [],
               },
             },

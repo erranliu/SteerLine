@@ -43,7 +43,6 @@ func TestSharedRunnerProjects(t *testing.T) {
 	b.ValidateDeclaredControlledEnvironment("controlled")
 	requestID := strings.Repeat("5", 32)
 	for _, p := range []*testenv.Project{a, b} {
-		s.Must(p.Driver.Control(s.Context, s.Run.Helper, "resume_dispatch", ""))
 		snap, err := p.Snapshot()
 		s.Must(err)
 		var version uint64

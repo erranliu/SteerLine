@@ -1,15 +1,12 @@
 package model
 
-func StartupBlockers(status string, delivered, paused bool, mode string, slotBusy bool) []string {
+func StartupBlockers(status string, delivered bool, mode string, slotBusy bool) []string {
 	blockers := []string{}
 	if (status == "closed") != delivered {
 		blockers = append(blockers, "inconsistent_delivery")
 	}
 	if status != "open" {
 		blockers = append(blockers, "task_not_open")
-	}
-	if paused {
-		blockers = append(blockers, "dispatch_paused")
 	}
 	if slotBusy && mode == "auto" {
 		blockers = append(blockers, "execution_slot_busy")

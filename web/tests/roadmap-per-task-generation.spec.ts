@@ -277,7 +277,6 @@ test("per-task generation displays identities, retries only one task and stops t
                 control: {
                   revision: 1,
                   dispatch_mode: "manual",
-                  dispatch_paused: true,
                   blockers: [],
                 },
               },

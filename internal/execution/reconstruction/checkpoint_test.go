@@ -19,8 +19,8 @@ func TestHostCheckpointProjectionPreservesFactsAndOwnership(t *testing.T) {
 		Operation: &hostcontract.ControlOperation{RequestID: "request", RequestDigest: "digest", Phase: "completed", Payload: json.RawMessage(`{"original":true}`), Result: &hostcontract.ControlReceipt{RequestID: "request", Status: "applied", AcceptedAt: &at, CompletedAt: &at}},
 		Blockers:  []hostcontract.ControlBlocker{{RequestID: "blocked", Reason: "original"}}}
 	before, _ := json.Marshal(cp)
-	rt := RuntimeFromCheckpoint(cp, "auto", false, 19)
-	if rt.Control.DispatchMode != "auto" || rt.Control.DispatchPaused || rt.Control.Revision != 19 || rt.Service.InstanceID != "instance" || rt.Service.ProcessIdentity.Created != "original-process" || rt.Revision != 7 || !rt.HeartbeatAt.Equal(at) || !rt.SlotOccupied || *rt.CurrentTask != "task" {
+	rt := RuntimeFromCheckpoint(cp, "auto", 19)
+	if rt.Control.DispatchMode != "auto" || rt.Control.Revision != 19 || rt.Service.InstanceID != "instance" || rt.Service.ProcessIdentity.Created != "original-process" || rt.Revision != 7 || !rt.HeartbeatAt.Equal(at) || !rt.SlotOccupied || *rt.CurrentTask != "task" {
 		t.Fatal("checkpoint facts or separate task authority changed", rt)
 	}
 	if got := Checkpoint(rt); !reflect.DeepEqual(got, cp) {
@@ -43,11 +43,11 @@ func TestHostCheckpointProjectionPreservesFactsAndOwnership(t *testing.T) {
 	if string(before) != string(after) {
 		t.Fatal("runtime projection mutated sampled host facts")
 	}
-	rt = RuntimeFromCheckpoint(cp, "manual", true, 21)
+	rt = RuntimeFromCheckpoint(cp, "manual", 21)
 	projected := Checkpoint(rt)
 	// A saved checkpoint is also an independent value, including nested receipt
 	// timestamps and the reserved task pointer.
-	copyRuntime := RuntimeFromCheckpoint(projected, "manual", true, 21)
+	copyRuntime := RuntimeFromCheckpoint(projected, "manual", 21)
 	copyRuntime.CurrentTask = projected.ReservedTask
 	copyRuntime.Control.Operation = projected.Operation
 	mutate(&copyRuntime)

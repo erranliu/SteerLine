@@ -92,7 +92,7 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 			defer fresh.Close()
 			graph, err := fresh.TaskGraphSnapshot(ctx, c.Identity())
 			require(t, err)
-			if graph.DatabaseID == old.DatabaseID || !graph.Authority.DispatchPaused || graph.Authority.DispatchMode != "manual" || !reflect.DeepEqual(graph.Edges, old.Edges) {
+			if graph.DatabaseID == old.DatabaseID || graph.Authority.DispatchMode != "manual" || !reflect.DeepEqual(graph.Edges, old.Edges) {
 				t.Fatal("task graph or dispatch differs", graph)
 			}
 			for _, expected := range batch.Tasks {
@@ -333,7 +333,7 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	defer fresh.Close()
 	graph, err := fresh.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, err)
-	if !graph.Authority.DispatchPaused || len(graph.Tasks) != 0 {
+	if graph.Authority.DispatchMode != "manual" || len(graph.Tasks) != 0 {
 		t.Fatal(graph)
 	}
 	// The normal upgrade verifier now sees a genuinely fresh namespace.

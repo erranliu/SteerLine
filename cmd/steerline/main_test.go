@@ -9,7 +9,7 @@ import (
 func TestCLIExecutionProfileFlagRejectsUnrelatedActions(t *testing.T) {
 	for _, args := range [][]string{
 		{"check", "-execution-profile", "orca"},
-		{"control", "-action", "resume_dispatch", "-execution-profile", "orca"},
+		{"control", "-action", "set_dispatch_mode", "-execution-profile", "orca"},
 		{"control", "-action", "start_task", "-request-id", "receipt", "-execution-profile", "orca"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {

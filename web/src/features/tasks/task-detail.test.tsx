@@ -203,7 +203,6 @@ function setup({
             control: {
               revision: 3,
               dispatch_mode: "manual",
-              dispatch_paused: false,
             },
             runs,
           },

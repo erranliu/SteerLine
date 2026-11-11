@@ -571,7 +571,6 @@ func (p *Project) Claim(key string) {
 
 func (p *Project) ClaimExpectedStatus(key, status string) {
 	p.Scenario.t.Helper()
-	p.Scenario.Must(p.Driver.Control(p.Scenario.Context, p.Scenario.Run.Helper, "resume_dispatch", ""))
 	p.Scenario.Must(p.Driver.ControlExpectedStatus(p.Scenario.Context, p.Scenario.Run.Helper, "start_task", p.Tasks[key].ID, status))
 }
 

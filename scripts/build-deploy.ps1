@@ -10,7 +10,7 @@ param(
     [switch]$NoPause
 )
 $ErrorActionPreference = 'Stop'
-if ($DiscardRuns -and -not $UpdateRunner) { throw 'DiscardRuns requires UpdateRunner; it resets all project tasks to open and pauses dispatch.' }
+if ($DiscardRuns -and -not $UpdateRunner) { throw 'DiscardRuns requires UpdateRunner; it resets all project tasks to open and disables automatic dispatch.' }
 if (-not [IO.Path]::IsPathRooted($InstallHome)) { throw 'InstallHome must be absolute.' }
 $sourceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $RunnerRepo) { $RunnerRepo = Join-Path (Split-Path -Parent $sourceRoot) 'SteerRunner' }
@@ -154,7 +154,7 @@ try {
     $env:STEERLINE_HOME = $InstallHome
     $installed = Join-Path $bin 'steerline.exe'
     Next-DeploymentStage 'deploy.stop-and-verify'
-    if ($DiscardRuns) { Write-Output 'Discarding all old executions in this installation; tasks will reopen with manual dispatch paused. Original state will be archived.' }
+    if ($DiscardRuns) { Write-Output 'Discarding all old executions in this installation; tasks will reopen with automatic dispatch disabled. Original state will be archived.' }
     if (Test-Path -LiteralPath $installed) {
         $verification = Stop-DeploymentApplication (Join-Path $package 'steerline.exe') $runnerStage -AllowRestart:$allowRestart -DiscardRuns:$DiscardRuns
         if ($null -ne $verification) {

@@ -289,13 +289,9 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
         await route.continue();
       },
     );
-    if (
-      await page.getByRole("button", { name: "恢复派发", exact: true }).count()
-    )
-      await page.getByRole("button", { name: "恢复派发", exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "暂停派发", exact: true }),
-    ).toBeVisible();
+      page.getByRole("switch", { name: "自动派发" }),
+    ).toHaveAttribute("aria-checked", "false");
     await page.getByRole("button", { name: "任务列表", exact: true }).click();
     await page
       .getByRole("button")

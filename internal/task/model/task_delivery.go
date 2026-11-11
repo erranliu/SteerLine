@@ -42,7 +42,6 @@ type ProjectTaskAuthority struct {
 	Remote           string    `json:"remote"`
 	Branch           string    `json:"branch"`
 	DispatchMode     string    `json:"dispatch_mode"`
-	DispatchPaused   bool      `json:"dispatch_paused"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }

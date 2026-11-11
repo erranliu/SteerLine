@@ -53,9 +53,10 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 | `answer_decision` | decision ID / version；`{run_id,decision_id,option_id,note,answers,expected_run_revision,source_attempt_id,expected_recovery_version}`，核对当前问题及原执行身份 |
 | `discard_task` | task ID / version；`{reason}`，原因不能为空 |
 | `set_dispatch_mode` | dispatch / control revision；`{"mode":"manual"}` 或 `{"mode":"auto"}` |
-| `pause_dispatch`、`resume_dispatch` | dispatch / control revision；`{}` |
 | `open_terminal`、`recheck_environment` | run ID / blocker version，control revision；`{target:{run_id,execution_id,attempt_id,turn_id,blocker_id,version}}`，只作用于原 blocker |
 | `open_native_session` | run ID / 0；原 `NativeSessionTarget` 的 run/Execution/Attempt/session/generation。只打开原查看器，无新业务轮次 |
+
+新项目默认关闭自动派发（`manual`），可手动启动符合资格的任务。开启后（`auto`），服务轮询并派发符合资格的任务。关闭开关只停止后续自动派发。
 
 以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning、人工验收和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
 

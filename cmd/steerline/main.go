@@ -199,10 +199,6 @@ func run() error {
 				return fmt.Errorf("run has no current environment blocker")
 			}
 			payload = productapi.ControlPayload{Environment: target}
-		case "pause_dispatch", "resume_dispatch":
-			if *taskID != "" || *controlMode != "" {
-				return fmt.Errorf("%s does not accept task or mode parameters", *action)
-			}
 		default:
 			return fmt.Errorf("unsupported control action %q", *action)
 		}

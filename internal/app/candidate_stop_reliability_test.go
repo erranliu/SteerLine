@@ -63,7 +63,7 @@ func TestCandidateStopReliabilityRecoversMissingReceipt(t *testing.T) {
 	}
 	command.Result = result
 	require(t, store.UpdateCommand(ctx, command))
-	ordinary := api.ControlInput{Action: api.PauseDispatch, RequestID: strings.Repeat("a", 32), InstanceID: "original", RequestedBy: "operator", ExpectedRevision: new(uint64)}
+	ordinary := api.ControlInput{Action: api.SetDispatchMode, Payload: api.ControlPayload{Mode: "manual"}, RequestID: strings.Repeat("a", 32), InstanceID: "original", RequestedBy: "operator", ExpectedRevision: new(uint64)}
 	_, err = host.SubmitControlInbox(*c.runtimeHost, ordinary)
 	require(t, err)
 	if _, err = control.Receipt(ctx, ordinary.RequestID); !os.IsNotExist(err) {

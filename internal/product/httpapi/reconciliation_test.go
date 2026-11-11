@@ -149,7 +149,7 @@ func TestAPIAuthoritativeControlBinding(t *testing.T) {
 func TestAPIMappedControlPayloadBinding(t *testing.T) {
 	server, _, _, _ := newAPIFixture(t)
 	environment := api.HostActionTarget{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), TurnID: strings.Repeat("d", 32), BlockerID: "blocker", Version: 3}
-	for _, action := range []string{"open_terminal", "recheck_environment", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"} {
+	for _, action := range []string{"open_terminal", "recheck_environment", "set_dispatch_mode", "stop_service"} {
 		t.Run(action, func(t *testing.T) {
 			envelope := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: action, TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
 			switch action {
@@ -207,7 +207,7 @@ func TestAPIAuthoritativeSQLiteBinding(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer store.Close()
-					if err = store.InitializeProject(context.Background(), taskmodel.ProjectTaskAuthority{ProjectIdentity: "C:/repo", Authority: "native", AuthorityVersion: 1, Repository: "C:/repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}); err != nil {
+					if err = store.InitializeProject(context.Background(), taskmodel.ProjectTaskAuthority{ProjectIdentity: "C:/repo", Authority: "native", AuthorityVersion: 1, Repository: "C:/repo", Remote: "origin", Branch: "main", DispatchMode: "manual"}); err != nil {
 						t.Fatal(err)
 					}
 					envelope := CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: kind, TargetID: "decision-original", ExpectedVersion: 3}

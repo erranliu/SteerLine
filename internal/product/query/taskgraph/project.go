@@ -16,7 +16,7 @@ func graphNode(record taskmodel.TaskRecord, snapshot storageports.TaskGraphSnaps
 	node := Node{
 		TaskID: record.TaskID, Title: record.Title, Status: record.Status, Priority: record.Priority,
 		DependencyReady: ready, Blockers: blockers,
-		StartupBlockers: executionmodel.StartupBlockers(record.Status, delivered, snapshot.Authority.DispatchPaused, snapshot.Authority.DispatchMode, snapshot.ExecutionSlotBusy),
+		StartupBlockers: executionmodel.StartupBlockers(record.Status, delivered, snapshot.Authority.DispatchMode, snapshot.ExecutionSlotBusy),
 	}
 	if delivery, ok := snapshot.Deliveries[record.TaskID]; ok {
 		copy := delivery

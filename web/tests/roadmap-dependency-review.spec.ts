@@ -220,7 +220,6 @@ test("saved roadmap preview shows proposed dependencies with changes, task detai
                 control: {
                   revision: 1,
                   dispatch_mode: "manual",
-                  dispatch_paused: true,
                   blockers: [],
                 },
               },

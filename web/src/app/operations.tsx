@@ -116,19 +116,12 @@ export function Operations({
     answer_decision: "回答问题",
     open_native_session: "打开原生会话",
     resolve_pr_conflict: "解决合并冲突",
-    pause_dispatch: "暂停派发",
-    resume_dispatch: "恢复派发",
-    set_dispatch_mode: "切换派发模式",
+    set_dispatch_mode: "切换自动派发",
     main_agent_cancel: "取消提示词建议生成",
   };
   const target = (row: StoredRequest) => {
     const e = row.envelope;
-    if (
-      ["pause_dispatch", "resume_dispatch", "set_dispatch_mode"].includes(
-        e.action,
-      )
-    )
-      return "项目派发";
+    if (e.action === "set_dispatch_mode") return "项目派发";
     const candidate = current(row)
       ? candidates.find(
           (run) =>

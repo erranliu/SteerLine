@@ -178,7 +178,7 @@ func TestAPIRequestRecordSizeBoundary(t *testing.T) {
 				t.Fatalf("real preflight broken: %v", err)
 			}
 			// A subsequent supported mutation remains usable after every case.
-			next := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: envelope.ProjectID, InstanceID: envelope.InstanceID, Action: "pause_dispatch", TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
+			next := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: envelope.ProjectID, InstanceID: envelope.InstanceID, Action: "set_dispatch_mode", TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{"mode":"manual"}`)}
 			if _, err := client.SubmitCommand(context.Background(), next); err != nil {
 				t.Fatalf("subsequent mutation failed: %v", err)
 			}

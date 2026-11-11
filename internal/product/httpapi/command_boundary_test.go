@@ -142,14 +142,14 @@ func registryTestControlRequest(input api.ControlInput) api.ControlRequest {
 }
 
 func registryTestEnvelope(id string) CommandEnvelope {
-	return CommandEnvelope{RequestID: id, ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "pause_dispatch",
-		TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
+	return CommandEnvelope{RequestID: id, ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "set_dispatch_mode",
+		TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{"mode":"manual"}`)}
 }
 
 func newRegistryTestOwner(authority *registryTestAuthority, commands *registryTestCommands, records requestRecordAccess) *commandRegistry {
 	readiness := &readinessState{status: "ready"}
 	readiness.Set(true, "", "ready")
-	return newCommandRegistry(Options{ProjectIdentity: "C:/repo", InstanceID: "instance-a", Capabilities: []string{"pause_dispatch"}},
+	return newCommandRegistry(Options{ProjectIdentity: "C:/repo", InstanceID: "instance-a", Capabilities: []string{"set_dispatch_mode"}},
 		Ports{Commands: commands, Authority: authority}, readiness, records)
 }
 
@@ -177,7 +177,7 @@ func TestHTTPCommandBoundary(t *testing.T) {
 	if response.Status != "submitted" || response.Original == nil || !sameEnvelope(*response.Original, envelope) {
 		t.Fatalf("handler did not preserve the original envelope: %+v", response)
 	}
-	if len(commands.controlIn) != 1 || commands.controlIn[0].Action != api.PauseDispatch || commands.controlIn[0].RequestedBy == "" {
+	if len(commands.controlIn) != 1 || commands.controlIn[0].Action != api.SetDispatchMode || commands.controlIn[0].RequestedBy == "" {
 		t.Fatalf("handler did not call the command port with the OS caller identity: %+v", commands.controlIn)
 	}
 }
@@ -239,8 +239,9 @@ func TestHTTPCommandRegistry(t *testing.T) {
 			t.Fatalf("same request was dispatched more than once: %+v %v calls=%d", second, err, len(commands.controlIn))
 		}
 		conflict := envelope
-		conflict.Action = "set_dispatch_mode"
-		conflict.Payload = json.RawMessage(`{"mode":"manual"}`)
+		conflict.Action = "start_task"
+		conflict.TargetID = "1"
+		conflict.Payload = json.RawMessage(`{"execution_profile_id":"controlled"}`)
 		_, err = owner.Submit(context.Background(), conflict, "tester")
 		var protocolErr *protocolError
 		if !errors.As(err, &protocolErr) || protocolErr.code != "request_id_conflict" || len(commands.controlIn) != 1 {

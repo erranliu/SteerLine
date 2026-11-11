@@ -52,7 +52,6 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 	authority, err := writer.NativeAuthority(ctx, project)
 	require(t, err)
 	authority.AuthorityVersion++
-	authority.DispatchPaused = false
 	claimed := tasks[2]
 	claimed.Status, claimed.Claimant, claimed.Version = "in_progress", "operator", 2
 	require(t, writer.transactSQLite(ctx, func(tx *sqliteTx) error {

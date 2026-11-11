@@ -54,6 +54,15 @@ it("gates automatic dispatch on the shared project verdict and keeps ready stabl
     client.setQueryData(key, ready);
   });
   await waitFor(() => expect(toggle).toBeEnabled());
+  expect(toggle).toHaveAttribute("aria-checked", "false");
+  fireEvent.click(toggle);
+  expect(send).toHaveBeenCalledWith(
+    "set_dispatch_mode",
+    "dispatch",
+    1,
+    { mode: "auto" },
+    { expected_control_revision: 1 },
+  );
   let refresh!: Promise<unknown>;
   await act(async () => {
     refresh = client.refetchQueries({ queryKey: key });
@@ -89,6 +98,7 @@ it("allows turning automatic dispatch off while the project is unready", async (
   });
   const toggle = screen.getByRole("switch", { name: "自动派发" });
   expect(toggle).toBeEnabled();
+  expect(toggle).toHaveAttribute("aria-checked", "true");
   fireEvent.click(toggle);
   expect(send).toHaveBeenCalledWith(
     "set_dispatch_mode",

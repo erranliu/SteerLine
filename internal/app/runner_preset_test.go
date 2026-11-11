@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	host "github.com/erranliu/SteerLine/internal/app/host"
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
@@ -320,16 +319,6 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	prepared, err := r.config.runtimeEnvironment.materialAt(ctx, c.RunnerExecution.DefaultProfile, base)
 	require(t, err)
 	require(t, r.store.StartEnvironment(ctx, envmodel.Record{FormatVersion: 1, ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: c.RunnerExecution.DefaultProfile, Execution: prepared.Input.Execution, Build: r.runner.client.BuildPin(), Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{}}, 0))
-	_, err = r.product.SubmitControl(ctx, api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.Repeat("7", 32), RequestedBy: "fixture"})
-	require(t, err)
-	wait, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
-	// The fixture already owns the frozen host binding. Use its verified
-	// receipt reader without repeating Git/config discovery on every poll.
-	_, err = host.WaitControlReceipt(wait, r.hostConfig, strings.Repeat("7", 32), 10*time.Millisecond)
-	if err != nil {
-		t.Fatalf("fixture resume receipt: %v", err)
-	}
 	graph, err = r.store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, err)
 	public := runnercontract.Run{RunID: strings.Repeat("b", 32), Revision: 1, InputDigest: strings.Repeat("c", 64), ResourceDigest: r.runner.info.ResourceDigest, Workflow: c.RunnerExecution.Profiles[0].Workflow, Status: "stopped", StopStatus: "stopped"}

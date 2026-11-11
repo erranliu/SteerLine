@@ -27,7 +27,7 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer writer.Close()
-	authority := taskmodel.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	authority := taskmodel.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual"}
 	at := time.Now().UTC()
 	large := []byte(strings.Repeat("x", query.MaxEventPageBytes))
 	if err = writer.InitializeProject(ctx, authority); err != nil {

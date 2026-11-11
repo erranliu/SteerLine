@@ -87,9 +87,6 @@ func StartTaskReason(ref ProjectRef, snapshot ProjectSnapshot, now time.Time) st
 	if rt.Control.DispatchMode != "manual" {
 		return "开始任务要求手动派发模式"
 	}
-	if rt.Control.DispatchPaused {
-		return "派发已暂停，请先恢复派发"
-	}
 	for _, capability := range rt.Service.Capabilities {
 		if capability == "start_task" {
 			return ""

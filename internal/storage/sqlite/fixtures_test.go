@@ -80,7 +80,7 @@ func nativeAuditRecordsWithReference(t *testing.T, store *SQLiteStore, a taskmod
 func nativeAuditStore(t *testing.T) (*SQLiteStore, string, []taskmodel.TaskRecord) {
 	t.Helper()
 	s := openDomainTestStore(t)
-	a := taskmodel.ProjectTaskAuthority{ProjectIdentity: "audit-project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	a := taskmodel.ProjectTaskAuthority{ProjectIdentity: "audit-project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual"}
 	require(t, s.transactSQLite(context.Background(), func(tx *sqliteTx) error { return tx.PutProjectTaskAuthority(a) }))
 	return s, a.ProjectIdentity, nativeAuditRecords(t, s, a)
 }

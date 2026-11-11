@@ -38,9 +38,8 @@ func TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project str
 	if project == "" {
 		return out, nativeErr("authority_mismatch", "project identity is required")
 	}
-	var paused int
 	var created, updated string
-	err := tx.QueryRowContext(ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, project).Scan(&out.Authority.Authority, &out.Authority.AuthorityVersion, &out.Authority.GraphRevision, &out.Authority.Repository, &out.Authority.Remote, &out.Authority.Branch, &out.Authority.DispatchMode, &paused, &created, &updated)
+	err := tx.QueryRowContext(ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, project).Scan(&out.Authority.Authority, &out.Authority.AuthorityVersion, &out.Authority.GraphRevision, &out.Authority.Repository, &out.Authority.Remote, &out.Authority.Branch, &out.Authority.DispatchMode, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, nativeErr("authority_mismatch", "project has no native task authority")
 	}
@@ -48,7 +47,6 @@ func TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project str
 		return out, err
 	}
 	out.Authority.ProjectIdentity = project
-	out.Authority.DispatchPaused = paused != 0
 	out.Authority.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	out.Authority.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 	if out.Authority.Authority != "native" {

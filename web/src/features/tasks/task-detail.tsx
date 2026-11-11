@@ -102,31 +102,29 @@ export function TaskDetail({
       ? "任务查询失败"
       : !supported
         ? "服务未提供此动作"
-        : page?.control.dispatch_paused
-          ? "派发已暂停，请先恢复"
-          : page?.control.dispatch_mode !== "manual"
-            ? "手动启动要求手动派发模式"
-            : task?.delivery
-              ? "任务已交付"
-              : task?.status === "discarded"
-                ? "任务已放弃"
-                : dependenciesMissing
-                  ? "前置尚未交付"
-                  : blockers?.length
-                    ? blockers.join("；")
+        : page?.control.dispatch_mode !== "manual"
+          ? "手动启动要求手动派发模式"
+          : task?.delivery
+            ? "任务已交付"
+            : task?.status === "discarded"
+              ? "任务已放弃"
+              : dependenciesMissing
+                ? "前置尚未交付"
+                : blockers?.length
+                  ? blockers.join("；")
+                  : hasCandidates &&
+                      !awaitingClaim &&
+                      task?.status !== "in_progress" &&
+                      !candidates.some(
+                        (run) => run.workflow_stage === "start.submit",
+                      )
+                    ? "新增候选需要进行中的任务"
                     : hasCandidates &&
-                        !awaitingClaim &&
-                        task?.status !== "in_progress" &&
-                        !candidates.some(
-                          (run) => run.workflow_stage === "start.submit",
-                        )
-                      ? "新增候选需要进行中的任务"
-                      : hasCandidates &&
-                          candidates.some((run) => run.pr.state === "merged")
-                        ? "已有候选 PR 合并"
-                        : hasCandidates && participatingIDs.size >= 5
-                          ? "已达到 5 个参与候选"
-                          : "";
+                        candidates.some((run) => run.pr.state === "merged")
+                      ? "已有候选 PR 合并"
+                      : hasCandidates && participatingIDs.size >= 5
+                        ? "已达到 5 个参与候选"
+                        : "";
   const profileReason =
     !selected || selected.unavailable_reason
       ? selected?.unavailable_reason || "没有可用执行方案"

@@ -135,11 +135,10 @@ type ServiceSummary struct {
 	Capabilities    []string `json:"capabilities"`
 }
 type ControlSummary struct {
-	DispatchMode   string           `json:"dispatch_mode"`
-	DispatchPaused bool             `json:"dispatch_paused"`
-	Revision       uint64           `json:"revision"`
-	Operation      *PendingControl  `json:"operation"`
-	Blockers       []ControlBlocker `json:"blockers"`
+	DispatchMode string           `json:"dispatch_mode"`
+	Revision     uint64           `json:"revision"`
+	Operation    *PendingControl  `json:"operation"`
+	Blockers     []ControlBlocker `json:"blockers"`
 }
 type PendingControl struct{ RequestID, Action, TaskID, Phase, RunID, AttemptID, DecisionID string }
 type ControlBlocker struct{ RequestID, Action, TaskID, RunID, AttemptID, DecisionID, Reason string }
@@ -445,7 +444,6 @@ type RecoveryInspection struct {
 	ServiceInstanceID      string             `json:"service_instance_id"`
 	ServiceStatus          string             `json:"service_status"`
 	DispatchMode           string             `json:"dispatch_mode"`
-	DispatchPaused         bool               `json:"dispatch_paused"`
 	SlotOccupied           bool               `json:"slot_occupied"`
 	TaskID                 string             `json:"task_id"`
 	DecisionID             string             `json:"decision_id"`

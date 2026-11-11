@@ -5,7 +5,6 @@ import {
 } from "../environment-checks/use-readiness";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
-import { Pause, Play } from "lucide-react";
 import { useProjectReadiness } from "../project-maintenance/use-readiness";
 export function Dispatch() {
   const { online, snapshot, send, busy, identity } = useWorkspace();
@@ -19,65 +18,37 @@ export function Dispatch() {
   const page = snapshot?.connection.snapshot.page;
   if (!page) return null;
   const { control } = page;
+  const automatic = control.dispatch_mode === "auto";
   const caps = page.service.capabilities ?? [];
   return (
     <div className="dispatch-bar">
       <div>
         <strong>当前项目派发</strong>
-        <span className="muted">
-          {control.dispatch_paused
-            ? "已暂停"
-            : control.dispatch_mode === "auto"
-              ? "自动派发"
-              : "手动派发"}
-        </span>
       </div>
       <div className="actions">
         <Button
           role="switch"
-          aria-checked={control.dispatch_mode === "auto"}
+          aria-checked={automatic}
           aria-label="自动派发"
           size="sm"
           disabled={
             !online ||
             busy ||
             !caps.includes("set_dispatch_mode") ||
-            (control.dispatch_mode !== "auto" && !project.ready)
+            (!automatic && !project.ready)
           }
-          title={control.dispatch_mode !== "auto" ? project.reason : undefined}
+          title={!automatic ? project.reason : undefined}
           onClick={() =>
             void send(
               "set_dispatch_mode",
               "dispatch",
               control.revision,
-              { mode: control.dispatch_mode === "auto" ? "manual" : "auto" },
+              { mode: automatic ? "manual" : "auto" },
               { expected_control_revision: control.revision },
             )
           }
         >
-          自动派发 {control.dispatch_mode === "auto" ? "开启" : "关闭"}
-        </Button>
-        <Button
-          size="sm"
-          disabled={
-            !online ||
-            busy ||
-            !caps.includes(
-              control.dispatch_paused ? "resume_dispatch" : "pause_dispatch",
-            )
-          }
-          onClick={() =>
-            void send(
-              control.dispatch_paused ? "resume_dispatch" : "pause_dispatch",
-              "dispatch",
-              control.revision,
-              {},
-              { expected_control_revision: control.revision },
-            )
-          }
-        >
-          {control.dispatch_paused ? <Play size={12} /> : <Pause size={12} />}{" "}
-          {control.dispatch_paused ? "恢复派发" : "暂停派发"}
+          自动派发 {automatic ? "开启" : "关闭"}
         </Button>
       </div>
       <p className="muted">默认执行方案：{selected?.name || "尚未核实"}</p>

@@ -349,7 +349,9 @@ it("disables commands when offline even while paused queries retain a successful
           ? configSnapshot
           : url === "/auth/status"
             ? { identity, csrf_token: "csrf" }
-            : workspaceRead(api, url.replace(/^.*\/projects\/[^/]+/, "")),
+            : url.endsWith("/maintenance/readiness")
+              ? { status: "ready", blockers: [] }
+              : workspaceRead(api, url.replace(/^.*\/projects\/[^/]+/, "")),
       ),
     ),
   );
@@ -360,12 +362,14 @@ it("disables commands when offline even while paused queries retain a successful
   await waitFor(() =>
     expect(screen.getByText("服务在线", { exact: true })).toBeVisible(),
   );
-  expect(screen.getByRole("button", { name: "暂停派发" })).toBeEnabled();
+  await waitFor(() =>
+    expect(screen.getByRole("switch", { name: "自动派发" })).toBeEnabled(),
+  );
   act(() => onlineManager.setOnline(false));
   expect(
     screen.getByText("当前不可提交业务操作", { exact: true }),
   ).toBeVisible();
-  expect(screen.getByRole("button", { name: "暂停派发" })).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "自动派发" })).toBeDisabled();
   expect(
     client.getQueryData([
       "",
@@ -376,7 +380,7 @@ it("disables commands when offline even while paused queries retain a successful
   ).toEqual(snapshot);
   act(() => onlineManager.setOnline(true));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "暂停派发" })).toBeEnabled(),
+    expect(screen.getByRole("switch", { name: "自动派发" })).toBeEnabled(),
   );
   client.clear();
 });

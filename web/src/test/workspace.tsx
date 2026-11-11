@@ -89,13 +89,12 @@ export function snapshot(api: Api, runs: Candidate[] = []): Snapshot {
           service: {
             instance_id: api.identity.instance_id,
             ready: true,
-            capabilities: ["pause_dispatch", "set_dispatch_mode", "start_task"],
+            capabilities: ["set_dispatch_mode", "start_task"],
           },
           runs,
           control: {
             revision: 1,
             dispatch_mode: "manual",
-            dispatch_paused: false,
             blockers: [],
           },
         },

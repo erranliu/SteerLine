@@ -17,8 +17,6 @@ import (
 func TestPRConflictControlRetainsIntentAfterReceiptLoss(t *testing.T) {
 	ctx := context.Background()
 	s, project, tasks := nativeAuditStore(t)
-	_, err := s.db.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, project)
-	require(t, err)
 	graph, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	record := graph.ByID[tasks[0].TaskID]
