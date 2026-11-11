@@ -85,7 +85,14 @@ export function useEnvironmentReadiness() {
       api.get<EnvironmentOptions>("/environment/options", signal),
     enabled: online,
     retry: false,
-    refetchInterval: visible ? 15000 : false,
+    refetchInterval: (query) => {
+      if (!online || !visible) return false;
+      const detecting = query.state.data?.environments.some(
+        (environment) =>
+          environment.activity_id && !environment.activity_settled,
+      );
+      return detecting ? 3000 : 15000;
+    },
   });
   const verified = online && query.isSuccess && !query.isError;
   const configurationVerified =
