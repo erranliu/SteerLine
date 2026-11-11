@@ -201,7 +201,6 @@ func runProjectEnvironment(t *testing.T, id string) {
 		r.Fetch(s, p, fixture)
 	}
 	p.CreateTasks()
-	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "resume_dispatch", ""))
 	deniedRaw, err := p.Driver.RunHelper(s.Context, s.Run.Helper, "control", "-config", p.Config, "-action", "start_task", "-task-id", p.Tasks["a"].ID, "-profile", p.Driver.Profile, "-expected-status", "rejected")
 	s.Must(err)
 	var denied productapi.ControlReceipt

@@ -207,13 +207,6 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	}
 	runner.InstanceID = status.InstanceID
 	proof.RunnerSHA256 = catalog.Runner.SHA256
-	resumed, err := tmControl(ctx, p, out, "resume", api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RequestedBy: "testing-driver"})
-	if err != nil {
-		return err
-	}
-	if resumed.Status != "applied" {
-		return fmt.Errorf("resume rejected: %+v", resumed)
-	}
 	payload, err := p.StartTaskPayload(ctx, taskID, "live")
 	if err != nil {
 		return err

@@ -27,7 +27,7 @@ import (
 
 func TestDeploymentDiscardRuns(t *testing.T) {
 	t.Run("offline-flow", testDiscardOfflineFlow)
-	for _, schema := range []string{"current", "schema44"} {
+	for _, schema := range []string{"current", "schema44", "schema45"} {
 		t.Run("task-graph-"+schema, func(t *testing.T) {
 			c, _ := nativeTaskFixture(t)
 			prepareStoppedRunRepository(t, c)
@@ -66,8 +66,11 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 			})
 			require(t, err)
 			require(t, store.Close())
-			if schema == "schema44" {
+			switch schema {
+			case "schema44":
 				makeDiscardSchema44(t, c)
+			case "schema45":
+				makeDiscardSchema45(t, c)
 			}
 			beforeFile, err := os.ReadFile(filepath.Join(c.RunDir, "steerline.db"))
 			require(t, err)
@@ -82,7 +85,7 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 			defer fresh.Close()
 			graph, err := fresh.TaskGraphSnapshot(ctx, c.Identity())
 			require(t, err)
-			if graph.DatabaseID == old.DatabaseID || !graph.Authority.DispatchPaused || graph.Authority.DispatchMode != "manual" || !reflect.DeepEqual(graph.Edges, old.Edges) {
+			if graph.DatabaseID == old.DatabaseID || graph.Authority.DispatchMode != "manual" || !reflect.DeepEqual(graph.Edges, old.Edges) {
 				t.Fatal("task graph or dispatch differs", graph)
 			}
 			for _, expected := range batch.Tasks {
@@ -106,14 +109,14 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 			if !bytes.Equal(beforeFile, afterFile) {
 				t.Fatal("discard preparation modified original database")
 			}
-			if schema == "schema44" {
+			if schema != "current" {
 				if normal, err := OpenNativeTaskReader(ctx, &c); err == nil {
 					normal.Close()
-					t.Fatal("normal reader admitted schema 44")
+					t.Fatal("normal reader admitted", schema)
 				}
 				if writer, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db")); err == nil {
 					writer.Close()
-					t.Fatal("normal writer admitted schema 44")
+					t.Fatal("normal writer admitted", schema)
 				}
 			}
 			original, err := openDiscardTaskReader(ctx, &c)
@@ -336,7 +339,7 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	defer fresh.Close()
 	graph, err := fresh.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, err)
-	if !graph.Authority.DispatchPaused || len(graph.Tasks) != 0 {
+	if graph.Authority.DispatchMode != "manual" || len(graph.Tasks) != 0 {
 		t.Fatal(graph)
 	}
 	// The normal upgrade verifier now sees a genuinely fresh namespace.
@@ -347,10 +350,20 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 // Schema 45 added three observation tables and their indexes.
 func makeDiscardSchema44(t *testing.T, c Config) {
 	t.Helper()
+	makeDiscardSchema45(t, c)
 	execDiscardFixtureSQL(t, c, `DROP TABLE reading_fields;
 		DROP TABLE reading_versions;
 		DROP TABLE message_observations;
 		UPDATE schema_migrations SET version=44`)
+}
+
+func makeDiscardSchema45(t *testing.T, c Config) {
+	t.Helper()
+	execDiscardFixtureSQL(t, c, `ALTER TABLE project_task_authorities RENAME TO current_authorities;
+		CREATE TABLE project_task_authorities (project_identity TEXT PRIMARY KEY, authority TEXT NOT NULL CHECK(authority='native'), authority_version INTEGER NOT NULL CHECK(authority_version>0), graph_revision INTEGER NOT NULL CHECK(graph_revision>=0), repository TEXT NOT NULL, remote TEXT NOT NULL, branch TEXT NOT NULL, dispatch_mode TEXT NOT NULL CHECK(dispatch_mode IN ('manual','auto')), dispatch_paused INTEGER NOT NULL CHECK(dispatch_paused IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+		INSERT INTO project_task_authorities SELECT project_identity,authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,1,created_at,updated_at FROM current_authorities;
+		DROP TABLE current_authorities;
+		UPDATE schema_migrations SET version=45`)
 }
 
 func execDiscardFixtureSQL(t *testing.T, c Config, stmt string, args ...any) {

@@ -49,8 +49,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		return page, nativeErr("unsupported_schema", "native task query requires the current database schema")
 	}
 	var targetRepository, targetRemote, targetBranch, dispatchMode string
-	var dispatchPaused int
-	err = tx.QueryRowContext(ctx, `SELECT authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&page.AuthorityVersion, &page.GraphRevision, &targetRepository, &targetRemote, &targetBranch, &dispatchMode, &dispatchPaused)
+	err = tx.QueryRowContext(ctx, `SELECT authority_version,graph_revision,repository,remote,branch,dispatch_mode FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&page.AuthorityVersion, &page.GraphRevision, &targetRepository, &targetRemote, &targetBranch, &dispatchMode)
 	if errors.Is(err, sql.ErrNoRows) {
 		if expectedDB != 0 {
 			return page, nativeErr("cursor_invalidated", "project authority could not be read for this cursor")
@@ -192,7 +191,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		}
 		delivery, hasDelivery := relations.deliveries[record.TaskID]
 		detail.DependencyReady, detail.Predecessors, detail.UnmetPredecessors = taskmodel.DependencyState(record.Status, hasDelivery, predecessors)
-		detail.StartupBlockers = executionmodel.StartupBlockers(record.Status, hasDelivery, dispatchPaused != 0, dispatchMode, executionSlotBusy > 0)
+		detail.StartupBlockers = executionmodel.StartupBlockers(record.Status, hasDelivery, dispatchMode, executionSlotBusy > 0)
 		contractRow, ok := relations.contracts[record.TaskID]
 		if !ok {
 			return page, nativeErr("contract_mismatch", "native task has no matching fixed contract")

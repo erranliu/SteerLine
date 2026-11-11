@@ -26,7 +26,7 @@ func TestReadinessAdmissionPolicyReservation(t *testing.T) {
 				require(t, err)
 				defer s.Close()
 				require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-					_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0,dispatch_mode=? WHERE project_identity=?`, mode, project)
+					_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_mode=? WHERE project_identity=?`, mode, project)
 					return err
 				}))
 				graph, err := s.TaskGraphSnapshot(ctx, project)

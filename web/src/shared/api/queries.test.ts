@@ -149,8 +149,6 @@ it("reuses presentation for sixty seconds then revalidates on access", async () 
 
 it.each([
   "set_dispatch_mode",
-  "pause_dispatch",
-  "resume_dispatch",
   "start_task",
   "start_candidate",
   "answer_decision",

@@ -106,7 +106,6 @@ function mock() {
                                 control: {
                                   revision: 1,
                                   dispatch_mode: "manual",
-                                  dispatch_paused: false,
                                 },
                               },
                             },

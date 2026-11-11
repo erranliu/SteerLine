@@ -38,7 +38,7 @@ func TestContinuationSuggestionSharedImmutableCommandNamespace(t *testing.T) {
 		t.Fatal("replay resubmitted", err, port.calls)
 	}
 	other := e
-	other.Action = "pause_dispatch"
+	other.Action = "set_dispatch_mode"
 	if _, err := c.Submit(ctx, other, "fixture"); err == nil {
 		t.Fatal("control replaced ContinuationSuggestion envelope")
 	}

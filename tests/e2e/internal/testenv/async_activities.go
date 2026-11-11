@@ -174,7 +174,7 @@ func (s *Scenario) activityFeedback(web, node string) {
 		} `json:"commands"`
 	}
 	s.Must(json.Unmarshal(proof, &evidence))
-	expected := map[string]int{"resume_dispatch": 1, "roadmap_parse": 1, "maintenance_check": 1, "start_task": 1, "start_candidate": 1, "environment_start": 1}
+	expected := map[string]int{"roadmap_parse": 1, "maintenance_check": 1, "start_task": 1, "start_candidate": 1, "environment_start": 1}
 	seen := map[string]bool{}
 	for _, command := range evidence.Commands {
 		if command.RequestID == "" || seen[command.RequestID] {
@@ -183,7 +183,7 @@ func (s *Scenario) activityFeedback(web, node string) {
 		seen[command.RequestID] = true
 		expected[command.Action]--
 	}
-	if !evidence.Passed || len(evidence.Commands) != 6 {
+	if !evidence.Passed || len(evidence.Commands) != len(expected) {
 		s.t.Fatal("feedback browser evidence incomplete")
 	}
 	for action, remaining := range expected {

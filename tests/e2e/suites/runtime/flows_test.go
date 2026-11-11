@@ -51,7 +51,8 @@ func TestServiceLifecycle(t *testing.T) {
 	}
 	p.Record("first-start", before)
 	count := controlRequestCount(t, p)
-	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "resume_dispatch", ""))
+	_, err = p.Driver.Run(s.Context, "control", "-config", p.Config, "-action", "set_dispatch_mode", "-mode", "manual", "-wait")
+	s.Must(err)
 	if controlRequestCount(t, p) != count+1 {
 		t.Fatal("normal command did not reach the home control inbox")
 	}

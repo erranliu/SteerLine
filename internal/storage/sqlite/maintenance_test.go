@@ -22,10 +22,6 @@ import (
 func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 	ctx := context.Background()
 	s, project, tasks := nativeAuditStore(t)
-	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, e := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, project)
-		return e
-	}))
 	graph, e := s.TaskGraphSnapshot(ctx, project)
 	require(t, e)
 	original, e := s.TaskContract(ctx, project, tasks[0])

@@ -210,12 +210,12 @@ it("bounds rejected history and keeps only current unresolved requests in the pr
   });
   const applied = request("start_task", "applied", "2026-11-10T00:00:00Z"),
     pending = request(
-      "pause_dispatch",
+      "set_dispatch_mode",
       "outcome_unknown",
       "2026-11-10T00:00:01Z",
     ),
     foreign = request(
-      "resume_dispatch",
+      "stop_service",
       "outcome_unknown",
       "2026-11-10T00:00:02Z",
     );
@@ -230,9 +230,9 @@ it("bounds rejected history and keeps only current unresolved requests in the pr
     />,
   );
   expect(document.querySelectorAll(".operations > .operation")).toHaveLength(1);
-  expect(screen.getByText("暂停派发")).toBeVisible();
+  expect(screen.getByText("切换自动派发")).toBeVisible();
   expect(screen.getByText("历史拒绝 19")).not.toBeVisible();
-  expect(screen.getByText("恢复派发")).not.toBeVisible();
+  expect(screen.queryByText("stop_service")).not.toBeInTheDocument();
   expect(document.querySelectorAll(".operations .operation")).toHaveLength(13);
   fireEvent.click(screen.getByText("操作回执 · 最近 12 项"));
   expect(screen.getByText("历史拒绝 19")).toBeVisible();

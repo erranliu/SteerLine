@@ -217,7 +217,7 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 	page := api.TaskPage{Protocol: "native-tasks/v1", ProjectID: "project", AuthorityVersion: 8, GraphRevision: 4, DatabaseRevision: 21, DatabaseID: "db-a", SampledAt: now, Tasks: []api.TaskDetail{}}
 	reader := &apiReader{page: page, graph: api.GraphPage{Protocol: api.TaskGraphProtocol, ProjectID: "project", AuthorityVersion: 8, GraphRevision: 4, DatabaseRevision: 21, DatabaseID: "db-a", SampledAt: now, Nodes: []api.GraphNode{}, Edges: []api.GraphEdge{}},
 		activity: api.LogBatch{Cursor: api.ActivityCursor{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), Initialized: true}}, commands: map[string]api.CommandReceipt{}}
-	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "stop_candidate", "resolve_pr_conflict", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
+	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "stop_candidate", "resolve_pr_conflict", "set_dispatch_mode", "stop_service"}
 	servicePage := &api.ServicePage{Service: api.ServiceSummary{InstanceID: "instance-a", Status: "running", Ready: true, ControlProtocol: 1, Capabilities: capabilities}, Control: api.ControlSummary{Revision: 7}, Runs: []*api.CandidateSummary{}}
 	reader.snapshot = api.ProjectSnapshot{SelectedTaskID: "", FullReadAt: now,
 		Connection:  api.ServiceConnection{State: api.ConnectionConnected, IdentityMatched: true, ConfigMatched: true, CanControl: true, CanStop: true, Snapshot: api.ObservationSnapshot{Page: servicePage, State: api.SnapshotValid, SampledAt: now}},
@@ -367,7 +367,7 @@ func TestAPIOriginalCommandReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	envelope := CommandEnvelope{RequestID: strings.Repeat("9", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a",
-		Action: "pause_dispatch", TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
+		Action: "set_dispatch_mode", TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{"mode":"manual"}`)}
 	first, err := client.SubmitCommand(context.Background(), envelope)
 	if err != nil || first.ControlRequest == nil || first.Status != "submitted" || control.submits != 1 {
 		t.Fatalf("original control request was not durably submitted: %+v %v submits=%d", first, err, control.submits)
@@ -395,8 +395,8 @@ func TestAPIReconnectAndUnsupported(t *testing.T) {
 		t.Fatal(err)
 	}
 	requestID := strings.Repeat("1", 32)
-	envelope := CommandEnvelope{RequestID: requestID, ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "pause_dispatch",
-		TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
+	envelope := CommandEnvelope{RequestID: requestID, ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "set_dispatch_mode",
+		TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{"mode":"manual"}`)}
 	first, err := client.SubmitCommand(context.Background(), envelope)
 	if err != nil || first.Status != "submitted" || control.submits != 1 {
 		t.Fatalf("first command was not submitted once: %+v %v submits=%d", first, err, control.submits)
@@ -426,7 +426,7 @@ func TestAPIReconnectAndUnsupported(t *testing.T) {
 		t.Fatalf("late duplicate competition produced %d control submissions", control.submits)
 	}
 	conflict := envelope
-	conflict.Action = "resume_dispatch"
+	conflict.Payload = json.RawMessage(`{"mode":"auto"}`)
 	if _, err = client.SubmitCommand(context.Background(), conflict); err == nil || !strings.Contains(err.Error(), "request_id_conflict") || control.submits != 1 {
 		t.Fatalf("same request ID with changed content was not rejected: %v submits=%d", err, control.submits)
 	}
@@ -565,7 +565,7 @@ func TestAPIServiceLifecycle(t *testing.T) {
 	cancel()
 	rotated, err := Prepare(context.Background(), productPorts(product), Options{RunDir: runDir, ProjectIdentity: projectIdentity, InstanceID: "instance-b",
 		Process:      ProcessIdentity{Kind: "os", PID: os.Getpid(), Created: "created-2", Executable: "steerline.exe"},
-		Capabilities: []string{"pause_dispatch", "stop_service"}})
+		Capabilities: []string{"set_dispatch_mode", "stop_service"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -594,7 +594,7 @@ func TestAPIServiceLifecycle(t *testing.T) {
 		t.Fatalf("read-only query was blocked during service recovery: %v", err)
 	}
 	blocked := CommandEnvelope{RequestID: strings.Repeat("8", 32), ProjectID: ProjectID(projectIdentity), InstanceID: "instance-b",
-		Action: "pause_dispatch", TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
+		Action: "set_dispatch_mode", TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{"mode":"manual"}`)}
 	if _, err = client.SubmitCommand(context.Background(), blocked); err == nil || !strings.Contains(err.Error(), "service_not_ready") || control.submits != 0 {
 		t.Fatalf("not-ready service accepted a business control action: %v submits=%d", err, control.submits)
 	}

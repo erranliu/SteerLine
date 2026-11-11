@@ -46,7 +46,7 @@ func ValidateControlRequest(req productapi.ControlRequest, instanceID, repositor
 
 func ValidControlAction(action string) bool {
 	switch action {
-	case "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment", "runner_reply", "runner_resume", "resolve_pr_conflict":
+	case "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "stop_service", "open_terminal", "recheck_environment", "runner_reply", "runner_resume", "resolve_pr_conflict":
 		return true
 	}
 	return false

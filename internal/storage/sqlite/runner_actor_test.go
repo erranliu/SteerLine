@@ -50,7 +50,7 @@ func TestRunnerActorUsesHostScheduler(t *testing.T) {
 		return api.ControlReceipt{}, errors.New("unexpected control")
 	}})
 	require(t, err)
-	for _, required := range []string{"pause_dispatch", "resume_dispatch", "set_dispatch_mode", "runner_reply", "runner_resume", "answer_decision", "open_native_session", "open_native_session:codex-app-server"} {
+	for _, required := range []string{"set_dispatch_mode", "runner_reply", "runner_resume", "answer_decision", "open_native_session", "open_native_session:codex-app-server"} {
 		found := false
 		for _, value := range actor.State.Service.Capabilities {
 			found = found || value == required
@@ -133,7 +133,7 @@ func TestRunnerActorBindsReceiptToOriginalHostFile(t *testing.T) {
 			}})
 			require(t, err)
 
-			host.request = api.ControlRequest{RequestID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", InstanceID: actor.InstanceID(), Action: "pause_dispatch"}
+			host.request = api.ControlRequest{RequestID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", InstanceID: actor.InstanceID(), Action: "set_dispatch_mode"}
 			err = actor.TickControl(context.Background(), func() {})
 			if changed {
 				if err != nil || host.receipt.RequestID != "" || actor.State.Service.Error == nil || !strings.Contains(*actor.State.Service.Error, "host control request changed") {

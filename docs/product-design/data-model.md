@@ -61,7 +61,7 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 
 | 格式或事实 | 当前来源 |
 | --- | --- |
-| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 45`；数值只在此表定位，正文不保留旧版本副本 |
+| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 46`；数值只在此表定位，正文不保留旧版本副本 |
 | 项目契约配置 | [app/config.go](../../internal/app/config.go) 要求显式 `task_authority=native`、`workflow_protocol=worker-flow-v2`；后者不代表 Runner 当前 workflow 版本 |
 | 全局执行配置 | [executionconfig](../../internal/executionconfig/config.go) 的严格解码与版本校验；构建选择由 [app](../../internal/app/runner_config.go) 校验 |
 | TaskContract 与 DAG | [taskcontract](../../internal/taskcontract) 的结构及 [task/model](../../internal/task/model) 的规则 |

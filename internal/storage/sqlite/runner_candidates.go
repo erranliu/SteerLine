@@ -237,9 +237,6 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if graph.Authority.AuthorityVersion != work.Authority.AuthorityVersion || graph.Authority.GraphRevision != work.Authority.GraphRevision {
 			return nativeErr("stale_version", "task graph changed before reservation")
 		}
-		if graph.Authority.DispatchPaused {
-			return nativeErr("dispatch_paused", "dispatch is paused")
-		}
 		if c.MaterialDigest != "" {
 			if err := tx.verifyProjectMaterials(c.Project, c.BaseRevision, graph.Tasks); err != nil {
 				return err

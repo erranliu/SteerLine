@@ -242,16 +242,8 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if len(page.Tasks) != 2 {
 		t.Fatalf("seed task count: %d", len(page.Tasks))
 	}
-	for _, action := range []string{"resume_dispatch", "start_task"} {
-		args := []string{"debug", "control", "--simulate", "-config", d.config, "-action", action, "-profile", "simulate"}
-		if action == "start_task" {
-			args = append(args, "-task-id", "1")
-		}
-		cmd := d.command(d.helper, args...)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("%s: %v %s", action, err, out)
-		}
+	if out, err := d.command(d.helper, "debug", "control", "--simulate", "-config", d.config, "-action", "start_task", "-profile", "simulate", "-task-id", "1").CombinedOutput(); err != nil {
+		t.Fatalf("start_task: %v %s", err, out)
 	}
 	wait("original active worker", func() bool {
 		state, err := ReadWorkflow(ctx, filepath.Join(d.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(readyCommon)))

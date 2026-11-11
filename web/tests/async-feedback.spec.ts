@@ -45,12 +45,9 @@ test("explicit submissions give immediate local feedback without a second coordi
   await page.goto(opening);
   const root = new URL(`/projects/${project}`, page.url()).href;
   await page.goto(root + "/roadmaps");
-  // Fixture preparation uses the existing public UI, with its normal identity
-  // and snapshot readiness, rather than a separate short-lived control CLI.
-  await page.getByRole("button", { name: "恢复派发", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "暂停派发", exact: true }),
-  ).toBeEnabled();
+    page.getByRole("switch", { name: "自动派发" }),
+  ).toHaveAttribute("aria-checked", "false");
   const parse = page.getByRole("button", {
     name: "Runner generate · 解析任务与依赖",
     exact: true,
@@ -116,7 +113,7 @@ test("explicit submissions give immediate local feedback without a second coordi
         ).length,
     )
     .toBe(2);
-  await expect.poll(() => delivered).toBe(5);
+  await expect.poll(() => delivered).toBe(4);
 
   await page.goto(root + "/environment");
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -167,7 +164,6 @@ test("explicit submissions give immediate local feedback without a second coordi
   await expect(page.getByRole("button", { name: /^活动 ·/ })).toBeFocused();
   expect(failures).toEqual([]);
   for (const action of [
-    "resume_dispatch",
     "roadmap_parse",
     "maintenance_check",
     "start_task",

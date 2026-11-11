@@ -90,8 +90,6 @@ test("runtime.project-maintenance: Git test arrangements, independent candidates
   const current=await get("/environment/options");
   return current.profiles.find((p:any)=>p.id==="simulate")?.status;
  },{timeout:90000}).toBe("ready");
- const control=(await get("/snapshot")).connection.snapshot.page.control;
- await applied(await call("resume_dispatch","dispatch",{},prefix,{expected_version:control.revision,expected_control_revision:control.revision}));
  const start=async(action:string)=>{
   const tasks=await get("/tasks"),snapshot=await get("/snapshot");
   const task=tasks.tasks.find((t:any)=>t.task_id==="1");

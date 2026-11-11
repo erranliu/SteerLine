@@ -111,7 +111,8 @@ func TestServiceWriteIsolation(t *testing.T) {
 		t.Fatal("rejected write published request or workflow")
 	}
 	// A successful command proves that the rejection counter observes this transport.
-	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "resume_dispatch", ""))
+	_, err = p.Driver.Run(s.Context, "control", "-config", p.Config, "-action", "set_dispatch_mode", "-mode", "manual", "-wait")
+	s.Must(err)
 	if controlRequestCount(t, p) != count+1 {
 		t.Fatal("normal command did not reach the original control inbox")
 	}

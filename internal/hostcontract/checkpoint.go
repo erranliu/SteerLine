@@ -36,11 +36,10 @@ type ServiceState struct {
 }
 
 type ControlState struct {
-	DispatchMode   string            `json:"dispatch_mode"`
-	DispatchPaused bool              `json:"dispatch_paused"`
-	Revision       uint64            `json:"revision"`
-	Operation      *ControlOperation `json:"operation"`
-	Blockers       []ControlBlocker  `json:"blockers"`
+	DispatchMode string            `json:"dispatch_mode"`
+	Revision     uint64            `json:"revision"`
+	Operation    *ControlOperation `json:"operation"`
+	Blockers     []ControlBlocker  `json:"blockers"`
 }
 
 type ControlOperation struct {

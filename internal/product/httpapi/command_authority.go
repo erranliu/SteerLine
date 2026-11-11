@@ -154,15 +154,12 @@ func mappedControlMatchesEnvelope(original CommandEnvelope, input api.ControlInp
 	case "open_terminal", "recheck_environment":
 		var environment environmentPayload
 		return decodeStrict(original.Payload, &environment) == nil && reflect.DeepEqual(payload.Environment, &environment.Target)
-	case "set_dispatch_mode", "pause_dispatch", "resume_dispatch":
+	case "set_dispatch_mode":
 		if original.TargetID != "dispatch" && original.TargetID != original.ProjectID || original.ExpectedVersion != original.ExpectedControlRevision {
 			return false
 		}
-		if original.Action == "set_dispatch_mode" {
-			var mode modePayload
-			return decodeStrict(original.Payload, &mode) == nil && payload.Mode == mode.Mode
-		}
-		return payload == (api.ControlPayload{})
+		var mode modePayload
+		return decodeStrict(original.Payload, &mode) == nil && payload == (api.ControlPayload{Mode: mode.Mode})
 	case "stop_service":
 		var empty map[string]json.RawMessage
 		return decodeStrict(original.Payload, &empty) == nil && len(empty) == 0 && original.TargetID == original.InstanceID && payload == (api.ControlPayload{})
@@ -207,7 +204,7 @@ func matchesCommand(original CommandEnvelope, record *requestRecord, command api
 
 func isControlAction(action string) bool {
 	switch action {
-	case "start_task", "start_candidate", "stop_candidate", "resolve_pr_conflict", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
+	case "start_task", "start_candidate", "stop_candidate", "resolve_pr_conflict", "set_dispatch_mode", "stop_service", "open_terminal", "recheck_environment":
 		return true
 	default:
 		return false
@@ -237,7 +234,7 @@ func definitiveCommandRejection(err error) bool {
 		return strings.Contains(message, "permission") || strings.Contains(message, "access is denied") || strings.Contains(message, "access denied")
 	}
 	message := strings.ToLower(err.Error())
-	for _, marker := range []string{"stale_version", "stale_revision", "stale_instance", "stale_recovery", "stale_profile", "stale_target", "answer_conflict", "idempotency_conflict", "task_not_ready", "slot_busy", "dispatch_paused", "wrong_mode", "already_managed", "unsupported", "permission", "access is denied", "access denied"} {
+	for _, marker := range []string{"stale_version", "stale_revision", "stale_instance", "stale_recovery", "stale_profile", "stale_target", "answer_conflict", "idempotency_conflict", "task_not_ready", "slot_busy", "wrong_mode", "already_managed", "unsupported", "permission", "access is denied", "access denied"} {
 		if strings.Contains(message, marker) {
 			return true
 		}
