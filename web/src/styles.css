@@ -380,6 +380,7 @@ main {
   width: 234px;
   min-height: 116px;
   padding: 15px 17px;
+  padding-inline-start: 14px;
   border: 1px solid #375040;
   border-radius: 7px;
   background: #1b2b21;
@@ -453,8 +454,80 @@ main {
 .detail-panel {
   padding: 21px 18px;
 }
-.task-detail > .status {
+.task-detail-status {
   margin-top: 12px;
+}
+.task-detail-status > p {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.task-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.task-status .status-task_starting {
+  background: #1d3b59;
+  color: #a9d5ff;
+  border-color: #466d98;
+}
+.task-status .status-in_progress {
+  background: #382b57;
+  color: #dac6ff;
+  border-color: #6d5494;
+}
+.task-status .status-task_start_unknown {
+  background: #493e22;
+  color: #e6ce91;
+  border-color: #615136;
+}
+.task-status .status-task_start_failed {
+  background: #4c2e24;
+  color: #efbbaa;
+  border-color: #674436;
+}
+.task-status :is(.status-task_starting, .status-in_progress)::before {
+  content: "";
+  display: block;
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  margin-inline-end: 5px;
+  border-radius: 50%;
+}
+.task-status .status-task_starting::before {
+  border: 1.5px solid currentColor;
+  border-inline-end-color: transparent;
+  animation: task-start-spin 900ms linear infinite;
+}
+.task-status .status-in_progress::before {
+  background: currentColor;
+  animation: task-running-pulse 2.4s ease-in-out infinite;
+}
+@keyframes task-start-spin {
+  to { transform: rotate(1turn); }
+}
+@keyframes task-running-pulse {
+  50% { opacity: 0.45; }
+}
+:is(.graph-task, .task-row) {
+  border-inline-start-width: 4px;
+  transition: border-inline-start-color 180ms ease;
+}
+:is(.graph-task, .task-row)[data-execution-state="task_starting"] {
+  border-inline-start-color: #70b8ff;
+}
+:is(.graph-task, .task-row)[data-execution-state="in_progress"] {
+  border-inline-start-color: #bc98ff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-status :is(.status-task_starting, .status-in_progress)::before {
+    animation: none;
+  }
+  :is(.graph-task, .task-row) {
+    transition: none;
+  }
 }
 .detail-section {
   border-top: 1px solid #2b3c31;
@@ -548,9 +621,11 @@ code {
   gap: 13px;
   width: 100%;
   padding: 14px 11px;
+  padding-inline-start: 7px;
   text-align: left;
   border: 0;
   border-bottom: 1px solid #2c4032;
+  border-inline-start: 4px solid transparent;
   background: transparent;
   color: #d8e6dc;
 }
