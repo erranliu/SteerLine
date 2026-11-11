@@ -58,7 +58,7 @@ suggest 仍使用 generate/1、原完整文本通道和私有空目录；不提�
 
 能力依赖按操作隔离：suggest 不因缺仓库/file 材料能力而受阻；Roadmap 两个生成操作仍检查各自实际需要的固定材料能力；原 message 不因缺 generate 能力受阻。一个操作不可用不撤销原问题回答、观察、停止或无关操作的资格；已有全局构建/实例及原业务规则仍有效。
 
-原建议自动来源、去重、完整上下文、未知零重投、失败不自动重开、取消、源解除、共享配额、停止信封及重启恢复全部保持；具体规则引用[现有建议 Spec](main-agent-advisory.spec.md)和[Worker 生命周期](../../docs/product-design/worker-lifecycle.md)。本期仅改调用方命名和归属，不改变这些规则。
+原建议自动来源、去重、完整上下文、未知零重投、失败不自动重开、取消、源解除、共享配额、停止信封及重启恢复全部保持；具体规则引用[现有建议 Spec](main-agent-advisory.spec.md)和[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)。本期仅改调用方命名和归属，不改变这些规则。
 
 固定提示词、规则、golden 的路径及正文保持；核心移动后仍调用 prompts 同包现有组装函数，不创建第二份资产。固定事实和身份相同的建议、冲突及 Roadmap 模型正文、材料、schema 和 digest 应与基线一致，分类元数据不进入模型上下文或 Runner 请求。按[提示词治理](../../docs/prompt-governance.md)对实际输入给出完整差异及字节对照，接线和对应测试须独立审核；不能因预期 0 B 变化免审，也不能以更新 golden 消除不符合预期的变化。
 

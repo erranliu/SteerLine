@@ -6,7 +6,7 @@
 
 实施基线为 `a54280510802c1208d9a1a3ff0ec473cad4ebd24` 上的本工作区变更；schema 从 39 更新到 40，无旧格式迁移。受控测试使用公开 Runner fixture，固定实际二进制及摘要随每次报告保存，不声明真实模型链通过。下文保留实施安排，实际结果只在专属验收登记。
 
-按 [worker 生命周期](../../docs/product-design/worker-lifecycle.md) 保持原请求、未知副作用、恢复和结算规则。读取[测试指南](../testing.md)、[路径清单](../paths.md)及[验收流程](../testing/acceptance/README.md)。普通开发直接实施，不因文档存在分配 Task ID 或进入 roadmap。
+按 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) 保持原请求、未知副作用、恢复和结算规则。读取[测试指南](../testing.md)、[路径清单](../paths.md)及[验收流程](../testing/acceptance/README.md)。普通开发直接实施，不因文档存在分配 Task ID 或进入 roadmap。
 
 先将以下行为冻结为回归基线：环境 `Start` 的材料读取与持久化边界；显式 `maintenance_check` 的 CommandRecord 和请求回执；准备 `RegisterPreparation` 的原请求/批次事务及后台 worker；候选预留/outbox/Runner 投影/TaskDelivery；原 `useOriginalRequests` 与候选启动协调。不得借活动接入改掉原先未知、取消或资格处理。
 

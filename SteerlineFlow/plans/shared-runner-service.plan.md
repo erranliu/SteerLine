@@ -9,7 +9,7 @@
 
 调查基线为 SteerLine `abd001f1fc40fb57abec49f4173874c0c942f2f1`，Runner 源码 `59c7597ac8056fc5c29ad622034e10e74e4395de`。已全文读取 `docs/spec/SpecGuide.md`，其最后修改 commit 为 `94e704300485b82d54e44991148074841ed66019`，SHA-256 为 `85b656090674e1f953320b6be62d17b6888248ef7eec5fe044b9d3f408bfe4de`；普通开发沿 AGENTS.md，不采用 roadmap 转正/发布准入。
 
-同时读取 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md)、[测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)、[本项目测试入口](../testing.md)与 [E2E 入口/维护约定](../../tests/e2e/README.md)，核对当前宿主、配置、任务 outbox、环境活动、verify-stop、reset、cleanup 和公开 CLI fixture。关联 W01/W08–W14/W18、E04/E05/E07、V01/V03/V06–V08；统一矩阵不复制到本 Plan。
+同时读取 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)、[测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)、[本项目测试入口](../testing.md)与 [E2E 入口/维护约定](../../tests/e2e/README.md)，核对当前宿主、配置、任务 outbox、环境活动、verify-stop、reset、cleanup 和公开 CLI fixture。关联 W01/W08–W14/W18、E04/E05/E07、V01/V03/V06–V08；统一矩阵不复制到本 Plan。
 
 实施前对实际 HEAD 与本基线的差异复核，特别是生命周期、Runner 绑定及调试重置的并行修改；记录实际实现和交付构建。使用固定真实 Runner EXE 作为公开契约依赖，登记来源 commit/version/SHA/resource digest，不能仅凭本地源码 HEAD 宣称 EXE 可用。当前未发现必须修改 Runner 的能力缺口；离线未知请求映射不足按 Spec 阻断，不在旁路读取 Runner 私有库。
 

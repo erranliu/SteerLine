@@ -157,7 +157,7 @@ Runner 正式目标契约（含既有接口复用与必要增量）和匹配固�
 
 实施时删除 SteerLine 的 `PricingPolicy` 路径、`RunCostSupported`、`EstimateRunCost`、Runner cost DTO 及对应旧测试和 UI 文案，更新执行配置 schema/示例/保存测试；`usage_policy` 原样保留。旧 execution.json 的 pricing_policy 字段不自动转换或继续读取，由用户按新格式配置。移除旧字段需沿现有严格配置校验与明确诊断，不默默丢字段后声称价表已保存。
 
-本次方案涉及遥测、价格设置及既有采集授权的显式配置闭环，不修改 [worker 生命周期](../../docs/product-design/worker-lifecycle.md)、业务 revision、TaskDelivery、模型执行权限或远端授权/停止/恢复/升级的既有规则。新增配置入口不构成默认扩权。实现中若触及提示词及其接线/资产/对应测试，须先单列影响并遵循提示词治理，不能夹带到本计费改动中。
+本次方案涉及遥测、价格设置及既有采集授权的显式配置闭环，不修改 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)、业务 revision、TaskDelivery、模型执行权限或远端授权/停止/恢复/升级的既有规则。新增配置入口不构成默认扩权。实现中若触及提示词及其接线/资产/对应测试，须先单列影响并遵循提示词治理，不能夹带到本计费改动中。
 
 ## 8. 通过条件
 

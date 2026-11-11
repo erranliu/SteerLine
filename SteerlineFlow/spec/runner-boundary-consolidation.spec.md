@@ -28,7 +28,7 @@ S1–S4 已实施，审计日期为 2026-11-05，SteerLine 基线为 `57e3c52e`�
 
 Runner 提供属于原 Run 的 PR 事实，SteerLine 在候选当前身份及任务版本下消费这些事实。唯一 TaskDelivery、候选收尾及后继释放继续在同一业务事务中确认。Roadmap 文档发布的人工确认与业务 Git/provider 编排按其原用例执行，其存在不能成为把 Task 交付判定迁给 Runner 的依据。
 
-当前未发布版本按 [AGENTS.md](../../AGENTS.md)执行，新增格式使用单一当前契约。现有状态的重启、原请求对账、当前构建停止义务与结算继续按 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)及[现行 Runner v8 接入](../testing/acceptance/runner-v8-install-reset.md)核对。各阶段改变的是职责归属及公开查询入口。
+当前未发布版本按 [AGENTS.md](../../AGENTS.md)执行，新增格式使用单一当前契约。现有状态的重启、原请求对账、当前构建停止义务与结算继续按 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)及[现行 Runner v8 接入](../testing/acceptance/runner-v8-install-reset.md)核对。各阶段改变的是职责归属及公开查询入口。
 
 ## 3. S1 · Orca 原生目录归 Runner
 

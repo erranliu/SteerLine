@@ -1,6 +1,6 @@
 # 问题、反馈与恢复输入
 
-Runner 拥有原生问题、会话、输入和执行状态。SteerLine 将其公开 question、controls 和 revision 投影为界面 Decision，保存调用方请求与投递进度；Decision 不是另一套持久原生问题或执行状态机。本文维护输入含义与受理边界，通用生命周期见[Worker 生命周期](worker-lifecycle.md)。
+Runner 拥有原生问题、会话、输入和执行状态。SteerLine 将其公开 question、controls 和 revision 投影为界面 Decision，保存调用方请求与投递进度；Decision 不是另一套持久原生问题或执行状态机。本文维护输入含义与受理边界，通用生命周期见[Runner 调用生命周期](runner-lifecycle.md)。
 
 ## 问题与答案
 

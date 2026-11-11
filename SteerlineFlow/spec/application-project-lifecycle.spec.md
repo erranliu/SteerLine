@@ -85,7 +85,7 @@ Runner 停机原 request_id、固定实例/EXE/state-dir 和 last_shutdown 校�
 
 ## 7. 验收与完成
 
-统一 worker 规则仍归 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md)，关联 W01、W08–W14、W17–W18 / E04、E05、E07 / V01、V03、V06–V08。本次只调整调用方资源/停止接线，不改原生恢复和流程。
+统一 worker 规则仍归 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，关联 W01、W08–W14、W17–W18 / E04、E05、E07 / V01、V03、V06–V08。本次只调整调用方资源/停止接线，不改原生恢复和流程。
 
 | ID | 通过条件 |
 | --- | --- |

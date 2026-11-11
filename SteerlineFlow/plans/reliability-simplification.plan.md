@@ -1,6 +1,6 @@
 # 可靠性交付简化实施 Plan
 
-依据[经二轮审计的方案](../archive/design/reliability-simplification-analysis.md#可以简化的流程)，按其依赖实施，不修改 roadmap。Worker 规则沿用 [W/E/V 矩阵](../../docs/product-design/worker-lifecycle.md)，不新增输入重放或资源停止授权，不使用安装环境作测试。
+依据[经二轮审计的方案](../archive/design/reliability-simplification-analysis.md#可以简化的流程)，按其依赖实施，不修改 roadmap。Worker 规则沿用 [W/E/V 矩阵](../../docs/product-design/runner-lifecycle.md)，不新增输入重放或资源停止授权，不使用安装环境作测试。
 
 ## 实施顺序
 

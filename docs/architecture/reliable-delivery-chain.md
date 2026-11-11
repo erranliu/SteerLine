@@ -1,6 +1,6 @@
 # SteerLine 可靠性交付链路
 
-本文串联命令受理、任务交付与资源结算的事实和核验边界。节点异常、重试和恢复统一见 [Worker 生命周期](../product-design/worker-lifecycle.md)，操作步骤见[安装部署](../integration/install-deploy.md)。旧简化分析及实施验证约束见[历史方案](../../SteerlineFlow/archive/design/reliability-simplification-analysis.md)，各版本验收见[历史证据入口](../../SteerlineFlow/archive/design/runner-reliability-history.md)。
+本文串联命令受理、任务交付与资源结算的事实和核验边界。节点异常、重试和恢复统一见 [Runner 调用生命周期](../product-design/runner-lifecycle.md)，操作步骤见[安装部署](../integration/install-deploy.md)。旧简化分析及实施验证约束见[历史方案](../../SteerlineFlow/archive/design/reliability-simplification-analysis.md)，各版本验收见[历史证据入口](../../SteerlineFlow/archive/design/runner-reliability-history.md)。
 
 ## 事实权威与完成含义
 
@@ -70,7 +70,7 @@ SteerLine 对已绑定候选使用 Runner 的同快照 `observe` 读取 Run 和�
 
 | 主题 | 入口 |
 | --- | --- |
-| 节点、异常、授权及原请求恢复 | [Worker 生命周期](../product-design/worker-lifecycle.md) |
+| 节点、异常、授权及原请求恢复 | [Runner 调用生命周期](../product-design/runner-lifecycle.md) |
 | 身份、冻结、事务与格式 | [数据模型](../product-design/data-model.md) |
 | 原请求、迟到接受与停止义务 | [runnerbridge](../../internal/runnerbridge/bridge.go) |
 | 平台查询与唯一交付 | [PR 所有权 Spec](../../SteerlineFlow/spec/task-pr-merge-ownership.spec.md) · [交付事务](../../internal/storage/sqlite/runner_result.go) |

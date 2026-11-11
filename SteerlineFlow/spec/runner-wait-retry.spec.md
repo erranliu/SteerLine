@@ -10,7 +10,7 @@ SteerLine 调查基线 `9607fb0099dfc00d9f3de35429d4c43fcdc80407`，Runner 基�
 
 审计将首版收敛为 remote repository_inventory / local runtime_status 两项准备读取。共用 CLI 同进程 FIFO、单层读取重试归 Runner；不扩大到写操作预算、通用三类调度、后台采样退避或未知结果的新状态机。
 
-复用 [worker 生命周期](../../docs/product-design/worker-lifecycle.md) W02/W04/W08–W11/W18、E01/E03–E05/E07 与 V01/V03/V06–V08；恢复按[协作契约](runner-collaboration.spec.md)、[服务换代契约](service-generation-recovery.spec.md)和[可靠交付架构](../../docs/architecture/reliable-delivery-chain.md)。未知创建/发送/停止继续沿原操作核验，不能因本项自动重投 submit/reply/resume。
+复用 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) W02/W04/W08–W11/W18、E01/E03–E05/E07 与 V01/V03/V06–V08；恢复按[协作契约](runner-collaboration.spec.md)、[服务换代契约](service-generation-recovery.spec.md)和[可靠交付架构](../../docs/architecture/reliable-delivery-chain.md)。未知创建/发送/停止继续沿原操作核验，不能因本项自动重投 submit/reply/resume。
 
 ## 2. 所有权与范围
 

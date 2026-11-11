@@ -1,6 +1,6 @@
 # SteerLine Web
 
-本机浏览器客户端，使用独立 Web 程序和共享 Go 后端的应用 API。[Spec](../SteerlineFlow/spec/web-project-switch.spec.md) · [Plan](../SteerlineFlow/plans/web-project-switch.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-project-switch.md)。项目添加、远程 Web 和 SSE 尚未实现；远端 worker 能力不等于远程 Web 访问。客户端与服务的职责唯一维护在[代码架构](../docs/architecture/current-code-architecture.md#客户端与服务边界)。
+本机浏览器客户端，使用独立 Web 程序和共享 Go 后端的应用 API。[Spec](../SteerlineFlow/spec/web-project-switch.spec.md) · [Plan](../SteerlineFlow/plans/web-project-switch.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-project-switch.md)。项目添加和 SSE 尚未实现。Web 仅供本机访问，远端 Orca 执行由 SteerRunner 管理。客户端与服务的职责唯一维护在[代码架构](../docs/architecture/current-code-architecture.md#客户端与服务边界)。
 
 ## 工程结构与技术栈
 
@@ -30,7 +30,7 @@ $env:STEERLINE_HOME = '<所选 home>'
 
 安装目录双击 `start.bat`（等价 `steerline start`），短协调器依次启动并核验同 home 的共享后端和 Web，然后委托本 home 的 Web `open` 授权打开浏览器。重复启动复用实例；`--no-open` 适合自动化。`steerline status --json` 展示宿主、Web、项目和最近停机结果，`stop.bat` / `steerline stop` 正常停止两者并核验各项目收尾。
 
-后端低层入口为 `steerline serve`，自动冻结并装载 `etc/*.json`，所有项目在同一 PID 内分别拥有数据库、actor、实例和锁。配置修改在下次宿主启动生效。Web 可通过 `steerline-web stop`、`serve`、`open` 独立重启，保持项目与 worker 活动轮次。
+后端低层入口为 `steerline serve`，自动冻结并装载 `etc/*.json`，所有项目在同一 PID 内分别拥有数据库、actor、实例和锁。配置修改在下次宿主启动生效。Web 可通过 `steerline-web stop`、`serve`、`open` 独立重启，项目服务和原 Runner Run 继续运行。
 
 Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742"}`；缺文件时采用该默认值并在启动时保存。稳定端口冲突明确失败。项目配置的 `web_address` 和旧 `steerline web -config` 已删除，旧配置需要显式移除该字段，不自动迁移。
 

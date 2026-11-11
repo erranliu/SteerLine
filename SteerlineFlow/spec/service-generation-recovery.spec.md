@@ -1,6 +1,6 @@
 # Runner 兼容构建接管的调用方契约
 
-2026-10-19，用户直接授权的跨仓恢复实施，基线 `9554eb61eefa417f5cd900d335650dacff3d3311`。与 Runner 工作树 `docs/spec/service-generation-recovery.spec.md` 配套；本仓只消费公开 CLI，不读取 Runner DB/IPC，不解释原生恢复状态。规则归属 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md) 的 W02–W18/E04–E07/V06–V08。[Plan](../plans/service-generation-recovery.plan.md) 与[验收](../testing/acceptance/service-generation-recovery.md)分别维护验证安排与实际结果。
+2026-10-19，用户直接授权的跨仓恢复实施，基线 `9554eb61eefa417f5cd900d335650dacff3d3311`。与 Runner 工作树 `docs/spec/service-generation-recovery.spec.md` 配套；本仓只消费公开 CLI，不读取 Runner DB/IPC，不解释原生恢复状态。规则归属 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) 的 W02–W18/E04–E07/V06–V08。[Plan](../plans/service-generation-recovery.plan.md) 与[验收](../testing/acceptance/service-generation-recovery.md)分别维护验证安排与实际结果。
 
 1. 所选 EXE 仍逐次校验绝对路径/SHA/version，活动服务仍逐次验证原 instance/state-dir/当前构建。历史 candidate.RunnerBuild、Check.Selection/resource digest、原 submit/control 信封、Run/input digest、PR/Delivery 事实不可改写。兼容接管只更新 application-api/runner-build.json 和当前 service checkpoint 的 pin。
 2. 换构建前调用 `service verify-takeover --candidate <所选 EXE>`；必须同目录、候选 SHA、contract=steerrunner-takeover/v1、全部逐项 compatible/read_only。原 Run 用 ID/input digest 关联；丢失 submit 回执用原 request_id 加 commands 的 canonical request_digest 关联，不能仅凭同名/同标题或重发 submit。读取受限原资源不因此获得新授权。

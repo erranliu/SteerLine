@@ -37,7 +37,7 @@
 
 final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取，单页最多 256 KiB，核对原 Attempt、revision、SHA-256 和 UTF-8 offset。来源规则见[公开会话结果](execution-observability.md#公开结果来源)，不回退原生日志。
 
-候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](worker-lifecycle.md)。
+候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](runner-lifecycle.md)。
 
 准备等待沿原候选 `runner_delivery.execution_wait` 返回完整 `steerrunner-execution-wait/v1` 对象或 null，activity 的 `kind=execution_wait` 保留 `meta.execution_wait`。只展示，不新增计时命令；读取异常保留最后已知值并标待核实。字段及验证范围见[等待 Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)。
 

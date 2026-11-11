@@ -69,7 +69,7 @@
 
 第一轮已完成第 1 项及候选错误映射；第二、三轮已完成第 2 项；第四、五轮已完成第 3 项中的 Task 与宿主契约归位。依赖规则由全标签源码与 Windows/Linux 依赖图核对。余下可继续收窄展示/控制传输值及 app 中的组装与产品适配；这些尚未实施。
 
-暂不建议把 Task、候选、交付拆成独立服务/数据库，也不建议引入通用事件总线、插件注册框架或重建 workflow 层。当前一个原子交付事务、每项目资源 owner、Runner 单写执行事实的关系是必要的一致性边界。业务规则、生命周期和真实支持范围分别归[整体架构](../../../docs/architecture.md)、[Worker 生命周期](../../../docs/product-design/worker-lifecycle.md)及[接入验收](../../testing/acceptance/steerrunner-cutover.md)维护。
+暂不建议把 Task、候选、交付拆成独立服务/数据库，也不建议引入通用事件总线、插件注册框架或重建 workflow 层。当前一个原子交付事务、每项目资源 owner、Runner 单写执行事实的关系是必要的一致性边界。业务规则、生命周期和真实支持范围分别归[整体架构](../../../docs/architecture.md)、[Runner 调用生命周期](../../../docs/product-design/runner-lifecycle.md)及[接入验收](../../testing/acceptance/steerrunner-cutover.md)维护。
 
 Runner 的 Orca 协议能力层共用本机/远端目录读取，通过 native-catalog 返回目标注册 Agent 及模型/provider/effort 事实。Web 每次查询重新调用固定 EXE，仅合并同上下文在途请求，失败时保留明确过期结果。配置owner独立发布可生成组合并验证完整schema；前端合并展示。模型provider凭据留在原Agent，Web不建key配置、provider发现或账号数据库；Go执行服务仍仅消费execution.json。
 

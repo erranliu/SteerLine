@@ -15,7 +15,7 @@
 | `internal/runnerclient/catalog.go`、`internal/runnercontract` | 已有公开自包含 schema 校验与参数摘要；复用纯校验，禁止 Web 调用 submit/service start 或读取 Runner 私有状态 |
 | `internal/localservice/endpoint.go`、`web/server/home_config_*_test.go` | 私有文件原子替换与父目录权限保持已有基础；复用而不改变整个 home 权限 |
 | `internal/testkit/boundary` | Web/HTTP 消费者有传递依赖守卫；为明确新增的纯配置/元数据职责补窄规则，不能用总开关放开 app、SQL、执行或存储依赖 |
-| `docs/product-design/worker-lifecycle.md` | 已读取；本次不改变 W/E/V 状态机，现有换代/冻结/停止行为直接复用，不另写恢复规则 |
+| `docs/product-design/runner-lifecycle.md` | 已读取；本次不改变 W/E/V 状态机，现有换代/冻结/停止行为直接复用，不另写恢复规则 |
 
 保留唯一 `execution.json`、profile 参数摘要和原 Run 冻结记录。新增模块是 Web 能力目录客户端及配置编辑 owner，不是新的执行链路。无旧格式兼容、迁移、双写、探测数据库或独立守护进程。
 

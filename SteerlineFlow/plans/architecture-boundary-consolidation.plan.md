@@ -8,7 +8,7 @@
 2. runnerbridge 唯一生成并保存候选 stop 信封；正常对账与启动前准备共用入口，保留两条路径既有 ID 生成方式、CAS、未知原信封及明确拒绝后的再准备。app 继续取得项目锁/store，启动前持久化并提交 pending_stops。
 3. takeover 公开类型与协议校验归 runnercontract；原 Candidate/Check 绑定及构建比较归纯 runnerbinding，启动、离线重启和查询复用。部署在线预检调用暂存 SteerLine 的同一 Go 入口，失败仍在停止/替换之前阻断。
 
-节点/异常/验证以 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md) W02–W18/E04–E07/V03、V06–V08 为准。本轮只调整规则归属；原输入授权、零自动 submit/reply/resume、只读接管限制、原 Run/input/request/build 事实、停服与资源结算分别取证以及唯一交付事务保持。未知不生成新信封；不增加兼容旧数据或恢复入口。
+节点/异常/验证以 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) W02–W18/E04–E07/V03、V06–V08 为准。本轮只调整规则归属；原输入授权、零自动 submit/reply/resume、只读接管限制、原 Run/input/request/build 事实、停服与资源结算分别取证以及唯一交付事务保持。未知不生成新信封；不增加兼容旧数据或恢复入口。
 
 ## 测试计划
 

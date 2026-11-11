@@ -20,7 +20,7 @@ Task、Candidate、Runner Run、Attempt、原生会话/轮次、命令与 PR 分
 
 ## 外部动作、反馈与恢复
 
-副作用前持久化固定意图，原请求未知时只按原 ID 对账，不能换 ID 重发或改投后端。问题、答案保存、发送意图、平台回执、原生轮次结果与业务阶段分别表达；迟到事实不取得新输入、重建资源或推进兄弟候选的授权。详细规则归[决策与反馈](../../docs/product-design/decisions.md)及[Worker 生命周期](../../docs/product-design/worker-lifecycle.md)，不在任务中另建平行状态机。
+副作用前持久化固定意图，原请求未知时只按原 ID 对账，不能换 ID 重发或改投后端。问题、答案保存、发送意图、平台回执、原生轮次结果与业务阶段分别表达；迟到事实不取得新输入、重建资源或推进兄弟候选的授权。详细规则归[决策与反馈](../../docs/product-design/decisions.md)及[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，不在任务中另建平行状态机。
 
 显式重启 SteerLine 后核验新 Runner 实例；运行中的旧 ProjectRuntime 不自动重绑。兼容构建接管按原 Run/输入/请求及公开逐项证明核验，不要求原资源全部先停；销毁/reset 仍须取得准确原范围的停止与结算证明。SteerLine 零自动 submit/reply/resume；Runner 只沿原持久授权继续已证明未发送的后继。未知副作用、资源丢失、不兼容和明确停止均保留原门槛，详见[服务换代恢复契约](service-generation-recovery.spec.md)。
 

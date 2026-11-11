@@ -56,7 +56,7 @@ Task 的 repository/remote/目标分支固定；材料确认可在没有任何�
 
 Web 仅一个维护面板：检查/Git 更新提示、影响清单、人工核对、单项生成/diff/应用及待提交状态；启动待办直达对应范围。沿既有应用 v2 认证/项目路由增加必要 DTO/命令，服务端核对原项目/范围/版本/摘要，不信 passed 布尔值，切项目不转移授权。首版不建 project maintenance 通用 CLI。既有 tests generate/generation/stop-generation 消费共用服务；新增 `tests apply -project <id> -generation-id <id> -request-id <new-id> -expected-revision <n> -review-digest <sha256>`。预览只读返回这些参数；review_digest覆盖项目/原生成/路径/输出及本地HEAD/分支、实际输入、目标原字节，应用时服务重算比对，不能只有输出摘要。重新审阅返回新摘要，不改原请求；Task确认先由维护面板/API提供，不新增独立修订CLI。
 
-已配置项目的材料确认与冻结由同一项目库/actor 持有；初始化仅复用规则。应用层只装配/路由/观察，不用应用级文件的版本与项目 SQLite 伪造跨库事务。所有旧生成入口切换为待审阅，无自动保存旁路。W/E/V 仍归[生命周期](../../../../docs/product-design/worker-lifecycle.md)，不增加 Runner 状态机。
+已配置项目的材料确认与冻结由同一项目库/actor 持有；初始化仅复用规则。应用层只装配/路由/观察，不用应用级文件的版本与项目 SQLite 伪造跨库事务。所有旧生成入口切换为待审阅，无自动保存旁路。W/E/V 仍归[生命周期](../../../../docs/product-design/runner-lifecycle.md)，不增加 Runner 状态机。
 
 ## 验收要求
 

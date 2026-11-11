@@ -8,7 +8,7 @@ Runner 提供 `open-native-session`，只接受公开 Run/Attempt/Session/Genera
 
 SteerLine 从固定 EXE 的已核验 capability 决定服务能力；通过候选自己的 state-dir、输入摘要及分支核对公开 Run，再把原会话目标交给 CLI。沿用 HTTP 原请求落盘和不可重放规则。前端区分离线、能力缺失和会话身份缺失，并核对对应 adapter 的能力。
 
-生命周期节点、异常及验证规则沿用 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md)。本次只补只读定位与查看窗口，不改变 W01–W18、异常分类、重试或恢复授权。
+生命周期节点、异常及验证规则沿用 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)。本次只补只读定位与查看窗口，不改变 W01–W18、异常分类、重试或恢复授权。
 
 ## 测试计划
 

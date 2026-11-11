@@ -4,7 +4,7 @@
 
 ## 目标与现状
 
-每次正常启动都由 Runner 在 SteerLine 选定的完整 Git commit 上创建专属 worktree。创建本身保证起点，因此成功路径省去再查 HEAD、分支、diff、洁净度及材料交付的启动门禁。工作区创建结果不确定时，沿[旧 Run 恢复流程](../../docs/product-design/worker-lifecycle.md)处理。
+每次正常启动都由 Runner 在 SteerLine 选定的完整 Git commit 上创建专属 worktree。创建本身保证起点，因此成功路径省去再查 HEAD、分支、diff、洁净度及材料交付的启动门禁。工作区创建结果不确定时，沿[旧 Run 恢复流程](../../docs/product-design/runner-lifecycle.md)处理。
 
 实施前，Runner 仓库准备强制刷新目标分支并重做基线祖先判断，本机 Codex 在创建后重复查询 Git，开发 Workflow 隐式读取项目策略槽位并据此准入。任务 101 已有自动生成的安排，SteerLine 启动仍要求固定 commit 包含 Plan 同名的 `.tests.json`。[Runner #99](https://github.com/erranliu/SteerRunner/pull/99) 已关闭，后续使用普通文件通道。
 

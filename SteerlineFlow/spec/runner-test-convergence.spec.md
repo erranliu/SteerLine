@@ -8,7 +8,7 @@ SteerRunner 已独立拥有执行流程、原生适配器、工作区、会话�
 
 用户明确要求保留完整 L2 smoke：通过真实 SteerLine 调用真实 Runner，使用本机 Codex 实际执行任务并创建真实 PR，完成合并、TaskDelivery 和后继释放。L2 因而继续覆盖 Runner 正常执行及发布能力，不能改成仅验证协议、模拟模型、模拟 PR 或只提交到 waiting_pr_merge。
 
-本次不修改产品 worker、重试或恢复规则。规则归属沿用 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md)：Runner 管执行事实与恢复资格，SteerLine 管原 CLI 请求、绑定、事件投影和 W17 TaskDelivery。仅调整测试所有者、夹具、选择及证据要求，不另立状态机。
+本次不修改产品 worker、重试或恢复规则。规则归属沿用 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)：Runner 管执行事实与恢复资格，SteerLine 管原 CLI 请求、绑定、事件投影和 W17 TaskDelivery。仅调整测试所有者、夹具、选择及证据要求，不另立状态机。
 
 ## 2. 当前调查
 

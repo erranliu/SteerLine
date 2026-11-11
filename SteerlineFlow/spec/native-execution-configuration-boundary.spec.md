@@ -33,7 +33,7 @@ SteerLine 调查基线：`9b2e5d886b8f56eaf07bc697ca78c578c91eec00`。Runner 调
 
 Runner 既有 `capability_catalog`、`configuration_schemas`、`validate`、`native-catalog` 分别继续负责静态支持、输入校验和动态发现。新接口只补配置投影/构造；不增加另一份支持矩阵、动态账号库或自动安装程序。
 
-PR 合入核验仍按[既有 Task 所有权](task-pr-merge-ownership.spec.md)。Workflow、异常、停止和重启继续遵循 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)，本轮无新增重试、自动输入、资源重建或停止范围要求。
+PR 合入核验仍按[既有 Task 所有权](task-pr-merge-ownership.spec.md)。Workflow、异常、停止和重启继续遵循 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，本轮无新增重试、自动输入、资源重建或停止范围要求。
 
 ## 3. Runner 新增的公开配置接口（提案）
 

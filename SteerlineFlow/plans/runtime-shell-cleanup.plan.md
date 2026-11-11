@@ -9,7 +9,7 @@
 3. 保留 TaskDelivery、Task/DAG、ServiceCheckpoint、当前 RunView/CandidateView 与产品 DTO、问题/输入、活动/会话和宿主进程能力；同名 TaskRecord.IdentityMapDigest 的拒绝旧身份规则保留。只删除已断开的引用闭包，不扩大为所有无写入展示字段清理。
 4. 校准架构、数据模型、Spec/验收导航与测试入口；按现有验收记录准确区分环境检查实现、公开契约、固定版本本机 full_access 正例和剩余原生/人工范围。历史 Spec/Plan 和原始验收事实不改写。
 
-不移动模型归属，不合并读取链，不改变数据库/schema、公开 HTTP/CLI、原请求、交付、停止、恢复或授权行为。内部 Runtime 不是持久格式：存储读写 ServiceCheckpoint，再由 taskrunner.Project 组合公开事实。[Worker 生命周期](../../docs/product-design/worker-lifecycle.md) 的 W/E/V 规则及实现缺口不变。
+不移动模型归属，不合并读取链，不改变数据库/schema、公开 HTTP/CLI、原请求、交付、停止、恢复或授权行为。内部 Runtime 不是持久格式：存储读写 ServiceCheckpoint，再由 taskrunner.Project 组合公开事实。[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) 的 W/E/V 规则及实现缺口不变。
 
 ## 测试计划
 

@@ -1,7 +1,7 @@
 SteerLine independent debug environment
 
 start.bat                 starts shared backend and Web, default live
-start.bat --simulate      freezes simulated worker/PR; real Git and SQLite
+start.bat --simulate      selects simulated Runner and PR provider; real Git and SQLite
 stop.bat                  stops both products and owned debug helpers
 home/start.bat            restarts products with the already frozen scheme
 reset-SteerlineTest.bat    resets only package execution state; stop first
