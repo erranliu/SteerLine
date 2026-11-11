@@ -461,33 +461,33 @@ main {
   margin-top: 6px;
   overflow-wrap: anywhere;
 }
-.task-status {
+.execution-statuses {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
 }
-.task-status .status-task_starting {
+.execution-statuses .status-task_starting {
   background: #1d3b59;
   color: #a9d5ff;
   border-color: #466d98;
 }
-.task-status .status-in_progress {
+.execution-statuses :is(.status-in_progress, .status-running) {
   background: #382b57;
   color: #dac6ff;
   border-color: #6d5494;
 }
-.task-status .status-task_start_unknown {
+.execution-statuses .status-task_start_unknown {
   background: #493e22;
   color: #e6ce91;
   border-color: #615136;
 }
-.task-status .status-task_start_failed {
+.execution-statuses .status-task_start_failed {
   background: #4c2e24;
   color: #efbbaa;
   border-color: #674436;
 }
-.task-status :is(.status-task_starting, .status-in_progress)::before {
+.execution-statuses :is(.status-task_starting, .status-in_progress, .status-running)::before {
   content: "";
   display: block;
   flex: 0 0 auto;
@@ -496,12 +496,12 @@ main {
   margin-inline-end: 5px;
   border-radius: 50%;
 }
-.task-status .status-task_starting::before {
+.execution-statuses .status-task_starting::before {
   border: 1.5px solid currentColor;
   border-inline-end-color: transparent;
   animation: task-start-spin 900ms linear infinite;
 }
-.task-status .status-in_progress::before {
+.execution-statuses :is(.status-in_progress, .status-running)::before {
   background: currentColor;
   animation: task-running-pulse 2.4s ease-in-out infinite;
 }
@@ -510,24 +510,6 @@ main {
 }
 @keyframes task-running-pulse {
   50% { opacity: 0.45; }
-}
-:is(.graph-task, .task-row) {
-  border-inline-start-width: 4px;
-  transition: border-inline-start-color 180ms ease;
-}
-:is(.graph-task, .task-row)[data-execution-state="task_starting"] {
-  border-inline-start-color: #70b8ff;
-}
-:is(.graph-task, .task-row)[data-execution-state="in_progress"] {
-  border-inline-start-color: #bc98ff;
-}
-@media (prefers-reduced-motion: reduce) {
-  .task-status :is(.status-task_starting, .status-in_progress)::before {
-    animation: none;
-  }
-  :is(.graph-task, .task-row) {
-    transition: none;
-  }
 }
 .detail-section {
   border-top: 1px solid #2b3c31;
@@ -691,6 +673,7 @@ textarea {
   border-radius: 6px;
   background: transparent;
   padding: 13px 11px;
+  padding-inline-start: 8px;
   color: #d0e0d5;
   margin-bottom: 4px;
 }
@@ -738,12 +721,6 @@ textarea {
 .execution-filters {
   flex-wrap: wrap;
 }
-.candidate-statuses {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  align-items: center;
-}
 .candidate-card.filter-match {
   box-shadow: inset 0 3px #bda36b;
 }
@@ -777,6 +754,7 @@ textarea {
   border-radius: 6px;
   text-align: left;
   padding: 11px 13px;
+  padding-inline-start: 10px;
   color: #c7dbcd;
 }
 .candidate-card.active {
@@ -791,6 +769,28 @@ textarea {
   display: block;
   font-size: 11px;
   margin: 4px 0 8px;
+}
+.candidate-start-detail {
+  display: block;
+  margin-top: 5px;
+}
+:is(.graph-task, .task-row, .run-task, .candidate-card) {
+  border-inline-start-width: 4px;
+  transition: border-inline-start-color 180ms ease;
+}
+:is(.graph-task, .task-row, .run-task, .candidate-card)[data-execution-state="task_starting"] {
+  border-inline-start-color: #70b8ff;
+}
+:is(.graph-task, .task-row, .run-task, .candidate-card):is([data-execution-state="in_progress"], [data-execution-state="running"]) {
+  border-inline-start-color: #bc98ff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .execution-statuses :is(.status-task_starting, .status-in_progress, .status-running)::before {
+    animation: none;
+  }
+  :is(.graph-task, .task-row, .run-task, .candidate-card) {
+    transition: none;
+  }
 }
 .candidate-heading {
   display: flex;

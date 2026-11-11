@@ -14,3 +14,11 @@
 - `go run ./cmd/test-feedback -level=L1 -out <独立目录>` 通过，报告位于 `C:\SteerlineDebug\wt-fa1a-dag-start-feedback\test-results\L1\6de9ee28-d109-4f22-8fa3-9ce494947aa2\summary.json`。
 - `go run ./cmd/test-feedback -level=L2 -out <独立目录>` 通过，报告位于 `C:\SteerlineDebug\wt-fa1a-dag-start-feedback\test-results\L2\afe28fac-883c-4698-9b6f-d018aaa08225\summary.json`。L1 和 L2 的首次沙箱运行均出现报告写入权限问题，以上报告来自独立目录复跑。
 - `npm --prefix web test` 共 471 项，458 项通过、13 项失败，另有 6 个未捕获错误。将项目切换和执行页两组测试在未修改的 `eefb67dc` 和当前工作区分别执行，13 个失败用例逐项一致，两边均有 6 个未捕获错误。对照日志位于 `C:\SteerlineDebug\wt-fa1a-dag-start-feedback\diagnostics\96776577-abe4-4407-9306-505aee8333f3` 下的 `vitest-head-compare.log` 和 `vitest-worktree-compare.log`。
+
+## 执行与待处理
+
+受测版本为 `f7534ba2` 加执行页补充改动。左侧任务列表、候选卡片和详情复用 DAG 的配色、图标和减少动态效果设置。候选从本地启动切到服务端排队时保持蓝色并显示「排队中」。服务端报告运行中后使用紫色，停止待核实时取消动效。
+
+- 执行页候选启动、执行状态、任务 DAG、启动请求及活动中心的定向测试通过 82 项。单独选中的执行页未确认启动筛选用例通过。生产构建通过。
+- 隔离 Edge 通过本地启动、回执未知、服务端排队、运行、停止待核实和减少动态效果检查。截图位于 `C:\Users\lmas1\AppData\Local\Temp\steerline-runs-status-wxmjNg`。
+- 沿用上一节 L1 的 Go 和协议覆盖以及 L2 受控交付证据。本次改动为前端状态显示，执行页状态测试已纳入定向回归。

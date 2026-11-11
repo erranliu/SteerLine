@@ -254,6 +254,43 @@ it("submits the selected remote profile when a fresh task and snapshot have null
   client.clear();
 });
 
+it("keeps startup colors through pending candidates and highlights only confirmed running candidates", async () => {
+  const { confirm, calls, showRuns, client } = setup();
+  await confirm(true);
+  const card = () => document.querySelector(".candidate-card.active")!;
+  expect(card()).toHaveAttribute("data-execution-state", "task_starting");
+  expect(document.querySelector(".run-task")).toHaveAttribute(
+    "data-execution-state",
+    "task_starting",
+  );
+  const { envelope, resolve } = calls[0];
+  await act(async () =>
+    resolve({
+      ...envelope,
+      status: "outcome_unknown",
+      sampled_at: "now",
+    }),
+  );
+  expect(card()).toHaveAttribute("data-execution-state", "task_start_unknown");
+  expect(
+    within(card() as HTMLElement).getByText("启动结果待确认"),
+  ).toBeVisible();
+
+  const observed = { ...run, run_id: envelope.request_id };
+  showRuns([{ ...observed, execution_status: "queued" }]);
+  expect(card()).toHaveAttribute("data-execution-state", "task_starting");
+  expect(card()).toHaveTextContent("排队中");
+  showRuns([{ ...observed, execution_status: "running" }]);
+  expect(card()).toHaveAttribute("data-execution-state", "running");
+  expect(
+    within(screen.getByRole("region", { name: "当前进度" })).getByText("运行中"),
+  ).toHaveClass("status-running");
+  showRuns([{ ...observed, execution_status: "running", stop_requested: true }]);
+  expect(card()).not.toHaveAttribute("data-execution-state");
+  expect(card()).toHaveTextContent("停止待核实");
+  client.clear();
+});
+
 it("clears old output immediately, keeps selection through late receipts, and replaces journal cards by the same server identity without duplicates", async () => {
   const { confirm, submit, calls, showRuns, client } = setup(true);
   await screen.findByText("旧候选活动");

@@ -16,10 +16,11 @@ export interface CandidateStart {
   title: string;
   profile: string;
   status: string;
+  phase: StartPhase;
   diagnostic?: string;
   participating: boolean;
   rejected?: boolean;
-  initial?: { requestedAt: string; phase: StartPhase };
+  initialRequestedAt?: string;
 }
 interface LocalStart {
   id: string;
@@ -208,12 +209,13 @@ export function useCandidateStarts(
       title: "",
       profile: String(row.envelope.payload.execution_profile_id || ""),
       status: startLabels[phase],
+      phase,
       diagnostic: row.response?.diagnostic || row.error,
       participating: phase !== "rejected",
       rejected: phase === "rejected",
-      initial:
+      initialRequestedAt:
         row.envelope.action === "start_task"
-          ? { requestedAt: row.created_at, phase }
+          ? row.created_at
           : undefined,
     };
   });
@@ -232,15 +234,16 @@ export function useCandidateStarts(
       title: entry.task.title,
       profile: entry.profile.name,
       status: startLabels[phase],
+      phase,
       diagnostic:
         receipt?.status === "applied"
           ? undefined
           : receipt?.diagnostic || error,
       participating: !entry.unsent && receipt?.status !== "rejected",
       rejected: receipt?.status === "rejected",
-      initial:
+      initialRequestedAt:
         entry.envelope?.action === "start_task"
-          ? { requestedAt: entry.requestedAt, phase }
+          ? entry.requestedAt
           : undefined,
     };
     const index = items.findIndex((item) => item.id === entry.id);

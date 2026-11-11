@@ -4,18 +4,18 @@ import { Status } from "../../shared/ui/status";
 export function latestTaskStarts(items: CandidateStart[] = []) {
   const starts = new Map<string, CandidateStart>();
   for (const item of items) {
-    if (!item.initial) continue;
-    const previous = starts.get(item.taskID)?.initial;
-    if (!previous || previous.requestedAt <= item.initial.requestedAt)
+    if (!item.initialRequestedAt) continue;
+    const previous = starts.get(item.taskID)?.initialRequestedAt;
+    if (!previous || previous <= item.initialRequestedAt)
       starts.set(item.taskID, item);
   }
   return starts;
 }
 
-export function taskStartStatus(status: string, start?: CandidateStart) {
-  if (status !== "open") return undefined;
-  switch (start?.initial?.phase) {
+export function candidateStartStatus(start: CandidateStart) {
+  switch (start.phase) {
     case "submitting":
+    case "waiting":
     case "applied":
       return "task_starting";
     case "unknown":
@@ -26,6 +26,11 @@ export function taskStartStatus(status: string, start?: CandidateStart) {
   }
 }
 
+export function taskStartStatus(status: string, start?: CandidateStart) {
+  if (status === "open" && start?.initialRequestedAt)
+    return candidateStartStatus(start);
+}
+
 export function TaskStatus({
   status,
   startStatus,
@@ -34,7 +39,7 @@ export function TaskStatus({
   startStatus?: ReturnType<typeof taskStartStatus>;
 }) {
   return (
-    <span className="task-status">
+    <span className="execution-statuses">
       {startStatus === "task_start_failed" ? (
         <>
           <Status value={status} />

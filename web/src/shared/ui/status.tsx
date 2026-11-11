@@ -39,9 +39,15 @@ const labels: Record<string, string> = {
   abandoned: "已停止参与",
 };
 export const label = (status: string) => labels[status] ?? status ?? "未知";
-export function Status({ value }: { value: string }) {
+export function Status({
+  value,
+  appearance = value,
+}: {
+  value: string;
+  appearance?: string;
+}) {
   return (
-    <span className={"status status-" + value}>
+    <span className={"status status-" + appearance}>
       {label(value || "unknown")}
     </span>
   );
