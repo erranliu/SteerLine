@@ -14,6 +14,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
+	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	progresstools "github.com/erranliu/SteerLine/tools"
 	"net/http"
@@ -231,6 +232,25 @@ func TestPMSGitArrangementFreshnessAndCandidateVersions(t *testing.T) {
 	commit()
 	if m.freshness(ctx, candidate) != "outdated" {
 		t.Fatal("selected definition change ignored")
+	}
+	candidate.Project, candidate.RunID, candidate.InputDigest = m.config.Identity(), "original-run", "original-input"
+	port := testManagementPort{project: candidate.Project, maintenance: m, store: tmSnapshotStore{
+		candidate: candidate,
+		progress: testmodel.Progress{
+			RunID: candidate.RunID, InputDigest: candidate.InputDigest, ParsedVersion: 2,
+			Completed: map[string]bool{"test.one": true},
+		},
+	}}
+	body, err := port.PlanTests(ctx, candidate.ID)
+	require(t, err)
+	var historical struct {
+		testmanagement.View
+		MaterialStatus       string `json:"material_status"`
+		AssociationAvailable bool   `json:"association_available"`
+	}
+	require(t, json.Unmarshal(body, &historical))
+	if historical.MaterialStatus != "outdated" || historical.AssociationAvailable || historical.Passed != 1 || historical.Pending != 0 || historical.Total != 1 || len(historical.Rows) != 1 || historical.Rows[0].Status != "passed" || historical.Rows[0].Command != "test" {
+		t.Fatal("outdated candidate lost original progress or definition", string(body))
 	}
 	require(t, os.WriteFile(filepath.Join(m.config.Repository, "task.tests.json"), []byte(`{"tests":["missing"]}`), 0600))
 	commit()

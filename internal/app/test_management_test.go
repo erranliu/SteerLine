@@ -16,6 +16,7 @@ import (
 type tmSnapshotStore struct {
 	testManagementStore
 	candidate runnerstate.Candidate
+	progress  testmodel.Progress
 }
 
 func (s tmSnapshotStore) Candidate(_ context.Context, project, id string) (runnerstate.Candidate, error) {
@@ -41,6 +42,9 @@ func TestTMPlanTestsRequiresPublicReports(t *testing.T) {
 }
 
 func (s tmSnapshotStore) Progress(context.Context, string, string) (testmodel.Progress, error) {
+	if s.progress.ParsedVersion > 0 {
+		return s.progress, nil
+	}
 	return testmodel.Progress{}, testmanagement.ErrNotFound
 }
 
