@@ -161,8 +161,20 @@ it("keeps recovery locked until the original Runner action fails and retries wit
   expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
 
   rendered.unmount();
-  render(view(failed));
+  const reloaded = render(view(failed));
   expect(screen.getByRole("alert")).toHaveTextContent("original history changed");
+  expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
+  submit.mockImplementationOnce(async (e) => ({
+    status: "rejected",
+    original: e,
+    diagnostic: "local request rejected before reaching Runner",
+  }));
+  fireEvent.click(screen.getByRole("button", { name: "继续原任务" }));
+  await screen.findByText("local request rejected before reaching Runner");
+  reloaded.rerender(
+    view(withActions([...failed.runner_delivery!.commands, newerFailure], 10)),
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("newer recovery failed");
   expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
 });
 

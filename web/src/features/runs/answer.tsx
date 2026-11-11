@@ -247,6 +247,12 @@ export function Answer({ run }: { run: Candidate }) {
       (observedResume?.diagnostic ||
         activeReceipt?.diagnostic ||
         "Runner 恢复失败。");
+    const localDiagnostic = error || failure || undefined;
+    const latestDiagnostic = latestResume?.diagnostic;
+    const recoveryDiagnostics = [localDiagnostic];
+    if (latestDiagnostic && !sameNotice(localDiagnostic, latestDiagnostic)) {
+      recoveryDiagnostics.push(latestDiagnostic);
+    }
     return (
       <section className="answer-panel" aria-label="恢复原执行">
         <p>需处理 · 核验原执行后恢复。</p>
@@ -270,10 +276,12 @@ export function Answer({ run }: { run: Candidate }) {
             {checking ? "正在核验…" : "继续原任务"}
           </Button>
         )}
-        {(error || failure) && (
-          <p role="alert" className="notice amber">
-            {error || failure}
-          </p>
+        {recoveryDiagnostics.some(Boolean) && (
+          <div role="alert" className="notice amber">
+            {recoveryDiagnostics.map(
+              (message) => message && <p key={message}>{message}</p>,
+            )}
+          </div>
         )}
       </section>
     );
