@@ -1531,8 +1531,7 @@ textarea {
 }
 
 .environment-page { min-width: 0; }
-.environment-page .environment-card { border: 1px solid var(--color-border, #32473a); border-radius: 8px; padding: 16px; margin: 14px 0; scroll-margin-top: 20px; }
-.environment-page article:focus { outline: 2px solid var(--color-primary, #78d7b5); outline-offset: 3px; }
+.environment-table tr:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 .environment-page p, .environment-page h2, .environment-page h3, .environment-page code, .environment-page .path { overflow-wrap: anywhere; }
 .environment-page pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; }
 .environment-page details { margin: 14px 0; min-width: 0; }
@@ -1547,31 +1546,30 @@ textarea {
 .environment-total-ready { color: var(--color-primary); }
 .environment-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .environment-table th, .environment-table td { text-align: left; padding: 16px 12px; border-bottom: 1px solid var(--color-border); vertical-align: top; overflow-wrap: anywhere; }
-.environment-table th { color: var(--color-muted); font-weight: 400; }
-.environment-table th:first-child { width: 34%; }
-.environment-table th:nth-child(2) { width: 17%; }
-.environment-table th:last-child { width: 108px; }
-.environment-table th:first-child, .environment-table td:first-child { padding-left: 12px; }
+.environment-table thead th { color: var(--color-muted); font-weight: 400; }
+.environment-table thead th:first-child { width: 20%; }
+.environment-table thead th:nth-child(2) { width: 19%; }
+.environment-table thead th:nth-child(4) { width: 24%; }
+.environment-table thead th:last-child { width: 130px; text-align: right; }
+.environment-table tbody th { font-weight: 600; }
 .environment-table td:last-child { text-align: right; }
 .environment-row-selected { background: #192a22; }
-.environment-page .environment-profiles { color: var(--color-muted); font-size: 12px; margin-top: 5px; }
 .environment-status { font-weight: 600; }
 .environment-status[data-stage="ready"] { color: var(--color-primary); }
 .environment-status[data-stage="blocked"], .environment-status[data-stage="timed_out"] { color: #f4a0a0; }
 .environment-status[data-stage="stale"], .environment-status[data-stage="awaiting_user"], .environment-status[data-stage="unprepared"] { color: #e7bf77; }
 .environment-status[data-stage="unverified"] { color: var(--color-muted); }
 .environment-table p { margin-top: 0; }
-.environment-overview-reason { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.environment-overview-reason { white-space: pre-line; }
 .environment-table .muted { margin-top: 5px; }
-.environment-detail, .environment-page > details, #requested-environment-activity { max-width: 800px; }
-.environment-detail { padding-top: 8px; }
-@media (max-width: 700px) {
+.environment-materials, .environment-page > details, #requested-environment-activity { max-width: 800px; }
+@media (max-width: 900px) {
   .environment-table, .environment-table tbody { display: block; }
   .environment-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .environment-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; padding: 16px 12px; border-bottom: 1px solid var(--color-border); }
-  .environment-table td, .environment-table td:first-child { padding: 0; border: 0; }
+  .environment-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); gap: 10px 12px; padding: 16px 12px; border-bottom: 1px solid var(--color-border); }
+  .environment-table tbody th, .environment-table td { width: auto; padding: 0; border: 0; min-width: 0; }
   .environment-table td:nth-child(2) { text-align: right; }
-  .environment-table td:nth-child(3) { grid-column: 1; }
+  .environment-table td:nth-child(3) { grid-column: 1 / -1; }
   .environment-table td:last-child { grid-column: 2; }
 }
 .environment-header, .detection-id { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

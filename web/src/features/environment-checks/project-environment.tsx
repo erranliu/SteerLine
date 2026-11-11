@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { usePageVisible } from "../../shared/query-visibility";
@@ -10,67 +10,28 @@ import {
   useEnvironmentReadiness,
   type Environment,
 } from "./use-readiness";
-import { DetectionID, EnvironmentCard } from "./environment-card";
-import { EnvironmentOverview } from "./environment-overview";
 import {
-  CopyExecutionInfo,
-  requestExecutionInfo,
-  type ExecutionReference,
-} from "../activities/execution-info";
+  DetectionID,
+  recordLabel,
+  type DetectionRecord,
+} from "./detection-record";
+import {
+  EnvironmentOverview,
+  type DetectionSubmission,
+} from "./environment-overview";
 import { OperationResult } from "../activities/operation-result";
-import {
-  SubmissionStatus,
-  useActivityFeedback,
-} from "../activities/feedback/feedback";
+import { useActivityFeedback } from "../activities/feedback/feedback";
 
-type Record = {
-  execution_ref?: ExecutionReference;
-  id: string;
-  revision: number;
-  profile_id: string;
-  environment_key: string;
-  created_at?: string;
-  state: string;
-  status: string;
-  settled: boolean;
-  blocked?: boolean;
-  timed_out?: boolean;
-  diagnostic: string;
-};
-const recordState: { [key: string]: string } = {
-  ready: "已通过",
-  failed: "未通过",
-  cancelled: "已停止",
-  running: "检测中",
-  queued: "等待检测",
-  stopping: "正在停止",
-  unverified: "结果待核实",
-};
-const recordLabel = (record: Record) =>
-  record.timed_out
-    ? "检测超时"
-    : record.blocked
-      ? "检测阻断"
-      : recordState[record.state] || "结果待核实";
 const linkName = (e: Environment) =>
   e.adapter === "codex-app-server"
     ? "Codex 直连"
     : `Orca → ${e.agent || "Codex"}`;
 
-type Selection = { key: string; profile?: string };
-
-function readSelection(key: string): Selection | null {
+function readPreferences(key: string): Record<string, string> {
   try {
-    const saved: Selection | null = JSON.parse(
-      sessionStorage.getItem(key) ?? "null",
-    );
-    return saved &&
-      typeof saved.key === "string" &&
-      (saved.profile === undefined || typeof saved.profile === "string")
-      ? saved
-      : null;
+    return JSON.parse(sessionStorage.getItem(key) ?? "null") ?? {};
   } catch {
-    return null;
+    return {};
   }
 }
 
@@ -87,6 +48,7 @@ function EnvironmentWorkspace() {
     useWorkspace();
   const feedback = useActivityFeedback();
   const visible = usePageVisible();
+  const queryClient = useQueryClient();
   const scope = [
     api.home,
     identity.project_id,
@@ -99,7 +61,7 @@ function EnvironmentWorkspace() {
   const requestedRecord = useQuery({
     queryKey: [...scope, "requested-record", requestedActivity],
     queryFn: ({ signal }) =>
-      api.get<Record>(
+      api.get<DetectionRecord>(
         "/environment/" + encodeURIComponent(requestedActivity),
         signal,
       ),
@@ -115,31 +77,21 @@ function EnvironmentWorkspace() {
   const task = params.get("task");
   const preferenceKey =
     "steerline-environment:" + JSON.stringify([api.home, identity.project_id]);
-  const [saved] = useState(() => readSelection(preferenceKey));
-  const [selected, setSelected] = useState<Selection | null>(null);
+  const [saved] = useState(() => readPreferences(preferenceKey));
+  const [preferences, setPreferences] = useState<Record<string, string>>({});
   const focusProfile = options.data?.profiles.find((p) => p.id === profile);
-  const defaultProfile = options.data?.profiles.find(
-    (p) => p.id === options.data?.default_profile_id,
-  );
-  const savedEnvironment = options.data?.environments.find(
-    (e) => e.environment_key === saved?.key,
-  );
-  const initialProfile = profile ? focusProfile : defaultProfile;
-  const selection =
-    selected ??
-    (!profile && savedEnvironment
-      ? saved
-      : initialProfile && {
-          key: initialProfile.environment_key,
-          profile: profile || undefined,
-        });
-  const environmentKey = selection?.key ?? "";
-  const remember = (next: Selection) => {
-    setSelected(next);
+  const linkedEnvironment = focusProfile?.environment_key;
+  const preferred = (key: string) =>
+    preferences[key] ?? (key === linkedEnvironment ? profile : saved[key]);
+  const remember = (key: string, profileID: string) => {
+    setPreferences({ ...preferences, [key]: profileID });
     try {
-      sessionStorage.setItem(preferenceKey, JSON.stringify(next));
+      sessionStorage.setItem(
+        preferenceKey,
+        JSON.stringify({ ...saved, ...preferences, [key]: profileID }),
+      );
     } catch {
-      // The selection still works on this page when browser storage is unavailable.
+      // The selection remains available on the current page.
     }
   };
   const hasRemote =
@@ -164,35 +116,32 @@ function EnvironmentWorkspace() {
       ? `${name} · ${e.profiles.map((p) => p.name).join("、")}`
       : name;
   };
-  const [allActivities, setAllActivities] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
-  const environment = options.data?.environments.find(
-    (e) => e.environment_key === environmentKey,
-  );
-  const activityID = environment?.activity_id;
-  const activity = useQuery({
-    queryKey: [...scope, "record", activityID],
-    queryFn: ({ signal }) =>
-      api.get<Record>("/environment/" + activityID, signal),
-    enabled: !!activityID,
-    retry: false,
-    refetchInterval: visible && !!activityID ? 3000 : false,
-  });
+  const environments = options.data?.environments ?? [];
+  const historyKey = environments.some(
+    (e) => e.environment_key === historyFilter,
+  )
+    ? historyFilter
+    : "";
   const history = useQuery({
-    queryKey: [...scope, "records", environmentKey, allActivities],
+    queryKey: [...scope, "records", historyKey],
     queryFn: ({ signal }) =>
-      api.get<{ records: Record[] }>(
-        "/environment" +
-          (!allActivities && environmentKey
-            ? `?environment_key=${environmentKey}`
-            : ""),
+      api.get<{ records: DetectionRecord[] }>(
+        historyKey
+          ? `/environment?environment_key=${encodeURIComponent(historyKey)}`
+          : "/environment",
         signal,
       ),
-    enabled: historyOpen && (allActivities || !!environmentKey),
+    enabled: historyOpen,
     retry: false,
     refetchInterval: visible && historyOpen ? 3000 : false,
   });
-  const [materialsOpen, setMaterialsOpen] = useState(false);
+  // The materials endpoint requires a configured environment key. The document
+  // comes from the project's observed source and is shared across environments.
+  const materialKey = environments.find(
+    (e) => e.environment_key,
+  )?.environment_key;
   const [copyingPrompt, setCopyingPrompt] = useState(false);
   const [promptFeedback, setPromptFeedback] = useState<{
     text: string;
@@ -213,53 +162,38 @@ function EnvironmentWorkspace() {
     }
   };
   const materialQuery = useQuery({
-    queryKey: [...scope, "materials", environmentKey],
-    enabled: online && !!environmentKey && materialsOpen,
+    queryKey: [...scope, "materials", materialKey],
+    enabled: online && !!materialKey,
     queryFn: ({ signal }) =>
       api.get<{ document?: string; diagnostic?: string }>(
-        `/environment/materials?environment_key=${environmentKey}`,
+        `/environment/materials?environment_key=${encodeURIComponent(materialKey!)}`,
         signal,
       ),
     retry: false,
   });
   const pending = useRef(false);
   const [submitting, setSubmitting] = useState(false);
-  const startRowsFor = (key: string) =>
-    (requests || []).filter(
+  const startState = (current: Environment): DetectionSubmission => {
+    const rows = (requests || []).filter(
       ({ envelope }) =>
         envelope.project_id === identity.project_id &&
         envelope.instance_id === identity.instance_id &&
         envelope.action === "environment_start" &&
-        envelope.payload.environment_key === key,
+        envelope.payload.environment_key === current.environment_key,
     );
-  const startRows = startRowsFor(environmentKey);
-  const latestStart = [...startRows].sort((a, b) =>
-    b.created_at.localeCompare(a.created_at),
-  )[0];
-  const startSending = (key = environmentKey) =>
-    (pendingRequests?.() || []).some(
-      (e) =>
-        e.action === "environment_start" && e.payload.environment_key === key,
-    );
-  const copyStart =
-    (pendingRequests?.() || []).find(
-      (e) =>
-        e.action === "environment_start" &&
-        e.payload.environment_key === environmentKey,
-    ) || latestStart?.envelope;
-  const copyStartReceipt = startRows.find(
-    (r) => r.envelope.request_id === copyStart?.request_id,
-  )?.response;
-  const confirmingEnvironment = (current: Environment) => {
-    const rows = startRowsFor(current.environment_key);
-    const latest = [...rows].sort((a, b) =>
+    const latest = rows.sort((a, b) =>
       b.created_at.localeCompare(a.created_at),
     )[0];
+    const sending = (pendingRequests?.() || []).find(
+      (e) =>
+        e.action === "environment_start" &&
+        e.payload.environment_key === current.environment_key,
+    );
     const receivedID = (
       latest?.response?.environment as { id?: string } | undefined
     )?.id;
-    return (
-      startSending(current.environment_key) ||
+    const confirming =
+      !!sending ||
       (!!receivedID &&
         receivedID !== current.activity_id &&
         current.current_revision <=
@@ -267,19 +201,28 @@ function EnvironmentWorkspace() {
       rows.some(
         ({ response }) =>
           response?.status !== "applied" && response?.status !== "rejected",
-      )
-    );
+      );
+    return {
+      sending: !!sending,
+      confirming,
+      accepted: latest?.response?.status === "applied",
+      request: sending || latest?.envelope,
+      receipt:
+        rows.find((r) => r.envelope.request_id === sending?.request_id)
+          ?.response ?? (sending ? undefined : latest?.response),
+    };
   };
-  const confirmingStart = !!environment && confirmingEnvironment(environment);
-  const refresh = async (onOptionsRefreshed?: () => void) => {
+  const refresh = async () => {
     const queries: Promise<unknown>[] = [
-      options.refetch().finally(onOptionsRefreshed),
+      options.refetch(),
+      queryClient.refetchQueries({
+        queryKey: [...scope, "record"],
+        type: "active",
+      }),
     ];
     if (hasRemote) queries.push(machines.refetch());
-    if (historyOpen && (allActivities || environmentKey))
-      queries.push(history.refetch());
-    if (materialsOpen && environmentKey) queries.push(materialQuery.refetch());
-    if (activityID) queries.push(activity.refetch());
+    if (historyOpen) queries.push(history.refetch());
+    if (online && materialKey) queries.push(materialQuery.refetch());
     await Promise.allSettled(queries);
   };
   const command = async (
@@ -290,9 +233,10 @@ function EnvironmentWorkspace() {
   ) => {
     if (!online) return;
     if (action === "environment_start") {
-      if (startSending() || confirmingStart) return;
-      if (typeof payload.profile_id === "string")
-        remember({ key: environmentKey, profile: payload.profile_id });
+      const current = environments.find(
+        (e) => e.environment_key === payload.environment_key,
+      );
+      if (!current || startState(current).confirming) return;
       const operation = submit(api.envelope(action, target, version, payload));
       feedback.notify("环境检测", document.activeElement as HTMLElement);
       await operation;
@@ -311,21 +255,11 @@ function EnvironmentWorkspace() {
     }
   };
   useEffect(() => {
-    if (
-      !profile ||
-      !focusProfile ||
-      environmentKey !== focusProfile.environment_key
-    )
-      return;
-    const node = document.getElementById(`environment-${environmentKey}`);
+    if (!linkedEnvironment || requestedActivity) return;
+    const node = document.getElementById(`environment-${linkedEnvironment}`);
     node?.scrollIntoView?.({ block: "nearest" });
     node?.focus();
-  }, [focusProfile?.environment_key, profile, environmentKey]);
-  const chooseEnvironment = (key: string) => {
-    remember({ key });
-    setAllActivities(false);
-    setMaterialsOpen(false);
-  };
+  }, [linkedEnvironment, profile, requestedActivity]);
   const returnParams = new URLSearchParams();
   if (task) returnParams.set("task", task);
   if (profile) returnParams.set("start_profile", profile);
@@ -355,7 +289,7 @@ function EnvironmentWorkspace() {
         ) : (
           <p role="status">{promptFeedback.text}</p>
         ))}
-      <p className="muted">查看所有环境的就绪情况，展开详情进行检测和准备。</p>
+      <p className="muted">查看所有环境的就绪情况，并在表格中发起检测。</p>
       {task && (
         <Link to={`/projects/${identity.project_id}/runs?${returnParams}`}>
           返回任务
@@ -377,21 +311,23 @@ function EnvironmentWorkspace() {
       {profile && options.verified && !focusProfile && (
         <p role="alert">原执行方案已不存在或不属于开发方案，请重新选择。</p>
       )}
-      {!!options.data?.environments.length && (
+      {options.data && environments.length > 0 && (
         <EnvironmentOverview
-          environments={options.data.environments}
+          environments={environments}
           verified={options.verified}
-          selected={environmentKey}
+          defaultProfile={options.data.default_profile_id}
+          linkedEnvironment={linkedEnvironment}
           name={environmentName}
-          confirming={confirmingEnvironment}
-          onSelect={chooseEnvironment}
+          preferred={preferred}
+          onProfileChange={remember}
+          startState={startState}
+          submitting={submitting}
+          recordScope={[...scope, "record"]}
+          command={command}
         />
       )}
       {!options.data && !options.error && (
         <p className="muted">正在读取运行环境…</p>
-      )}
-      {environmentKey && !environment && options.verified && (
-        <p role="alert">原环境已不在当前配置中，请重新选择。</p>
       )}
       {options.verified && !options.data?.environments.length && (
         <p>
@@ -433,74 +369,27 @@ function EnvironmentWorkspace() {
           )}
         </section>
       )}
-      {environment && (
+      {materialKey && (
         <section
-          aria-label="当前运行环境"
-          id="environment-detail"
-          className="environment-detail"
+          className="environment-materials"
+          aria-labelledby="environment-materials-title"
         >
-          <h2>{environmentName(environment)}</h2>
-          <SubmissionStatus
-            label={
-              startSending()
-                ? "正在提交检测…"
-                : confirmingStart
-                  ? latestStart?.response?.status === "applied"
-                    ? "已受理，正在读取工作信息"
-                    : "提交结果待核实 · 请查看原请求"
-                  : environment.activity_id
-                    ? "检测进度可在活动中心查看"
-                    : ""
-            }
-            busy={startSending()}
-            showActivity={!!latestStart || !!environment.activity_id}
-          />
-          <EnvironmentCard
-            key={`${environmentKey}:${profile}`}
-            environment={environment}
-            project={identity.project_id}
-            defaultProfile={options.data!.default_profile_id}
-            preferred={selection?.profile}
-            onProfileChange={(profile) =>
-              remember({ key: environmentKey, profile })
-            }
-            confirmingStart={!!confirmingStart}
-            submittingStart={startSending()}
-            statusVerified={options.verified && !activity.isError}
-            disabled={!options.verified || submitting}
-            stopDisabled={!online || activity.isError || submitting}
-            activity={activity.data}
-            command={command}
-          />
-          {confirmingStart && copyStart && (
-            <CopyExecutionInfo
-              info={{
-                ...requestExecutionInfo(copyStart, copyStartReceipt),
-                project: identity.repository_identity,
-              }}
-            />
+          <h2 id="environment-materials-title">准备要求</h2>
+          {materialQuery.isError ? (
+            <p role="alert">准备要求读取失败，请刷新重试。</p>
+          ) : materialQuery.isPending && online ? (
+            <p>正在读取准备要求…</p>
+          ) : materialQuery.isPending ? (
+            <p>连接项目后可读取准备要求。</p>
+          ) : (
+            <pre>
+              {material?.document
+                ?.replace(/```steerline-environment\s*\n[\s\S]*?\n```/g, "")
+                .trim() ||
+                material?.diagnostic ||
+                "项目尚未提供准备要求，请联系项目维护者完善检测入口。"}
+            </pre>
           )}
-          {activity.error && (
-            <p role="status">检测状态查询失败，请刷新重试。</p>
-          )}
-          <details
-            open={materialsOpen}
-            onToggle={(event) => setMaterialsOpen(event.currentTarget.open)}
-          >
-            <summary>查看准备要求</summary>
-            {materialQuery.isError ? (
-              <p role="alert">准备要求读取失败，请刷新重试。</p>
-            ) : materialQuery.isFetching ? (
-              <p>正在读取准备要求…</p>
-            ) : (
-              <pre>
-                {material?.document
-                  ?.replace(/```steerline-environment\s*\n[\s\S]*?\n```/g, "")
-                  .trim() ||
-                  "项目尚未提供准备要求，请联系项目维护者完善检测入口。"}
-              </pre>
-            )}
-          </details>
         </section>
       )}
       <details
@@ -512,13 +401,17 @@ function EnvironmentWorkspace() {
           查看范围
           <select
             aria-label="历史范围"
-            value={allActivities ? "project" : "environment"}
-            onChange={(event) =>
-              setAllActivities(event.target.value === "project")
-            }
+            value={historyKey}
+            onChange={(event) => setHistoryFilter(event.target.value)}
           >
-            <option value="environment">当前环境</option>
-            <option value="project">当前项目全部环境</option>
+            <option value="">当前项目全部环境</option>
+            {environments
+              .filter((e) => e.environment_key)
+              .map((e) => (
+                <option key={e.environment_key} value={e.environment_key}>
+                  {environmentName(e)}
+                </option>
+              ))}
           </select>
         </label>
         {history.error && <p role="alert">检测历史读取失败，请刷新重试。</p>}
@@ -537,7 +430,7 @@ function EnvironmentWorkspace() {
                 {r.created_at && (
                   <> · {new Date(r.created_at).toLocaleString("zh-CN")}</>
                 )}
-                {allActivities && (
+                {!historyKey && (
                   <> · {matched ? environmentName(matched) : "历史环境"}</>
                 )}
               </p>
@@ -545,7 +438,9 @@ function EnvironmentWorkspace() {
                 <p className="environment-reason">{r.diagnostic}</p>
               )}
               <DetectionID id={r.id} execution={r.execution_ref} />
-              <Link to={`?activity=${encodeURIComponent(r.id)}`}>查看详情</Link>
+              <Link to={`?activity=${encodeURIComponent(r.id)}`}>
+                查看检测结果
+              </Link>
               {!r.settled && (
                 <Button
                   size="sm"
