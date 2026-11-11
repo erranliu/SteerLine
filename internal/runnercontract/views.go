@@ -62,9 +62,10 @@ type WorkspaceGit struct {
 }
 
 type Question struct {
-	ID      string `json:"id"`
-	Text    string `json:"text"`
-	Options []struct {
+	InteractionKind string `json:"interaction_kind,omitempty"`
+	ID              string `json:"id"`
+	Text            string `json:"text"`
+	Options         []struct {
 		ID     string `json:"id"`
 		Label  string `json:"label"`
 		Detail string `json:"detail"`
