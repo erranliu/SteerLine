@@ -257,8 +257,8 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.environment",
-      "check": "两组串行：environmentadaptation、environmentadaptation/model、testkit/remotetest、internal/executionconfig四owner全部普通Go测试；App固定八个environment*_test.go全部24声明根及TestPMReservationRejectsPendingEnvironmentObservation、TestDeveloperConfigurationOptions、TestDeveloperConfigurationLoad、TestDeveloperReadinessService、TestSharedEnvironmentMaterialsAndIndependentQualifications、TestPMSGitArrangementFreshnessAndCandidateVersions、TestPMSMaterialReadinessDoesNotDependOnGenerationProfiles，共31声明根/全部子项；Windows执行31根，其他平台执行30根，仅TestProjectEnvironmentScriptReportsToolsWithoutChainChecks按明确windows属性排除，所有平台仍解析八个源文件检查漂移，不以skip通过。按(package,root)核对唯一开始/终态，包/根缺失、额外根、重复、skip、零匹配或一组失败均不通过。",
-      "note": "isolated；原环境准入/依据/分组/撤销/占用/材料/公开调用/重启结算与中性目标边界保留。App源文件/明确根名由固定Go定义和源清单守卫核对，新增/改名漂移阻断；其他App根继续在go.full，无真实环境成功承诺。"
+      "check": "两组串行：environmentadaptation、environmentadaptation/model、testkit/remotetest、internal/executionconfig四owner全部普通Go测试；App固定八个environment*_test.go全部25声明根及TestPMReservationRejectsPendingEnvironmentObservation、TestDeveloperConfigurationOptions、TestDeveloperConfigurationLoad、TestDeveloperReadinessService、TestSharedEnvironmentMaterialsAndIndependentQualifications、TestPMSGitArrangementFreshnessAndCandidateVersions、TestPMSMaterialReadinessDoesNotDependOnGenerationProfiles，共32声明根/全部子项；Windows执行32根，其他平台执行31根，仅TestProjectEnvironmentScriptReportsToolsWithoutChainChecks按明确windows属性排除，所有平台仍解析八个源文件检查漂移，不以skip通过。按(package,root)核对唯一开始/终态，包/根缺失、额外根、重复、skip、零匹配或一组失败均不通过。",
+      "note": "isolated；原环境准入/依据/分组/撤销/占用/材料/公开调用/重启结算与中性目标边界保留。覆盖检测启动期间总览等待主分支检查及三种检查结果。App源文件/明确根名由固定Go定义和源清单守卫核对，新增/改名漂移阻断；其他App根继续在go.full，无真实环境成功承诺。"
     },
     {
       "id": "go.runner-contract",

@@ -25,7 +25,7 @@ func (p *environmentPort) materials(ctx context.Context, key string) (any, error
 		return nil, e
 	}
 	out := map[string]any{"environment_key": key, "document_path": model.DocumentPath()}
-	commit, e := p.observedSource(ctx)
+	commit, e := p.observedSource(ctx, false)
 	if e != nil {
 		out["diagnostic"] = e.Error()
 		return out, nil

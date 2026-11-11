@@ -149,7 +149,7 @@ func TestLocalGroupsPreserveEvidenceFailuresThroughManagedAndProgress(t *testing
 
 func TestEnvironmentSelectionRejectsSourceAndDefinitionDrift(t *testing.T) {
 	windows := environmentAppRootsForGOOS("windows")
-	if len(windows) != 31 {
+	if len(windows) != 32 {
 		t.Fatal("Windows environment root count changed", windows)
 	}
 	for _, goos := range []string{"windows", "linux", "darwin"} {
@@ -158,7 +158,7 @@ func TestEnvironmentSelectionRejectsSourceAndDefinitionDrift(t *testing.T) {
 			if goos != "windows" {
 				want = slices.DeleteFunc(want, func(name string) bool { return name == "TestProjectEnvironmentScriptReportsToolsWithoutChainChecks" })
 			}
-			if got := environmentAppRootsForGOOS(goos); !slices.Equal(got, want) || (goos != "windows" && len(got) != 30) {
+			if got := environmentAppRootsForGOOS(goos); !slices.Equal(got, want) || (goos != "windows" && len(got) != 31) {
 				t.Fatal("platform selection changed explicit roots", goos, got, want)
 			}
 		})

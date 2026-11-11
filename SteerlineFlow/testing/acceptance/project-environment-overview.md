@@ -39,3 +39,16 @@
 - L2 通过且清理完成：`test-results/L2/merge-20261109T102642994Z-9b26ce5b/summary.json`。
 - 完整 Web 回归 386 项通过、零失败/跳过：`test-results/L4/merge-wait-20261109T102731578Z-dcd345d1/summary.json`。首轮 `test-results/L4/merge-20261109T102545509Z-fc9e4c14/` 为 385 通过/1 失败：排序测试在机器目录返回正式名称前读到临时名称。仅补充等待正式名称，再按原顺序断言；保留首轮报告，未放宽业务或排序断言。
 - Edge 浏览器四屏宽、详情切换、原位更新及观察故障验证通过：`diagnostics/browser-merge-20261109T102606852Z-9c6a4929/`；已查看新的 320px 截图。
+
+## 启动检测期间的总览刷新（2026-11-11）
+
+受测版本为 `99aa0cc9f94d803716c9b753f274e6ba0cb01c5a` 加本次工作树代码差异。`/environment/options` 等待正在进行的主分支检查，请求取消时结束等待。回归用例暂停 A 发起的检查，验证等待期间无状态响应，并核对 B 在依据未变、依据变更和检查失败后的状态及持久失效标记。
+
+证据根为 `C:/SteerlineDebug/wt-0e62-environment-options/`。
+
+- 固定 L1 通过，报告为 `test-results/L1/20261111T074613Z-00ee78b7/summary.json`。
+- 固定 L2 通过且清理完成，报告为 `test-results/L2/20261111T074541Z-98c74f10/summary.json`。
+- L4 `go.environment` 通过，包含四个 owner 和 Windows 32 个 App 测试根。报告为 `test-results/L4/20261111T074609Z-72bbc1d4/summary.json`，新增用例的三个子项记录在同目录的 `go-environment-app/test.jsonl`。
+- `npm --prefix web test -- src/features/environment-checks/project-environment.test.tsx` 的 29 项页面组件测试通过。
+
+首轮沙箱执行的受管报告写入被拒绝，首轮 L2 的清理未确认。L1、L2 和环境专项的通过记录来自隔离重跑。本次未部署到安装版。
