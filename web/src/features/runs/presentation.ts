@@ -28,6 +28,12 @@ export function candidateNotices(
   const seen = answerVisible
     ? [run.decision?.request.question, run.decision?.request.context]
     : [];
+  if (answerVisible && run.decision?.request.interaction_kind === "runner_resume")
+    seen.push(
+      run.runner_delivery?.commands
+        ?.filter((command) => command.command === "resume")
+        .at(-1)?.diagnostic,
+    );
   return texts.filter((text): text is string => {
     if (!text || seen.some((s) => sameNotice(s, text))) return false;
     seen.push(text);
@@ -89,7 +95,10 @@ export function commandIssues(run: Candidate): string[] {
     close: "关闭会话",
   };
   const issues = new Set<string>();
-  for (const command of run.runner_delivery?.commands ?? []) {
+  const commands = run.runner_delivery?.commands ?? [];
+  const latestResume = commands.filter((command) => command.command === "resume").at(-1);
+  for (const command of commands) {
+    if (command.command === "resume" && command !== latestResume) continue;
     const name = names[command.command] || "执行";
     const states = [command.receipt_state, command.action_status];
     if (

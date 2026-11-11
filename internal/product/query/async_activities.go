@@ -422,9 +422,12 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 			case "running":
 				a.State = "running"
 				a.Phase = activityStage(r.Step)
+				if r.Phase == "observation_reconnecting" {
+					a.Phase = "正在重连"
+				}
 			case "waiting_input":
 				a.State = "waiting"
-				a.Phase = "等待回答"
+				a.Phase = "等待输入"
 			case "waiting_external", "pr_ready":
 				a.State = "waiting"
 				a.Phase = "等待外部结果"
@@ -449,10 +452,10 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 			}
 			if active && r.ResumeRequired {
 				a.State = "waiting"
-				a.Phase = "需要显式恢复"
+				a.Phase = "需处理 · 需要显式恢复"
 			}
 			a.NeedsAttention = active && (r.Question != nil || r.ResumeRequired || r.Status == "failed" || r.Status == "blocked")
-			if active && r.Question != nil && r.Status == "waiting_input" {
+			if active && r.Question != nil && r.Status == "waiting_input" && !r.ResumeRequired {
 				a.Phase = "等待回答"
 			}
 			if related.Winner == c.ID {

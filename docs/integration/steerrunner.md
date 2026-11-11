@@ -40,6 +40,7 @@ Runner state-dir 由规范绝对 home 和当前 v8 命名空间派生：Windows 
 | 执行配置 | 无服务 `execution-config` 提供描述、派生、构造及来源 identity；Runner 解释原生 settings 和模型/effort 组合，Web 编辑逻辑选择，服务端重验可信保存版本 |
 | 工作流 | 按公开目录及组合 schema 验证预设；Runner 决定步骤、审计及修复预算，SteerLine 选择并展示 |
 | 候选观察 | 在线目录须提供 `steerrunner-run-observation/v1`、`same_snapshot: true` 及至少 100 条每页；正常同步用 `observe` |
+| Orca 观察重连 | Runner 在原轮次上有界退避重连。SteerLine 将 `running / observation_reconnecting` 显示为「正在重连」，将要求人工恢复的阻断显示为「需处理」 |
 | 原请求与控制 | 原请求对账、启动前离线读取及控制前 revision 使用 `inspect` 等既有入口；按钮资格来自公开 controls 与调用方业务资格 |
 | 等待状态 | 准备等待展示 `execution_wait` 对象或显式 null，保留原 revision；SteerLine 不重试 Orca CLI，不根据倒计时自动恢复 |
 | 原会话查看 | 仅公开 `native_session_viewer.adapters` 声明支持时启用；Runner 校验原 Run/Attempt/session/generation 并打开，不创建替代业务会话 |

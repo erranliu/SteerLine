@@ -11,7 +11,11 @@ func deliveryObservation(c runnerstate.Candidate) *runnercontract.DeliveryObserv
 	// Run completion or authorize a transition in this read projection.
 	add := func(a *runnerstate.Action) {
 		if a != nil {
-			v.Commands = append(v.Commands, runnercontract.CommandObservation{Command: a.Command, RequestID: a.Request.RequestID, CommandID: a.CommandID, ReceiptState: a.State, ActionStatus: a.ActionStatus})
+			v.Commands = append(v.Commands, runnercontract.CommandObservation{
+				Command: a.Command, RequestID: a.Request.RequestID, CommandID: a.CommandID,
+				ReceiptState: a.State, ActionStatus: a.ActionStatus, CallerRequestID: a.CallerRequestID,
+				Diagnostic: c.ResumeFailureDiagnostic(*a),
+			})
 		}
 	}
 	if c.Submit.RequestID != "" {

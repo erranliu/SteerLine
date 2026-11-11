@@ -35,6 +35,7 @@ func (s *commandRegistry) dispatch(ctx context.Context, envelope CommandEnvelope
 			return response, &api.Error{Kind: api.IdentityConflict, Message: "submitted command receipt does not match its original mapped intent"}
 		}
 		response.Command, response.Status = &receipt, normalizedCommandStatus(envelope.Action, receipt.Status)
+		response.Code, response.Diagnostic = receipt.ResultCode, receipt.ResultError
 		return response, nil
 	}
 	if envelope.Action == "discard_task" {

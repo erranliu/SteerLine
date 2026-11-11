@@ -12,6 +12,7 @@ import (
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
@@ -155,34 +156,8 @@ func runnerAnswerReceipt(ctx context.Context, config Config, req api.ControlRequ
 	defer reader.Close()
 	candidate, err := reader.Candidate(ctx, config.Identity(), payload.RunID)
 	if err == nil {
-		for _, action := range candidate.Actions {
-			if action.Request.RequestID == "sl-input-"+req.RequestID {
-				result.UpdatedAt = time.Now().UTC()
-				switch action.State {
-				case "cancelled":
-					result.Status = "rejected"
-					result.ResultCode = "fresh_reply_required"
-					result.ResultError = "unused input was withdrawn at the caller service boundary"
-				case "unknown":
-					result.Status = "indeterminate"
-					result.ResultCode = "request_outcome_unknown"
-				case "rejected":
-					result.Status = "rejected"
-					result.ResultCode = action.ErrorCode
-				case "accepted":
-					switch action.ActionStatus {
-					case "completed":
-						result.Status = "accepted"
-					case "failed", "rejected", "cancelled":
-						result.Status = "failed"
-						result.ResultCode = "runner_input_failed"
-					case "unknown":
-						result.Status = "indeterminate"
-						result.ResultCode = "request_outcome_unknown"
-					}
-				}
-				return result, nil
-			}
+		if applyRunnerAnswerAction(&result, candidate, req) {
+			return result, nil
 		}
 	} else if !errors.Is(err, ports.ErrNotFound) && !errors.Is(err, os.ErrNotExist) {
 		// A valid candidate is part of every accepted input; missing it is not a new submission permission.
@@ -198,6 +173,49 @@ func runnerAnswerReceipt(ctx context.Context, config Config, req api.ControlRequ
 		result.ResultError = receipt.Message
 	}
 	return result, nil
+}
+
+// Action delivery uses a separate Runner request ID. Reconcile by the exact
+// product request identity carried by the persisted action.
+func applyRunnerAnswerAction(result *api.CommandReceipt, candidate runnerstate.Candidate, req api.ControlRequest) bool {
+	for _, action := range candidate.Actions {
+		if action.CallerRequestID != req.RequestID || "runner_"+action.Command != string(req.Action) {
+			continue
+		}
+		result.UpdatedAt = time.Now().UTC()
+		switch action.State {
+		case "cancelled":
+			result.Status = "rejected"
+			result.ResultCode = "fresh_reply_required"
+			result.ResultError = "unused input was withdrawn at the caller service boundary"
+		case "unknown":
+			result.Status = "indeterminate"
+			result.ResultCode = "request_outcome_unknown"
+		case "rejected":
+			result.Status = "rejected"
+			result.ResultCode = action.ErrorCode
+			result.ResultError = candidate.ResumeFailureDiagnostic(action)
+		case "accepted":
+			switch action.ActionStatus {
+			case "completed":
+				result.Status = "accepted"
+				if action.Command == "resume" {
+					result.Status = "confirmed"
+				}
+			case "failed", "rejected", "cancelled":
+				result.Status = "failed"
+				result.ResultCode = "runner_input_failed"
+				if r := candidate.Projection; r != nil && result.DecisionAnswer != nil && r.Execution.AttemptID == result.DecisionAnswer.SourceAttemptID {
+					result.ResultError = candidate.ResumeFailureDiagnostic(action)
+				}
+			case "unknown":
+				result.Status = "indeterminate"
+				result.ResultCode = "request_outcome_unknown"
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func AnswererName() string {

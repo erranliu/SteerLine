@@ -141,6 +141,13 @@ func TestWaitServiceCommandResolvesIdentityAndKeepsPolling(t *testing.T) {
 		t.Fatalf("pending/accepted receipt scope: %+v %v / %d", got, err, r.closed)
 	}
 	r.command = func(context.Context, string) (api.CommandReceipt, error) {
+		return api.CommandReceipt{CommandID: id, Status: "confirmed"}, nil
+	}
+	got, err = c.WaitCommand(context.Background(), id, time.Second)
+	if err != nil || got.Status != "confirmed" {
+		t.Fatalf("confirmed receipt did not settle the wait: %+v %v", got, err)
+	}
+	r.command = func(context.Context, string) (api.CommandReceipt, error) {
 		return api.CommandReceipt{}, api.ErrRecordNotFound
 	}
 	_, err = c.WaitCommand(context.Background(), id, 10*time.Millisecond)

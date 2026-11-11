@@ -32,6 +32,7 @@ const labels: Record<string, string> = {
   waiting_input: "待回答",
   waiting_external: "等待外部事实",
   reconciling: "核实中",
+  observation_reconnecting: "正在重连",
   abandoned: "已停止参与",
 };
 export const label = (status: string) => labels[status] ?? status ?? "未知";

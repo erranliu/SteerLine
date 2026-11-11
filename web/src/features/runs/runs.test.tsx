@@ -686,7 +686,7 @@ function mixedWorkspace() {
       question: "问题 " + id,
       context: "",
       options: [],
-      interaction_kind: optional ? "async" : "business_feedback",
+      interaction_kind: optional ? "async" : "runner_question",
       blocks_progress: !optional,
       allow_free_text: true,
       has_native_questions: false,

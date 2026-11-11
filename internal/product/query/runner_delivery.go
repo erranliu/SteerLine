@@ -13,7 +13,11 @@ func runnerDelivery(r *runnercontract.DeliveryObservation) *api.RunnerDeliverySu
 	v.Controls = api.RunnerDeliveryControls{CanReply: r.Controls.CanReply, CanResume: r.Controls.CanResume, CanStop: r.Controls.CanStop, CanMessage: r.Controls.CanMessage, CanInterrupt: r.Controls.CanInterrupt, CanClose: r.Controls.CanClose, Reason: r.Controls.Reason}
 	v.PRCheckedAt = copyValue(r.PRCheckedAt)
 	for _, c := range r.Commands {
-		v.Commands = append(v.Commands, api.RunnerCommandSummary{Command: c.Command, RequestID: c.RequestID, CommandID: c.CommandID, ReceiptState: c.ReceiptState, ActionStatus: c.ActionStatus})
+		v.Commands = append(v.Commands, api.RunnerCommandSummary{
+			Command: c.Command, RequestID: c.RequestID, CommandID: c.CommandID,
+			ReceiptState: c.ReceiptState, ActionStatus: c.ActionStatus, CallerRequestID: c.CallerRequestID,
+			Diagnostic: c.Diagnostic,
+		})
 	}
 	return v
 }

@@ -204,7 +204,7 @@ func (c *Client) WaitCommand(ctx context.Context, id string, timeout time.Durati
 			return api.CommandReceipt{}, fmt.Errorf("command %s remains unconfirmed; query this same command ID later", id)
 		}
 		r, err := c.Command(waitCtx, id)
-		if err == nil && (r.Status == "accepted" || r.Status == "rejected" || r.Status == "failed" || r.Status == "indeterminate") {
+		if err == nil && (r.Status == "accepted" || r.Status == "confirmed" || r.Status == "rejected" || r.Status == "failed" || r.Status == "indeterminate") {
 			return r, nil
 		}
 		if waitCtx.Err() != nil {

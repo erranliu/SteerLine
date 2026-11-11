@@ -36,12 +36,29 @@ func (f *stopObservationFixture) Call(ctx context.Context, command string, args 
 	switch f.stopError {
 	case "stale_revision":
 		f.run.Revision++
-		return runnerclient.Response{}, &runnerclient.Failure{Code: "stale_revision", Exit: 5}
+		return runnerclient.Response{}, &runnerclient.Failure{Code: "stale_revision", Message: "Runner revision changed", Exit: 5}
 	case "request_outcome_unknown":
 		_, _ = f.fixtureCLI.Call(ctx, command, args, req)
 		return runnerclient.Response{}, &runnerclient.Failure{Code: "request_outcome_unknown", Exit: 6, Unknown: true}
 	}
 	return f.fixtureCLI.Call(ctx, command, args, req)
+}
+
+func TestResumeRejectionPersistsRunnerDiagnostic(t *testing.T) {
+	b, s, plain := setup()
+	s.value.RunID, s.value.SubmitState = "run", "accepted"
+	s.value.Actions = []Action{{
+		Command: "resume", State: "unknown",
+		Request: runnerclient.Request{RequestID: "original-resume"},
+	}}
+	f := &stopObservationFixture{fixtureCLI: plain, stopError: "stale_revision"}
+	b.Client = func(string) CLI { return f }
+	err := b.Step(context.Background(), "project", "candidate")
+	action := s.value.Actions[0]
+	if err == nil || action.State != "rejected" || action.ErrorCode != "stale_revision" ||
+		action.RejectionDiagnostic != "Runner revision changed" || action.Request.RequestID != "original-resume" {
+		t.Fatalf("rejection lost its original diagnostic: %+v, %v", action, err)
+	}
 }
 
 func (f *stopObservationFixture) Observe(_ context.Context, id, after string) (runnerclient.RunObservation, error) {

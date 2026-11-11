@@ -435,6 +435,9 @@ func (b *Bridge) deliver(ctx context.Context, cli CLI, c *Candidate, action *Act
 		if errors.As(err, &failure) && !failure.Unknown && failure.Exit != 4 {
 			action.State = "rejected"
 			action.ErrorCode = failure.Code
+			if action.Command == "resume" {
+				action.RejectionDiagnostic = failure.Message
+			}
 			if saveErr := b.save(ctx, c); saveErr != nil {
 				return saveErr
 			}
