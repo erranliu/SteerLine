@@ -31,7 +31,7 @@ function rememberProject(home: string, project: string) {
 }
 
 const projectRoute =
-  /^\/projects\/([^/]+)\/(roadmaps|dag|runs|tests|settings|environment|activities)$/;
+  /^\/projects\/([^/]+)\/(roadmaps|roadmap-planning|dag|runs|tests|settings|environment|activities)$/;
 
 function projectReturnTarget(
   home: string,

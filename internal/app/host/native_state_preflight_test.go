@@ -7,10 +7,13 @@ import (
 )
 
 func TestRoadmapPublicationStateCanReopenWithoutRelaxingDirectoryGuard(t *testing.T) {
-	for _, name := range []string{"published-checkout", "file-instead-of-directory", "unknown-runtime-root"} {
+	for _, name := range []string{"published-checkout", "planning-workspace", "file-instead-of-directory", "unknown-runtime-root"} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
 			target := filepath.Join(root, "roadmap-publications")
+			if name == "planning-workspace" {
+				target = filepath.Join(root, "roadmap-planning")
+			}
 			if name == "file-instead-of-directory" {
 				if err := os.WriteFile(target, []byte("invalid"), 0600); err != nil {
 					t.Fatal(err)
@@ -24,7 +27,7 @@ func TestRoadmapPublicationStateCanReopenWithoutRelaxingDirectoryGuard(t *testin
 				}
 			}
 			err := ensureNativeStateFilesAllowed(root, nil)
-			if (err == nil) != (name == "published-checkout") {
+			if (err == nil) != (name == "published-checkout" || name == "planning-workspace") {
 				t.Fatalf("unexpected native state acceptance: %v", err)
 			}
 		})

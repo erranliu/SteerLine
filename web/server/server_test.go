@@ -152,9 +152,12 @@ func TestRoadmapBrowserRoutes(t *testing.T) {
 	if w := request(s, "GET", "/projects/"+client.identity.ProjectID+"/roadmaps?source="+strings.Repeat("b", 32), "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {
 		t.Fatal("direct or refreshed roadmap URL did not serve SPA", w.Code, w.Body.String())
 	}
+	if w := request(s, "GET", "/projects/"+client.identity.ProjectID+"/roadmap-planning?task="+strings.Repeat("b", 32), "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {
+		t.Fatal("direct or refreshed planning URL did not serve SPA", w.Code, w.Body.String())
+	}
 	cookie, csrf := login(t, s)
 	base := "/api/v2/application/projects/" + client.identity.ProjectID
-	for _, path := range []string{"/roadmaps", "/roadmaps/" + strings.Repeat("a", 32), "/roadmaps/sources/" + strings.Repeat("b", 32)} {
+	for _, path := range []string{"/roadmaps", "/roadmaps/" + strings.Repeat("a", 32), "/roadmaps/sources/" + strings.Repeat("b", 32), "/roadmap-planning", "/roadmap-planning/" + strings.Repeat("a", 32), "/roadmap-planning/" + strings.Repeat("a", 32) + "/history"} {
 		if w := request(s, "GET", base+path, "", cookie, ""); w.Code != 200 || client.route != "/projects/"+client.identity.ProjectID+path {
 			t.Fatal("roadmap read was not forwarded", w.Code, w.Body.String(), client.route)
 		}

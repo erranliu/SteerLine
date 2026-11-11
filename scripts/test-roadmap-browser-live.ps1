@@ -1,12 +1,17 @@
 ﻿param(
     [Parameter(Mandatory=$true)][string]$SteerRunnerExe,
     [Parameter(Mandatory=$true)][string]$OutRoot,
-    [switch]$IndependentProcess
+    [switch]$IndependentProcess,
+    [switch]$Planning,
+    [string]$CodexExe
 )
 $ErrorActionPreference='Stop'
 if (!$IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
-    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments @('-SteerRunnerExe',$SteerRunnerExe,'-OutRoot',$OutRoot) -Timeout ([TimeSpan]::FromMinutes(30))
+    $taskArguments=@('-SteerRunnerExe',$SteerRunnerExe,'-OutRoot',$OutRoot)
+    if ($Planning) { $taskArguments+= '-Planning' }
+    if ($CodexExe) { $taskArguments+= @('-CodexExe',$CodexExe) }
+    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $taskArguments -Timeout ([TimeSpan]::FromMinutes(30))
     return
 }
 $taskSource=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -76,7 +81,7 @@ try {
     Copy-Item -LiteralPath $SteerRunnerExe -Destination $taskRunner
     $taskVersion=(Invoke-TaskNative $taskRunner @('version','--json')|ConvertFrom-Json).data
     $taskRunnerSHA=(Get-FileHash -LiteralPath $taskRunner -Algorithm SHA256).Hash.ToLowerInvariant()
-    $taskCodex=(Get-Command codex.exe -ErrorAction Stop).Source
+    $taskCodex=if ($CodexExe) { (Resolve-Path -LiteralPath $CodexExe).ProviderPath } else { (Get-Command codex.exe -ErrorAction Stop).Source }
     Write-TaskJSON 'evidence\build.json' @{source_commit=$taskSHA;source_dirty=$taskDirty;runner=$taskVersion;runner_sha256=$taskRunnerSHA;backend_sha256=(Get-FileHash $taskBinary).Hash;web_sha256=(Get-FileHash $taskWeb).Hash;codex=(Invoke-TaskNative $taskCodex @('--version'))}
     Invoke-TaskNative 'git' @('-C',$taskProject,'init','--initial-branch',$taskBase)|Out-Null
     Invoke-TaskNative 'git' @('-C',$taskProject,'config','user.name','SteerLine test')|Out-Null
@@ -95,6 +100,7 @@ try {
         'SteerlineFlow/Roadmap/execution-map.md'="# 算术任务执行清单`n`n当前无正式任务。编号仅由 SteerLine 入图分配。`n"
         'SteerlineFlow/Roadmap/drafts/arithmetic-roadmap.md'="# 算术 Roadmap`nT1：在已有 logic 包新增纯函数 Sum(a,b int) int 和单元测试，Sum(2,3)=5；不改变其他范围。`nT2：新增纯函数 Difference(a,b int) int，使用 Sum(a,-b) 实现并补单元测试，Difference(5,2)=3；依赖本 Roadmap 的 T1。`n本次只生成规划文档，不实现函数，不执行测试。`n"
     }
+    if ($Planning) { $files['planning-conflict.txt']="original baseline`n" }
     foreach($item in $files.GetEnumerator()) {
         $path=Join-Path $taskProject $item.Key
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))|Out-Null
@@ -110,7 +116,9 @@ try {
     try {$taskPort=$probe.LocalEndpoint.Port} finally {$probe.Stop()}
     Write-TaskJSON 'manifest.json' @{schema='roadmap-browser-live/v1';root=$taskRoot;repository=$taskRemote;base_branch=$taskBase;base_commit=$taskBaseCommit;web_address=('127.0.0.1:'+$taskPort);source_commit=$taskSHA;source_dirty=$taskDirty}
     Write-TaskJSON 'home\web.json' @{version=1;address=('127.0.0.1:'+$taskPort)}
-    Write-TaskJSON 'home\execution.json' @{version=3;max_generate_concurrency=2;runner=@{executable=$taskRunner;version=$taskVersion.version;sha256=$taskRunnerSHA};default_execution_profile='roadmap-live';execution_profiles=@(@{id='roadmap-live';name='Roadmap live';execution=@{adapter='codex-app-server';target=@{kind='local'};settings=@{executable=$taskCodex;model='gpt-6.1-sol';reasoning_effort='low'}};workflow=@{id='development';version=2}})}
+    $taskSettings=@{executable=$taskCodex;model='gpt-6.1-sol';reasoning_effort='low'}
+    if ($Planning) { $taskSettings.access_mode='full_access' }
+    Write-TaskJSON 'home\execution.json' @{version=3;max_generate_concurrency=2;runner=@{executable=$taskRunner;version=$taskVersion.version;sha256=$taskRunnerSHA};default_execution_profile='roadmap-live';execution_profiles=@(@{id='roadmap-live';name='Roadmap live';execution=@{adapter='codex-app-server';target=@{kind='local'};settings=$taskSettings};workflow=@{id='development';version=2}})}
     $query=Get-Content -LiteralPath (Join-Path $taskSource 'debug-template\home\config-source\SteerlineTest.live.json') -Raw -Encoding utf8|ConvertFrom-Json
     $query.repository=$taskProject;$query.branch=$taskBase
     $query|Add-Member -NotePropertyName shutdown_grace -NotePropertyValue '45s' -Force
@@ -125,7 +133,8 @@ try {
     Push-Location $taskSource
     try {
         $ErrorActionPreference='Continue'
-        & npm.cmd --prefix web run test:e2e -- roadmap-live.spec.ts *> (Join-Path $taskRoot 'evidence\browser.log')
+        $taskScenario=if($Planning){'roadmap-planning-live.spec.ts'}else{'roadmap-live.spec.ts'}
+        & npm.cmd --prefix web run test:e2e -- $taskScenario *> (Join-Path $taskRoot 'evidence\browser.log')
         $taskBrowser=$LASTEXITCODE -eq 0
         $ErrorActionPreference='Stop'
         if(!$taskBrowser){throw 'Roadmap browser test failed; inspect evidence/browser.log.'}
@@ -145,6 +154,7 @@ finally {
         if(Test-Path -LiteralPath $factsPath) {
             $facts=Get-Content -LiteralPath $factsPath -Raw -Encoding utf8|ConvertFrom-Json
             if($facts.document_id -match '^[0-9a-f]{32}$') {$taskHead='codex/roadmap-'+$facts.document_id}
+            if($Planning -and $facts.planning_id -match '^[0-9a-f]{32}$') {$taskHead='codex/roadmap-planning-'+$facts.planning_id}
         }
         if($taskHead) {
             $prs=Invoke-TaskNative 'gh' @('api',('repos/'+$taskRemote+'/pulls?state=all&head=erranliu:'+ $taskHead+'&base='+$taskBase+'&per_page=100'))|ConvertFrom-Json
@@ -158,7 +168,7 @@ finally {
         }
         foreach($branch in @($taskHead,$taskBase)) {
             if(!$branch){continue}
-            if(($branch -eq $taskBase -and $branch -notmatch '^codex/roadmap-e2e/[0-9-]+[0-9a-f]+/base$') -or ($branch -eq $taskHead -and $branch -notmatch '^codex/roadmap-[0-9a-f]{32}$')){throw 'Ref cleanup identity differs.'}
+            if(($branch -eq $taskBase -and $branch -notmatch '^codex/roadmap-e2e/[0-9-]+[0-9a-f]+/base$') -or ($branch -eq $taskHead -and $branch -notmatch '^codex/roadmap-(planning-)?[0-9a-f]{32}$')){throw 'Ref cleanup identity differs.'}
             $present=Invoke-TaskNative 'git' @('-C',$taskProject,'ls-remote','--refs','origin',('refs/heads/'+$branch))
             if($present){Invoke-TaskNative 'git' @('-C',$taskProject,'push','origin',(':refs/heads/'+$branch))|Out-Null}
         }

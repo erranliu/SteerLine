@@ -12,6 +12,8 @@ Runner 正文、用户覆盖/原回答、测试安排、规范、schema、报告
 
 ## 修改与本地检查
 
+Roadmap 规划的 `conversation/2` 通过应用管理的固定普通文件交付完整规划规则。规则资产来自 `internal/prompts/materials/roadmap-planning.md`，按原请求保存路径和摘要。短指令引用该文件，原请求已受理时沿原身份对账，首次发送前核验文件与摘要。冲突消息由同包固定短模板提供。[Roadmap 规划验收](../SteerlineFlow/testing/acceptance/roadmap-planning-workspace.md)
+
 1. 修改对应 Markdown；确需改变组合方式时，在 prompts 及原适配点修改，保持阶段、来源和原请求冻结约束。
 2. 运行 `go test ./internal/prompts -count=1 -v`，核对 `testdata/*.golden.md` 的完整正文差异和 UTF-8 字节数；再按[测试指南](../SteerlineFlow/testing.md)运行正式 L1/L2 与受影响的 owner/L3。黄金样本没有自动接受/更新开关，修改期望值需显式审阅。
 3. 在 PR 写清业务依据、实际正文差异、字节数前后值和验证。增长说明替代了哪些旧规则；新增且无替代时说明原因。缩短、等长替换和测试/检查配置变化同样需要独立审核。

@@ -2,6 +2,31 @@ package runnercontract
 
 import "encoding/json"
 
+type ConversationRunInput struct {
+	Title        string            `json:"title"`
+	Correlation  map[string]string `json:"correlation"`
+	Workflow     Workflow          `json:"workflow"`
+	Execution    ExecutionInput    `json:"execution"`
+	Repository   Repository        `json:"repository"`
+	Conversation ConversationInput `json:"conversation"`
+}
+
+type ConversationInput struct {
+	Instruction string     `json:"instruction"`
+	Materials   []Document `json:"materials"`
+}
+
+type WorkspaceWrite struct {
+	Owner      string `json:"owner"`
+	LeaseID    string `json:"lease_id,omitempty"`
+	CanAcquire bool   `json:"can_acquire"`
+}
+
+type WorkspaceReleaseInput struct {
+	ExpectedRevision uint64 `json:"expected_revision"`
+	LeaseID          string `json:"lease_id"`
+}
+
 // GenerateInput is the published generate/1 payload; it carries no development fields.
 type GenerateInput struct {
 	Repository   *GenerateRepository `json:"repository,omitempty"`

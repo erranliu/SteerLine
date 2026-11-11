@@ -2,7 +2,7 @@ package httpcontract
 
 import "regexp"
 
-var projectReadRoute = regexp.MustCompile(`^/(main-agent|main-agent/[0-9a-f]{32}|activities|roadmaps|roadmaps/[0-9a-f]{32}|roadmaps/sources/[0-9a-f]{32}|identity|environment|environment/(options|materials|[0-9a-f]{32})|tests/catalogue|tests/records|tests/records/[0-9a-f]{32}|maintenance|maintenance/readiness|maintenance/log|maintenance/commits/[0-9a-f]{40,64}|maintenance/tasks/[^/]+|tasks|tasks/[^/]+|graph|snapshot|candidates|presentation|runs/[^/]+|runs/[^/]+/(activity|last-message|usage|conversation|final|body|recovery|decision-eligibility|tests|documents)|commands/[0-9a-f]{32})$`)
+var projectReadRoute = regexp.MustCompile(`^/(main-agent|main-agent/[0-9a-f]{32}|activities|roadmap-planning|roadmap-planning/[0-9a-f]{32}(/history)?|roadmaps|roadmaps/[0-9a-f]{32}|roadmaps/sources/[0-9a-f]{32}|identity|environment|environment/(options|materials|[0-9a-f]{32})|tests/catalogue|tests/records|tests/records/[0-9a-f]{32}|maintenance|maintenance/readiness|maintenance/log|maintenance/commits/[0-9a-f]{40,64}|maintenance/tasks/[^/]+|tasks|tasks/[^/]+|graph|snapshot|candidates|presentation|runs/[^/]+|runs/[^/]+/(activity|last-message|usage|conversation|final|body|recovery|decision-eligibility|tests|documents)|commands/[0-9a-f]{32})$`)
 
 // AllowedProjectRead is the shared project query allowlist for the application
 // handler and browser proxy. Task mutation/receipt routes remain backend-only.

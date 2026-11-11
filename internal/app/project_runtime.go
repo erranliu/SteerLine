@@ -139,6 +139,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	var preparationDone chan struct{}
 	var environmentDone chan struct{}
 	var advisoryDone chan struct{}
+	var planningDone chan struct{}
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
 	defer startupTimer.Stop()
 	defer func() {
@@ -148,6 +149,9 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		}
 		if advisoryDone != nil {
 			<-advisoryDone
+		}
+		if planningDone != nil {
+			<-planningDone
 		}
 		if environmentDone != nil {
 			<-environmentDone
@@ -239,6 +243,10 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		}
 		if service.State.Service.Ready {
 			startupTimer.Stop()
+			if planningDone == nil {
+				planningDone = make(chan struct{})
+				go func() { defer close(planningDone); r.config.runtimeRoadmaps.planning.run(ctx) }()
+			}
 			if advisoryDone == nil {
 				advisoryDone = make(chan struct{})
 				go func() { defer close(advisoryDone); r.config.runtimeContinuationSuggestion.run(ctx) }()
@@ -279,6 +287,11 @@ func (r *ProjectRuntime) close() {
 		}
 		if r.config.runtimeRoadmaps != nil {
 			stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if err := r.config.runtimeRoadmaps.planning.close(stopCtx); err != nil && r.log != nil {
+				fmt.Fprintf(r.log, "roadmap planning stop remains unverified: %v\n", err)
+			}
+			cancel()
+			stopCtx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 			if err := r.config.runtimeRoadmaps.service.Close(stopCtx); err != nil && r.log != nil {
 				fmt.Fprintf(r.log, "roadmap generation stop remains unverified: %v\n", err)
 			}
@@ -454,6 +467,12 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		}
 		return p.config.runtimeRoadmaps.read(ctx, route, values)
 	}
+	if route == planningRoute || strings.HasPrefix(route, planningRoute+"/") {
+		if p.config.runtimeRoadmaps == nil || p.config.runtimeRoadmaps.planning == nil {
+			return nil, errors.New("roadmap planning unavailable")
+		}
+		return p.config.runtimeRoadmaps.planning.read(ctx, route, values)
+	}
 	if route == "/environment" || strings.HasPrefix(route, "/environment/") {
 		return p.environmentRead(ctx, route, values)
 	}
@@ -489,7 +508,7 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 			}
 		}
 		if p.config.runtimeRoadmaps != nil {
-			if r, e := p.roadmapReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
+			if r, e := p.RoadmapReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
 				return nil, e
 			} else if r != nil {
 				return r, nil
