@@ -163,6 +163,7 @@ it("merges local waiting, journal and formal IDs once, without reviving old-inst
     title: "task",
     profile: "profile",
     status: "等待首次启动确认",
+    phase: "waiting",
     participating: true,
   };
   const stored = {

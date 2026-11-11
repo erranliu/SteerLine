@@ -9,20 +9,26 @@ import {
   useEnvironmentReadiness,
 } from "../environment-checks/use-readiness";
 import { useWorkspace } from "../../app/context";
+import type { CandidateStart } from "../../app/use-candidate-starts";
 import { RoadmapTaskSource } from "../roadmaps/roadmaps";
 import { TaskMaterials } from "./task-materials";
 import { useProjectReadiness } from "../project-maintenance/use-readiness";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { participating } from "../runs/state";
-import { SafeLink, Status } from "../../shared/ui/status";
+import { SafeLink } from "../../shared/ui/status";
+import { TaskStatus, taskStartStatus } from "./task-status";
 
 export function TaskDetail({
   id,
   allowCandidate = false,
+  startInPlace = false,
+  initialStart,
 }: {
   id: string;
   allowCandidate?: boolean;
+  startInPlace?: boolean;
+  initialStart?: CandidateStart;
 }) {
   const { api, online, snapshot, candidateStarts } = useWorkspace();
   const feedback = useActivityFeedback();
@@ -145,6 +151,7 @@ export function TaskDetail({
         {detail.error ? String(detail.error) : "正在读取任务详情…"}
       </div>
     );
+  const startStatus = taskStartStatus(task.status, initialStart);
   return (
     <section className="task-detail">
       {detail.error && <p className="notice amber">{String(detail.error)}</p>}
@@ -153,7 +160,15 @@ export function TaskDetail({
       )}
       <div className="eyebrow">正式任务 · #{task.task_id}</div>
       <h2>{task.title}</h2>
-      <Status value={task.status} />
+      <div className="task-detail-status" role="status">
+        <TaskStatus status={task.status} startStatus={startStatus} />
+        {startStatus && initialStart && (
+          <p className="muted">
+            {initialStart.status}
+            {initialStart.diagnostic && ` · ${initialStart.diagnostic}`}
+          </p>
+        )}
+      </div>
       {(!!task.predecessors?.length ||
         !!blockers?.length ||
         !!task.stop_pending?.length) && (
@@ -226,7 +241,10 @@ export function TaskDetail({
                 "/projects/" +
                 api.identity.project_id +
                 "/runs?task=" +
-                encodeURIComponent(id)
+                encodeURIComponent(id) +
+                (startStatus && initialStart?.participating
+                  ? "&run=" + encodeURIComponent(initialStart.id)
+                  : "")
               }
             >
               查看执行 <ArrowUpRight size={14} />
@@ -314,9 +332,10 @@ export function TaskDetail({
                 }
                 feedback.notify("启动任务候选", event.currentTarget);
                 setStarting(false);
-                navigate(
-                  `/projects/${api.identity.project_id}/runs?task=${encodeURIComponent(id)}&run=${requestID}`,
-                );
+                if (!startInPlace)
+                  navigate(
+                    `/projects/${api.identity.project_id}/runs?task=${encodeURIComponent(id)}&run=${requestID}`,
+                  );
               }}
             >
               确认启动

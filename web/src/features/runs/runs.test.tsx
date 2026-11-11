@@ -931,6 +931,7 @@ it("keeps unconfirmed starts visible in all candidates without counting them as 
         title: "启动中的任务",
         profile: "方案" + index,
         status,
+        phase: index === 0 ? "applied" : "unknown",
         participating: true,
       })),
     },

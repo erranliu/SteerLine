@@ -16,12 +16,15 @@ export interface CandidateStart {
   title: string;
   profile: string;
   status: string;
+  phase: StartPhase;
   diagnostic?: string;
   participating: boolean;
   rejected?: boolean;
+  initialRequestedAt?: string;
 }
 interface LocalStart {
   id: string;
+  requestedAt: string;
   task: Task;
   profile: Profile;
   graphRevision: number;
@@ -31,6 +34,30 @@ interface LocalStart {
   receipt?: Receipt;
   error?: string;
   unsent?: boolean;
+}
+
+const startLabels = {
+  submitting: "正在提交",
+  waiting: "等待首次启动确认",
+  applied: "等待执行信息",
+  unknown: "提交结果待核实",
+  rejected: "启动被拒绝",
+  unsent: "未提交",
+};
+type StartPhase = keyof typeof startLabels;
+
+function startPhase({
+  receipt,
+  error,
+  first,
+  unsent,
+}: Pick<LocalStart, "receipt" | "error" | "first" | "unsent">): StartPhase {
+  if (unsent) return "unsent";
+  if (receipt?.status === "rejected") return "rejected";
+  if (first) return "waiting";
+  if (receipt?.status === "applied") return "applied";
+  if (error || receipt?.status === "outcome_unknown") return "unknown";
+  return "submitting";
 }
 export interface CandidateStarts {
   items: CandidateStart[];
@@ -116,11 +143,10 @@ export function useCandidateStarts(
       row.envelope.instance_id === api.identity.instance_id &&
       ["start_task", "start_candidate"].includes(row.envelope.action),
   );
+  const rowsByID = new Map(rows.map((row) => [row.envelope.request_id, row]));
   const entries = current.current.entries;
   const receiptFor = (entry: LocalStart) => {
-    const saved = rows.find(
-      (row) => row.envelope.request_id === entry.id,
-    )?.response;
+    const saved = rowsByID.get(entry.id)?.response;
     return saved?.status === "applied" || saved?.status === "rejected"
       ? saved
       : entry.receipt || saved;
@@ -135,9 +161,7 @@ export function useCandidateStarts(
       );
       const receipt = first
         ? receiptFor(first)
-        : rows.find(
-            (row) => row.envelope.request_id === entry.first!.request_id,
-          )?.response;
+        : rowsByID.get(entry.first.request_id)?.response;
       if (receipt?.status === "rejected" || first?.unsent) {
         update(entry.id, {
           error: "首次启动未成功，本候选未提交",
@@ -177,47 +201,50 @@ export function useCandidateStarts(
     }
   }, [api, online, requests, local]);
 
-  const items: CandidateStart[] = rows.map((row) => ({
-    id: row.envelope.request_id,
-    taskID: row.envelope.target_id,
-    title: "",
-    profile: String(row.envelope.payload.execution_profile_id || ""),
-    status:
-      row.response?.status === "rejected"
-        ? "启动被拒绝"
-        : row.response?.status === "applied"
-          ? "等待执行信息"
-          : row.error || row.response?.status === "outcome_unknown"
-            ? "提交结果待核实"
-            : "正在提交",
-    diagnostic: row.response?.diagnostic || row.error,
-    participating: row.response?.status !== "rejected",
-    rejected: row.response?.status === "rejected",
-  }));
+  const items: CandidateStart[] = rows.map((row) => {
+    const phase = startPhase({ receipt: row.response, error: row.error });
+    return {
+      id: row.envelope.request_id,
+      taskID: row.envelope.target_id,
+      title: "",
+      profile: String(row.envelope.payload.execution_profile_id || ""),
+      status: startLabels[phase],
+      phase,
+      diagnostic: row.response?.diagnostic || row.error,
+      participating: phase !== "rejected",
+      rejected: phase === "rejected",
+      initialRequestedAt:
+        row.envelope.action === "start_task"
+          ? row.created_at
+          : undefined,
+    };
+  });
   for (const entry of entries) {
     const receipt = receiptFor(entry);
+    const error = entry.error || rowsByID.get(entry.id)?.error;
+    const phase = startPhase({
+      receipt,
+      error,
+      first: entry.first,
+      unsent: entry.unsent,
+    });
     const view: CandidateStart = {
       id: entry.id,
       taskID: entry.task.task_id,
       title: entry.task.title,
       profile: entry.profile.name,
-      status: entry.unsent
-        ? "未提交"
-        : receipt?.status === "rejected"
-          ? "启动被拒绝"
-          : entry.first
-            ? "等待首次启动确认"
-            : receipt?.status === "applied"
-              ? "等待执行信息"
-              : entry.error || receipt?.status === "outcome_unknown"
-                ? "提交结果待核实"
-                : "正在提交",
+      status: startLabels[phase],
+      phase,
       diagnostic:
         receipt?.status === "applied"
           ? undefined
-          : receipt?.diagnostic || entry.error,
+          : receipt?.diagnostic || error,
       participating: !entry.unsent && receipt?.status !== "rejected",
       rejected: receipt?.status === "rejected",
+      initialRequestedAt:
+        entry.envelope?.action === "start_task"
+          ? entry.requestedAt
+          : undefined,
     };
     const index = items.findIndex((item) => item.id === entry.id);
     if (index < 0) items.push(view);
@@ -277,6 +304,7 @@ export function useCandidateStarts(
           : undefined;
       const entry: LocalStart = {
         id: crypto.randomUUID().replaceAll("-", ""),
+        requestedAt: new Date().toISOString(),
         task: structuredClone(task),
         profile: structuredClone(profile),
         graphRevision,

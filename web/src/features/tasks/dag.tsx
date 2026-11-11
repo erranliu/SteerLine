@@ -14,29 +14,43 @@ import {
 } from "@xyflow/react";
 import { GitBranch, List, Network } from "lucide-react";
 import { useWorkspace } from "../../app/context";
+import type { CandidateStart } from "../../app/use-candidate-starts";
 import { Button } from "../../shared/ui/button";
-import { Status } from "../../shared/ui/status";
 import type { GraphPage } from "../../shared/api/types";
 import { TaskDetail } from "./task-detail";
+import { latestTaskStarts, TaskStatus, taskStartStatus } from "./task-status";
 import "@xyflow/react/dist/style.css";
 type TaskNode = Node<
-  { title: string; task: string; status: string; blocked: boolean },
+  {
+    title: string;
+    task: string;
+    status: string;
+    startStatus?: ReturnType<typeof taskStartStatus>;
+    blocked: boolean;
+  },
   "task"
 >;
 function TaskCard({ data, selected }: NodeProps<TaskNode>) {
   return (
-    <div className={"graph-task " + (selected ? "selected" : "")}>
+    <div
+      className={"graph-task " + (selected ? "selected" : "")}
+      data-execution-state={data.startStatus ?? data.status}
+    >
       <Handle type="target" position={Position.Left} />
       <span className="eyebrow">TASK #{data.task}</span>
       <strong>{data.title}</strong>
-      <Status value={data.status} />
+      <TaskStatus status={data.status} startStatus={data.startStatus} />
       {data.blocked && <span className="muted">首次启动条件未满足</span>}
       <Handle type="source" position={Position.Right} />
     </div>
   );
 }
 const nodeTypes = { task: TaskCard };
-export function layout(graph: GraphPage, selected: string) {
+export function layout(
+  graph: GraphPage,
+  selected: string,
+  starts?: ReadonlyMap<string, CandidateStart>,
+) {
   const visible = new Set(graph.nodes.map((n) => n.task_id));
   const level = new Map<string, number>();
   for (let pass = 0; pass < graph.nodes.length; pass++) {
@@ -64,6 +78,7 @@ export function layout(graph: GraphPage, selected: string) {
   const nodes: TaskNode[] = graph.nodes.map((n) => {
     const depth = level.get(n.task_id) ?? 0;
     const index = counts.get(depth) ?? 0;
+    const startStatus = taskStartStatus(n.status, starts?.get(n.task_id));
     counts.set(depth, index + 1);
     return {
       id: n.task_id,
@@ -74,8 +89,10 @@ export function layout(graph: GraphPage, selected: string) {
         title: n.title,
         task: n.task_id,
         status: n.status,
+        startStatus,
         blocked:
           n.status === "open" &&
+          (!startStatus || startStatus === "task_start_failed") &&
           (!n.dependency_ready || !!n.startup_blockers?.length),
       },
     };
@@ -91,7 +108,7 @@ export function layout(graph: GraphPage, selected: string) {
   return { nodes, edges };
 }
 export function Dag() {
-  const { api, online } = useWorkspace();
+  const { api, online, candidateStarts } = useWorkspace();
   const [params, setParams] = useSearchParams();
   const selected = params.get("task") ?? "";
   const [view, setView] = useState<"graph" | "list">("graph");
@@ -109,10 +126,16 @@ export function Dag() {
     enabled: online && view === "list",
     refetchInterval: 2500,
   });
+  const starts = useMemo(
+    () => latestTaskStarts(candidateStarts?.items),
+    [candidateStarts?.items],
+  );
   const nodes = useMemo(
     () =>
-      graph.data ? layout(graph.data, selected) : { nodes: [], edges: [] },
-    [graph.data, selected],
+      graph.data
+        ? layout(graph.data, selected, starts)
+        : { nodes: [], edges: [] },
+    [graph.data, selected, starts],
   );
   const select = (task: string) =>
     setParams((previous) => {
@@ -209,19 +232,29 @@ export function Dag() {
               {tasks.error && (
                 <p className="notice amber">{String(tasks.error)}</p>
               )}
-              {tasks.data?.tasks.map((task) => (
-                <button
-                  key={task.task_id}
-                  className={
-                    "task-row " + (selected === task.task_id ? "active" : "")
-                  }
-                  onClick={() => select(task.task_id)}
-                >
-                  <span className="task-number">#{task.task_id}</span>
-                  <strong>{task.title}</strong>
-                  <Status value={task.status} />
-                </button>
-              ))}
+              {tasks.data?.tasks.map((task) => {
+                const startStatus = taskStartStatus(
+                  task.status,
+                  starts.get(task.task_id),
+                );
+                return (
+                  <button
+                    key={task.task_id}
+                    className={
+                      "task-row " + (selected === task.task_id ? "active" : "")
+                    }
+                    data-execution-state={startStatus ?? task.status}
+                    onClick={() => select(task.task_id)}
+                  >
+                    <span className="task-number">#{task.task_id}</span>
+                    <strong>{task.title}</strong>
+                    <TaskStatus
+                      status={task.status}
+                      startStatus={startStatus}
+                    />
+                  </button>
+                );
+              })}
             </div>
           )}
           {current?.has_more && (
@@ -254,7 +287,12 @@ export function Dag() {
         </div>
         <aside className="detail-panel">
           {selected ? (
-            <TaskDetail key={selected} id={selected} />
+            <TaskDetail
+              key={selected}
+              id={selected}
+              startInPlace
+              initialStart={starts.get(selected)}
+            />
           ) : (
             <div className="empty">
               <GitBranch size={26} />
