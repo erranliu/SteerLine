@@ -13,10 +13,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 const id = "a".repeat(32);
+const builtIn = {
+  id: "simplify",
+  name: "简化设计",
+  prompt: "# 简化设计\n\n简化不必要的抽象与控制流。\n",
+  revision: "b".repeat(64),
+};
+const custom = {
+  id: "custom:fixtures",
+  name: "收拢共享夹具",
+  prompt: "# 收拢共享夹具\r\n\r\n第一段。  \r\n第二段。\r\n",
+  revision: "c".repeat(64),
+};
 const record: MaintenanceRecord = {
   id,
   revision: 7,
   phase: "waiting_input",
+  direction_name: builtIn.name,
+  direction_prompt: builtIn.prompt,
   input: {
     direction: "simplify",
     requirements: "",
@@ -39,15 +53,17 @@ const record: MaintenanceRecord = {
 function setup(records: MaintenanceRecord[] = []) {
   const api = new Api(identity, "token", "home");
   vi.spyOn(api, "get").mockImplementation(async (path: string) =>
-    path === "/refactoring"
-      ? {
-          records,
-          profiles: [{ id: "local", name: "本机 Codex" }],
-          default_profile: "local",
-        }
-      : path.startsWith("/refactoring/")
-        ? records[0]
-        : { status: "ready", blockers: [] },
+    path === "/refactoring/directions"
+      ? { directions: [builtIn, custom] }
+      : path === "/refactoring"
+        ? {
+            records,
+            profiles: [{ id: "local", name: "本机 Codex" }],
+            default_profile: "local",
+          }
+        : path.startsWith("/refactoring/")
+          ? records[0]
+          : { status: "ready", blockers: [] },
   );
   const submit = vi.fn(async (envelope) => ({
     ...envelope,
@@ -71,7 +87,35 @@ it("defaults to cautious and one round, submits the original project identity", 
     action: "refactoring_start",
     target_id: identity.repository_identity,
     expected_version: 1,
-    payload: { strategy: "cautious", profile: "local", budget: { rounds: 1 } },
+    payload: {
+      direction: builtIn.id,
+      direction_revision: builtIn.revision,
+      strategy: "cautious",
+      profile: "local",
+      budget: { rounds: 1 },
+    },
+  });
+});
+it("previews the full selected Markdown and submits only its identity and version with the requirements", async () => {
+  const { submit } = setup();
+  const preview = await screen.findByLabelText("方向提示词");
+  expect(preview.textContent).toBe(builtIn.prompt);
+  fireEvent.change(screen.getByLabelText("重构方向"), {
+    target: { value: custom.id },
+  });
+  expect(preview.textContent).toBe(custom.prompt);
+  fireEvent.change(screen.getByLabelText("补充要求"), {
+    target: { value: "先检查共享夹具" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "开始维护" }));
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  expect(submit.mock.calls[0][0].payload).toEqual({
+    direction: custom.id,
+    direction_revision: custom.revision,
+    requirements: "先检查共享夹具",
+    strategy: "cautious",
+    profile: "local",
+    budget: { dollars: "", minutes: "", rounds: 1 },
   });
 });
 it("shows coverage exclusions and answers the original question without another chat", async () => {

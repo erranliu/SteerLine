@@ -21,7 +21,17 @@ var ErrConflict = errors.New("维护版本或项目在途名额冲突，请刷�
 var validID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var revisionID = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 var decimal = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]{1,18})?$`)
-var Directions = []string{"simplify", "cleanup", "boundaries", "readability", "docs-tests"}
+var directionID = regexp.MustCompile(`^(custom:)?[a-z0-9][a-z0-9-]{0,63}$`)
+var directionRevision = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+func ValidDirectionID(id string) bool { return directionID.MatchString(id) }
+
+type Direction struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Prompt   string `json:"prompt"`
+	Revision string `json:"revision"`
+}
 
 func ID() string {
 	var b [16]byte
@@ -38,21 +48,19 @@ type Budget struct {
 	Rounds  int    `json:"rounds,omitempty"`
 }
 type Start struct {
-	Direction    string `json:"direction"`
-	Requirements string `json:"requirements"`
-	Profile      string `json:"profile"`
-	Strategy     string `json:"strategy"`
-	Budget       Budget `json:"budget"`
+	Direction         string `json:"direction"`
+	DirectionRevision string `json:"direction_revision"`
+	Requirements      string `json:"requirements"`
+	Profile           string `json:"profile"`
+	Strategy          string `json:"strategy"`
+	Budget            Budget `json:"budget"`
 }
 
 func (s Start) Validate() error {
-	found := false
-	for _, v := range Directions {
-		if s.Direction == v {
-			found = true
-		}
+	if !ValidDirectionID(s.Direction) || !directionRevision.MatchString(s.DirectionRevision) {
+		return errors.New("重构方向或预览版本无效，请刷新后重试")
 	}
-	if !found || s.Profile == "" || (s.Strategy != "cautious" && s.Strategy != "autonomous" && s.Strategy != "aggressive") || len(s.Requirements) > 32<<10 {
+	if s.Profile == "" || (s.Strategy != "cautious" && s.Strategy != "autonomous" && s.Strategy != "aggressive") || len(s.Requirements) > 32<<10 {
 		return errors.New("方向、执行配置或策略无效")
 	}
 	if s.Budget.Rounds < 0 || s.Budget.Rounds > 10000 || (s.Budget.Rounds == 0 && s.Budget.Dollars == "" && s.Budget.Minutes == "") {
@@ -73,6 +81,7 @@ func (s Start) Validate() error {
 }
 
 type Frozen struct {
+	Direction   Direction                     `json:"direction"`
 	Publication map[string]string             `json:"publication"`
 	Repository  runnercontract.Repository     `json:"repository"`
 	Documents   runnercontract.Documents      `json:"documents"`

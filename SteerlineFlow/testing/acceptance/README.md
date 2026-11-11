@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+重构方向模板与界面统一（2026-11-11）。[验收记录与提示词差异](refactoring-directions.md)
+
 重构与维护最小闭环（2026-11-11，已实现，隔离真实联验通过，未部署）。[验收记录](refactoring-maintenance.md) · [Spec](../../spec/refactoring-maintenance.spec.md) · [Plan](../../plans/refactoring-maintenance.plan.md)
 
 显式放弃旧运行时重建任务库（2026-11-11）：兼容旧 schema 只读归档，重建任务和依赖，暂停派发。记录了 schema 44 隔离回归及部署边界。[验收记录](deployment-old-schema-discard.md)

@@ -38,6 +38,10 @@ func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Cl
 }
 func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen, error) {
 	var out ref.Frozen
+	direction, e := refactoring.ResolveDirection(HomeDir(), in.Direction, in.DirectionRevision)
+	if e != nil {
+		return out, e
+	}
 	c := p.config
 	m := c.runtimeMaintenance
 	if m == nil || c.runtimeNative == nil {
@@ -123,7 +127,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	if e != nil {
 		return out, e
 	}
-	out = ref.Frozen{Repository: runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}, Write: *write.Execution, Read: *read.Execution, Runner: cli.BuildPin(), Rules: string(rules)}
+	out = ref.Frozen{Direction: direction, Repository: runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}, Write: *write.Execution, Read: *read.Execution, Runner: cli.BuildPin(), Rules: string(rules)}
 	out.Publication = map[string]string{"provider": c.PR.Kind, "base_url": c.PR.BaseURL, "repository": c.PR.Repository, "base_branch": c.Branch, "token_env": c.PR.TokenEnv}
 	settings, priceErr := (billingconfig.Store{Home: HomeDir()}).Read()
 	if priceErr == nil {
@@ -251,6 +255,9 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 	if len(values) > 0 {
 		return nil, errors.New("维护查询不接受额外参数")
 	}
+	if route == "/refactoring/directions" {
+		return refactoring.ListDirections(HomeDir()), nil
+	}
 	if route == "/refactoring" {
 		rows, e := p.store.Refactorings(ctx, p.config.Identity())
 		if e != nil {
@@ -264,6 +271,7 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 			v := query.Refactoring(r, time.Now().UTC())
 			delete(v, "operations")
 			delete(v, "reports")
+			delete(v, "direction_prompt")
 			views = append(views, v)
 		}
 		profiles := []map[string]string{}

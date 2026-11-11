@@ -381,7 +381,11 @@ func (s *Service) prepareOperation(r model.Record) (model.Operation, error) {
 		if e != nil {
 			return o, e
 		}
-		data, e := json.Marshal(s.facts(r))
+		contextFacts := struct {
+			facts
+			DirectionPrompt string `json:"direction_prompt"`
+		}{s.facts(r), r.Frozen.Direction.Prompt}
+		data, e := json.Marshal(contextFacts)
 		if e != nil {
 			return o, e
 		}

@@ -4,6 +4,18 @@
 
 配置、项目数据库和应用日志归 home；Runner 状态/工作区/日志位于由 home 派生的短目录，默认卷根下 `C:\slr\<hash>`，同 home 多项目共享。业务 Git 仓库留在配置路径。身份与路径规则见[Runner 接入](steerrunner.md)，Web 单独构建、认证和启动见[Web 指南](../../web/README.md)，隔离验证使用[独立调试包](../runtime-install-debug.md)。
 
+## 自定义重构方向
+
+部署管理员在 `<InstallHome>\etc\refactoring-directions\` 下维护自定义模板。首次使用时创建该目录，例如 `C:\SteerlineInstall\etc\refactoring-directions\`。目录内每个 UTF-8 `.md` 普通文件提供一个方向，最多 32 KiB。文件名使用 1–64 个小写英文字母、数字或连字符，以字母或数字开头。首行写 `# 显示名称`，下方填写完整的方向提示词。例如 `shared-fixtures.md`：
+
+```markdown
+# 收拢共享夹具
+
+优先整理重复的测试夹具，保留各测试覆盖的行为。
+```
+
+新增、修改或删除文件后，刷新「重构与维护」页面即可加载最新列表。部署更新会保留该目录；行动开始后使用当时保存的版本。
+
 ## 从源码更新
 
 | 入口 | Runner 选择 |
