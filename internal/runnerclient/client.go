@@ -107,7 +107,7 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 		argv = append(argv, "service", command[len("service "):])
 	case "workspace acquire", "workspace release":
 		argv = append(argv, "workspace", command[len("workspace "):])
-	case "result-file", "progress-file", "version", "capabilities", "submit", "inspect", "observe", "history", "last-message", "open-native-session", "events", "reply", "resume", "message", "stop", "close", "run-usage", "run-usage-events":
+	case "result-file", "progress-file", "version", "capabilities", "submit", "inspect", "observe", "history", "last-message", "open-native-session", "events", "reply", "resume", "message", "stop", "close", "run-usage", "run-usage-events", "workspace-git":
 		argv = append(argv, command)
 	default:
 		return Response{}, &Failure{Code: "invalid_arguments", Message: "Unsupported Runner CLI command", Exit: 2}

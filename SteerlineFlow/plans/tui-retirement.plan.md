@@ -2,7 +2,7 @@
 
 范围归 [Spec](../spec/tui-retirement.spec.md)，步骤及结果归[专属验收](../testing/acceptance/tui-retirement.md)。2026-10-15 用户已授权实施；普通开发，无 Task ID，不改 execution-map，不创建执行聊天或独立 worktree。执行下列实施和验证安排；本任务不操作安装路径，不安装、替换或停止安装环境。
 
-调查代码基线 `47fafc12721ceb8fa39ba1ab227872fd14513bcb`。已读 `AGENTS.md`、`docs/spec/SpecGuide.md` 全文（SHA256 `85b656090674e1f953320b6be62d17b6888248ef7eec5fe044b9d3f408bfe4de`）、`tests/e2e/README.md`、`docs/testing.md`，核对现有 Web Spec/Plan/实现和 worker 生命周期的所有权及验证约束。本任务不改变 worker 节点/异常/恢复，统一规则继续链接[原文](../../docs/product-design/worker-lifecycle.md)，不复制矩阵。
+调查代码基线 `47fafc12721ceb8fa39ba1ab227872fd14513bcb`。已读 `AGENTS.md`、`docs/spec/SpecGuide.md` 全文（SHA256 `85b656090674e1f953320b6be62d17b6888248ef7eec5fe044b9d3f408bfe4de`）、`tests/e2e/README.md`、`docs/testing.md`，核对现有 Web Spec/Plan/实现和 worker 生命周期的所有权及验证约束。本任务不改变 worker 节点/异常/恢复，统一规则继续链接[原文](../../docs/product-design/runner-lifecycle.md)，不复制矩阵。
 
 2026-10-15 审计交付接入主干 `317714e6`，保留已合入的双产品批处理构建、Web home 权限修复和查询复用。原基线证据继续绑定原版本；整合后补跑下文的最小检查，不把旧结果重新标为新基线通过。
 

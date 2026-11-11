@@ -200,22 +200,31 @@ func (p *environmentPort) invocationAt(ctx context.Context, commit string) ([]by
 	return document, manifest, script, nil
 }
 
-// observedSource is query-only: fetch belongs to explicit prepare/start or the
-// existing project maintenance observation, never the environment page poll.
-func (p *environmentPort) observedSource(ctx context.Context) (string, error) {
+// observedSource is query-only. The environment overview can wait for an
+// existing check so it only receives a completed baseline observation.
+func (p *environmentPort) observedSource(ctx context.Context, waitForCheck bool) (string, error) {
 	if m := p.config.runtimeMaintenance; m != nil {
-		m.mu.Lock()
-		observation := m.observation
-		pending := m.checking != nil
-		m.mu.Unlock()
-		if pending {
-			return "", errors.New("主分支环境依据观察处理中")
-		}
-		if observation.Diagnostic != "" {
-			return "", errors.New(observation.Diagnostic)
-		}
-		if observation.Commit != "" {
-			return observation.Commit, nil
+		for {
+			m.mu.Lock()
+			observation, checking := m.observation, m.checking
+			m.mu.Unlock()
+			if checking == nil {
+				if observation.Diagnostic != "" {
+					return "", errors.New(observation.Diagnostic)
+				}
+				if observation.Commit != "" {
+					return observation.Commit, nil
+				}
+				break
+			}
+			if !waitForCheck {
+				return "", errors.New("主分支环境依据观察处理中")
+			}
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-checking:
+			}
 		}
 	}
 	raw, err := p.git().Output(ctx, p.config.Git, "rev-parse", "--verify", "refs/remotes/"+p.config.Remote+"/"+p.config.Branch+"^{commit}")
@@ -254,6 +263,19 @@ func (p *environmentPort) admission(ctx context.Context, id, candidateCommit str
 			return envmodel.Admission{}, envmodel.Record{}, err
 		}
 	}
+	return p.qualifyEnvironment(ctx, id, candidateCommit, func(ctx context.Context) (string, error) {
+		if !refresh {
+			return p.observedSource(ctx, false)
+		}
+		if maintenance := p.config.runtimeMaintenance; maintenance != nil {
+			observation, err := maintenance.check(ctx)
+			return observation.Commit, err
+		}
+		return p.source(ctx)
+	})
+}
+
+func (p *environmentPort) qualifyEnvironment(ctx context.Context, id, candidateCommit string, source func(context.Context) (string, error)) (envmodel.Admission, envmodel.Record, error) {
 	current, record, err := p.current(ctx, id)
 	if err != nil {
 		return envmodel.Admission{}, record, err
@@ -261,17 +283,7 @@ func (p *environmentPort) admission(ctx context.Context, id, candidateCommit str
 	if _, err := envmodel.Qualify(current, record, record.Prepared.Inputs); err != nil {
 		return envmodel.Admission{}, record, err
 	}
-	var commit string
-	if refresh {
-		if maintenance := p.config.runtimeMaintenance; maintenance != nil {
-			observation, readErr := maintenance.check(ctx)
-			commit, err = observation.Commit, readErr
-		} else {
-			commit, err = p.source(ctx)
-		}
-	} else {
-		commit, err = p.observedSource(ctx)
-	}
+	commit, err := source(ctx)
 	if err != nil {
 		return envmodel.Admission{}, record, err
 	}

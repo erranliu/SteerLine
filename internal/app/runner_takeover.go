@@ -135,6 +135,10 @@ func openStartupStopStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, 
 }
 
 func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQLiteStore, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
+	refactoringStops, err := prepareRefactoringStops(ctx, c, store, cli)
+	if err != nil {
+		return nil, err
+	}
 	environmentStops, err := prepareEnvironmentStops(ctx, *c, store, cli)
 	if err != nil {
 		return nil, err
@@ -160,7 +164,7 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 	if err != nil {
 		return nil, err
 	}
-	return append(generationStops, candidateStops...), nil
+	return append(append(generationStops, candidateStops...), refactoringStops...), nil
 }
 
 func prepareCandidateStops(ctx context.Context, candidates []runnerstate.Candidate, store runnerbridge.Store, cli runnerclient.Client) ([]runnercontract.PendingStop, error) {

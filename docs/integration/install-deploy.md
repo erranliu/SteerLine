@@ -4,6 +4,18 @@
 
 配置、项目数据库和应用日志归 home；Runner 状态/工作区/日志位于由 home 派生的短目录，默认卷根下 `C:\slr\<hash>`，同 home 多项目共享。业务 Git 仓库留在配置路径。身份与路径规则见[Runner 接入](steerrunner.md)，Web 单独构建、认证和启动见[Web 指南](../../web/README.md)，隔离验证使用[独立调试包](../runtime-install-debug.md)。
 
+## 自定义重构方向
+
+部署管理员在 `<InstallHome>\etc\refactoring-directions\` 下维护自定义模板。首次使用时创建该目录，例如 `C:\SteerlineInstall\etc\refactoring-directions\`。目录内每个 UTF-8 `.md` 普通文件提供一个方向，最多 32 KiB。文件名使用 1–64 个小写英文字母、数字或连字符，以字母或数字开头。首行写 `# 显示名称`，下方填写完整的方向提示词。例如 `shared-fixtures.md`：
+
+```markdown
+# 收拢共享夹具
+
+优先整理重复的测试夹具，保留各测试覆盖的行为。
+```
+
+新增、修改或删除文件后，刷新「重构与维护」页面即可加载最新列表。部署更新会保留该目录；行动开始后使用当时保存的版本。
+
 ## 从源码更新
 
 | 入口 | Runner 选择 |
@@ -74,7 +86,7 @@ Windows 安装根目录须向普通子目录传递当前用户的访问权限。
 
 -DiscardRuns 必须与 -UpdateRunner 组合，可加 -NoStart。构建及能力预检完成后，先在独立位置通过正式任务校验/创建入口准备任务定义与 DAG，再核对原应用/Web 退出、checkpoint、项目/仓库身份及锁。已保存待重启的 profile/default/开发设置可与原冻结摘要不同，仓库、remote、分支及 Runner 绑定须一致，准备期间再改配置会阻断。
 
-原固定 Runner 公开冷查询全部 Run/input，先持久保存原 stop 信封并在 worker 启动前受理，沿原号结算、停止服务并核实全部资源。未知停止、未完成恢复授权、输入/项目归属不明、锁或证明缺失均阻断，不把“放弃”当作资源已消失。
+通过原固定 Runner 的公开接口冷查询全部 Run/input。先持久保存原 stop 信封，由 Runner 在恢复执行前受理，再沿原号结算、停止服务并核实全部资源。未知停止、未完成恢复授权、输入/项目归属不明、锁或证明缺失均阻断，不把“放弃”当作资源已消失。
 
 通过后将原项目 state、应用/Web 状态及 Runner 命名空间归档到 `<home>/maintenance/discard-runs-<调用ID>/`，切换准备好的任务库，再安装新程序：
 

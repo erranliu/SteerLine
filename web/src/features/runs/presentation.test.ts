@@ -70,3 +70,24 @@ it("retains command failures and uncertainty independently of a normally running
     }),
   ).toEqual([]);
 });
+
+it("replaces a prior recovery failure with the latest recovery outcome", () => {
+  const first = {
+    command: "resume",
+    request_id: "old-resume",
+    receipt_state: "accepted",
+    action_status: "failed",
+  };
+  const candidate = {
+    ...run,
+    runner_delivery: { commands: [first] },
+  } as typeof run;
+  expect(commandIssues(candidate)).toEqual(["恢复操作未成功，请核对原操作结果。"]);
+  expect(commandIssues({
+    ...candidate,
+    runner_delivery: {
+      ...candidate.runner_delivery!,
+      commands: [first, { ...first, request_id: "retry", action_status: "completed" }],
+    },
+  })).toEqual([]);
+});

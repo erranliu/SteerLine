@@ -83,6 +83,7 @@ type CommandEnvelope struct {
 }
 
 type CommandResponse struct {
+	Refactoring     json.RawMessage         `json:"refactoring,omitempty"`
 	Roadmap         json.RawMessage         `json:"roadmap,omitempty"`
 	Environment     json.RawMessage         `json:"environment,omitempty"`
 	Maintenance     json.RawMessage         `json:"maintenance,omitempty"`

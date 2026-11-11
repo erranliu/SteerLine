@@ -28,6 +28,7 @@ export function draftKey(project: string, instance: string, run: Candidate) {
 export function Answer({ run }: { run: Candidate }) {
   const { api, online, submit: submitCommand, busy, requests } = useWorkspace();
   const decision = run.decision!;
+  const resume = decision.request.interaction_kind === "runner_resume";
   const key =
     (api.home ? api.home + "/" : "") +
     draftKey(api.identity.project_id, api.identity.instance_id, run);
@@ -43,7 +44,7 @@ export function Answer({ run }: { run: Candidate }) {
     envelope: Envelope;
     receipt?: Receipt;
   }>();
-  const restored = requests?.find(
+  const matchingRequests = requests?.filter(
     (row) =>
       row.envelope.project_id === api.identity.project_id &&
       row.envelope.instance_id === api.identity.instance_id &&
@@ -51,17 +52,65 @@ export function Answer({ run }: { run: Candidate }) {
       row.envelope.target_id === decision.id &&
       row.envelope.payload.run_id === run.run_id &&
       row.envelope.payload.source_attempt_id === run.attempt_id &&
+      (!resume ||
+        row.response?.status !== "applied" ||
+        row.envelope.payload.expected_recovery_version === run.recovery_version) &&
       row.response?.status !== "rejected" &&
       (row.response?.status !== "applied" ||
         decision.request.interaction_kind !== "business_feedback"),
   );
+  const restored = resume
+    ? matchingRequests?.sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+    : matchingRequests?.[0];
   const envelope = pending?.envelope ?? restored?.envelope;
   const receipt =
     requests?.find((row) => row.envelope.request_id === envelope?.request_id)
       ?.response ??
     pending?.receipt ??
     restored?.response;
-  const answered = !!envelope && receipt?.status !== "rejected";
+  const resumeCommands = resume
+    ? run.runner_delivery?.commands?.filter(
+        (command) => command.command === "resume",
+      )
+    : undefined;
+  const latestResume = resumeCommands?.at(-1);
+  const resumeFailed = (command: typeof latestResume) =>
+    !!command &&
+    [command.receipt_state, command.action_status].some(
+      (status) =>
+        status === "failed" || status === "rejected" || status === "cancelled",
+    );
+  const localResume = envelope
+    ? resumeCommands?.find(
+        (command) => command.caller_request_id === envelope.request_id,
+      )
+    : undefined;
+  const localResumeCompleted =
+    resume &&
+    (localResume?.action_status === "completed" ||
+      receipt?.command?.status === "confirmed");
+  const submittedRecoveryVersion = envelope?.payload.expected_recovery_version;
+  const localResumeSuperseded =
+    (!!localResume &&
+      (localResumeCompleted || resumeFailed(localResume)) &&
+      localResume !== latestResume) ||
+    (localResumeCompleted &&
+      typeof submittedRecoveryVersion === "number" &&
+      run.recovery_version > submittedRecoveryVersion);
+  const observedResume =
+    !envelope || localResumeSuperseded ? latestResume : localResume;
+  const activeReceipt = localResumeSuperseded ? undefined : receipt;
+  const latestResumePending =
+    !!latestResume &&
+    !resumeFailed(latestResume) &&
+    latestResume.action_status !== "completed" &&
+    !(latestResume === observedResume && activeReceipt?.status === "rejected");
+  const answered =
+    (!!envelope &&
+      !localResumeSuperseded &&
+      activeReceipt?.status !== "rejected" &&
+      !resumeFailed(observedResume)) ||
+    latestResumePending;
   const rejected =
     receipt?.status === "rejected"
       ? receipt.diagnostic || "回答未成功，请核对原问题后重新提交。"
@@ -87,6 +136,7 @@ export function Answer({ run }: { run: Candidate }) {
     ],
   );
   useEffect(() => {
+    if (resume) return;
     let active = true;
     readDraftValue(key)
       .then((value) => {
@@ -99,7 +149,7 @@ export function Answer({ run }: { run: Candidate }) {
     return () => {
       active = false;
     };
-  }, [key]);
+  }, [key, resume]);
   const update = (value: string) => {
     setNote(value);
     writeDraft(key, value)
@@ -129,14 +179,14 @@ export function Answer({ run }: { run: Candidate }) {
       const payload: Record<string, unknown> = {
         run_id: run.run_id,
         decision_id: decision.id,
-        option_id: option,
-        note: answer,
+        option_id: resume ? "resume" : option,
+        note: resume ? "" : answer,
         expected_run_revision: run.control_revision,
         source_attempt_id: run.attempt_id,
         expected_recovery_version: run.recovery_version,
       };
       if (
-        decision.request.has_native_questions &&
+        !resume && decision.request.has_native_questions &&
         answer.trim().startsWith("{")
       ) {
         const answers = JSON.parse(answer);
@@ -171,7 +221,13 @@ export function Answer({ run }: { run: Candidate }) {
         const saved = await requestByID(original.request_id);
         if (!saved) {
           setPending(undefined);
-          setError((value) => value || "回答尚未提交，请核对操作错误后重试。");
+          setError(
+            (value) =>
+              value ||
+              (resume
+                ? "恢复请求尚未提交，请核对操作错误后重试。"
+                : "回答尚未提交，请核对操作错误后重试。"),
+          );
           return;
         }
         result = saved.response;
@@ -184,6 +240,52 @@ export function Answer({ run }: { run: Candidate }) {
       submitting.current = false;
     }
   };
+  if (resume) {
+    const failure =
+      !answered &&
+      (resumeFailed(observedResume) || activeReceipt?.status === "rejected") &&
+      (observedResume?.diagnostic ||
+        activeReceipt?.diagnostic ||
+        "Runner 恢复失败。");
+    const localDiagnostic = error || failure || undefined;
+    const latestDiagnostic = latestResume?.diagnostic;
+    const recoveryDiagnostics = [localDiagnostic];
+    if (latestDiagnostic && !sameNotice(localDiagnostic, latestDiagnostic)) {
+      recoveryDiagnostics.push(latestDiagnostic);
+    }
+    return (
+      <section className="answer-panel" aria-label="恢复原执行">
+        <p>需处理 · 核验原执行后恢复。</p>
+        {answered ? (
+          <p role="status">
+            {!activeReceipt || activeReceipt.status === "outcome_unknown"
+              ? "恢复结果待核实，请在操作记录中核实原请求。"
+              : "恢复请求已提交，等待状态更新。"}
+          </p>
+        ) : (
+          <Button
+            disabled={
+              !online ||
+              busy ||
+              checking ||
+              !businessOpen(run) ||
+              decision.status !== "pending"
+            }
+            onClick={submit}
+          >
+            {checking ? "正在核验…" : "继续原任务"}
+          </Button>
+        )}
+        {recoveryDiagnostics.some(Boolean) && (
+          <div role="alert" className="notice amber">
+            {recoveryDiagnostics.map(
+              (message) => message && <p key={message}>{message}</p>,
+            )}
+          </div>
+        )}
+      </section>
+    );
+  }
   return (
     <section className="answer-panel">
       <div className="section-heading">

@@ -1,0 +1,69 @@
+.refactoring-panel h2 {
+  margin-bottom: 10px;
+}
+
+.refactoring-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.refactoring-configuration {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.refactoring-panel label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 12px 0;
+}
+
+.refactoring-preview {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-background);
+}
+
+.refactoring-panel .refactoring-preview h3 {
+  margin: 0 0 6px;
+}
+
+.refactoring-panel pre,
+.refactoring-panel code,
+.refactoring-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.refactoring-panel pre {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.refactoring-actions,
+.refactoring-history {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-block: 12px;
+}
+
+.refactoring-panel details,
+.refactoring-panel article {
+  padding-block: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.refactoring-panel summary {
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .refactoring-fields {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

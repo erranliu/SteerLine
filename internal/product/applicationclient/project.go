@@ -252,7 +252,7 @@ func (p *Project) WaitCommand(ctx context.Context, id string, wait time.Duration
 	defer tick.Stop()
 	for {
 		out, err := p.Command(ctx, id)
-		if err == nil && (out.Status == "accepted" || out.Status == "rejected" || out.Status == "failed" || out.Status == "indeterminate") {
+		if err == nil && (out.Status == "accepted" || out.Status == "confirmed" || out.Status == "rejected" || out.Status == "failed" || out.Status == "indeterminate") {
 			return out, nil
 		}
 		select {

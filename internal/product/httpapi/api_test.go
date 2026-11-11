@@ -553,6 +553,14 @@ func TestAPIAnswerDecisionReceiptAndUniqueRequest(t *testing.T) {
 	if err != nil || queried.Command == nil || queried.Command.TargetID != decisionID || queried.Command.ExpectedVersion != 3 || queried.Status != "accepted" {
 		t.Fatalf("original Decision receipt was not queryable: %+v %v", queried, err)
 	}
+	failed := *queried.Command
+	failed.Status, failed.ResultCode, failed.ResultError = "failed", "runner_input_failed", "original history changed"
+	reader.commands[envelope.RequestID] = failed
+	queried, err = client.Command(context.Background(), envelope.RequestID)
+	if err != nil || queried.Status != "rejected" || queried.Code != failed.ResultCode ||
+		queried.Diagnostic != failed.ResultError || reader.decisionSubmits != 1 {
+		t.Fatalf("original request did not report its final Runner failure: %+v %v", queried, err)
+	}
 }
 
 func TestAPIServiceLifecycle(t *testing.T) {

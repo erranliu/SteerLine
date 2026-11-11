@@ -54,6 +54,33 @@ func TestRunnerExplicitInputKeepsOriginalRunAndDisplayedVersions(t *testing.T) {
 	}
 }
 
+func TestRunnerAsyncQuestionRemainsAnswerableDuringExecution(t *testing.T) {
+	var run runnerclient.Run
+	const wire = `{"run_id":"native-run","revision":7,"status":"running","controls":{"can_reply":true},"question":{"id":"native","interaction_kind":"async","native_questions":[{"id":"color","text":"Choose color","options":[{"id":"blue","label":"Blue"}]}]}}`
+	if err := json.Unmarshal([]byte(wire), &run); err != nil {
+		t.Fatal(err)
+	}
+	decision := Decision(&run)
+	if decision == nil || decision.Status != "pending" || decision.Request.BlocksProgress ||
+		decision.Request.InteractionKind != "async" || decision.Request.Question != "Choose color" {
+		t.Fatal("running candidate lost its asynchronous question", decision)
+	}
+	candidate := runnerbridge.Candidate{ID: "candidate", RunID: run.RunID, Revision: 3, Participation: "active", Projection: &run}
+	command, raw, err := InputForAnswer(candidate, api.DecisionAnswer{RunID: candidate.ID, DecisionID: decision.ID,
+		ExpectedRunRevision: 3, ExpectedDecisionVersion: 7, OptionID: "blue"})
+	if err != nil || command != "reply" {
+		t.Fatal(command, err)
+	}
+	var reply struct {
+		Kind       string
+		QuestionID string `json:"question_id"`
+		Text       string
+	}
+	if err := json.Unmarshal(raw, &reply); err != nil || reply.Kind != "answer" || reply.QuestionID != decision.ID || reply.Text != "Blue" {
+		t.Fatal("answer was not routed to the original question", string(raw), err)
+	}
+}
+
 func TestRunnerNativeAnswersPreserveQuestionsAndCallerInput(t *testing.T) {
 	var q runnerclient.Question
 	if err := json.Unmarshal([]byte(`{"id":"native","native_questions":[{"id":"color","text":"Choose color","options":[{"id":"red","label":"Red"}]},{"id":"details","text":"Explain","allow_free_text":true}]}`), &q); err != nil {

@@ -387,7 +387,7 @@ func runE2E(opts options) (code int) {
 	web := ""
 	activityWeb := false
 	for _, entry := range selected {
-		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.main-agent-advisory" {
+		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.main-agent-advisory" || entry.ID == "runtime.refactoring-maintenance" {
 			activityWeb = true
 		}
 	}
@@ -604,7 +604,7 @@ func e2ePackageParallelism(entries []e2eScenario) int {
 			return 1
 		}
 		switch entry.ID {
-		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.async-activities":
+		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.async-activities", "runtime.refactoring-maintenance":
 			if entry.Level != "L3" {
 				return 1
 			}
@@ -620,6 +620,9 @@ func e2ePackageParallelism(entries []e2eScenario) int {
 }
 
 func e2ePackageGoTimeout(entries []e2eScenario) string {
+	if len(entries) == 1 && entries[0].ID == "refactoring.local-codex" {
+		return "40m"
+	}
 	if len(entries) > 0 && entries[0].Env == "live" {
 		return "35m"
 	}
@@ -717,6 +720,23 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				return err
 			}
 		}
+		if e.ID == "runtime.refactoring-maintenance" {
+			var proof struct {
+				Rounds, Executes int
+				Same             bool `json:"same_workspace"`
+				Original         bool `json:"original_pr"`
+				Audit            bool `json:"independent_audit"`
+				Direction        bool `json:"direction_template"`
+				Browser          bool
+			}
+			raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "refactoring-proof.json"))
+			if err != nil {
+				return err
+			}
+			if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Original || !proof.Audit || !proof.Browser || !proof.Direction {
+				return errors.New("maintenance evidence incomplete")
+			}
+		}
 		if e.ID == "runtime.async-activities" {
 			if err := checkActivityReadingEvidence(filepath.Join(out, "scenarios", e.ID)); err != nil {
 				return err
@@ -738,6 +758,24 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			continue
 		}
 		if e.Env == "live" {
+			if e.ID == "refactoring.local-codex" {
+				var proof struct {
+					Rounds, Executes int
+					Same             bool   `json:"same_workspace"`
+					PR               string `json:"original_pr"`
+					Report           bool   `json:"report_matches_pr"`
+					Conflict         bool   `json:"conflict_audit"`
+					Head, Base       string
+				}
+				raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "refactoring-live-proof.json"))
+				if err != nil {
+					return err
+				}
+				if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Report || !proof.Conflict || proof.PR == "" || proof.Head == "" || proof.Base == "" {
+					return errors.New("native maintenance proof incomplete")
+				}
+				continue
+			}
 			if !supportedLiveScenario(e) || evidence.Live == nil || e.ID == "workflow.local-codex-audited" && evidence.Live.Audited == nil {
 				return fmt.Errorf("unsupported live chain or missing delivery proof: %s", e.ID)
 			}
@@ -751,6 +789,9 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 }
 
 func supportedLiveScenario(e e2eScenario) bool {
+	if e.ID == "refactoring.local-codex" {
+		return e.Level == "L4" && e.Suite == "refactoring" && e.Chain == "local-codex" && e.Package == "./tests/e2e/live"
+	}
 	if e.ID == remotetest.LocalEnvironment {
 		return e.Level == "L4" && e.Suite == "testing" && e.Package == "./tests/e2e/remote" && e.Chain == "local-environment"
 	}

@@ -48,7 +48,7 @@
 
 供给缺口、已支持流程的读取核验、未支持流程阻断和仍待真实验证范围分别交付。发现需要新材料发布方式或Runner能力时单列设计问题，不默认扩展授权。
 
-实际源码、报告/清理及状态登记到[验收记录](../testing/acceptance/caller-prompt-convergence.md)。操作恢复沿[既有生命周期](../../docs/product-design/worker-lifecycle.md)，本修订仅改变新输入的准备和内容，不恢复旧运行。本次修改实现并执行规定测试，业务复验仍不在范围。
+实际源码、报告/清理及状态登记到[验收记录](../testing/acceptance/caller-prompt-convergence.md)。操作恢复沿[既有生命周期](../../docs/product-design/runner-lifecycle.md)，本修订仅改变新输入的准备和内容，不恢复旧运行。本次修改实现并执行规定测试，业务复验仍不在范围。
 
 ## 2026-10-29 剩余L4修复与复验
 

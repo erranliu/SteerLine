@@ -183,6 +183,8 @@ export interface Candidate {
       command_id?: string;
       receipt_state: string;
       action_status?: string;
+      caller_request_id?: string;
+      diagnostic?: string;
     }[];
   };
   runner_workflow?: { id: string; version: number };
@@ -311,6 +313,8 @@ export interface Envelope {
   payload: Record<string, unknown>;
 }
 export interface Receipt {
+  command?: { status: string };
+  refactoring?: unknown;
   roadmap?: unknown;
   environment?: unknown;
   maintenance?: unknown;

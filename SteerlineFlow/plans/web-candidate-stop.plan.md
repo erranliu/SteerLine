@@ -10,7 +10,7 @@
 2. SQLite 人工退出事务重检版本、参与资格和剩余数量，持久化原请求、操作者与停止时间，支持精确原请求重放；最后两个候选并发退出最多一个成功。使用既有 Bridge 候选锁串行化人工退出和外发动作。
 3. 人工退出仅写 participation=abandoned，不写代表 Runner 停止义务的 stop_requested。Bridge 对人工退出不再发新业务或主动恢复/轮询，包含重启 VerifyBinding 的原执行查询；Task 终态仍可增加 stop_requested，保留原迟到接受与停止结算。输入、PR 交付与投影统一检查参与资格。
 4. Web 对账沿用原请求日志；权威快照确认退出后，仍选择原目标才切到编号最大的剩余参与候选，用户已切换则保持选择。已停止历史只读，显示停止事实及保留资源；不把接口接受当作已完成。
-5. 更新 [worker 统一规则](../../docs/product-design/worker-lifecycle.md) 的 W12/W17/W18、E04/E05、V03/V06–V08 差异和当前缺口；不改 Runner 内部执行状态机。
+5. 更新 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) 的 W12/W17/W18、E04/E05、V03/V06–V08 差异和当前缺口；不改 Runner 内部执行状态机。
 
 ## 测试计划
 

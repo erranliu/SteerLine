@@ -1,6 +1,7 @@
 import { LockKeyhole } from "lucide-react";
+import type { CandidateStart } from "../../app/use-candidate-starts";
 import type { Task } from "../../shared/api/types";
-import { Status } from "../../shared/ui/status";
+import { TaskStatus, taskStartStatus } from "../tasks/task-status";
 
 export function taskDependencyReason(task?: Task): string {
   if (!task || task.status !== "open" || task.dependency_ready) return "";
@@ -16,6 +17,7 @@ export function RunTask({
   candidateCount,
   summary,
   matchedCount,
+  initialStart,
   onSelect,
 }: {
   task: Task;
@@ -23,13 +25,19 @@ export function RunTask({
   candidateCount: number;
   summary?: string;
   matchedCount?: number;
+  initialStart?: CandidateStart;
   onSelect: () => void;
 }) {
-  const reason = taskDependencyReason(task);
+  const startStatus = taskStartStatus(task.status, initialStart);
+  const reason =
+    !startStatus || startStatus === "task_start_failed"
+      ? taskDependencyReason(task)
+      : "";
   return (
     <button
       onClick={onSelect}
       aria-current={selected ? "true" : undefined}
+      data-execution-state={startStatus ?? task.status}
       className={
         "run-task" +
         (reason ? " dependency-blocked" : "") +
@@ -39,7 +47,10 @@ export function RunTask({
       <span className="eyebrow">TASK #{task.task_id}</span>
       <strong>{task.title}</strong>
       <div>
-        <Status value={reason ? "dependency_blocked" : task.status} />
+        <TaskStatus
+          status={reason ? "dependency_blocked" : task.status}
+          startStatus={startStatus}
+        />
         <span className="muted">{candidateCount} 个候选</span>
       </div>
       {summary && <span className="run-task-summary">{summary}</span>}

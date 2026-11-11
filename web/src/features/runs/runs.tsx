@@ -13,6 +13,11 @@ import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { Status, label } from "../../shared/ui/status";
 import { TaskDetail } from "../tasks/task-detail";
+import {
+  candidateStartStatus,
+  latestTaskStarts,
+  TaskStatus,
+} from "../tasks/task-status";
 import { Answer, draftKey } from "./answer";
 import {
   candidateStatuses,
@@ -46,12 +51,31 @@ import { RunUsage } from "./run-usage";
 import { RejectedStart } from "./rejected-start";
 import { ContinuationSuggestion } from "./continuation-suggestion";
 
-function CandidateStatuses({ run, task }: { run: Candidate; task?: Task }) {
-  const states = candidateStatuses(run, task);
+function candidateExecutionState(state: string) {
+  if (state === "running") return state;
+  if (["pending", "accepted", "queued", "preparing"].includes(state))
+    return "task_starting";
+}
+
+function CandidateStatuses({
+  run,
+  states,
+}: {
+  run: Candidate;
+  states: string[];
+}) {
   return (
-    <span className="candidate-statuses">
+    <span className="execution-statuses">
       {states.map((state) => (
-        <Status key={state} value={state} />
+        <Status
+          key={state}
+          value={
+            state === "pending" || state === "preparing"
+              ? "task_starting"
+              : state
+          }
+          appearance={candidateExecutionState(state)}
+        />
       ))}
       {states.includes("waiting_for_input") && optionalAnswer(run) && (
         <span className="muted">可稍后回答</span>
@@ -86,7 +110,10 @@ function CandidateDetail({
             </div>
             <h2>{run.title}</h2>
             <div className="actions">
-              <CandidateStatuses run={run} task={task} />
+              <CandidateStatuses
+                run={run}
+                states={candidateStatuses(run, task)}
+              />
               <span className="muted">{currentStage(run)}</span>
             </div>
           </div>
@@ -175,9 +202,11 @@ function CandidateDetail({
             {issue}
           </p>
         ))}
-        {run.runner_delivery?.resume_required && (
-          <p className="notice amber">待处理 · 核验原执行后显式恢复。</p>
-        )}
+        {run.runner_delivery?.resume_required &&
+          !(answerVisible &&
+            run.decision?.request.interaction_kind === "runner_resume") && (
+            <p className="notice amber">需处理 · 核验原执行后显式恢复。</p>
+          )}
         {stopApplied && run.participation === "active" && (
           <p className="notice amber">
             停止已生效，列表刷新中；可使用页面刷新重取。
@@ -253,6 +282,7 @@ export function Runs() {
     candidateStarts?.items.filter(
       (entry) => !runs.some((run) => run.run_id === entry.id),
     ) ?? [];
+  const initialStarts = latestTaskStarts(candidateStarts?.items);
   const visibleRuns = runs.filter(
     (run) => showStopped || run.participation !== "abandoned",
   );
@@ -498,6 +528,7 @@ export function Runs() {
               onSelect={() => chooseTask(group.task.task_id)}
               candidateCount={group.count}
               summary={group.summary}
+              initialStart={initialStarts.get(group.task.task_id)}
               matchedCount={
                 filter === "all" ? undefined : group.matching(filter).length
               }
@@ -526,34 +557,36 @@ export function Runs() {
               </p>
             )}
           <div className="candidate-strip">
-            {candidates.map((r) => (
-              <button
-                key={r.run_id}
-                onClick={() => chooseRun(r.run_id)}
-                className={
-                  "candidate-card " +
-                  (selected?.run_id === r.run_id ? "active " : "") +
-                  (filter !== "all" &&
-                  matchesCandidate(r, filter, selectedTaskRecord)
-                    ? "filter-match"
-                    : "")
-                }
-                aria-pressed={selected?.run_id === r.run_id}
-              >
-                <span>候选 C{r.candidate_number || "—"}</span>
-                <strong>{r.execution_profile?.name || r.agent}</strong>
-                <CandidateStatuses run={r} task={selectedTaskRecord} />
-                {filter !== "all" &&
-                  matchesCandidate(r, filter, selectedTaskRecord) && (
+            {candidates.map((r) => {
+              const states = candidateStatuses(r, selectedTaskRecord);
+              const matches =
+                filter !== "all" &&
+                matchesCandidate(r, filter, selectedTaskRecord);
+              const wait = preparationWait(r);
+              return (
+                <button
+                  key={r.run_id}
+                  onClick={() => chooseRun(r.run_id)}
+                  className={
+                    "candidate-card " +
+                    (selected?.run_id === r.run_id ? "active " : "") +
+                    (matches ? "filter-match" : "")
+                  }
+                  aria-pressed={selected?.run_id === r.run_id}
+                  data-execution-state={candidateExecutionState(states[0])}
+                >
+                  <span>候选 C{r.candidate_number || "—"}</span>
+                  <strong>{r.execution_profile?.name || r.agent}</strong>
+                  <CandidateStatuses run={r} states={states} />
+                  {matches && (
                     <span className="candidate-match">符合筛选</span>
                   )}
-                {preparationWait(r) && (
-                  <span className="muted">
-                    {executionWaitTitle(preparationWait(r)!)}
-                  </span>
-                )}
-              </button>
-            ))}
+                  {wait && (
+                    <span className="muted">{executionWaitTitle(wait)}</span>
+                  )}
+                </button>
+              );
+            })}
             {pendingCandidates.map((entry) => (
               <button
                 key={entry.id}
@@ -561,10 +594,13 @@ export function Runs() {
                 className={
                   "candidate-card " + (runID === entry.id ? "active" : "")
                 }
+                aria-pressed={runID === entry.id}
+                data-execution-state={candidateStartStatus(entry)}
               >
                 <span>新候选</span>
                 <strong>{entry.profile}</strong>
-                <span className="muted">
+                <TaskStatus status={candidateStartStatus(entry)} />
+                <span className="muted candidate-start-detail">
                   {entry.status}
                   {entry.rejected ? "（历史）" : ""}
                 </span>
@@ -585,6 +621,7 @@ export function Runs() {
                   )?.title ||
                   selectedTask}
               </h2>
+              <TaskStatus status={candidateStartStatus(selectedStart)} />
               <CopyInfo
                 info={{
                   title: "任务候选启动",
@@ -660,7 +697,12 @@ export function Runs() {
         </section>
         <aside className="detail-panel">
           {selectedTask && (
-            <TaskDetail key={selectedTask} id={selectedTask} allowCandidate />
+            <TaskDetail
+              key={selectedTask}
+              id={selectedTask}
+              allowCandidate
+              initialStart={initialStarts.get(selectedTask)}
+            />
           )}
         </aside>
       </div>

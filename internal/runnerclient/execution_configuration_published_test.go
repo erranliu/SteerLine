@@ -31,6 +31,13 @@ func TestExecutionConfigurationPublishedRunner(t *testing.T) {
 	if err != nil || derived.Execution == nil || derived.View.AccessMode != "read_only" || derived.View.Model == nil || *derived.View.Model != "selected" {
 		t.Fatal(derived, err)
 	}
+	write, err := client.ConfigureExecution(ctx, catalog, runnercontract.ExecutionConfigurationRequest{Operation: "derive", Execution: &execution, Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, AccessMode: "full_access"})
+	if err != nil || write.Execution == nil {
+		t.Fatal(write, err)
+	}
+	if err = catalog.ValidateMaintenance(*write.Execution, *derived.Execution); err != nil {
+		t.Fatal("maintenance capability/derivation", err)
+	}
 	model := "changed"
 	composed, err := client.ConfigureExecution(ctx, catalog, runnercontract.ExecutionConfigurationRequest{Operation: "compose", BaseExecution: &execution, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Selection: &runnercontract.ExecutionSelection{Adapter: execution.Adapter, Target: execution.Target, Agent: "codex", AccessMode: "full_access", Model: &model}, Unset: []string{"reasoning_effort"}})
 	if err != nil || composed.Identity == nil || composed.View.ReasoningEffort != nil {

@@ -16,7 +16,7 @@ import (
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
-//go:embed *.md materials/*.md
+//go:embed *.md materials/*.md materials/refactoring-directions/*.md
 var files embed.FS
 
 func render(name string, data any) (string, error) {
@@ -52,7 +52,13 @@ func RoadmapPlanning(rules, draft, goal string) (string, error) {
 func RoadmapPlanningConflict(decision string) (string, error) {
 	return render("roadmap-planning-conflict", struct{ Decision string }{decision})
 }
-func MainAgentRules() ([]byte, error) { return files.ReadFile("materials/main-agent.md") }
+func MainAgentRules() ([]byte, error)   { return files.ReadFile("materials/main-agent.md") }
+func MaintenanceRules() ([]byte, error) { return files.ReadFile("materials/maintenance.md") }
+func MaintenanceDirection(id string) ([]byte, error) {
+	return files.ReadFile("materials/refactoring-directions/" + id + ".md")
+}
+func MaintenanceDecision() (string, error) { return render("maintenance-decision", nil) }
+func MaintenanceExecute() (string, error)  { return render("maintenance-execute", nil) }
 func MainAgentAdvisory(context string) (string, error) {
 	rules, err := MainAgentRules()
 	if err != nil {

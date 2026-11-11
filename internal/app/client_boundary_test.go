@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/testkit/boundary"
 	"go/parser"
 	"go/token"
 	"os"
@@ -40,7 +41,11 @@ func TestCM71ProductDependencyBoundary(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if strings.HasPrefix(path, module+"/internal/") && !contains(owner.allow, path) {
+				allowed := contains(owner.allow, path)
+				if owner.dir == "../product/api" {
+					allowed = boundary.PureImportsAllowed(module+"/internal/product/api", path)
+				}
+				if strings.HasPrefix(path, module+"/internal/") && !allowed {
 					t.Fatalf("%s depends on an unowned internal package: %s", entry.Name(), path)
 				}
 			}
@@ -61,7 +66,7 @@ func TestCM71ProductDependencyBoundary(t *testing.T) {
 			}
 			count++
 			path := pkg.ImportPath
-			if path == "database/sql" || strings.HasPrefix(path, "modernc.org/sqlite") || strings.HasPrefix(path, module+"/internal/") && path != module+"/internal/product/api" && path != module+"/internal/product/client" && path != module+"/internal/product/activityrender" {
+			if path == "database/sql" || strings.HasPrefix(path, "modernc.org/sqlite") || strings.HasPrefix(path, module+"/internal/") && path != module+"/internal/product/api" && path != module+"/internal/product/client" && path != module+"/internal/product/activityrender" && !boundary.PureImportsAllowed(module+"/internal/product/api", path) {
 				t.Fatalf("product-owned package %s reached concrete storage or the old center: %s", owner, path)
 			}
 		}

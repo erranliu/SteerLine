@@ -18,6 +18,15 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 		return err
 	}
 	pin := cli.BuildPin()
+	refactorings, err := store.Refactorings(ctx, c.Identity())
+	if err != nil {
+		return err
+	}
+	for _, r := range refactorings {
+		if !runnerbinding.SamePath(r.Frozen.Runner.StateDir, pin.StateDir) {
+			return errors.New("maintenance Runner namespace differs")
+		}
+	}
 	if err := verifyEnvironmentBindings(ctx, c, store, cli); err != nil {
 		return err
 	}

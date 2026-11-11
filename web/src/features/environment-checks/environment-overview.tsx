@@ -1,25 +1,56 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useWorkspace } from "../../app/context";
+import type { Envelope, Receipt } from "../../shared/api/types";
+import { usePageVisible } from "../../shared/query-visibility";
+import {
+  CopyExecutionInfo,
+  requestExecutionInfo,
+} from "../activities/execution-info";
+import { SubmissionStatus } from "../activities/feedback/feedback";
+import { DetectionID, type DetectionRecord } from "./detection-record";
 import { Button } from "../../shared/ui/button";
 import { environmentStage, type Environment } from "./use-readiness";
 
 const priority = (stage: string) =>
   stage === "ready" ? 2 : stage === "verifying" ? 1 : 0;
 
-export function EnvironmentOverview({
-  environments,
-  verified,
-  selected,
-  name,
-  confirming,
-  onSelect,
-}: {
+export type DetectionSubmission = {
+  sending: boolean;
+  confirming: boolean;
+  accepted: boolean;
+  request?: Envelope;
+  receipt?: Receipt;
+};
+
+type OverviewProps = {
   environments: Environment[];
   verified: boolean;
-  selected: string;
+  defaultProfile: string;
+  linkedEnvironment?: string;
   name: (environment: Environment) => string;
-  confirming: (environment: Environment) => boolean;
-  onSelect: (key: string) => void;
-}) {
+  preferred: (key: string) => string | undefined;
+  onProfileChange: (key: string, profile: string) => void;
+  startState: (environment: Environment) => DetectionSubmission;
+  submitting: boolean;
+  recordScope: string[];
+  command: (
+    action: "environment_start" | "environment_stop",
+    target: string,
+    version: number,
+    payload: { [key: string]: unknown },
+  ) => Promise<void>;
+};
+
+export function EnvironmentOverview({
+  environments,
+  linkedEnvironment,
+  name,
+  preferred,
+  startState,
+  ...controls
+}: OverviewProps) {
+  const { verified } = controls;
   const [order, setOrder] = useState<string[] | null>(null);
   useEffect(() => {
     if (order === null && verified && environments.length)
@@ -38,11 +69,15 @@ export function EnvironmentOverview({
     };
     return index(a) - index(b);
   });
+  const submissions = new Map(rows.map((e) => [e, startState(e)]));
   const ready = environments.filter(
-    (e) => e.status === "ready" && e.stage === "ready" && !confirming(e),
+    (e) =>
+      e.status === "ready" &&
+      e.stage === "ready" &&
+      !submissions.get(e)?.confirming,
   ).length;
   const running = environments.filter(
-    (e) => e.stage === "verifying" || confirming(e),
+    (e) => e.stage === "verifying" || submissions.get(e)?.confirming,
   ).length;
   const attention = environments.length - ready - running;
   return (
@@ -70,70 +105,225 @@ export function EnvironmentOverview({
             <th scope="col">运行机 / 执行链路</th>
             <th scope="col">当前状态</th>
             <th scope="col">状态说明</th>
+            <th scope="col">检测方案</th>
             <th scope="col">操作</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((e) => {
-            const isConfirming = confirming(e);
-            const stage = verified ? e.stage : "unverified";
-            const label = isConfirming
-              ? "正在确认启动"
-              : environmentStage[stage] || environmentStage.unverified;
-            const active = e.environment_key === selected;
-            return (
-              <tr
-                key={e.environment_key || e.profiles[0]?.id}
-                className={active ? "environment-row-selected" : undefined}
-              >
-                <td>
-                  <strong>{name(e)}</strong>
-                  <p className="environment-profiles">
-                    关联方案：{e.profiles.map((p) => p.name).join("、") || "无"}
-                  </p>
-                </td>
-                <td>
-                  <span
-                    className="environment-status"
-                    data-stage={isConfirming ? "verifying" : stage}
-                  >
-                    {label}
-                  </span>
-                </td>
-                <td>
-                  <p className="environment-overview-reason">
-                    {isConfirming
-                      ? "正在核实原请求，请勿重复提交。"
-                      : !verified
-                        ? `上次状态：${environmentStage[e.stage] || "待核实"}`
-                        : e.stage === "ready"
-                          ? "当前准备要求已通过"
-                          : e.reason || "查看详情了解当前检测情况"}
-                  </p>
-                  {verified &&
-                    !isConfirming &&
-                    e.activity_id &&
-                    !e.activity_settled && (
-                      <p className="muted">本次检测尚未结束</p>
-                    )}
-                </td>
-                <td>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-expanded={active}
-                    aria-controls={active ? "environment-detail" : undefined}
-                    disabled={!e.environment_key}
-                    onClick={() => onSelect(active ? "" : e.environment_key)}
-                  >
-                    {active ? "收起详情" : "查看详情"}
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
+          {rows.map((e) => (
+            <EnvironmentRow
+              {...controls}
+              key={e.environment_key || e.profiles[0]?.id}
+              environment={e}
+              name={name(e)}
+              linked={
+                !!linkedEnvironment && e.environment_key === linkedEnvironment
+              }
+              preferred={preferred(e.environment_key)}
+              submission={submissions.get(e)!}
+            />
+          ))}
         </tbody>
       </table>
     </section>
+  );
+}
+
+type RowProps = Pick<
+  OverviewProps,
+  | "verified"
+  | "defaultProfile"
+  | "onProfileChange"
+  | "submitting"
+  | "recordScope"
+  | "command"
+> & {
+  environment: Environment;
+  name: string;
+  linked: boolean;
+  preferred?: string;
+  submission: DetectionSubmission;
+};
+
+function EnvironmentRow({
+  environment: e,
+  name,
+  linked,
+  preferred,
+  submission,
+  verified,
+  defaultProfile,
+  onProfileChange,
+  submitting,
+  recordScope,
+  command,
+}: RowProps) {
+  const { api, identity, online } = useWorkspace();
+  const visible = usePageVisible();
+  const { activity_id: activityID, environment_key: key, profiles } = e;
+  const activity = useQuery({
+    queryKey: [...recordScope, activityID],
+    queryFn: ({ signal }) =>
+      api.get<DetectionRecord>(
+        "/environment/" + encodeURIComponent(activityID!),
+        signal,
+      ),
+    enabled: online && !!activityID,
+    retry: false,
+    refetchInterval: (query) =>
+      visible &&
+      online &&
+      activityID &&
+      (!e.activity_settled || query.state.data?.settled === false)
+        ? 3000
+        : false,
+  });
+  const current = activity.data?.id === activityID ? activity.data : undefined;
+  const unsettled =
+    e.stage === "verifying" ||
+    (!!activityID && (!e.activity_settled || current?.settled === false));
+  const { confirming, sending, accepted, request, receipt } = submission;
+  const stage = verified && !activity.isError ? e.stage : "unverified";
+  const label = confirming
+    ? "正在确认启动"
+    : environmentStage[stage] || environmentStage.unverified;
+  const selected =
+    profiles.length === 1
+      ? profiles[0].id
+      : preferred === "" || profiles.some((p) => p.id === preferred)
+        ? preferred
+        : (profiles.find((p) => p.id === defaultProfile)?.id ?? "");
+  return (
+    <tr
+      id={`environment-${key || profiles[0]?.id}`}
+      tabIndex={-1}
+      className={linked ? "environment-row-selected" : undefined}
+    >
+      <th scope="row">{name}</th>
+      <td>
+        <span
+          className="environment-status"
+          data-stage={confirming ? "verifying" : stage}
+        >
+          {label}
+        </span>
+        {!confirming && current?.created_at && (
+          <p className="muted">
+            最近检测：{new Date(current.created_at).toLocaleString("zh-CN")}
+          </p>
+        )}
+        {!confirming && activityID && (
+          <DetectionID id={activityID} execution={current?.execution_ref} />
+        )}
+      </td>
+      <td>
+        <p className="environment-overview-reason">
+          {confirming
+            ? "正在核实原请求，请勿重复提交。"
+            : !verified
+              ? `上次状态：${environmentStage[e.stage] || "待核实"}`
+              : activity.isError
+                ? "检测状态查询失败，请刷新重试。"
+                : e.stage === "ready"
+                  ? "当前准备要求已通过"
+                  : e.reason || "暂无状态说明"}
+        </p>
+        {!confirming && unsettled && <p className="muted">本次检测尚未结束</p>}
+        {!confirming && stage === "ready" && (
+          <p className="muted">重新检测会使当前就绪状态失效。</p>
+        )}
+        <SubmissionStatus
+          label={
+            sending
+              ? "正在提交检测…"
+              : confirming
+                ? accepted
+                  ? "已受理，正在读取工作信息"
+                  : "提交结果待核实 · 请查看原请求"
+                : activityID
+                  ? "检测进度可在活动中心查看"
+                  : ""
+          }
+          busy={sending}
+          showActivity={!!request || !!activityID}
+          announce={confirming}
+        />
+        {confirming && request && (
+          <CopyExecutionInfo
+            info={{
+              ...requestExecutionInfo(request, receipt),
+              project: identity.repository_identity,
+            }}
+          />
+        )}
+      </td>
+      <td>
+        {profiles.length > 1 ? (
+          <select
+            aria-label="检测所用方案"
+            value={selected}
+            disabled={confirming}
+            onChange={(event) => onProfileChange(key, event.target.value)}
+          >
+            <option value="">选择本次检测方案</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {[p.name, p.model, p.reasoning_effort]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </option>
+            ))}
+          </select>
+        ) : (
+          profiles[0]?.name || "无"
+        )}
+      </td>
+      <td>
+        {unsettled && !confirming ? (
+          <Button
+            size="sm"
+            disabled={
+              !online ||
+              submitting ||
+              activity.isError ||
+              !current ||
+              current.settled
+            }
+            onClick={() =>
+              current &&
+              void command("environment_stop", current.id, current.revision, {})
+            }
+          >
+            停止检测
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            disabled={
+              !verified ||
+              stage === "unverified" ||
+              submitting ||
+              confirming ||
+              !key ||
+              !selected
+            }
+            onClick={() =>
+              void command("environment_start", identity.project_id, 1, {
+                environment_key: key,
+                profile_id: selected,
+                round_timeout_seconds: 3600,
+                expected_current_revision: e.current_revision,
+              })
+            }
+          >
+            {sending
+              ? "正在提交检测…"
+              : e.stage === "ready" || activityID
+                ? "重新检测"
+                : "开始检测"}
+          </Button>
+        )}
+      </td>
+    </tr>
   );
 }

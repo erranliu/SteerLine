@@ -10,7 +10,7 @@
 
 继续复用 SteerLine 的 `runnerclient/runnerbridge/taskrunner`、SQLite 和 HTTP/Web owners、`cmd/test-feedback`、testenv/driver、Runner CLI fixture、隔离 Git/PR provider 及新包生成器。只把测试注入点从 Codex/Orca 协议边界上移到 Runner 公开 CLI，真实 L2 仍走现有产品链。不引入共享跨仓 Go 包、私有 IPC、Runner DB/日志读取或另一个执行入口。
 
-规则参考 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md)。实施时仅校准其验证映射/当前实现缺口中的测试所有者：W02–W16/W18 执行专项指向 Runner，W01/W12 调用方授权/W17 及停止义务指向 SteerLine，L2 保留正常路径跨仓覆盖。不得改节点、异常规则或复制矩阵。
+规则参考 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)。实施时仅校准其验证映射/当前实现缺口中的测试所有者：W02–W16/W18 执行专项指向 Runner，W01/W12 调用方授权/W17 及停止义务指向 SteerLine，L2 保留正常路径跨仓覆盖。不得改节点、异常规则或复制矩阵。
 
 ## 2. 实施步骤
 

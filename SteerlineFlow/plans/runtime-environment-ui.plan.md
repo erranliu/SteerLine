@@ -16,7 +16,7 @@
 | `internal/app/environment_readiness.go` 及原 owner 测试 | 只补充原 target/adapter/agent、activity_settled 与从文档 manifest 读取的 script_path 展示字段；不改环境键、资格或持久化 |
 | `web/tests/configuration-navigation.spec.ts` | 扩展原受控 UI 场景，验证环境导航、卡片流程和任务返回，沿原 fixture/临时服务器，不新建通用测试平台 |
 
-执行环境分组继续来自原后端键；运行机展示只按已有 target 标识，不调用主机发现或物理别名解析。若补只读字段，先明确字段与已加载 execution/原活动的一一来源，不直接暴露 settings。按[生命周期](../../docs/product-design/worker-lifecycle.md)保留原请求、未知、停止与结算规则。
+执行环境分组继续来自原后端键；运行机展示只按已有 target 标识，不调用主机发现或物理别名解析。若补只读字段，先明确字段与已加载 execution/原活动的一一来源，不直接暴露 settings。按[生命周期](../../docs/product-design/runner-lifecycle.md)保留原请求、未知、停止与结算规则。
 
 ## 2. 两步实施与依赖
 

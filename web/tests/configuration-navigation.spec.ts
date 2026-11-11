@@ -302,7 +302,7 @@ test("global developer switches preserve drafts, require restart and disappear i
   expect(errors).toEqual([]);
 });
 
-test("runtime environments keep card actions, failed observations and task return scoped", async ({
+test("runtime environments keep row actions, failed observations and task return scoped", async ({
   page,
   context,
 }, info) => {
@@ -543,23 +543,17 @@ test("runtime environments keep card actions, failed observations and task retur
   await expect(
     page.getByRole("heading", { name: "项目运行环境", exact: true }),
   ).toBeVisible();
-  const first = page.locator(".environment-card").first();
   const overview = page.getByRole("region", { name: "全部运行环境" });
   const environmentRow = (index: number) =>
-    overview.getByRole("row").filter({
-      hasText: `关联方案：${environments[index].profiles.map((p) => p.name).join("、")}`,
-    });
-  const selectEnvironment = async (index: number) => {
-    const button = environmentRow(index).getByRole("button");
-    if ((await button.getAttribute("aria-expanded")) !== "true")
-      await button.click();
-    await expect(button).toHaveAttribute("aria-expanded", "true");
-  };
+    overview.locator(
+      `[id="environment-${environments[index].environment_key}"]`,
+    );
+  const first = environmentRow(0);
   await expect(
     overview.getByRole("row", { name: /远程工作站 · Orca → Codex/ }),
   ).toHaveCount(1);
   await expect(overview.getByRole("row")).toHaveCount(7);
-  await expect(first.getByRole("heading")).toHaveText("待核实");
+  await expect(first.locator(".environment-status")).toHaveText("待核实");
   await expect(
     first.getByRole("button", { name: /开始检测|重新检测/ }),
   ).toBeDisabled();
@@ -569,13 +563,15 @@ test("runtime environments keep card actions, failed observations and task retur
   });
   holdQualification = false;
   releaseQualification();
-  await expect(first.getByRole("heading")).toHaveText("已失效");
+  await expect(first.locator(".environment-status")).toHaveText("已失效");
   await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
   await expect(
     first.getByLabel("检测所用方案").locator("option:checked"),
   ).toHaveText("alternate · model-high · high");
   await expect(first).toBeFocused();
-  await expect(page.getByText("查看准备要求", { exact: true })).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", { name: "准备要求", exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
   await page.getByRole("link", { name: "返回任务", exact: true }).click();
@@ -585,7 +581,7 @@ test("runtime environments keep card actions, failed observations and task retur
   environments[0].stage = "ready";
   environments[0].status = "ready";
   await page.getByRole("button", { name: "刷新环境" }).click();
-  await expect(first.getByRole("heading")).toHaveText("已就绪");
+  await expect(first.locator(".environment-status")).toHaveText("已就绪");
   const labels = [
     "已就绪",
     "待准备与检测",
@@ -595,10 +591,10 @@ test("runtime environments keep card actions, failed observations and task retur
     "未准备",
   ];
   for (const [index, label] of labels.entries()) {
-    await selectEnvironment(index);
-    await expect(first.getByRole("heading")).toHaveText(label);
+    await expect(
+      environmentRow(index).locator(".environment-status"),
+    ).toHaveText(label);
   }
-  await selectEnvironment(0);
   failOptions = true;
   await page.getByRole("button", { name: "刷新环境" }).click();
   await expect(page.getByText(/上次已知状态，当前待核实/)).toBeVisible();
@@ -610,12 +606,8 @@ test("runtime environments keep card actions, failed observations and task retur
   await expect(
     first.getByRole("button", { name: /开始检测|重新检测/ }),
   ).toBeEnabled();
-  const invalidation = first.locator("summary").filter({ hasText: "更多设置" });
-  await invalidation.focus();
-  await page.keyboard.press("Enter");
-  await expect(first.getByLabel("环境失效原因")).toBeVisible();
-  await invalidation.focus();
-  await page.keyboard.press("Enter");
+  await expect(page.getByText("更多设置", { exact: true })).toHaveCount(0);
+  await expect(first.getByRole("button", { name: "标记失效" })).toHaveCount(0);
   await page.evaluate(
     ({ project }) =>
       new Promise<void>((resolve, reject) => {
@@ -698,7 +690,7 @@ test("runtime environments keep card actions, failed observations and task retur
   await expect(
     page.getByRole("link", { name: "配置执行方案", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".environment-card")).toHaveCount(0);
+  await expect(overview).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "返回任务", exact: true }),
   ).toHaveCount(0);
@@ -804,6 +796,8 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
         tasks: [],
         profiles: [],
       };
+    else if (path.endsWith("/environment/options"))
+      data = { profiles: [], environments: [], default_profile_id: "" };
     else if (path.endsWith("/presentation"))
       data = { presentation: { profiles: [], default_profile_id: "" } };
     else data = { tasks: [], runs: [] };

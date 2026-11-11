@@ -36,15 +36,13 @@ const repairPrompt = readFileSync(
   resolve("../internal/prompts/testdata/environment-repair.golden.md"),
   "utf8",
 );
-const currentCard = () => screen.getByRole("region", { name: "当前运行环境" });
+const remoteRow = () =>
+  document.getElementById(`environment-${"e".repeat(64)}`)!;
 const overview = () => screen.getByRole("region", { name: "全部运行环境" });
 const environmentRow = (name: string) =>
   within(overview()).getByRole("row", { name: new RegExp(name) });
-function chooseEnvironment(name: string) {
-  fireEvent.click(within(environmentRow(name)).getByRole("button"));
-}
 async function loaded() {
-  await screen.findByRole("heading", { name: "检测阻断" });
+  await screen.findByText("检测阻断", { exact: true });
 }
 async function updateOptions(
   client: ReturnType<typeof testClient>,
@@ -63,6 +61,54 @@ async function openHistory() {
   fireEvent.click(screen.getByText("检测历史", { selector: "summary" }));
   await screen.findByLabelText("历史范围");
 }
+
+it("refreshes current readiness within one active poll and slows down after settlement", async () => {
+  vi.useFakeTimers();
+  try {
+    let settled = false;
+    const { api } = fixture(
+      true,
+      undefined,
+      false,
+      "",
+      false,
+      false,
+      (options) => {
+        const status = settled ? "ready" : "not_ready";
+        const stage = settled ? "ready" : "verifying";
+        Object.assign(options.environments[0], {
+          activity_settled: settled,
+          status,
+          stage,
+        });
+        Object.assign(options.profiles[0], { status, stage });
+      },
+    );
+    const readinessReads = () =>
+      vi
+        .mocked(api.get)
+        .mock.calls.filter(([path]) => path === "/environment/options").length;
+    await act(() => vi.advanceTimersByTimeAsync(10));
+    expect(
+      within(remoteRow()).getByText("检测中", { exact: true }),
+    ).toBeVisible();
+    expect(readinessReads()).toBe(1);
+
+    settled = true;
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    expect(
+      within(remoteRow()).getByText("已就绪", { exact: true }),
+    ).toBeVisible();
+    expect(readinessReads()).toBe(2);
+
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    expect(readinessReads()).toBe(2);
+    await act(() => vi.advanceTimersByTimeAsync(12000));
+    expect(readinessReads()).toBe(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 it("copies the canonical preparation prompt without submitting a detection and offers manual copying on failure", async () => {
   const { send } = fixture(true, undefined, false, "", true);
@@ -90,37 +136,29 @@ it("disables prompt copying when configuration cannot supply the canonical text"
   ).toBeDisabled();
 });
 
-it("shows environment readiness directly with lazy details and execution copying instead of debug ID fields", async () => {
+it("shows environment readiness directly with row actions and execution copying instead of debug ID fields", async () => {
   const { api, record, send } = fixture();
   await loaded();
   expect(
     await within(overview()).findByText("远程工作站 · Orca → Codex"),
   ).toBeInTheDocument();
   expect(within(overview()).getByText("缺少工具")).toBeVisible();
-  expect(within(currentCard()).getByText("缺少工具")).toBeVisible();
+  expect(within(remoteRow()).getByText("缺少工具")).toBeVisible();
   expect(screen.queryByLabelText("运行环境")).not.toBeInTheDocument();
   expect(screen.queryByText(record.id)).toBeNull();
   expect(
-    within(currentCard()).getByRole("button", { name: "复制执行信息" }),
+    within(remoteRow()).getByRole("button", { name: "复制执行信息" }),
   ).toBeEnabled();
   expect(screen.queryByLabelText("检测所用方案")).not.toBeInTheDocument();
-  expect(screen.getByText("更多设置").closest("details")).not.toHaveAttribute(
-    "open",
-  );
+  expect(screen.queryByText("更多设置")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /查看详情|收起详情|标记失效/ }),
+  ).not.toBeInTheDocument();
   expect(screen.getByText("检测历史").closest("details")).not.toHaveAttribute(
     "open",
   );
-  expect(
-    screen.getByText("查看准备要求").closest("details"),
-  ).not.toHaveAttribute("open");
-  expect(api.get).not.toHaveBeenCalledWith(
-    expect.stringContaining("/environment/materials"),
-    expect.anything(),
-  );
-  expect(api.get).not.toHaveBeenCalledWith(
-    expect.stringMatching(/^\/environment\?/),
-    expect.anything(),
-  );
+  expect(screen.getByRole("heading", { name: "准备要求" })).toBeVisible();
+  expect(api.get).not.toHaveBeenCalledWith("/environment", expect.anything());
   for (const text of [
     remoteMachineID,
     "e".repeat(64),
@@ -180,9 +218,9 @@ it("copies the full detection ID and supports manual copying when clipboard acce
     value: { writeText },
   });
   await loaded();
-  await within(currentCard()).findByText(/最近检测：/);
+  await within(remoteRow()).findByText(/最近检测：/);
   fireEvent.click(
-    within(currentCard()).getByRole("button", { name: "复制执行信息" }),
+    within(remoteRow()).getByRole("button", { name: "复制执行信息" }),
   );
   expect(await screen.findByText("已复制执行信息")).toBeVisible();
   expect(writeText.mock.calls[0][0]).toContain(record.id);
@@ -190,15 +228,14 @@ it("copies the full detection ID and supports manual copying when clipboard acce
   expect(writeText.mock.calls[0][0]).toContain("Attempt ID：original-attempt");
   writeText.mockRejectedValue(new Error("denied"));
   fireEvent.click(
-    within(currentCard()).getByRole("button", { name: "复制执行信息" }),
+    within(remoteRow()).getByRole("button", { name: "复制执行信息" }),
   );
   expect(await screen.findByRole("alert")).toBeVisible();
   expect(screen.getByRole("alert")).toHaveTextContent(record.id);
 });
 
-it("loads preparation requirements only when opened and excludes protocol metadata", async () => {
+it("loads preparation requirements directly and excludes protocol metadata", async () => {
   const { api } = fixture();
-  await loaded();
   const original = vi.mocked(api.get).getMockImplementation()!;
   vi.mocked(api.get).mockImplementation(async (path, signal) =>
     path.startsWith("/environment/materials")
@@ -210,13 +247,12 @@ it("loads preparation requirements only when opened and excludes protocol metada
         } as never)
       : original(path, signal),
   );
-  fireEvent.click(screen.getByText("查看准备要求", { selector: "summary" }));
   expect(await screen.findByText(/准备 Git 和认证/)).toBeVisible();
   for (const text of ["hidden-key", "hidden-path", "hidden-sha"])
     expect(screen.queryByText(text, { exact: false })).not.toBeInTheDocument();
 });
 
-it("preserves the selected timeout and profile and prevents duplicate detection submissions", async () => {
+it("uses the default timeout and correct profile and prevents duplicate detection submissions", async () => {
   let finish!: (value: boolean) => void;
   const send = vi.fn(
     () =>
@@ -226,13 +262,9 @@ it("preserves the selected timeout and profile and prevents duplicate detection 
   );
   const { api, client, record } = fixture(true, send);
   await loaded();
-  fireEvent.click(screen.getByText("更多设置", { selector: "summary" }));
-  fireEvent.change(screen.getByLabelText("本次检测总超时（秒）"), {
-    target: { value: "120" },
-  });
   const start = screen.getByRole("button", { name: "重新检测" });
   fireEvent.click(start);
-  await screen.findByRole("heading", { name: "正在确认启动" });
+  await screen.findByText("正在确认启动", { exact: true });
   expect(start).toBeDisabled();
   fireEvent.click(start);
   await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
@@ -243,7 +275,7 @@ it("preserves the selected timeout and profile and prevents duplicate detection 
     {
       environment_key: "e".repeat(64),
       profile_id: "remote",
-      round_timeout_seconds: 120,
+      round_timeout_seconds: 3600,
       expected_current_revision: 2,
     },
   );
@@ -253,9 +285,7 @@ it("preserves the selected timeout and profile and prevents duplicate detection 
     environments[0].stage = "verifying";
     environments[0].activity_settled = false;
   });
-  expect(
-    screen.queryByRole("heading", { name: "检测中" }),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByText("检测中", { exact: true })).not.toBeInTheDocument();
   const get = vi.mocked(api.get).getMockImplementation()!;
   const running = client.getQueryData<EnvironmentOptions>(optionsKey);
   vi.mocked(api.get).mockImplementation(async (path, signal) =>
@@ -263,25 +293,25 @@ it("preserves the selected timeout and profile and prevents duplicate detection 
   );
   vi.mocked(fetch).mockImplementationOnce(() => new Promise(() => {}));
   finish(true);
-  expect(await screen.findByRole("heading", { name: "检测中" })).toBeVisible();
+  expect(await screen.findByText("检测中", { exact: true })).toBeVisible();
   expect(screen.queryByText("检测超时")).not.toBeInTheDocument();
 });
 
-it("shows a recorded detection timeout on the card and in history", async () => {
+it("shows a recorded detection timeout in the row and in history", async () => {
   const { client, record } = fixture();
   record.timed_out = true;
   await loaded();
   await updateOptions(client, ({ environments }) => {
     environments[0].stage = "timed_out";
   });
-  expect(screen.getByRole("heading", { name: "检测超时" })).toBeVisible();
+  expect(screen.getByText("检测超时", { exact: true })).toBeVisible();
   await openHistory();
   expect(
     await screen.findByText("检测超时", { selector: "strong" }),
   ).toBeVisible();
 });
 
-it("shows an unsettled blocked Run on the card and in history without restarting or stopping it", async () => {
+it("shows an unsettled blocked Run in the row and in history without restarting or stopping it", async () => {
   const { client, record, send } = fixture();
   record.state = "running";
   record.settled = false;
@@ -293,12 +323,10 @@ it("shows an unsettled blocked Run on the card and in history without restarting
     environments[0].reason = record.diagnostic;
     environments[0].activity_settled = false;
   });
-  expect(within(currentCard()).getByText(record.diagnostic)).toBeVisible();
+  expect(within(remoteRow()).getByText(record.diagnostic)).toBeVisible();
+  expect(within(remoteRow()).getByText("本次检测尚未结束")).toBeVisible();
   expect(
-    within(currentCard()).getByText("本次检测尚未结束，可停止检测后重新发起。"),
-  ).toBeVisible();
-  expect(
-    within(currentCard()).queryByRole("button", { name: "重新检测" }),
+    within(remoteRow()).queryByRole("button", { name: "重新检测" }),
   ).not.toBeInTheDocument();
   await openHistory();
   const history = screen
@@ -310,7 +338,7 @@ it("shows an unsettled blocked Run on the card and in history without restarting
   expect(within(history).getByText(record.diagnostic)).toBeVisible();
   expect(send).not.toHaveBeenCalled();
   fireEvent.click(
-    within(currentCard()).getByRole("button", { name: "停止检测" }),
+    within(remoteRow()).getByRole("button", { name: "停止检测" }),
   );
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
@@ -363,7 +391,6 @@ it("requires a scheme selection only for shared environments without a default",
       name: "另一方案",
     });
   });
-  chooseEnvironment("远程工作站 · Orca → Codex");
   expect(await screen.findByLabelText("检测所用方案")).toHaveValue("");
   expect(screen.getByRole("button", { name: "重新检测" })).toBeDisabled();
   fireEvent.change(screen.getByLabelText("检测所用方案"), {
@@ -373,7 +400,7 @@ it("requires a scheme selection only for shared environments without a default",
   expect(send).not.toHaveBeenCalled();
 });
 
-it("restores the selected environment and scheme after switching pages", async () => {
+it("restores the selected scheme for the correct environment after switching pages", async () => {
   const { api, client, send } = fixture();
   await loaded();
   const key = "f".repeat(64);
@@ -395,7 +422,6 @@ it("restores the selected environment and scheme after switching pages", async (
       ? (options as never)
       : read(path, signal),
   );
-  chooseEnvironment("本机 · Orca → Codex");
   fireEvent.change(screen.getByLabelText("检测所用方案"), {
     target: { value: "local-two" },
   });
@@ -404,11 +430,12 @@ it("restores the selected environment and scheme after switching pages", async (
   otherPage.unmount();
   mountFeature(<ProjectEnvironment />, api, client, true, { send });
   await screen.findByRole("region", { name: "全部运行环境" });
-  expect(
-    within(environmentRow("本机 · Orca → Codex")).getByRole("button"),
-  ).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByLabelText("检测所用方案")).toHaveValue("local-two");
-  fireEvent.click(screen.getByRole("button", { name: "重新检测" }));
+  fireEvent.click(
+    within(environmentRow("本机 · Orca → Codex")).getByRole("button", {
+      name: "重新检测",
+    }),
+  );
   expect(send).toHaveBeenCalledWith(
     "environment_start",
     identity.project_id,
@@ -456,7 +483,7 @@ it("stops the exact current activity even outside the history window and never s
     options.environments[0].reason = "环境要求 go：1.26.0 → 1.27.0；须重新检测";
   });
   expect(
-    await within(currentCard()).findByText(
+    await within(remoteRow()).findByText(
       "环境要求 go：1.26.0 → 1.27.0；须重新检测",
     ),
   ).toBeVisible();
@@ -490,48 +517,14 @@ it("keeps stop available after qualification observation fails while disabling n
   });
   await client.refetchQueries({ queryKey: optionsKey });
   expect(await screen.findByText(/上次已知状态，当前待核实/)).toBeVisible();
-  expect(screen.getByRole("heading", { name: "待核实" })).toBeVisible();
+  expect(screen.getByText("待核实", { exact: true })).toBeVisible();
   expect(screen.queryByText(/raw ID and diagnostics/)).not.toBeInTheDocument();
-  fireEvent.click(screen.getByText("更多设置", { selector: "summary" }));
-  fireEvent.change(screen.getByLabelText("环境失效原因"), {
-    target: { value: "工具变化" },
-  });
-  expect(screen.getByRole("button", { name: "标记失效" })).toBeDisabled();
   fireEvent.click(await screen.findByRole("button", { name: "停止检测" }));
   expect(send).toHaveBeenCalledWith(
     "environment_stop",
     record.id,
     record.revision,
     {},
-  );
-});
-
-it("binds invalidation to the selected environment revision", async () => {
-  const { client, send } = fixture();
-  await loaded();
-  await updateOptions(client, (options) =>
-    options.environments.push({
-      ...options.environments[0],
-      environment_key: "f".repeat(64),
-      current_revision: 7,
-      profiles: [{ ...options.profiles[0], id: "other", name: "其他环境" }],
-    }),
-  );
-  chooseEnvironment("远程工作站 · Orca → Codex · 其他环境");
-  fireEvent.click(screen.getByText("更多设置", { selector: "summary" }));
-  fireEvent.change(screen.getByLabelText("环境失效原因"), {
-    target: { value: "账号变化" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "标记失效" }));
-  expect(send).toHaveBeenCalledWith(
-    "environment_invalidate",
-    identity.project_id,
-    1,
-    {
-      environment_key: "f".repeat(64),
-      expected_current_revision: 7,
-      reason: "账号变化",
-    },
   );
 });
 
@@ -545,23 +538,23 @@ it("keeps collapsed history concise and filters by environment or project", asyn
     ).toHaveLength(2),
   );
   expect(screen.queryByText(record.id)).toBeNull();
-  expect(screen.getByText("未通过")).toBeVisible();
+  expect(screen.getByText("未通过", { selector: "strong" })).toBeVisible();
   expect(
     screen.queryByText("original-run", { exact: false }),
   ).not.toBeInTheDocument();
-  expect(api.get).toHaveBeenCalledWith(
-    "/environment?environment_key=" + "e".repeat(64),
-    expect.anything(),
-  );
-  fireEvent.change(screen.getByLabelText("历史范围"), {
-    target: { value: "project" },
-  });
-  await waitFor(() =>
-    expect(api.get).toHaveBeenCalledWith("/environment", expect.anything()),
-  );
+  expect(api.get).toHaveBeenCalledWith("/environment", expect.anything());
   expect(
     await screen.findByText(/远程工作站 · Orca → Codex/, { selector: "p" }),
   ).toBeVisible();
+  fireEvent.change(screen.getByLabelText("历史范围"), {
+    target: { value: "e".repeat(64) },
+  });
+  await waitFor(() =>
+    expect(api.get).toHaveBeenCalledWith(
+      "/environment?environment_key=" + "e".repeat(64),
+      expect.anything(),
+    ),
+  );
   expect(send).not.toHaveBeenCalled();
 });
 
@@ -569,14 +562,16 @@ it("allows reading project history offline and disables stopping", async () => {
   const { record } = fixture(false);
   record.settled = false;
   await openHistory();
-  fireEvent.change(screen.getByLabelText("历史范围"), {
-    target: { value: "project" },
-  });
   expect(
     (await screen.findAllByRole("button", { name: "复制执行信息" })).length,
   ).toBeGreaterThan(0);
   expect(screen.queryByText(record.id)).toBeNull();
-  expect(screen.getByRole("button", { name: "停止检测" })).toBeDisabled();
+  expect(
+    within(screen.getByText("检测历史").closest("details")!).getByRole(
+      "button",
+      { name: "停止检测" },
+    ),
+  ).toBeDisabled();
 });
 
 it("locates the linked scheme and returns to the task without executing anything", async () => {
@@ -616,7 +611,7 @@ it("does not turn a project ready report into platform qualification", async () 
     },
   });
   await loaded();
-  expect(screen.getByRole("heading", { name: "检测阻断" })).toBeVisible();
+  expect(screen.getByText("检测阻断", { exact: true })).toBeVisible();
   expect(screen.queryByText("project ready")).not.toBeInTheDocument();
   expect(screen.queryByText(/opaque data/)).not.toBeInTheDocument();
 });
@@ -710,7 +705,7 @@ it("shows every environment and shared scheme without switching, with initial at
   await loaded();
   await within(overview()).findByText("远程工作站 · Orca → Codex");
   expect(
-    overviewRows().map((row) => row.querySelector("strong")?.textContent),
+    overviewRows().map((row) => row.querySelector("th")?.textContent),
   ).toEqual([
     "远程工作站 · Orca → Codex",
     "本机 · Orca → Pi",
@@ -718,10 +713,8 @@ it("shows every environment and shared scheme without switching, with initial at
     "本机 · Codex 直连",
   ]);
   expect(
-    within(environmentRow("本机 · Codex 直连")).getByText(
-      "关联方案：日常开发、深度审查",
-    ),
-  ).toBeVisible();
+    within(environmentRow("本机 · Codex 直连")).getByLabelText("检测所用方案"),
+  ).toHaveTextContent("日常开发深度审查");
   expect(within(overview()).getByRole("status")).toHaveTextContent(
     "1/4 已就绪检测中 1需要处理 2",
   );
@@ -731,7 +724,7 @@ it("shows every environment and shared scheme without switching, with initial at
   expect(send).not.toHaveBeenCalled();
 });
 
-it("updates all readiness rows in place and keeps the overview visible when details are collapsed or changed", async () => {
+it("updates readiness rows in place while keeping all detection controls visible", async () => {
   const { client, send } = fixture(
     true,
     undefined,
@@ -744,7 +737,7 @@ it("updates all readiness rows in place and keeps the overview visible when deta
   await loaded();
   await within(overview()).findByText("远程工作站 · Orca → Codex");
   const before = overviewRows().map(
-    (row) => row.querySelector("strong")?.textContent,
+    (row) => row.querySelector("th")?.textContent,
   );
   await updateOptions(client, ({ environments }) => {
     environments[0].status = "not_ready";
@@ -754,20 +747,16 @@ it("updates all readiness rows in place and keeps the overview visible when deta
     environments[1].stage = "ready";
   });
   expect(
-    overviewRows().map((row) => row.querySelector("strong")?.textContent),
+    overviewRows().map((row) => row.querySelector("th")?.textContent),
   ).toEqual(before);
   expect(
     within(environmentRow("本机 · Codex 直连")).getByText("认证已失效"),
   ).toBeVisible();
-  chooseEnvironment("远程工作站 · Orca → Codex");
   expect(
-    screen.queryByRole("region", { name: "当前运行环境" }),
-  ).not.toBeInTheDocument();
-  expect(overviewRows()).toHaveLength(4);
-  chooseEnvironment("本机 · Orca → Pi");
-  expect(
-    within(currentCard()).getByRole("heading", { name: "本机 · Orca → Pi" }),
-  ).toBeVisible();
+    within(environmentRow("本机 · Orca → Pi")).getByRole("button", {
+      name: "开始检测",
+    }),
+  ).toBeEnabled();
   expect(overviewRows()).toHaveLength(4);
   expect(send).not.toHaveBeenCalled();
 });
@@ -822,7 +811,7 @@ it("shows disabled readiness enforcement separately from actual qualification", 
   ).toBeVisible();
 });
 
-it("keeps a pending original submission visible in its row after opening another environment", async () => {
+it("keeps a pending original submission in its row while changing another scheme", async () => {
   let finish!: (accepted: boolean) => void;
   const send = vi.fn(
     () =>
@@ -832,15 +821,17 @@ it("keeps a pending original submission visible in its row after opening another
   );
   fixture(true, send, false, "", false, false, multipleEnvironments);
   await loaded();
-  fireEvent.click(screen.getByRole("button", { name: "重新检测" }));
-  await screen.findByRole("heading", { name: "正在确认启动" });
-  chooseEnvironment("本机 · Orca → Pi");
-  expect(
-    within(environmentRow("远程工作站 · Orca → Codex")).getByText(
-      "正在确认启动",
-    ),
-  ).toBeVisible();
-  chooseEnvironment("远程工作站 · Orca → Codex");
+  fireEvent.click(
+    within(remoteRow()).getByRole("button", { name: "重新检测" }),
+  );
+  await screen.findByText("正在确认启动", { exact: true });
+  fireEvent.change(
+    within(environmentRow("本机 · Codex 直连")).getByLabelText("检测所用方案"),
+    {
+      target: { value: "review" },
+    },
+  );
+  expect(within(remoteRow()).getByText("正在确认启动")).toBeVisible();
   expect(screen.getByRole("button", { name: "正在提交检测…" })).toBeDisabled();
   expect(send).toHaveBeenCalledTimes(1);
   await act(async () => {
@@ -848,7 +839,7 @@ it("keeps a pending original submission visible in its row after opening another
   });
 });
 
-it("does not steal focus back to a linked scheme after choosing another environment", async () => {
+it("does not steal focus back to a linked scheme after choosing a scheme in another row", async () => {
   fixture(
     true,
     undefined,
@@ -859,13 +850,13 @@ it("does not steal focus back to a linked scheme after choosing another environm
     multipleEnvironments,
   );
   await loaded();
-  const button = within(environmentRow("本机 · Orca → Pi")).getByRole("button");
-  button.focus();
-  fireEvent.click(button);
-  expect(document.activeElement).toBe(button);
-  expect(
-    within(currentCard()).getByRole("heading", { name: "本机 · Orca → Pi" }),
-  ).toBeVisible();
+  const select = within(environmentRow("本机 · Codex 直连")).getByLabelText(
+    "检测所用方案",
+  );
+  select.focus();
+  fireEvent.change(select, { target: { value: "review" } });
+  expect(document.activeElement).toBe(select);
+  expect(select).toHaveValue("review");
 });
 
 function fixture(

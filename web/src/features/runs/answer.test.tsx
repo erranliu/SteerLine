@@ -27,6 +27,157 @@ function render(ui: ReactNode) {
     ),
   });
 }
+it("keeps recovery locked until the original Runner action fails and retries with the current versions", async () => {
+  const api = new Api(
+    { project_id: "recovery", instance_id: "original" } as Identity,
+    "csrf",
+  );
+  vi.spyOn(api, "get").mockResolvedValue({});
+  const submit = vi.fn(async (e: Envelope) => ({ status: "applied", original: e }));
+  const workspace = {
+    api,
+    identity: api.identity,
+    online: true,
+    busy: false,
+    submit,
+  } as unknown as Workspace;
+  const run = {
+    run_id: "candidate",
+    execution_id: "original-run",
+    attempt_id: "original-attempt",
+    participation: "active",
+    workflow_status: "blocked",
+    task_status: "in_progress",
+    control_revision: 4,
+    recovery_version: 7,
+    decision: {
+      id: "resume",
+      version: 7,
+      status: "pending",
+      request: { interaction_kind: "runner_resume" },
+    },
+  } as Candidate;
+  const view = (candidate: Candidate) => (
+    <WorkspaceContext.Provider value={workspace}>
+      <Answer run={candidate} />
+    </WorkspaceContext.Provider>
+  );
+  const rendered = render(view(run));
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  const button = screen.getByRole("button", { name: "继续原任务" });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  expect(submit.mock.calls[0][0]).toMatchObject({
+    action: "answer_decision",
+    payload: {
+      run_id: "candidate",
+      source_attempt_id: "original-attempt",
+      expected_run_revision: 4,
+      expected_recovery_version: 7,
+      option_id: "resume",
+      note: "",
+    },
+  });
+  await screen.findByText("恢复请求已提交，等待状态更新。");
+  const firstRequest = submit.mock.calls[0][0];
+  const action = {
+    command: "resume",
+    request_id: "independent-runner-request",
+    caller_request_id: firstRequest.request_id,
+    receipt_state: "accepted",
+    action_status: "pending",
+  };
+  const withActions = (
+    commands: NonNullable<Candidate["runner_delivery"]>["commands"],
+    recoveryVersion = 7,
+  ) => ({
+    ...run,
+    control_revision: recoveryVersion - 3,
+    recovery_version: recoveryVersion,
+    decision: { ...run.decision!, version: recoveryVersion },
+    runner_delivery: { commands },
+  }) as Candidate;
+  const unrelatedFailure = {
+    ...action,
+    caller_request_id: "older-request",
+    action_status: "failed",
+    diagnostic: "other recovery failed",
+  };
+  rendered.rerender(view(withActions([unrelatedFailure, action])));
+  expect(screen.queryByText("other recovery failed")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "继续原任务" })).not.toBeInTheDocument();
+
+  const failed = withActions(
+    [{ ...action, action_status: "failed", diagnostic: "original history changed" }],
+    9,
+  );
+  rendered.rerender(view(failed));
+  expect(screen.getByRole("alert")).toHaveTextContent("original history changed");
+  expect(screen.queryByText("恢复请求已提交，等待状态更新。")).not.toBeInTheDocument();
+  const newerFailure = {
+    ...unrelatedFailure,
+    request_id: "other-runner-request",
+    caller_request_id: "other-caller-request",
+    diagnostic: "newer recovery failed",
+  };
+  rendered.rerender(
+    view(withActions([...failed.runner_delivery!.commands, newerFailure], 10)),
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("newer recovery failed");
+  const retry = screen.getByRole("button", { name: "继续原任务" });
+  expect(retry).toBeEnabled();
+  submit.mockImplementationOnce(async (e) => ({
+    status: "applied",
+    original: e,
+    command: { status: "confirmed" },
+  }));
+  fireEvent.click(retry);
+  fireEvent.click(retry);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+  expect(submit.mock.calls[1][0].request_id).not.toBe(firstRequest.request_id);
+  expect(submit.mock.calls[1][0].payload).toMatchObject({
+    source_attempt_id: "original-attempt",
+    expected_run_revision: 7,
+    expected_recovery_version: 10,
+    option_id: "resume",
+  });
+  expect(screen.queryByRole("button", { name: "继续原任务" })).not.toBeInTheDocument();
+  rendered.rerender(
+    view(withActions([
+      newerFailure,
+      {
+        ...action,
+        request_id: "retry-runner-request",
+        caller_request_id: submit.mock.calls[1][0].request_id,
+        action_status: "completed",
+      },
+    ], 12)),
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
+  // The bounded command summary can also drop the old completed action.
+  rendered.rerender(view(withActions([], 12)));
+  expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
+
+  rendered.unmount();
+  const reloaded = render(view(failed));
+  expect(screen.getByRole("alert")).toHaveTextContent("original history changed");
+  expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
+  submit.mockImplementationOnce(async (e) => ({
+    status: "rejected",
+    original: e,
+    diagnostic: "local request rejected before reaching Runner",
+  }));
+  fireEvent.click(screen.getByRole("button", { name: "继续原任务" }));
+  await screen.findByText("local request rejected before reaching Runner");
+  reloaded.rerender(
+    view(withActions([...failed.runner_delivery!.commands, newerFailure], 10)),
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("newer recovery failed");
+  expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
+});
+
 it("submits native multi-question JSON once without duplicating it as a note", async () => {
   const api = new Api(
     { project_id: "native-multi", instance_id: "original" } as Identity,

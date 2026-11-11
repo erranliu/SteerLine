@@ -24,7 +24,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	p := s.NewProject(name)
 	p.Chain = chain
 	p.Driver.NativeHome = s.Run.AuthHome
-	if s.ID == "smoke.local-codex" || s.ID == "workflow.local-codex-audited" {
+	if s.ID == "smoke.local-codex" || s.ID == "workflow.local-codex-audited" || s.ID == "refactoring.local-codex" {
 		p.enableGitHub()
 	}
 	codex, err := driver.CodexExecutable("codex")

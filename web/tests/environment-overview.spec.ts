@@ -41,7 +41,7 @@ test.afterAll(async () => {
   );
 });
 
-test("all environment readiness remains visible across detail changes, refresh failures and responsive layouts", async ({
+test("all environment readiness remains visible with inline actions across refresh failures and responsive layouts", async ({
   page,
 }, info) => {
   const project = "a".repeat(64);
@@ -208,7 +208,6 @@ test("all environment readiness remains visible across detail changes, refresh f
   await page.goto(`${origin}/projects/${project}/environment`);
   const overview = page.getByRole("region", { name: "全部运行环境" });
   const rows = overview.locator("tbody tr");
-  const detail = page.getByRole("region", { name: "当前运行环境" });
   await expect(rows).toHaveCount(4);
   const copyPrompt = page.getByRole("button", { name: "复制修正环境提示词" });
   await expect(copyPrompt).toBeEnabled();
@@ -222,18 +221,26 @@ test("all environment readiness remains visible across detail changes, refresh f
     ),
   ).toBe(repairPrompt);
   await expect(overview.getByRole("status")).toContainText("1/4 已就绪");
-  await expect(rows.locator("td:first-child strong")).toHaveText([
+  await expect(rows.locator("th[scope=row]")).toHaveText([
     "本机 · Orca → Codex",
     "本机 · Orca → Pi",
     "本机 · Orca → DSH",
     "本机 · Codex 直连",
   ]);
   await expect(page.getByLabel("运行环境", { exact: true })).toHaveCount(0);
-  expect(reads.some((path) => path.endsWith("/environment/materials"))).toBe(
-    false,
-  );
-  await rows.first().getByRole("button", { name: "收起详情" }).click();
-  await expect(detail).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "准备要求" })).toBeVisible();
+  await expect(
+    page.getByText("准备 Git 和 Agent 登录，再开始检测。"),
+  ).toBeVisible();
+  expect(
+    reads.filter((path) => path.endsWith("/environment/materials")),
+  ).toHaveLength(1);
+  await expect(
+    page.getByRole("button", { name: /查看详情|收起详情|标记失效/ }),
+  ).toHaveCount(0);
+  await expect(
+    rows.nth(1).getByRole("button", { name: "开始检测" }),
+  ).toBeEnabled();
   for (const width of [1440, 800, 375, 960, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(rows).toHaveCount(4);
@@ -260,14 +267,6 @@ test("all environment readiness remains visible across detail changes, refresh f
       .screenshot({ path: info.outputPath(`overview-${width}.png`) });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await rows.nth(1).getByRole("button", { name: "查看详情" }).click();
-  await expect(
-    detail.getByRole("heading", { name: "本机 · Orca → Pi" }),
-  ).toBeVisible();
-  await detail.getByText("查看准备要求", { exact: true }).click();
-  await expect(
-    detail.getByText("准备 Git 和 Agent 登录，再开始检测。"),
-  ).toBeVisible();
   await expect(rows).toHaveCount(4);
   environments[0].stage = "blocked";
   environments[0].status = "not_ready";
@@ -283,5 +282,59 @@ test("all environment readiness remains visible across detail changes, refresh f
   );
   await expect(overview.getByText("待核实", { exact: true })).toHaveCount(4);
   expect(writes).toEqual([]);
+
+  failure = false;
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.getByRole("button", { name: "刷新环境", exact: true }).click();
+  const pi = rows.nth(1);
+  const start = pi.getByRole("button", { name: "开始检测", exact: true });
+  await expect(start).toBeEnabled();
+  let finishSubmission!: () => void;
+  const responseAllowed = new Promise<void>((resolve) => {
+    finishSubmission = resolve;
+  });
+  const commands: unknown[] = [];
+  await page.route("**/commands", async (route) => {
+    const envelope = route.request().postDataJSON();
+    commands.push(envelope);
+    await responseAllowed;
+    await route.fulfill({
+      json: {
+        ...envelope,
+        original: envelope,
+        status: "rejected",
+        code: "fixture_rejected",
+      },
+    });
+  });
+  try {
+    await start.click();
+    await expect(pi.locator(".submission-status")).toContainText(
+      "正在提交检测…",
+    );
+    await expect(
+      pi.getByRole("button", { name: "正在提交检测…" }),
+    ).toBeDisabled();
+    await expect(
+      rows.first().getByRole("button", { name: "开始检测" }),
+    ).toBeEnabled();
+    await expect
+      .poll(() => commands)
+      .toEqual([
+        expect.objectContaining({
+          action: "environment_start",
+          target_id: project,
+          payload: {
+            environment_key: "pi",
+            profile_id: "pi-0",
+            expected_current_revision: 1,
+            round_timeout_seconds: 3600,
+          },
+        }),
+      ]);
+  } finally {
+    finishSubmission();
+  }
+  await expect(start).toBeEnabled();
   expect(errors).toEqual([]);
 });

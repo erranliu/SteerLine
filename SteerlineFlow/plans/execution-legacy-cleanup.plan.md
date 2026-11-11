@@ -9,7 +9,7 @@
 3. 同步固定 L1 的包登记，移除已无测试的 `execution/model`；现有 DTO 守卫发现的环境检查冗余 RawMessage 别名改为直接使用标准库类型，保持 JSON 与行为不变。
 4. 同步当前代码架构、生命周期归属和测试说明，结果登记[专属验收](../testing/acceptance/execution-legacy-cleanup.md)。历史冻结 Spec/Plan 和验收事实不改写。
 
-不改变 CLI/HTTP、数据库格式、原请求对账、Runner 输入/恢复或交付行为；不移动现有包，不引入兼容、迁移或替代状态机。W01–W18、E01–E07、V01–V08 继续以 [worker lifecycle](../../docs/product-design/worker-lifecycle.md)为准，本次仅清理本仓已无调用者的旧实现。
+不改变 CLI/HTTP、数据库格式、原请求对账、Runner 输入/恢复或交付行为；不移动现有包，不引入兼容、迁移或替代状态机。W01–W18、E01–E07、V01–V08 继续以 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)为准，本次仅清理本仓已无调用者的旧实现。
 
 ## 测试计划
 

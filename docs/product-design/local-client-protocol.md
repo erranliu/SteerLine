@@ -37,7 +37,7 @@
 
 final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取，单页最多 256 KiB，核对原 Attempt、revision、SHA-256 和 UTF-8 offset。来源规则见[公开会话结果](execution-observability.md#公开结果来源)，不回退原生日志。
 
-候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](worker-lifecycle.md)。
+候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](runner-lifecycle.md)。
 
 准备等待沿原候选 `runner_delivery.execution_wait` 返回完整 `steerrunner-execution-wait/v1` 对象或 null，activity 的 `kind=execution_wait` 保留 `meta.execution_wait`。只展示，不新增计时命令；读取异常保留最后已知值并标待核实。字段及验证范围见[等待 Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)。
 
@@ -103,6 +103,10 @@ Web 只作受限同源 `/api/v2/application/...` 转接；原生 `/native/identi
 检测详情和历史的 `blocked` 是原 Run 阻断事实的只读投影，`timed_out` 表示整次检测已超时；两者不改写 `state`、`settled` 或停止资格。未就绪时，顶层诊断优先保留原活动原因，缺少说明时读取当前轮及原 Run 诊断，首次提交错误继续保留。未结算阻断在环境页显示“检测阻断”，活动中心列入进行中及需要关注；指定检测 ID 的详情沿原号轮询，不自动停止或重试。
 
 ## 项目维护动作与能力边界
+
+重构与维护独立于下表的项目基线维护：`GET /refactoring`、`GET /refactoring/<action-id>` 只读取保存事实；`refactoring_start/answer/finish/stop/conflict` 沿同一命令信封及 journal，回执的 `refactoring` 仅含行动 ID/版本。启动 target 是 repository_identity、版本 1；后继操作 target 为原行动，采用其版本；停止/结束允许同一行动的较早已知版本，人工答复仍须匹配原 question_id 和当前版本。详情不返回冻结执行 settings 或传输原请求。完整规则归[产品设计](refactoring-maintenance.md)与[路由](../../internal/app/refactoring_routes.go)。
+
+`GET /refactoring/readiness?profile=<id>` 以已观察的基线核实所选执行配置的运行环境资格，返回目标分支、项目基线、运行环境状态与诊断。省略 `profile` 时只核实项目基线。该查询不会发起远端同步或环境检测，启动命令会重新核验。
 
 维护动作沿原项目 actor、命令 journal 和原请求回执，不使用图/控制 revision。
 

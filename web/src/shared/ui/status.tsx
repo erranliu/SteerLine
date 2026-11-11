@@ -3,6 +3,9 @@ const labels: Record<string, string> = {
   pending: "待执行",
   running: "运行中",
   in_progress: "执行中",
+  task_starting: "启动中",
+  task_start_unknown: "启动结果待确认",
+  task_start_failed: "启动失败",
   waiting: "等待中",
   completed: "本轮完成",
   merged: "已合并",
@@ -32,12 +35,19 @@ const labels: Record<string, string> = {
   waiting_input: "待回答",
   waiting_external: "等待外部事实",
   reconciling: "核实中",
+  observation_reconnecting: "正在重连",
   abandoned: "已停止参与",
 };
 export const label = (status: string) => labels[status] ?? status ?? "未知";
-export function Status({ value }: { value: string }) {
+export function Status({
+  value,
+  appearance = value,
+}: {
+  value: string;
+  appearance?: string;
+}) {
   return (
-    <span className={"status status-" + value}>
+    <span className={"status status-" + appearance}>
       {label(value || "unknown")}
     </span>
   );

@@ -135,8 +135,11 @@ func Calculate(u Usage, p Policy) (Estimate, error) {
 	if err := p.Validate(); err != nil {
 		return e, err
 	}
-	if u.RunID == "" || u.Revision == 0 || u.Scope != "main_session" || len(u.Records) > MaxRecords {
+	if u.RunID == "" || u.Revision == 0 || (u.Scope != "main_session" && u.Scope != "runner_internal") || len(u.Records) > MaxRecords {
 		return e, errors.New("invalid usage identity or record budget")
+	}
+	if u.Scope == "runner_internal" {
+		e.Assumptions = []string{"按约定配置模型估算，非实际账单；仅已登记内部调用，不含子 Agent、工具内部模型和不可观测供应商调用。"}
 	}
 	sum := new(big.Rat)
 	seen := map[string]bool{}

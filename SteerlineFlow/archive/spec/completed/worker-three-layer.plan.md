@@ -6,7 +6,7 @@
 
 ## 输入与源码调查
 
-调查基线 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`。已完整读取 `docs/spec/SpecGuide.md`，该基线 Git blob 为 `cb77f165b80f6e7bbb09fe190d0f86b97201e2c3`；依仓库开发规则作为普通开发编写，不执行产品 roadmap 转正/调度。已读取[长期流程](../../../../docs/product-design/worker-lifecycle.md)、[PR 契约](../../../spec/worker-pr-flow.spec.md)、[核心恢复](../../../spec/worker-disconnect-recovery.spec.md)、[停机恢复](../../../spec/worker-stop-recovery.spec.md)、[原会话边界](product-simplification-04-conversation-recovery.spec.md)、[屏幕核验移除记录](../../../testing/acceptance/workflow-verification.md)及[测试入口](../../../../tests/e2e/README.md)。
+调查基线 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`。已完整读取 `docs/spec/SpecGuide.md`，该基线 Git blob 为 `cb77f165b80f6e7bbb09fe190d0f86b97201e2c3`；依仓库开发规则作为普通开发编写，不执行产品 roadmap 转正/调度。已读取[长期流程](../../../../docs/product-design/runner-lifecycle.md)、[PR 契约](../../../spec/worker-pr-flow.spec.md)、[核心恢复](../../../spec/worker-disconnect-recovery.spec.md)、[停机恢复](../../../spec/worker-stop-recovery.spec.md)、[原会话边界](product-simplification-04-conversation-recovery.spec.md)、[屏幕核验移除记录](../../../testing/acceptance/workflow-verification.md)及[测试入口](../../../../tests/e2e/README.md)。
 
 实施基线：主干 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`，设计文档固定提交 `34418bd963af75b727850272dcffc1275690e99c`（本 Spec/Plan 路径）。随后用户补充的适用性要求纳入本次实施文档与实现；候选验证同时保存 runner source_commit 和工作树差异。保留他人改动，使用最新已核实基线实施，发现影响本范围的差异先更新调查与计划。
 

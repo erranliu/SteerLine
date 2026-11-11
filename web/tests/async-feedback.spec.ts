@@ -45,9 +45,10 @@ test("explicit submissions give immediate local feedback without a second coordi
   await page.goto(opening);
   const root = new URL(`/projects/${project}`, page.url()).href;
   await page.goto(root + "/roadmaps");
-  await expect(
-    page.getByRole("switch", { name: "自动派发" }),
-  ).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("switch", { name: "自动派发" })).toHaveAttribute(
+    "aria-checked",
+    "false",
+  );
   const parse = page.getByRole("button", {
     name: "Runner generate · 解析任务与依赖",
     exact: true,
@@ -118,7 +119,7 @@ test("explicit submissions give immediate local feedback without a second coordi
   await page.goto(root + "/environment");
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 760 });
-  const environment = page.getByRole("region", { name: "当前运行环境" });
+  const environment = page.getByRole("region", { name: "全部运行环境" });
   await expect(
     environment.getByRole("button", { name: "重新检测", exact: true }),
   ).toBeEnabled();
@@ -151,9 +152,7 @@ test("explicit submissions give immediate local feedback without a second coordi
   await expect
     .poll(() => commands.filter((c) => c.action === "environment_start").length)
     .toBe(1);
-  await expect(
-    page.getByRole("heading", { name: "已就绪", exact: true }),
-  ).toBeVisible();
+  await expect(environment.getByText("已就绪", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 720, height: 500 });
   await environment
     .getByRole("button", { name: "查看活动", exact: true })

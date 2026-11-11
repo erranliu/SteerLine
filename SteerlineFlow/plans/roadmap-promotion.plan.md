@@ -65,7 +65,7 @@ Runner aa8c392f9798d05184788d83947dd7bf4afc75a6 已交付 generate/1 的可选 r
 
 ## 4. 状态与恢复落实
 
-遵循 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)与当前生成/服务换代规则。本次差异仅为两类内容操作（解析、文档生成）、文档发布和 Task 入图的业务身份及结果。内容 Run 不转成 Candidate，发布记录不伪装 Runner 执行状态。
+遵循 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)与当前生成/服务换代规则。本次差异仅为两类内容操作（解析、文档生成）、文档发布和 Task 入图的业务身份及结果。内容 Run 不转成 Candidate，发布记录不伪装 Runner 执行状态。
 
 原请求绑定用途、项目/home/仓库、固定输入、profile和构建，保存后才调用。结果必须核实来源/完整性，再以原确认版本应用；迟到旧结果仅属历史。未确定/取消/停止/资源结算分别保存，不因页面刷新或重启换号重发。
 

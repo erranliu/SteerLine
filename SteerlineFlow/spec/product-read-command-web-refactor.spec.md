@@ -129,4 +129,4 @@ API 命名中的 RunID/ExecutionID、WorkflowSummary 等暂不整体改名；Hos
 | RCW-A05 | Web 连接/原请求副作用归口，StrictMode、切换/离线/卸载取消、原 home/实例失效范围与 journal/重放资格保持 |
 | RCW-A06 | 设置及操作组件搬动后原路由/缓存/回执和相关功能测试、TypeScript/Vite build 通过；选定受控命令链的隔离边界通过并清理 |
 
-自动项的最小命令、环境、时点、通过条件和证据位置由 Plan 映射。统一 worker 规则仍归 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md)：关联 W12/W17 的展示与原请求边界及 V06/V08；不改变任何 W/E 节点、异常分类或原生恢复/停止矩阵。当前仅审计和设计，不以文档通过声称产品验收完成。
+自动项的最小命令、环境、时点、通过条件和证据位置由 Plan 映射。统一 worker 规则仍归 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)：关联 W12/W17 的展示与原请求边界及 V06/V08；不改变任何 W/E 节点、异常分类或原生恢复/停止矩阵。当前仅审计和设计，不以文档通过声称产品验收完成。

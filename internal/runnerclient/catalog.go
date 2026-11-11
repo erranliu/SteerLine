@@ -34,6 +34,13 @@ type Capabilities struct {
 		RunProperty     string `json:"run_property"`
 		SurvivesRestart bool   `json:"survives_service_restart"`
 	} `json:"workspace_write,omitempty"`
+	WorktreeReuse *struct {
+		InputProperty      string `json:"input_property"`
+		Workflow           string `json:"workflow"`
+		NewSession         bool   `json:"new_session"`
+		ArbitraryDirectory bool   `json:"arbitrary_directory"`
+		OptionalFileWrites string `json:"optional_file_writes"`
+	} `json:"worktree_reuse,omitempty"`
 	ExecutionConfiguration json.RawMessage           `json:"execution_configuration"`
 	ModelInputContract     json.RawMessage           `json:"model_input_contract"`
 	Recovery               *RecoveryCapability       `json:"recovery,omitempty"`

@@ -89,10 +89,13 @@ func (p *environmentPort) configurationOptions() environmentOptions {
 
 func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 	ctx = materialReads(ctx)
+	commit, sourceErr := p.observedSource(ctx, true)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	environments := p.configurationOptions().Environments
 
 	rows, historyErr := p.store.Environments(ctx, p.config.Identity())
-	commit, sourceErr := p.observedSource(ctx)
 	for i := range environments {
 		item := &environments[i]
 		id := item.Profiles[0].ID

@@ -28,7 +28,7 @@
 4. Git 停在冲突时，SteerLine 核验 Rebase 仍属于原分支和目标，保存检查点和冲突文件，并在本地写入结算后以原租约 ID 和当前 revision 调用 `workspace release`。Runner 恢复 `owner=runner` 且 `controls.can_message=true` 后，用户可一键向原会话发送固定短指令。SteerAgent 在原 worktree 修复并继续原 Rebase。需要取舍时，用户可回答原生问题或在下一轮冲突处理中补充决定。普通规划消息、新 Rebase 与发布在此期间保持禁用。
 5. SteerLine 区分仍有冲突、冲突已暂存但 Rebase 仍在进行、Rebase 完成及异常中止。前两种都可在原会话继续。以原分支恢复、目标 commit 的祖先关系、Rebase 元数据消失和无未合并索引共同核验完成。未知结果保留现场和最近有效预览。用户也可显式中止已核实的原 Rebase，由 SteerLine 在租约下中止并核对检查点恢复结果。开始 Rebase 即撤销未发布的旧审阅确认，完成后按新基线刷新预览和 diff。
 
-Runner 租约跨重启保留且无自动过期，持有期间包括 `message`、`close`、`stop` 在内的新 Run 控制会被拒绝。SteerLine 持久保存原 acquire/release 信封和本地操作阶段。恢复时通过原 `request_id` 对账回执，再以当前 Run 投影确定租约。匹配的租约只有在本地写入已结算后才可归还。已归还的租约只补记归还事实，其他租约或未知本地写者保留阻断。Runner 离线时只读核对，启动同构建服务时延后提交受租约阻挡的停止命令。归还核实后再执行原会话关闭并核实停止。适用边界见[宿主和 Runner 协作](../../docs/integration/steerrunner.md)及[生命周期约定](../../docs/product-design/worker-lifecycle.md)。
+Runner 租约跨重启保留且无自动过期，持有期间包括 `message`、`close`、`stop` 在内的新 Run 控制会被拒绝。SteerLine 持久保存原 acquire/release 信封和本地操作阶段。恢复时通过原 `request_id` 对账回执，再以当前 Run 投影确定租约。匹配的租约只有在本地写入已结算后才可归还。已归还的租约只补记归还事实，其他租约或未知本地写者保留阻断。Runner 离线时只读核对，启动同构建服务时延后提交受租约阻挡的停止命令。归还核实后再执行原会话关闭并核实停止。适用边界见[宿主和 Runner 协作](../../docs/integration/steerrunner.md)及[生命周期约定](../../docs/product-design/runner-lifecycle.md)。
 
 ## 审阅、发布和交接
 

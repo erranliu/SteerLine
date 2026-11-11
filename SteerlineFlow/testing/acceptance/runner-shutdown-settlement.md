@@ -1,6 +1,6 @@
 # Runner 停服最终结算
 
-普通开发修复（2026-10-16），不进入 roadmap DAG。对应 W18、E04/E05、V06/V07，统一规则见 [worker lifecycle](../../../docs/product-design/worker-lifecycle.md)。
+普通开发修复（2026-10-16），不进入 roadmap DAG。对应 W18、E04/E05、V06/V07，统一规则见 [Runner 调用生命周期](../../../docs/product-design/runner-lifecycle.md)。
 
 问题：部署前 stop 已等待 Runner 服务退出，却使用停机前的候选投影判定原生资源。正常本地关闭后的最终 stopped 无法经已退出服务查询，导致误报资源未核实。
 
