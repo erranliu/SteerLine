@@ -13,7 +13,7 @@
 - 把现有 `runnerPRBinding` 的纯绑定规则收口为查询前与事务内复用的规则。调用方以原候选快照固定 PR 对象。保持正常 Runner 投影同步，在已绑定的查询路径移除 `Bridge.RefreshPR` / `ObservePR` 的依赖；确认无其余调用后清理 SteerLine 的专用刷新包装。
 - 让 `Service.Deliver`、`Actor.TickPR` 和 `Service.Discard` 共用查询能力，保持原触发时点、候选参与规则与重放顺序。废弃记录本次候选集合和每个原 PR 的观察；任一候选未知或已合入时沿原分支退出。
 - 调整 `RunnerResult` / `RunnerDiscard` 的内部提交入参携带本次平台证据。SQLite 事务在写入前重读并比对候选、原 PR 绑定和版本；保持原有 TaskDelivery/TaskDiscard、图推进、停止义务、PR 唯一性和幂等事务。继续使用现有任务交付记录作为成功后的产品读取依据，不增加平台查询历史表。查询失败沿现有待核实与服务诊断入口返回。
-- 复核成功交付后的读取，确保已交付任务从 TaskDelivery 显示合入事实，Runner 投影仍显示其自身历史观察。切换通过后同步[可靠交付链](../../docs/architecture/reliable-delivery-chain.md)和[Runner 接入说明](../../docs/integration/steerrunner.md)的当前职责说明。既有运行/停止异常规则沿[统一 worker 生命周期](../../docs/product-design/worker-lifecycle.md)，本项差异限于业务提交前的取证来源与提交输入。
+- 复核成功交付后的读取，确保已交付任务从 TaskDelivery 显示合入事实，Runner 投影仍显示其自身历史观察。切换通过后同步[可靠交付链](../../docs/architecture/reliable-delivery-chain.md)和[Runner 接入说明](../../docs/integration/steerrunner.md)的当前职责说明。既有运行/停止异常规则沿[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，本项差异限于业务提交前的取证来源与提交输入。
 
 ## 3. 验证与验收
 

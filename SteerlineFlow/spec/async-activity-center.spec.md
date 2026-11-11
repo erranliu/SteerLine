@@ -32,7 +32,7 @@
 | 候选保存 caller 参与关系和公开 Runner 投影；TaskDelivery 独立 | `internal/runnerstate/candidate.go`、`internal/taskrunner/projection.go`、`internal/product/query/pages.go`、`web/src/features/runs/state.ts` | 候选 ID 与 Runner Run ID 分开；同 Task 的并行候选分别展示，不能以原生轮次结束直接宣布任务交付 |
 | 测试进度来自已核验的 progress-file；布尔 false 代表未完成 | `internal/testmanagement/progress.go`、[运行时进度契约](../../docs/integration/runtime-progress.md) | 只复用已保存的测试进度，不另拉 Runner、不把 false 当作失败、不据此修改执行终态 |
 
-上述文件说明当前基础，不代表活动中心已实现。通用异常、原请求、恢复和资源所有权遵循 [worker 生命周期](../../docs/product-design/worker-lifecycle.md)；本期没有新增执行恢复规则。
+上述文件说明当前基础，不代表活动中心已实现。通用异常、原请求、恢复和资源所有权遵循 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)；本期没有新增执行恢复规则。
 
 ## 3. 所有权与解耦边界
 

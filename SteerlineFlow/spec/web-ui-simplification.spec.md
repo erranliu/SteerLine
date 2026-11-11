@@ -10,7 +10,7 @@
 
 本次只改变信息层级、显示文案和布局，不新增后端 API、数据库状态、Runner 契约、执行链路或通用展示配置框架。不引入“普通/专家模式”开关，不新增调试信息面板，不为旧版界面或开发数据提供兼容路径。
 
-业务权威及 W01–W18、E01–E07、V01–V08 沿用 [worker 生命周期](../../docs/product-design/worker-lifecycle.md)。等待按 [Runner 等待规则](runner-wait-retry.spec.md)，测试按 [运行时测试进度](runtime-test-progress.spec.md)，参与退出按 [候选停止规则](candidate-stop.spec.md)及[可靠性边界](candidate-stop-reliability.spec.md)。本次没有新的重试、恢复、交付或停止规则。
+业务权威及 W01–W18、E01–E07、V01–V08 沿用 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)。等待按 [Runner 等待规则](runner-wait-retry.spec.md)，测试按 [运行时测试进度](runtime-test-progress.spec.md)，参与退出按 [候选停止规则](candidate-stop.spec.md)及[可靠性边界](candidate-stop-reliability.spec.md)。本次没有新的重试、恢复、交付或停止规则。
 
 ## 2. 现有依据与整合方向
 

@@ -2,7 +2,7 @@
 
 归档于 2026-11-06。汇集执行、数据、配置、进度、协议、安装/调试及项目维护整理前引用的契约、验收和 Runner 来源，保留各记录的受测版本、失败、通过及未验范围。历史通过不自动赋予当前构建执行或恢复资格；安装状态按实际部署记录判断。
 
-当前说明：[Worker 生命周期](../../../docs/product-design/worker-lifecycle.md) · [可靠性交付链路](../../../docs/architecture/reliable-delivery-chain.md) · [Runner 接入](../../../docs/integration/steerrunner.md)。
+当前说明：[Runner 调用生命周期](../../../docs/product-design/runner-lifecycle.md) · [可靠性交付链路](../../../docs/architecture/reliable-delivery-chain.md) · [Runner 接入](../../../docs/integration/steerrunner.md)。
 
 ## 设计来源
 

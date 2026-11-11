@@ -133,7 +133,7 @@ Web 比较同 home/当前宿主实例的 loaded_execution_digest 与 saved_diges
 
 文件变化后当前宿主仍按既有配置一致性门槛拒绝新候选；Web 新启动入口显示需重启，CLI 等其他消费者同样不能绕过。旧 Run 的观察、原请求对账和停止沿原持久绑定；其他业务输入继续受原授权/实例/配置门槛约束，不保证换配置后任意输入仍可受理。用户使用现有正式 restart 或 stop/start 流程生效；刷新页面、重启 Web、重启 Runner 本身均不构成应用配置重载。
 
-重启后新候选使用新目录，既有候选的 ID/name、完整提交、参数摘要、Run/input_digest 等仍取其冻结记录。关闭 Web 或删除探测缓存后，新加载的合法配置仍可由执行服务/CLI 使用；不为此增加 probe ID、目录命中或查询成功门禁。服务/构建换代和 stop/reply/resume 的行为统一链接[既有协作规则](runner-collaboration.spec.md#4-冻结摘要与配置变化)及[当前生命周期规则](../../docs/product-design/worker-lifecycle.md)，不复制另一套恢复状态机。本文不改变 W/E/V 节点、异常、重试及恢复矩阵。
+重启后新候选使用新目录，既有候选的 ID/name、完整提交、参数摘要、Run/input_digest 等仍取其冻结记录。关闭 Web 或删除探测缓存后，新加载的合法配置仍可由执行服务/CLI 使用；不为此增加 probe ID、目录命中或查询成功门禁。服务/构建换代和 stop/reply/resume 的行为统一链接[既有协作规则](runner-collaboration.spec.md#4-冻结摘要与配置变化)及[当前生命周期规则](../../docs/product-design/runner-lifecycle.md)，不复制另一套恢复状态机。本文不改变 W/E/V 节点、异常、重试及恢复矩阵。
 
 ## 8. 最小验收与交付
 

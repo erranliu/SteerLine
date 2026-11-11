@@ -39,7 +39,7 @@
 
 1. 队列身份使用 generation_id，批次不占名额；UpdateContent 和重建均使用执行项 CreatedAt，首轮同刻沿原 ID 规则排序，重生成追加时固定新时间，不能借批次旧时间插队。现有 ObserveNext 遍历任务执行；复用原 dispatch/observe/stop 的单 Run 处理规则，改为更新选中执行项再 CAS 保存外层记录。只在 roadmap 包内拆小函数，不新建执行器接口、通用批次框架或后台提交线程池；逐项短提交后由 Runner 异步并行。
 2. 每项分别观察/结算，失败但未 stopped 保持占位；按 local_key 取最后一项推导进度。一个保存冲突须重读原执行事实，不能覆盖整份数组；任何提交未知只核实该项原请求。
-3. 停止先保存原文档记录 Cancelled，再持久化/逐项履行停止责任。原 Roadmap 包提供一处执行枚举，供派发、队列重建及 App 恢复/停止读取，避免各消费者分别猜根级/数组形态；同步 Settled/ObservationComplete 按全部执行事实判定。复用 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)，不另建重启流程或部署协议。
+3. 停止先保存原文档记录 Cancelled，再持久化/逐项履行停止责任。原 Roadmap 包提供一处执行枚举，供派发、队列重建及 App 恢复/停止读取，避免各消费者分别猜根级/数组形态；同步 Settled/ObservationComplete 按全部执行事实判定。复用 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，不另建重启流程或部署协议。
 4. 增加窄命令 `roadmap_retry_documents`：target 为原文档记录，expected_version 为其 revision，payload 为 `{local_key:...}`。一次只处理一个失败且结算任务；停止、有问题需重规划、发布中/已发布及其它不合格状态拒绝。页面逐行提供按钮，不新增多选状态。资格还须沿原同来源检查排除其它未结算记录/在途发布，并拒绝同来源已有更新文档批次的历史记录；重生成检查跳过当前文档记录，允许其它任务继续运行时重生成已结算失败项。从既有 CreatedAt/ID 推导最新批次，不维护 latest 字段。新建生成/重生成及其原回执核实共用既有 generationMu；首次发布意图的资格检查/保存也在一致锁序的既有写入边界串行重核。模型及远端发布操作在该锁外；初次生成沿用既有 generationMu 覆盖只读 Git 材料准备至意图保存，保证原请求核实不会把仍在准备的请求判为未提交。此处不新增 preparing 状态、两阶段提交或额外在途索引；重生成与首次发布意图检查/保存仍为短临界区。
 5. 原请求号绑定文档记录和 local_key，幂等写入新执行及请求关联。最后追加项自然成为该任务当前执行，历史/成功项保留；已有观察按 generation_id 更新对应项并经 CAS 保存，不能按数组下标或旧快照写回整个记录。不重确认、不改固定上下文。
 

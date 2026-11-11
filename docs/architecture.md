@@ -35,7 +35,7 @@ Runner 在任务要求与授权内管理内部 workflow；需要补充任务依�
 
 ## 生命周期、反馈与恢复
 
-共享后端承载独立的项目运行时，应用宿主持有一个 home 级 Runner。关闭 Web 只结束观察；项目本地关闭、共享服务退出和原生资源结算分别核验。反馈和恢复绑定原目标、当前资格与授权；当前 Runner v8 换构建须先排空，不接管活动任务。节点、异常、候选退出及停止规则见[Worker 生命周期](product-design/worker-lifecycle.md)，操作见[安装部署](integration/install-deploy.md)。
+共享后端承载独立的项目运行时，应用宿主持有一个 home 级 Runner。关闭 Web 只结束观察；项目本地关闭、共享服务退出和原生资源结算分别核验。反馈和恢复绑定原目标、当前资格与授权；当前 Runner v8 换构建须先排空，不接管活动任务。节点、异常、候选退出及停止规则见[Runner 调用生命周期](product-design/runner-lifecycle.md)，操作见[安装部署](integration/install-deploy.md)。
 
 ## 文档职责
 

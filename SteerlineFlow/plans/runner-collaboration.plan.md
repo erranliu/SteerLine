@@ -56,7 +56,7 @@ Runner 实施在其仓库维护本次 schema 增量和测试资产的专属验�
 2. 扩展既有 live driver 支持传入完整审计预设及两种显式模型，增加 `workflow.local-codex-audited` / L3 live / `TestWorkflowLocalCodexAudited`。同步 `tests/e2e/suites.json`、选择校验、驱动映射、E2E 可读清单和证据校验；规划文档不提前登记为可运行。此场景不作为现有 L2 的别名，也不默认加入完整 L2。
 3. 新场景在分级隔离夹具内准备 SteerlineTest 专属 base/head/任务，从 SteerLine 正式入口选择审计预设，走 Runner/Codex 实施、报告、两项审计、发布、真实 PR 合并、唯一交付和后继 ready。在同一 Run 的实施、审计及发布时点，经 SteerLine 正式详情查询核对 workflow ID/version、materials 的固定来源/摘要、当前轮次 requested_model/effort；两项审计完成后核对 audit 的模型、结果/来源/repair_count。经正式历史查询核对其预设/workflow 摘要与候选/Runner Run 关联，历史不必新增完整材料/审计正文。记录实际 revision 与原 CLI inspect 的公开投影作为对照，保留产品响应和原候选记录；不能绕开 caller 直接查 Runner 后宣称产品字段接通。合理轮询但不新增模型轮次。驱动不代写业务实现、commit/push/PR，不强迫模型制造 finding。修复预算/故障矩阵仍在 Runner。
 4. 现有 controlled `smoke.delivery` 作为业务交付回归；新 L3 验证新增 workflow 的真实产品接线。真实链需要目标构建的执行权限/登录就绪，失败记录真实缺口，不降低为模拟成功。停止/清理按原资源和 PR/ref SHA 核对，失败保留诊断。
-5. 修正 `docs/architecture.md`、`architecture/current-code-architecture.md`、`product-design/execution-profiles.md`、`product-design/worker-lifecycle.md`、`product-design/README.md`、`integration/steerrunner.md` 及数据模型来源说明：当前 workflow owner/版本、四种数据、摘要职责、短目录和身份映射。旧 development/v3/worker-flow-v2 只在其历史/Task 契约语境出现，不再写作 SteerLine 当前执行引擎。冻结 commit 的历史证据不改写。实际测试结果登记本任务验收；全局正文只陈述本次真正实现的契约。
+5. 修正 `docs/architecture.md`、`architecture/current-code-architecture.md`、`product-design/execution-profiles.md`、`product-design/runner-lifecycle.md`、`product-design/README.md`、`integration/steerrunner.md` 及数据模型来源说明：当前 workflow owner/版本、四种数据、摘要职责、短目录和身份映射。旧 development/v3/worker-flow-v2 只在其历史/Task 契约语境出现，不再写作 SteerLine 当前执行引擎。冻结 commit 的历史证据不改写。实际测试结果登记本任务验收；全局正文只陈述本次真正实现的契约。
 
 ## 3. 测试计划
 

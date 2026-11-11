@@ -2,7 +2,7 @@
 
 归档于 2026-11-06。以下保留 2026-10-21 经审计的简化方案及 SIM-A01–A09 验证约束，供原 Plan 和审计记录追溯；不作为当前接入、升级或恢复指引。原方案基于 SteerLine `9e02854e` 加当时部署恢复修改、Runner `8261310d`。部分方案后来实施，部分仍未实施，逐项结果见[实施验收](../../testing/acceptance/reliability-simplification.md)。
 
-当前 Runner v8 换构建须先排空，不支持本文背景中的活动任务跨构建接管。当前规则见[Worker 生命周期](../../../docs/product-design/worker-lifecycle.md)、[可靠性交付链路](../../../docs/architecture/reliable-delivery-chain.md)和[安装部署](../../../docs/integration/install-deploy.md)。历史验收结论、原版本及失败记录保持原意。
+当前 Runner v8 换构建须先排空，不支持本文背景中的活动任务跨构建接管。当前规则见[Runner 调用生命周期](../../../docs/product-design/runner-lifecycle.md)、[可靠性交付链路](../../../docs/architecture/reliable-delivery-chain.md)和[安装部署](../../../docs/integration/install-deploy.md)。历史验收结论、原版本及失败记录保持原意。
 
 ## 可以简化的流程
 

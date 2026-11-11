@@ -4,7 +4,7 @@
 
 状态：已实施，约定自动验收完成（2026-10-14，见专属验收）；不包含安装更新或现场恢复。普通开发，不分配 Task ID，不修改 roadmap 或 execution-map。
 
-[Plan](worker-three-layer.plan.md) · [专属验收](../../../testing/acceptance/archive/completed/worker-three-layer.md) · [长期流程规则](../../../../docs/product-design/worker-lifecycle.md)。源码调查基线为 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`；当前聊天新增的 worker 流程文档和维护规则属于本次设计输入。实际实现开始时固定文档与源码的真实 Git 版本，不把此调查 commit 当作尚未提交文档的版本。
+[Plan](worker-three-layer.plan.md) · [专属验收](../../../testing/acceptance/archive/completed/worker-three-layer.md) · [长期流程规则](../../../../docs/product-design/runner-lifecycle.md)。源码调查基线为 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`；当前聊天新增的 worker 流程文档和维护规则属于本次设计输入。实际实现开始时固定文档与源码的真实 Git 版本，不把此调查 commit 当作尚未提交文档的版本。
 
 实施收尾已将同一改动重放到主干 `ab814da9`，保留新增 HTTP Ports 接线和部署默认；初始调查/验收版本仍用于追溯，最新基线定向复验见专属验收。
 

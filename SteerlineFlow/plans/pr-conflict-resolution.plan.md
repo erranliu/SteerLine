@@ -21,7 +21,7 @@ Runner 交接只需：实际 commit、EXE/version/SHA256/resource_digest、公�
 3. 扩展 `internal/runnerbridge/bridge.go` 的 QueueControl 和原 Actions 存储校验，允许 message。复用产品 request_id、随机 Runner request_id、冻结字节、原回执恢复和观察循环。保存失败零发送，已发送结果未知只查原请求；同一候选不并发发送，停止/退出/终态沿现有优先级仲裁。不新增续作表或独立后台 worker。
 4. 在 `internal/prompts/pr_conflict_resolution.md` 与 prompts 包组装函数实现 Spec 的短正文，只传原 PR URL 和目标分支。不新增完整规则材料、项目文件或 inline 兜底。新增实际请求正文断言；按[提示词维护](../../docs/prompt-governance.md)列出新增正文、0→实际 UTF-8 字节数、完整投递正文和业务依据，取得独立审核。保留原回答限制，不把系统指令伪装成用户回答。
 5. 在 `web/src/features/runs/runs.tsx` 的候选详情操作区接入同一按钮及已有原请求核实机制。复用现有活动、answer、final 和 delivery 展示；沿 Runner 公开执行状态显示本轮活动，不能因 Workflow 仍为 pr_ready 隐藏正在执行/等待回答。同步 `internal/taskrunner/input.go` 的实际问题投影，避免将 pr_ready 的旧 feedback 表单当作新入口；本次不新增通用消息编辑器。若现有投影把 pr_ready 固定当作空闲，同步调整 `internal/taskrunner/projection.go` 等实际消费者，以当前执行事实为准，不新增业务状态源。
-6. 同步 `docs/integration/steerrunner.md`、`docs/product-design/worker-lifecycle.md` 和相关产品说明，仅描述本次 message 增量及现有恢复/停止边界。旧冻结验收不改写，无数据迁移、自动重发、跨构建活动接管或部署。
+6. 同步 `docs/integration/steerrunner.md`、`docs/product-design/runner-lifecycle.md` 和相关产品说明，仅描述本次 message 增量及现有恢复/停止边界。旧冻结验收不改写，无数据迁移、自动重发、跨构建活动接管或部署。
 
 ## 3. 最小测试与登记
 

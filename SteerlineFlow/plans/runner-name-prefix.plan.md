@@ -2,7 +2,7 @@
 
 用户直接授权的两仓普通开发。Runner 的公开 Run 输入新增可选 `name_prefix`，与不透明关联元数据分开；SteerLine 对 C1 生成 `sl-<task_id>`，从 C2 起生成 `sl-<task_id>-c<候选 Number>`，Runner 仅追加自身 Run ID。未提供时 Runner 使用 `sr`。前缀限定 1–48 个小写 ASCII 字母、数字和单个分隔连字符，不接受空值、首尾连字符或连续连字符。
 
-候选 Number 由现有 SQLite 预留事务分配，同事务生成前缀、序列化最终 submit 并保存候选；重复预留使用原 Number 比较最终输入，正常重放直接返回原候选。命名不是身份权威，原 Run/资源/请求绑定保持。[生命周期](../../docs/product-design/worker-lifecycle.md) W01/W02、V01/V06–V08 仅补充命名输入的冻结与校验，不新增节点、重试、恢复或旧现场迁移。范围限 Orca worktree 名称，分支规则保持。
+候选 Number 由现有 SQLite 预留事务分配，同事务生成前缀、序列化最终 submit 并保存候选；重复预留使用原 Number 比较最终输入，正常重放直接返回原候选。命名不是身份权威，原 Run/资源/请求绑定保持。[生命周期](../../docs/product-design/runner-lifecycle.md) W01/W02、V01/V06–V08 仅补充命名输入的冻结与校验，不新增节点、重试、恢复或旧现场迁移。范围限 Orca worktree 名称，分支规则保持。
 
 ## 实施
 

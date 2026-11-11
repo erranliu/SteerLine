@@ -2,7 +2,7 @@
 
 范围归 [Spec](../spec/unified-startup.spec.md)，结果归[专属验收](../testing/acceptance/unified-startup.md)。2026-10-15 用户已授权实施；按普通开发完成，不纳入 roadmap。实现前再次 rebase 到 `60dae583`，保留 #324 TUI 退役成果。
 
-初稿调查基线为 `db92f5c46bd90a45b1cfa2a6e94236113b77803a`。按用户要求于 2026-10-15 rebase 并重新审计，明确采用主干 `317714e6e42be0f902a97b1a5577e325970d2f75` 为当前调查基线，已包含 #321/#322 构建/ACL 修复及 #323 Web 查询优化；保留后者代码与验收边界。已完整读取 `docs/spec/SpecGuide.md`，该文件最后修改 commit 为 `94e704300485b82d54e44991148074841ed66019`，本次 SHA-256 为 `85b656090674e1f953320b6be62d17b6888248ef7eec5fe044b9d3f408bfe4de`；同时读取 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md)、[停服恢复契约](../spec/worker-stop-recovery.spec.md)、[分级入口与扩展约定](../../tests/e2e/README.md)。普通开发依用户授权直接开展，不要求 roadmap 编号或执行聊天。
+初稿调查基线为 `db92f5c46bd90a45b1cfa2a6e94236113b77803a`。按用户要求于 2026-10-15 rebase 并重新审计，明确采用主干 `317714e6e42be0f902a97b1a5577e325970d2f75` 为当前调查基线，已包含 #321/#322 构建/ACL 修复及 #323 Web 查询优化；保留后者代码与验收边界。已完整读取 `docs/spec/SpecGuide.md`，该文件最后修改 commit 为 `94e704300485b82d54e44991148074841ed66019`，本次 SHA-256 为 `85b656090674e1f953320b6be62d17b6888248ef7eec5fe044b9d3f408bfe4de`；同时读取 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)、[停服恢复契约](../spec/worker-stop-recovery.spec.md)、[分级入口与扩展约定](../../tests/e2e/README.md)。普通开发依用户授权直接开展，不要求 roadmap 编号或执行聊天。
 
 ## 1. 当前实现调查与整合决定
 

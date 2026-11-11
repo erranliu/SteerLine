@@ -12,7 +12,7 @@
 | [项目维护](project-maintenance.md) | 显式材料准备、统一就绪、候选冻结与过期保留 |
 | [数据模型](data-model.md) | 实体、身份、事务不变量与格式源码定位 |
 | [执行配置](execution-configuration.md) | 预设、条件保存、生效与冻结、两层默认链路及开发覆盖/发布限制 |
-| [Worker 生命周期](worker-lifecycle.md) | 调用方资格、原请求、反馈、交付和停止；W/E/V 定位 |
+| [Runner 调用生命周期](runner-lifecycle.md) | 调用方资格、原请求、反馈、交付和停止；W/E/V 定位 |
 | [可靠性交付链路](../architecture/reliable-delivery-chain.md) | 命令受理、唯一交付与资源结算的核验关系 |
 | [问题、反馈与恢复输入](decisions.md) | 公开问题/controls 的投影、校验及送达事实 |
 | [执行观察与结果](execution-observability.md) | 活动/游标、最近消息、verified final、原正文与分页；各自事实含义分开 |

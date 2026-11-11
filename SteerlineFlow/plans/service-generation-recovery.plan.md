@@ -1,6 +1,6 @@
 # Runner 兼容接管 Plan
 
-对应 [Spec](../spec/service-generation-recovery.spec.md)；采用既有 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md) 和 caller outbox，不新增 lifecycle、持久兼容 manifest 或全局 hold/release。实际记录见[验收](../testing/acceptance/service-generation-recovery.md)。
+对应 [Spec](../spec/service-generation-recovery.spec.md)；采用既有 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) 和 caller outbox，不新增 lifecycle、持久兼容 manifest 或全局 hold/release。实际记录见[验收](../testing/acceptance/service-generation-recovery.md)。
 
 实施顺序：runnerclient 增加公开 takeover 与裸 startup stops；application 在共享 Runner 启动前采样项目 caller Store、保存原停止信封；按原 Run/input/request digest 重绑当前服务 pin；环境检查沿原 ID/报告和旧 selection 取证；部署分别验证旧服务退出与新候选兼容。所有原任务、候选、结果、PR 和 Delivery 都保留原事实。
 

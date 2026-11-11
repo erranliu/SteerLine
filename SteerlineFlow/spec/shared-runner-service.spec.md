@@ -61,7 +61,7 @@ submit 由候选原产品请求找到已存信封；环境活动由原操作的�
 
 ## 5. 项目退出、整体停服与恢复
 
-统一 worker 语义归 [worker-lifecycle](../../docs/product-design/worker-lifecycle.md)，关联 W01/W08–W14/W18、E04/E05/E07、V01/V03/V06–V08。本次只改变调用方服务所有权，不复制节点状态机。
+统一 worker 语义归 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，关联 W01/W08–W14/W18、E04/E05/E07、V01/V03/V06–V08。本次只改变调用方服务所有权，不复制节点状态机。
 
 ### 5.1 单项目退出
 

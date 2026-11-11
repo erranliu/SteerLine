@@ -2,7 +2,7 @@
 
 后续兼容跨构建接管以[服务换代 Spec](../spec/service-generation-recovery.spec.md)和[Plan](service-generation-recovery.plan.md)为准；下文保留本次同构建修复的原始范围与验证，不把其通过计为跨构建联调资格。
 
-普通开发，2026-10-19。规则归属 [worker lifecycle](../../docs/product-design/worker-lifecycle.md) 的 W18/E04–E05/V06–V08；本次仅修复调用方把服务退出和原生资源销毁混为同一部署门槛的问题，不改变 Runner 恢复、输入授权或停止策略。
+普通开发，2026-10-19。规则归属 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) 的 W18/E04–E05/V06–V08；本次仅修复调用方把服务退出和原生资源销毁混为同一部署门槛的问题，不改变 Runner 恢复、输入授权或停止策略。
 
 1. 普通 build-deploy 复用安装配置固定的 Runner EXE，构建并更新 SteerLine/Web。首次安装或显式 `-UpdateRunner` 才从 RunnerRepo 构建 Runner。
 2. 增加只读 `verify-restart`：原宿主/Web 退出、项目本地关闭/锁释放、checkpoint/配置/实例一致；原 Runner 服务的最终停止记录绑定原实例/request/state-dir/EXE，待用 EXE 与原 build pin 完全一致。逐候选和检查保持同 build/state-dir；未知请求保留原 ID。允许原生资源未结算，但输出单独的 restartable 证明，不伪造 resources_settled。

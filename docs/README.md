@@ -22,7 +22,7 @@ SteerLine 的整体职责、具体产品设计、后续规划、执行契约与�
 | 固定提示词变更、独立审核及保护边界 | [提示词治理](prompt-governance.md) |
 | 规划任务前判断并行与冲突 | [并行开发指南](architecture/parallel-development.md) |
 | 配置、数据、反馈、会话与 UI 设计 | [产品设计](product-design/README.md) |
-| Worker 调用方生命周期、异常与恢复边界 | [Worker 生命周期](product-design/worker-lifecycle.md) |
+| Runner 调用生命周期、异常与恢复 | [Runner 调用生命周期](product-design/runner-lifecycle.md) |
 | 命令受理、唯一交付与资源结算的核验关系 | [可靠性交付链路](architecture/reliable-delivery-chain.md) |
 | 讨论目标与执行任务 | [RoadmapGuide](../SteerlineFlow/Roadmap/RoadmapGuide.md) · [正式执行规划](../SteerlineFlow/Roadmap/execution-map.md) · [产品愿景](../SteerlineFlow/Roadmap/product-vision.md) |
 | 未交付规格与待补验收 | [Spec / Plan](../SteerlineFlow/spec/README.md) |

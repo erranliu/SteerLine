@@ -1,6 +1,6 @@
 # 架构解耦第五轮验收：宿主 checkpoint 与状态契约
 
-日期：2026-10-17。归属：用户直接授权的第五轮实现与提 PR，无 roadmap Task ID。源码基线：主干 `64f918536a51c26a574e119e2419286f7f195725` 加本轮变更；前四轮已随 PR #350 合入。现状图见[代码架构](../../../docs/architecture/current-code-architecture.md)，关闭契约见[项目生命周期](../../spec/application-project-lifecycle.spec.md)，worker 规则仍归[生命周期矩阵](../../../docs/product-design/worker-lifecycle.md)。
+日期：2026-10-17。归属：用户直接授权的第五轮实现与提 PR，无 roadmap Task ID。源码基线：主干 `64f918536a51c26a574e119e2419286f7f195725` 加本轮变更；前四轮已随 PR #350 合入。现状图见[代码架构](../../../docs/architecture/current-code-architecture.md)，关闭契约见[项目生命周期](../../spec/application-project-lifecycle.spec.md)，worker 规则仍归[生命周期矩阵](../../../docs/product-design/runner-lifecycle.md)。
 
 ## 实现与范围
 

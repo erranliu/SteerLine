@@ -68,7 +68,7 @@
 
 ## 4. 执行、结果与验收
 
-沿用[worker生命周期](../../docs/product-design/worker-lifecycle.md)、[换代恢复](service-generation-recovery.spec.md)及原项目适配收尾规则；测试驱动不重发未知业务、PR或停止操作。三项各建独立home、Git checkout/数据库、工作区、端口及输出目录；同一远端live串行，构建/Web目录仍按[路径清单](../paths.md)串行。缺少所需本机生成模型、Edge或执行机条件明确不通过。
+沿用[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)、[换代恢复](service-generation-recovery.spec.md)及原项目适配收尾规则；测试驱动不重发未知业务、PR或停止操作。三项各建独立home、Git checkout/数据库、工作区、端口及输出目录；同一远端live串行，构建/Web目录仍按[路径清单](../paths.md)串行。缺少所需本机生成模型、Edge或执行机条件明确不通过。
 
 进度及308适配单轮超时显式给定正秒数并冻结；两者外围测试总期限均须容纳最多三轮及既有准备/收尾时间，进度还须容纳原六状态观察。不能沿用较短固定总超时截断仍有效的业务预算。总期限不是另一套业务重试预算；超时按原stop和未知对账收尾，不能直接杀共享服务或其他任务。
 

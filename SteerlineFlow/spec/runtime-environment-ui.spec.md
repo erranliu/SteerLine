@@ -116,7 +116,7 @@
 
 主要落点为 Web 的 execution-configs、environment-checks、settings、tasks、runs 和 app 导航；仅在展示确有需要时扩展原 app options 的只读字段。复用当前 Query、Router、命令仲裁及活动详情，不新增通用配置中心、表格平台、前端资格引擎或第二套环境 API。
 
-不修改环境摘要、SQLite 格式、Runner 协议、验收材料、固定提示词、三轮预算、重试/未知/收尾、服务生命周期和自动派发策略。沿 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md) W01–W03 的资格、W08–W16 的原请求和 W18 的结算边界，本次仅调整只读投影、动作位置和页面选择恢复，不新增执行节点或恢复授权。
+不修改环境摘要、SQLite 格式、Runner 协议、验收材料、固定提示词、三轮预算、重试/未知/收尾、服务生命周期和自动派发策略。沿 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md) W01–W03 的资格、W08–W16 的原请求和 W18 的结算边界，本次仅调整只读投影、动作位置和页面选择恢复，不新增执行节点或恢复授权。
 
 不部署、不重启或改写安装现场；后续若实现发现必须改模型可见正文、接线或其对应测试/CI，须单列范围并遵守[提示词治理](../../docs/prompt-governance.md)，不得以 UI 文案整理名义顺带修改。
 

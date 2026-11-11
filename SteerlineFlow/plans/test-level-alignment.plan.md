@@ -1,6 +1,6 @@
 # Plan：测试分级与 L4 入口
 
-普通开发，按用户授权直接实施，不进入 roadmap。采用 [测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)，专属验收见 [记录](../testing/acceptance/test-level-alignment.md)。仅修改测试及调度基础设施，不改变产品 worker/恢复行为；原职责沿用 [生命周期](../../docs/product-design/worker-lifecycle.md)。
+普通开发，按用户授权直接实施，不进入 roadmap。采用 [测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)，专属验收见 [记录](../testing/acceptance/test-level-alignment.md)。仅修改测试及调度基础设施，不改变产品 worker/恢复行为；原职责沿用 [生命周期](../../docs/product-design/runner-lifecycle.md)。
 
 ## 实施范围
 

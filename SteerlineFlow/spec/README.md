@@ -116,7 +116,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 已交付规格归档
 
-控制台主界面、四批产品精简和迁出前 Worker 三层重构已交付，其 Spec/Plan 与原版本验收由[已交付归档](../archive/spec/completed/README.md#2026-10-21-补充归档)承接。三层重构经 PR #313 合入，执行实现随后迁至独立 Runner；长期流程规则继续维护于 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)。已退役的 TUI 和迁出前本机 Orca 方案不再列作当前实施或补验入口；后续本机 Orca 配置范围见[执行配置](web-execution-config.spec.md)。
+控制台主界面、四批产品精简和迁出前 Worker 三层重构已交付，其 Spec/Plan 与原版本验收由[已交付归档](../archive/spec/completed/README.md#2026-10-21-补充归档)承接。三层重构经 PR #313 合入，执行实现随后迁至独立 Runner；长期流程规则继续维护于 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)。已退役的 TUI 和迁出前本机 Orca 方案不再列作当前实施或补验入口；后续本机 Orca 配置范围见[执行配置](web-execution-config.spec.md)。
 
 ## 旧 Orca 编排身份残留清理（普通开发规格）
 
@@ -128,7 +128,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 会话与恢复精简历史
 
-第四批产品精简已由 PR #243 合入；[Spec / Plan](../archive/spec/completed/README.md#2026-10-21-补充归档)及[原版本验收](../testing/acceptance/archive/completed/product-simplification-04-conversation-recovery.md)已归档。后续恢复规则以 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)和[服务换代恢复](service-generation-recovery.spec.md)为准。
+第四批产品精简已由 PR #243 合入；[Spec / Plan](../archive/spec/completed/README.md#2026-10-21-补充归档)及[原版本验收](../testing/acceptance/archive/completed/product-simplification-04-conversation-recovery.md)已归档。后续恢复规则以 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)和[服务换代恢复](service-generation-recovery.spec.md)为准。
 
 ## 停机对账修复
 
@@ -177,7 +177,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 共同约束
 
-- [执行架构](execution-architecture.spec.md)：当前持续 worker、单写者、身份、反馈与真实交付边界。
+- [执行架构](execution-architecture.spec.md)：当前候选与 Runner Run 的身份、单写者、反馈与真实交付边界。
 - [原生任务](native-task-constraints.md)：固定契约、DAG、唯一权威和受控命令。
 - [第一阶段](phase1-delivery-constraints.md)：本机候选、安装/调试隔离与单安装版组合验收交接。
 - [第二阶段](phase2-constraints.md)：原 TUI/HTTP/Go 边界历史；公共 API 部分继续有效。

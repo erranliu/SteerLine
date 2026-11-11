@@ -20,7 +20,7 @@
 
 项目状态位于仓库外的受管目录；同 common-dir 的 linked worktree 共用仓库身份。项目运行时持有仓库和状态目录锁，不允许另一 home 或 linked worktree 绕过同仓写者；数据库身份、格式及归属在业务写入前核验。现有 `.beads`、`.beads.db` 或 `beads.db` 状态阻断原生初始化，保留供人工处理，不自动删除或迁移，见[状态前置](../../internal/app/host/native_state_preflight.go)。
 
-Runner 按调用方固定 commit 创建专属工作区并管理原生资源。候选保存公开路径、分支/base 和 Run 绑定，不能把旧工作区重建成同名新执行。成功新建后的启动条件与未知创建的恢复分别按[生命周期](worker-lifecycle.md)处理。
+Runner 按调用方固定 commit 创建专属工作区并管理原生资源。候选保存公开路径、分支/base 和 Run 绑定，不能把旧工作区重建成同名新执行。成功新建后的启动条件与未知创建的恢复分别按[生命周期](runner-lifecycle.md)处理。
 
 应用 home 内项目共用一个 Runner 服务和准确 state-dir，任务库仍按项目隔离。目录布局与清理目标归[路径清单](../../SteerlineFlow/paths.md)，执行准备归[Runner 接入](../integration/steerrunner.md)。未知请求、原资源或停止义务未核实前不删除恢复依据，不用进程退出或窗口消失代替资源证明。
 

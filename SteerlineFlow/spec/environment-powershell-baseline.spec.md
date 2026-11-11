@@ -1,6 +1,6 @@
 # Spec：环境检测使用 Windows 自带 PowerShell
 
-用户确认环境检测移除 PowerShell 7 要求，并实测验收。[Plan](../plans/environment-powershell-baseline.plan.md)。沿用[环境发布边界](environment-publication-scope.spec.md)与[worker 生命周期](../../docs/product-design/worker-lifecycle.md)，不修改 Runner 或部署安装环境。
+用户确认环境检测移除 PowerShell 7 要求，并实测验收。[Plan](../plans/environment-powershell-baseline.plan.md)。沿用[环境发布边界](environment-publication-scope.spec.md)与[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，不修改 Runner 或部署安装环境。
 
 - PSB-A01：Windows 项目材料明确使用 `powershell.exe`，全部检测阶段及正式 L1/L2 必经脚本使用 Windows PowerShell 5.1 可用的语法与 .NET 能力。生成材料、解释器校验及外部取证同步；Bash 项目仍显式声明 bash，不增加解释器搜索、自动切换、旧材料读取或特殊失败记录回退。
 - PSB-A02：SteerLine、SteerlineTest、308 的检测脚本和必经共享进度写入器移除 PowerShell 7 隐含依赖。UTF-8、严格布尔对象、Ordinal 唯一键、并发锁、合并与原子替换语义保留；非法输入不改原文件。单一实现，不创建另一套协议或写入器。

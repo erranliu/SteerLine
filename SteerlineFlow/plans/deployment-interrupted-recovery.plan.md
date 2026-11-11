@@ -1,6 +1,6 @@
 # 部署中自动恢复中断宿主
 
-普通开发，用户直接授权。规则归属 [worker lifecycle](../../docs/product-design/worker-lifecycle.md)，差异仅为部署自动完成原安装恢复和正式停服；不变更 Runner 原授权、输入、重试或原生停止规则。验收见[专属记录](../testing/acceptance/deployment-interrupted-recovery.md)。
+普通开发，用户直接授权。规则归属 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，差异仅为部署自动完成原安装恢复和正式停服；不变更 Runner 原授权、输入、重试或原生停止规则。验收见[专属记录](../testing/acceptance/deployment-interrupted-recovery.md)。
 
 1. staged CLI 增加显式 `recover-deployment`。在应用启动协调锁下，仅对原宿主有精确已退出身份、原启动记录匹配、Web/Runner 已退出且当前停机回执缺失/陈旧的情况开放。安装记录中的三份 EXE 摘要、Runner pin/version/resource/state-dir、配置/checkpoint 的原进程和项目集合、原候选/检查/Generation 及候选兼容性须全部核实；匹配的当前失败回执、未知创建、活动服务/锁、变配置/文件或不兼容不触发恢复。
 2. 使用已核实的原安装 EXE，沿既有启动入口等待所有项目 ready，再正常停服。全程持有协调锁，不创建业务 submit/reply/resume，不删除状态。原进程创建不明或恢复失败不循环重试、不强杀；失败继续阻断替换。
