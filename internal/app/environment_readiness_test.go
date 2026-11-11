@@ -118,6 +118,119 @@ func TestProjectEnvironmentConfigurationSurvivesProjectFailures(t *testing.T) {
 	}
 }
 
+func TestEnvironmentOptionsWaitForStartBaselineCheck(t *testing.T) {
+	checkFailure := errors.New("environment basis check failed")
+	for _, tc := range []struct {
+		name, stage, reason string
+		checkErr            error
+	}{
+		{name: "unchanged", stage: "ready"},
+		{name: "changed", stage: "stale", reason: "检测依赖内容变化：go.mod"},
+		{name: "failed", stage: "unverified", reason: checkFailure.Error(), checkErr: checkFailure},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, c, store := environmentFixture(t)
+			existing := seedDetectedEnvironment(t, p, "remote")
+			existingKey := mustEnvironmentKey(t, existing.Execution)
+			selected := c.RunnerExecution.Profiles[0]
+			selectedKey := mustEnvironmentKey(t, selected.Execution)
+			maintenance := newProjectMaintenance(c, store)
+			p.config.runtimeMaintenance = maintenance
+			maintenance.environmentObservation = p.observeBasis
+			_, err := maintenance.check(t.Context())
+			require(t, err)
+			port := &runtimeProjectPort{config: c}
+			assertStage := func(value any, stage, reason string) {
+				t.Helper()
+				for _, item := range value.(environmentOptions).Environments {
+					if item.Key == existingKey {
+						if item.Stage != stage || (item.Status == "ready") != (stage == "ready") || item.ActivityID != existing.ID || !strings.Contains(item.Reason, reason) {
+							t.Fatalf("existing environment: got %+v, want stage %q and reason %q", item, stage, reason)
+						}
+						return
+					}
+				}
+				t.Fatal("existing environment missing from options")
+			}
+			before, err := port.environmentRead(t.Context(), "/environment/options", nil)
+			require(t, err)
+			assertStage(before, "ready", "")
+			if tc.stage == "stale" {
+				require(t, os.WriteFile(filepath.Join(c.Repository, "go.mod"), []byte("module changed.invalid\n"), 0600))
+				commitEnvironmentMaterials(t, c)
+			}
+
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			entered, release := make(chan struct{}), make(chan struct{})
+			maintenance.environmentObservation = func(ctx context.Context, commit string) error {
+				close(entered)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-release:
+				}
+				if tc.checkErr != nil {
+					return tc.checkErr
+				}
+				return p.observeBasis(ctx, commit)
+			}
+			started := make(chan error, 1)
+			go func() {
+				_, err := p.service.Start(ctx, env.ID(), json.RawMessage(`{}`), env.Start{
+					EnvironmentKey: selectedKey, Profile: selected.ID, TimeoutSeconds: 60,
+				})
+				started <- err
+				close(started)
+			}()
+			defer func() { cancel(); <-started }()
+			select {
+			case <-entered:
+			case err := <-started:
+				t.Fatalf("start finished before checking baseline: %v", err)
+			case <-ctx.Done():
+				t.Fatal("start did not reach the baseline check")
+			}
+
+			type optionsResult struct {
+				value any
+				err   error
+			}
+			options := make(chan optionsResult, 1)
+			go func() {
+				value, err := port.environmentRead(ctx, "/environment/options", nil)
+				options <- optionsResult{value, err}
+				close(options)
+			}()
+			defer func() { cancel(); <-options }()
+
+			// An options request that expires during the check must yield no snapshot.
+			readCtx, cancelRead := context.WithTimeout(ctx, 250*time.Millisecond)
+			during, err := port.environmentRead(readCtx, "/environment/options", nil)
+			cancelRead()
+			if during != nil || !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("options returned before the baseline check finished: value=%+v err=%v", during, err)
+			}
+			select {
+			case result := <-options:
+				t.Fatalf("options completed while the baseline check was paused: %+v", result)
+			default:
+			}
+			close(release)
+			if err := <-started; !errors.Is(err, tc.checkErr) {
+				t.Fatalf("unexpected detection start result: %v", err)
+			}
+			result := <-options
+			require(t, result.err)
+			assertStage(result.value, tc.stage, tc.reason)
+			current, err := store.CurrentEnvironment(ctx, c.Identity(), existingKey)
+			require(t, err)
+			if current.Invalidated != (tc.stage == "stale") {
+				t.Fatalf("unexpected persisted qualification: %+v", current)
+			}
+		})
+	}
+}
+
 func (r readinessTasks) TaskSnapshot(context.Context, string) (taskmodel.Snapshot, error) {
 	task := taskmodel.TaskRecord{ProjectIdentity: r.project, TaskID: "1", Version: 1, Status: "open", Type: "task", Title: "admission probe"}
 	return taskmodel.Snapshot{Authority: taskmodel.GraphAuthority{ProjectIdentity: r.project, AuthorityVersion: 1, GraphRevision: 1}, Tasks: []taskmodel.TaskRecord{task}, ByID: map[string]taskmodel.TaskRecord{"1": task}}, nil
