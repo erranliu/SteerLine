@@ -61,7 +61,7 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 
 | 格式或事实 | 当前来源 |
 | --- | --- |
-| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 41`；数值只在此表定位，正文不保留旧版本副本 |
+| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 45`；数值只在此表定位，正文不保留旧版本副本 |
 | 项目契约配置 | [app/config.go](../../internal/app/config.go) 要求显式 `task_authority=native`、`workflow_protocol=worker-flow-v2`；后者不代表 Runner 当前 workflow 版本 |
 | 全局执行配置 | [executionconfig](../../internal/executionconfig/config.go) 的严格解码与版本校验；构建选择由 [app](../../internal/app/runner_config.go) 校验 |
 | TaskContract 与 DAG | [taskcontract](../../internal/taskcontract) 的结构及 [task/model](../../internal/task/model) 的规则 |
@@ -74,5 +74,7 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 历史数字、字段和旧验收结论按[原版本来源](../../SteerlineFlow/archive/design/runner-reliability-history.md#第四批整理来源)取证，不能据此读取旧库或回填运行。本文不证明安装版已部署或各原生路径已通过验收。
 
 ## 异步活动只读投影
+
+`refactoring_actions` 以项目身份和行动 ID 保存一份维护权威；从属轮次/操作、原请求、最新 worktree 持有者、问题、预算及报告都在该行动内。CAS 和项目在途唯一索引共同约束推进；原用户命令与状态同事务进入已有 commands 表，结果只存最小 ID/版本回执，不复制整份行动。维护活动从原表只读投影，不新增活动业务写表。类型归 [refactoring/model](../../internal/refactoring/model)，本版数据库唯一版本以 reader.go 为准，不迁移未发布旧库。
 
 `preparation_batches` 按项目与批次 ID 保存原准备事实和业务结果快照；`maintenance_settings.generation_batch` 只保存当前批次 ID。`preparation_associations` 保存原 TaskID/Inputs/GenerationID，随生成初次登记事务在外部提交前绑定，历史批次不被新引用覆盖。`source_observations` 独立保存最近成功观察及错误，不递增业务版本或赋予执行权限。查询返回来源事实，由产品 query 只读聚合；不存在统一活动业务写表或调度器。完整职责与接入约定见[异步活动中心](async-activities.md)。

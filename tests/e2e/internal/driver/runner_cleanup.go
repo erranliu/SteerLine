@@ -152,6 +152,32 @@ func (c *Client) CleanupOwnedRunner(ctx context.Context, helper string) error {
 	return err
 }
 
+func ReadOriginalMaintenanceOperations(ctx context.Context, database, project string) ([]runnerstate.Candidate, error) {
+	reader, err := sqlite.OpenSQLiteReader(database)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	records, err := reader.Refactorings(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+	var operations []runnerstate.Candidate
+	for _, record := range records {
+		for _, op := range record.Operations {
+			candidate := runnerstate.Candidate{Project: record.Project, RunID: op.RunID, Submit: op.Request, SubmitState: op.State, Projection: op.Run}
+			if op.State == "submitted" && op.RunID == "" {
+				candidate.SubmitState = "unknown"
+			}
+			if op.Run != nil && op.Run.Workflow.ID == "execute" {
+				candidate.Branch = op.Run.Execution.Branch
+			}
+			operations = append(operations, candidate)
+		}
+	}
+	return operations, nil
+}
+
 func MainRunnerCleanup(args []string) error {
 	fs := flag.NewFlagSet("runner-cleanup", flag.ContinueOnError)
 	path := fs.String("config", "", "owned project config")
@@ -175,6 +201,11 @@ func MainRunnerCleanup(args []string) error {
 	if err != nil {
 		return err
 	}
+	maintenance, err := ReadOriginalMaintenanceOperations(ctx, filepath.Join(hc.RunDir, "steerline.db"), c.Identity())
+	if err != nil {
+		return err
+	}
+	candidates = append(candidates, maintenance...)
 	reader, err := sqlite.OpenSQLiteReader(filepath.Join(hc.RunDir, "steerline.db"))
 	if err != nil {
 		return err

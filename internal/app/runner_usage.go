@@ -77,7 +77,7 @@ func readRunnerUsage(ctx context.Context, cli runnerclient.Client, candidate, ex
 	}
 	usage := billing.Usage{RunID: execution, Scope: u.Scope, Status: u.Status, Revision: u.Revision, Finalized: u.Coverage.Finalized, PriceAt: priceAt, CoverageComplete: u.Coverage.ExpectedSources != nil && *u.Coverage.ExpectedSources == u.Coverage.VerifiedSources}
 	for _, e := range events {
-		if e.Decision != "counted" {
+		if e.Decision != "counted" || e.Scope != "" && e.Scope != "main_session" {
 			continue
 		}
 		usage.Records = append(usage.Records, billing.Record{ID: e.ID, StepID: e.StepID, Model: e.ConfiguredModel, ReasoningEffort: e.ConfiguredReasoningEffort, Tokens: billing.Tokens(e.Tokens)})

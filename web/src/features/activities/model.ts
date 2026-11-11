@@ -76,6 +76,11 @@ export const matchesActivity = (a: Activity, filter: ActivityFilter) =>
       ? ended(a)
       : !ended(a);
 export const activityActions = new Set([
+  "refactoring_start",
+  "refactoring_finish",
+  "refactoring_stop",
+  "refactoring_answer",
+  "refactoring_conflict",
   "environment_start",
   "maintenance_check",
   "start_task",
@@ -122,8 +127,9 @@ export function provisionalActivities(
       kind: "submission",
       request_ids: [e.request_id],
       provisional: true,
-      title:
-        e.action === "roadmap_parse"
+      title: e.action.startsWith("refactoring_")
+        ? "提交维护操作"
+        : e.action === "roadmap_parse"
           ? "提交 Roadmap 草稿解析"
           : e.action === "roadmap_generate_documents"
             ? "提交 Spec / Plan / 验收文档生成"
@@ -195,6 +201,8 @@ export function provisionalActivities(
 export function activityDestination(project: string, activity: Activity) {
   const root = `/projects/${encodeURIComponent(project)}`;
   const d = activity.details_ref;
+  if (d.kind === "refactoring")
+    return `${root}/refactoring?action=${encodeURIComponent(d.target)}`;
   if (d.kind === "advisory")
     return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.candidate_id || "")}&advisory=${encodeURIComponent(d.target)}`;
   if (d.kind === "roadmap")
@@ -215,6 +223,10 @@ export function activityDestination(project: string, activity: Activity) {
 export function requestDestination(e: Envelope, receipt?: Receipt) {
   const root = `/projects/${encodeURIComponent(e.project_id)}`;
   const request = `request_id=${encodeURIComponent(e.request_id)}`;
+  if (e.action.startsWith("refactoring_")) {
+    const result = receipt?.refactoring as { id?: string } | undefined;
+    return `${root}/refactoring?action=${encodeURIComponent(result?.id || (e.action === "refactoring_start" ? e.request_id : e.target_id))}`;
+  }
   const record = (receipt?.roadmap || receipt?.environment) as
     { id?: string } | undefined;
   if (e.action.startsWith("roadmap_")) {

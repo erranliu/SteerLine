@@ -14,6 +14,8 @@ SteerLine 的整体职责、具体产品设计、后续规划、执行契约与�
 | 隔离调试包、重置与真实 PR 调试 | [独立调试](runtime-install-debug.md) |
 | 本机应用 API、命令回执与重连 | [本机客户端协议](product-design/local-client-protocol.md) |
 | 主工作区同步、显式准备与新候选就绪 | [项目维护](product-design/project-maintenance.md) |
+| SteerAgent 多轮重构、预算、PR 与冲突收益审计（产品设计） | [重构与维护](product-design/refactoring-maintenance.md) |
+| 重构与维护的拟议模块、解耦边界与接入前提 | [维护实现方案](architecture/refactoring-maintenance.md) |
 | 当前进程、模块、客户端与事务边界 | [代码架构](architecture/current-code-architecture.md) |
 | Web 技术栈、构建启动与工程使用 | [Web README](../web/README.md) |
 | 执行预设、配置生效、开发覆盖与发布限制 | [执行配置](product-design/execution-configuration.md) |

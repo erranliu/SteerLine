@@ -1,0 +1,18 @@
+{
+  "tests": [
+    "l1.minimum",
+    "smoke.delivery",
+    "go.http",
+    "go.storage",
+    "go.environment",
+    "go.runner-contract",
+    "go.runner-result",
+    "go.deployment",
+    "web.unit",
+    "runtime.async-activities",
+    "runtime.shared-runner-projects",
+    "runtime.service-lifecycle",
+    "runtime.refactoring-maintenance",
+    "refactoring.local-codex"
+  ]
+}

@@ -20,6 +20,14 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	}
 	var table, id, payload, related, created, finished, request string
 	switch in.Source {
+	case "refactoring":
+		table = "refactoring_actions a"
+		id = "a.action_id"
+		payload = "json_remove(CAST(a.payload AS TEXT),'$.frozen','$.operations','$.answers','$.pending_prompt','$.reports','$.candidate')"
+		created = "json_extract(a.payload,'$.created_at')"
+		finished = "json_extract(a.payload,'$.finished_at')"
+		related = `json_object('requests',json((SELECT COALESCE(json_group_array(c.command_id),'[]') FROM commands c WHERE c.project_identity=a.project_identity AND c.kind='refactoring' AND json_extract(c.result,'$.id')=a.action_id)))`
+		request = `EXISTS(SELECT 1 FROM commands c WHERE c.project_identity=a.project_identity AND c.kind='refactoring' AND json_extract(c.result,'$.id')=a.action_id AND c.command_id IN (%s))`
 	case "main_agent_advisory":
 		table = "advisory_jobs a"
 		id = "a.request_id"

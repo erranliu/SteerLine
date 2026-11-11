@@ -15,7 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-var AsyncActivitySources = []string{"environment_detection", "baseline_check", "task_candidate", "roadmap", "main_agent_advisory"}
+var AsyncActivitySources = []string{"environment_detection", "baseline_check", "task_candidate", "roadmap", "main_agent_advisory", "refactoring"}
 
 // Private read shapes contain only fields used by the observation projection.
 // Domain qualification/settlement is supplied by the read port, not recreated.
@@ -215,6 +215,51 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		return a, errors.New("invalid activity related facts")
 	}
 	switch f.Source {
+	case "refactoring":
+		var r struct {
+			ID, Project, Phase, Summary, Diagnostic string
+			Revision                                uint64
+			CreatedAt                               time.Time  `json:"created_at"`
+			UpdatedAt                               time.Time  `json:"updated_at"`
+			FinishedAt                              *time.Time `json:"finished_at"`
+		}
+		if e := json.Unmarshal(f.Payload, &r); e != nil {
+			return a, e
+		}
+		if r.ID != f.ID || r.Project != project {
+			return a, errors.New("maintenance activity identity differs")
+		}
+		a.Kind = "steer_agent"
+		a.SteerAgent = &api.SteerAgentClassification{Type: "maintenance", Operation: "refactoring"}
+		a.Title = "重构与维护"
+		a.Revision = r.Revision
+		a.CreatedAt = activityTime(r.CreatedAt)
+		a.ObservedAt = activityTime(r.UpdatedAt)
+		a.Summary = r.Summary
+		a.Diagnostic = r.Diagnostic
+		a.RequestIDs = related.Requests
+		a.Details = api.AsyncActivityDetails{Kind: "refactoring", Target: r.ID}
+		a.Execution.RequestID = r.ID
+		a.Phase = r.Phase
+		a.State = "running"
+		switch r.Phase {
+		case "waiting_input":
+			a.State = "waiting"
+			a.NeedsAttention = true
+		case "blocked":
+			a.State = "failed"
+			a.NeedsAttention = true
+		case "stopped":
+			a.State = "cancelled"
+		case "delivered":
+			a.State = "succeeded"
+		}
+		if activityTerminal(a.State) {
+			a.FinishedAt = r.FinishedAt
+			if a.FinishedAt == nil {
+				a.FinishedAt = activityTime(r.UpdatedAt)
+			}
+		}
 	case "environment_detection":
 		var r activityEnvironment
 		if e := json.Unmarshal(f.Payload, &r); e != nil {

@@ -12,6 +12,8 @@ Runner 正文、用户覆盖/原回答、测试安排、规范、schema、报告
 
 ## 修改与本地检查
 
+重构与维护使用独立正式文件通道：`maintenance-decision.md` 只引用 Runner 的 `maintenance/rules.md`、`maintenance/context.json` 两个冻结 file 材料；首次调查使用固定提交 repository，已有成果使用原 worktree 的 read_only directory。消费时核对材料、提交/目录和原生 Final 来源。`maintenance-execute.md` 引用 `STEERLINE_RESULT_FILE` 的完整初始化内容，规则、原生成提示词与少量事实在该正式文件中传递，Runner 原子写回结果，停止封存后消费。只读核心不能写项目；不复用 advisory 的完整文本例外。固定资产缺失失败，原请求保存完整字节；执行交接不重复携带所有历史 Run 原文。
+
 1. 修改对应 Markdown；确需改变组合方式时，在 prompts 及原适配点修改，保持阶段、来源和原请求冻结约束。
 2. 运行 `go test ./internal/prompts -count=1 -v`，核对 `testdata/*.golden.md` 的完整正文差异和 UTF-8 字节数；再按[测试指南](../SteerlineFlow/testing.md)运行正式 L1/L2 与受影响的 owner/L3。黄金样本没有自动接受/更新开关，修改期望值需显式审阅。
 3. 在 PR 写清业务依据、实际正文差异、字节数前后值和验证。增长说明替代了哪些旧规则；新增且无替代时说明原因。缩短、等长替换和测试/检查配置变化同样需要独立审核。

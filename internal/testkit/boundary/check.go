@@ -48,7 +48,7 @@ type Report struct {
 // PureImportsAllowed encodes the ownership matrix for definitions already
 // migrated by #73. Transitional aggregations are checked by the existing guards.
 func PureImportsAllowed(owner, dependency string) bool {
-	if owner == module+"/internal/steeragent" || owner == module+"/internal/steeragent/suggestion" || owner == module+"/internal/steeragent/suggestion/contract" {
+	if owner == module+"/internal/steeragent/maintenance" || owner == module+"/internal/steeragent" || owner == module+"/internal/steeragent/suggestion" || owner == module+"/internal/steeragent/suggestion/contract" {
 		if dependency == "os" || strings.HasPrefix(dependency, "os/") || dependency == "net" || strings.HasPrefix(dependency, "net/") || dependency == "io/fs" {
 			return false
 		}
@@ -60,6 +60,10 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return true
 	}
 	switch owner {
+	case module + "/internal/steeragent/maintenance":
+		return dependency == module+"/internal/prompts"
+	case module + "/internal/refactoring/model":
+		return dependency == module+"/internal/billing" || dependency == module+"/internal/runnerbinding" || dependency == module+"/internal/runnercontract"
 	case module + "/internal/product/api":
 		return dependency == module+"/internal/billing"
 	case module + "/internal/task/model", module + "/internal/projectmaintenance/model":
@@ -98,7 +102,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/steeragent", module + "/internal/steeragent/suggestion", module + "/internal/steeragent/suggestion/contract", module + "/internal/billing", module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/steeragent/maintenance", module + "/internal/refactoring/model", module + "/internal/steeragent", module + "/internal/steeragent/suggestion", module + "/internal/steeragent/suggestion/contract", module + "/internal/billing", module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -437,7 +441,7 @@ func productQueryImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
 		return true
 	}
-	for _, allowed := range []string{module + "/internal/steeragent", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/api", productQuery + "/taskgraph", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/storage/ports"} {
+	for _, allowed := range []string{module + "/internal/refactoring/model", module + "/internal/steeragent", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/api", productQuery + "/taskgraph", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/storage/ports"} {
 		if dependency == allowed {
 			return true
 		}
@@ -457,7 +461,7 @@ func storageSQLiteImportAllowed(dependency string) bool {
 		module + "/internal/testmanagement/model",
 		module + "/internal/prompts",
 		module + "/internal/projectmaintenance/model",
-		module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/steeragent/suggestion/contract",
+		module + "/internal/refactoring/model", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/steeragent/suggestion/contract",
 	} {
 		if dependency == allowed {
 			return true

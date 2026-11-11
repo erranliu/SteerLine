@@ -4,10 +4,16 @@ import "encoding/json"
 
 // GenerateInput is the published generate/1 payload; it carries no development fields.
 type GenerateInput struct {
+	Directory    *DirectoryAccess    `json:"directory,omitempty"`
 	Repository   *GenerateRepository `json:"repository,omitempty"`
 	Instruction  string              `json:"instruction"`
 	Materials    []Document          `json:"materials"`
 	OutputSchema json.RawMessage     `json:"output_schema,omitempty"`
+}
+
+type DirectoryAccess struct {
+	Path   string `json:"path"`
+	Access string `json:"access"`
 }
 type GenerateRunInput struct {
 	Title       string            `json:"title"`

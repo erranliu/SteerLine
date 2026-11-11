@@ -1,0 +1,1 @@
+本次身份是 Runner 可写执行，遵循本文件的结果文件合约；rules 中的只读决策输出格式不适用于本次执行。读取 STEERLINE_RESULT_FILE 指向文件中的完整 rules、context 和 instruction。按该提示词完成本次操作。将结果原子写回同一文件，保留 action_id、operation_id，提供 outcome(done/needs_input/blocked)、summary、head、base、pr、report、no_changes、question。事实未知如实说明，不重复未知的发布，不请求原生交互来替代结果中的 question。

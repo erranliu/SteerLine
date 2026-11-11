@@ -52,6 +52,15 @@ type Execution struct {
 	Workspace                string `json:"workspace"`
 	Branch                   string `json:"branch"`
 }
+type WorkspaceGit struct {
+	RunID      string    `json:"run_id"`
+	Commit     *string   `json:"commit"`
+	Clean      *bool     `json:"clean"`
+	ObservedAt time.Time `json:"observed_at"`
+	Verified   bool      `json:"verified"`
+	Diagnostic string    `json:"diagnostic"`
+}
+
 type Question struct {
 	ID      string `json:"id"`
 	Text    string `json:"text"`
@@ -82,35 +91,39 @@ type Operation struct {
 }
 
 type Run struct {
-	StopEvidenceScope string            `json:"stop_evidence_scope,omitempty"`
-	Operations        []Operation       `json:"operations"`
-	RepositorySource  *RepositorySource `json:"repository_source,omitempty"`
-	ExecutionWait     *ExecutionWait    `json:"execution_wait"`
-	Closed            bool              `json:"closed"`
-	ContentResult     *ContentResult    `json:"content_result,omitempty"`
-	Correlation       map[string]string `json:"correlation,omitempty"`
-	Workflow          Workflow          `json:"workflow"`
-	Audit             *Audit            `json:"audit,omitempty"`
-	Materials         []Material        `json:"materials"`
-	RunID             string            `json:"run_id"`
-	Revision          uint64            `json:"revision"`
-	Title             string            `json:"title"`
-	InputDigest       string            `json:"input_digest"`
-	ResourceDigest    string            `json:"resource_digest"`
-	Status            string            `json:"status"`
-	Phase             string            `json:"phase"`
-	Step              string            `json:"step"`
-	Diagnostic        string            `json:"diagnostic"`
-	NewInputsAllowed  bool              `json:"new_inputs_allowed"`
-	ResumeRequired    bool              `json:"resume_required"`
-	StopStatus        string            `json:"stop_status"`
-	Execution         Execution         `json:"execution"`
-	Question          *Question         `json:"question"`
-	Controls          Controls          `json:"controls"`
-	PR                *PRFact           `json:"pr"`
-	Final             *Final            `json:"final"`
-	Summary           string            `json:"summary"`
-	UpdatedAt         time.Time         `json:"updated_at"`
+	ReuseWorktreeFromRunID string            `json:"reuse_worktree_from_run_id,omitempty"`
+	WorkspaceOriginRunID   string            `json:"workspace_origin_run_id,omitempty"`
+	WorkspaceIdentity      string            `json:"workspace_identity,omitempty"`
+	ResourcesSettled       *bool             `json:"resources_settled,omitempty"`
+	StopEvidenceScope      string            `json:"stop_evidence_scope,omitempty"`
+	Operations             []Operation       `json:"operations"`
+	RepositorySource       *RepositorySource `json:"repository_source,omitempty"`
+	ExecutionWait          *ExecutionWait    `json:"execution_wait"`
+	Closed                 bool              `json:"closed"`
+	ContentResult          *ContentResult    `json:"content_result,omitempty"`
+	Correlation            map[string]string `json:"correlation,omitempty"`
+	Workflow               Workflow          `json:"workflow"`
+	Audit                  *Audit            `json:"audit,omitempty"`
+	Materials              []Material        `json:"materials"`
+	RunID                  string            `json:"run_id"`
+	Revision               uint64            `json:"revision"`
+	Title                  string            `json:"title"`
+	InputDigest            string            `json:"input_digest"`
+	ResourceDigest         string            `json:"resource_digest"`
+	Status                 string            `json:"status"`
+	Phase                  string            `json:"phase"`
+	Step                   string            `json:"step"`
+	Diagnostic             string            `json:"diagnostic"`
+	NewInputsAllowed       bool              `json:"new_inputs_allowed"`
+	ResumeRequired         bool              `json:"resume_required"`
+	StopStatus             string            `json:"stop_status"`
+	Execution              Execution         `json:"execution"`
+	Question               *Question         `json:"question"`
+	Controls               Controls          `json:"controls"`
+	PR                     *PRFact           `json:"pr"`
+	Final                  *Final            `json:"final"`
+	Summary                string            `json:"summary"`
+	UpdatedAt              time.Time         `json:"updated_at"`
 }
 
 type Material struct {

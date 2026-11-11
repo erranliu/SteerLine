@@ -65,7 +65,7 @@ func TestE2EParallelismOnlyAllowsIndependentRuntimeScenes(t *testing.T) {
 		}
 	}
 	flows, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "controlled"})
-	if err != nil || len(flows) != 4 || e2ePackageParallelism(flows) != 2 {
+	if err != nil || len(flows) != 5 || e2ePackageParallelism(flows) != 2 {
 		t.Fatalf("normal flows lost bounded parallelism: %v %v", flows, err)
 	}
 	if _, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "controlled", scenario: "runtime.installed-debug-isolation"}); err == nil {
@@ -109,7 +109,7 @@ func TestL2OnlySelectsControlledSmokeAndL4OwnsRealChains(t *testing.T) {
 		t.Fatalf("fixed controlled smoke: %+v %v", selected, err)
 	}
 	for _, tc := range []struct{ suite, id string }{
-		{"smoke", "smoke.local-codex"}, {"workflow", "workflow.local-codex-audited"}, {"testing", "testing.management-local-codex"},
+		{"smoke", "smoke.local-codex"}, {"workflow", "workflow.local-codex-audited"}, {"testing", "testing.management-local-codex"}, {"refactoring", "refactoring.local-codex"},
 	} {
 		opts, err = parseOptions([]string{"-level=L4", "-suite=" + tc.suite, "-env=live", "-scenario=" + tc.id})
 		if err != nil {
@@ -238,7 +238,7 @@ func TestL3AndL4SelectDisjointRegisteredContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
-		"L3": {"recovery.waiting-merge-restart", "recovery.runner-wait-retry", "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.async-activities"},
+		"L3": {"recovery.waiting-merge-restart", "recovery.runner-wait-retry", "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.async-activities", "runtime.refactoring-maintenance"},
 		"L4": {"runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation", "runtime.project-maintenance", "runtime.main-agent-advisory"},
 	}
 	for level, ids := range want {

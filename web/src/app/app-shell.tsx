@@ -44,6 +44,7 @@ export function AppShell({
         tests: "测试管理",
         settings: "配置",
         environment: "项目运行环境",
+        refactoring: "重构与维护",
       }[location.pathname.split("/").pop() ?? ""] ?? "规划与执行");
   return (
     <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>
@@ -57,6 +58,13 @@ export function AppShell({
         <nav aria-label="主导航">
           {projectId ? (
             <>
+              <NavLink
+                aria-label="重构与维护"
+                to={`/projects/${projectId}/refactoring`}
+              >
+                <Layers size={17} />
+                <span>重构与维护</span>
+              </NavLink>
               <NavLink
                 aria-label="Roadmap 草稿"
                 to={"/projects/" + projectId + "/roadmaps"}

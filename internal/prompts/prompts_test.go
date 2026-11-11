@@ -19,6 +19,8 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		name   string
 		render func() (string, error)
 	}{
+		{"maintenance-decision", MaintenanceDecision},
+		{"maintenance-execute", MaintenanceExecute},
 		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot)) }},
 		{"testing-readonly", TestingReadOnly},
 		{"main-agent", func() (string, error) { return MainAgentAdvisory(`{"goal":"clarify","materials":[]}`) }},
@@ -105,6 +107,7 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		read         func() ([]byte, error)
 	}{
 		{"testing", "75671b11e26c540791678c1593c3b14ed4161ba53b721d8758ae8c9c1eba937a", TestingRules},
+		{"maintenance", "c3385287247e3b8ce1e6a1652eefc990c3eb3119d8135ecfc9295868f205b073", MaintenanceRules},
 		{"main-agent", "3a7a447bbe7527bf4c1c46867f9180cab32bc3b61359a92d9db9784172c38189", MainAgentRules},
 		{"roadmap-parse", "426c10f34a883e9066d3060bc06723bcf2823989e5cc74d78c50a3a3882738bb", RoadmapParseRules},
 		{"roadmap-documents", "f7c7324cc046e3d9b44b504e7553b637351384184eb8d3a05c57b0bf796df66c", RoadmapDocumentRules},

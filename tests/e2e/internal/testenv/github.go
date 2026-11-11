@@ -23,9 +23,9 @@ const githubRepository = "erranliu/SteerlineTest"
 
 const githubURL = "https://github.com/" + githubRepository + ".git"
 
-const githubFields = "url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName"
+const githubFields = "body,url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName"
 
-const githubInfoQuery = `{url:.url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + "/" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
+const githubInfoQuery = `{body:.body,url:.url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + "/" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
 
 func (p *Project) enableGitHub() {
 	s := p.Scenario
@@ -154,6 +154,12 @@ func (p *Project) cleanupGitHub() error {
 		} else {
 			return candidateErr
 		}
+	} else if p.Scenario.ID == "refactoring.local-codex" {
+		maintenance, err := driver.ReadOriginalMaintenanceOperations(ctx, p.Database, p.ProjectID)
+		if err != nil {
+			return err
+		}
+		candidates = append(candidates, maintenance...)
 	}
 	for _, candidate := range candidates {
 		if candidate.Branch == "" {

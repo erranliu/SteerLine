@@ -19,13 +19,14 @@ type UsageIssue struct {
 	SourceRef string `json:"source_ref,omitempty"`
 }
 type UsageSnapshot struct {
-	Schema   string       `json:"schema"`
-	RunID    string       `json:"run_id"`
-	Revision uint64       `json:"snapshot_revision"`
-	Status   string       `json:"status"`
-	Scope    string       `json:"scope"`
-	Tokens   *UsageTokens `json:"tokens"`
-	Coverage struct {
+	ModelCallCoverage *ModelCallCoverage `json:"model_call_coverage,omitempty"`
+	Schema            string             `json:"schema"`
+	RunID             string             `json:"run_id"`
+	Revision          uint64             `json:"snapshot_revision"`
+	Status            string             `json:"status"`
+	Scope             string             `json:"scope"`
+	Tokens            *UsageTokens       `json:"tokens"`
+	Coverage          struct {
 		ExpectedSources  *int64 `json:"expected_sources"`
 		VerifiedSources  int64  `json:"verified_sources"`
 		CountedResponses int64  `json:"counted_responses"`
@@ -35,7 +36,22 @@ type UsageSnapshot struct {
 	AccessCleanupStatus string       `json:"access_cleanup_status"`
 	ObservedAt          time.Time    `json:"observed_at"`
 }
+
+type ModelCallCoverage struct {
+	InternalRecorded  int64    `json:"internal_recorded"`
+	InternalCovered   int64    `json:"internal_covered"`
+	InternalUncovered int64    `json:"internal_uncovered"`
+	InternalPending   int64    `json:"internal_pending"`
+	Untracked         []string `json:"untracked"`
+}
 type UsageEvent struct {
+	Scope                     string       `json:"scope,omitempty"`
+	CallID                    string       `json:"call_id,omitempty"`
+	CallSource                string       `json:"call_source,omitempty"`
+	SourceResultID            string       `json:"source_result_id,omitempty"`
+	CoverageStatus            string       `json:"coverage_status,omitempty"`
+	CommandID                 string       `json:"command_id,omitempty"`
+	AttemptID                 string       `json:"attempt_id,omitempty"`
 	StepID                    string       `json:"step_id"`
 	ConfiguredModel           string       `json:"configured_model"`
 	ConfiguredReasoningEffort string       `json:"configured_reasoning_effort"`

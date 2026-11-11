@@ -37,6 +37,11 @@ const Roadmaps = lazy(() =>
     default: module.Roadmaps,
   })),
 );
+const RefactoringMaintenance = lazy(() =>
+  import("../features/refactoring-maintenance/refactoring-maintenance").then(
+    (module) => ({ default: module.RefactoringMaintenance }),
+  ),
+);
 const Tests = lazy(() =>
   import("../features/tests/tests").then((module) => ({
     default: module.Tests,
@@ -201,6 +206,10 @@ export function Workspace({
           {!environmentPage && <Dispatch />}
           <Suspense fallback={<div className="empty">正在加载页面…</div>}>
             <Routes>
+              <Route
+                path={"/projects/" + identity.project_id + "/refactoring"}
+                element={<RefactoringMaintenance />}
+              />
               <Route
                 path={"/projects/" + identity.project_id + "/roadmaps"}
                 element={

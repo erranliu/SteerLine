@@ -1,0 +1,59 @@
+.refactoring-page {
+  max-width: 1050px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.refactoring-card {
+  margin: 20px 0;
+  padding: 22px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 10px;
+}
+.refactoring-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.refactoring-page label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+.refactoring-page input,
+.refactoring-page select,
+.refactoring-page textarea {
+  font: inherit;
+  padding: 8px;
+  color: inherit;
+  background: var(--panel, transparent);
+  border: 1px solid var(--border, #ccc);
+  border-radius: 5px;
+}
+.refactoring-page textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.refactoring-page pre,
+.refactoring-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.refactoring-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.refactoring-page details {
+  padding: 12px 0;
+  border-top: 1px solid var(--border, #ddd);
+}
+@media (max-width: 700px) {
+  .refactoring-fields {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .refactoring-page {
+    padding: 12px;
+  }
+}

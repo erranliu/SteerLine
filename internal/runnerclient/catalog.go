@@ -27,6 +27,13 @@ type RecoveryCapability struct {
 }
 
 type Capabilities struct {
+	WorktreeReuse *struct {
+		InputProperty      string `json:"input_property"`
+		Workflow           string `json:"workflow"`
+		NewSession         bool   `json:"new_session"`
+		ArbitraryDirectory bool   `json:"arbitrary_directory"`
+		OptionalFileWrites string `json:"optional_file_writes"`
+	} `json:"worktree_reuse,omitempty"`
 	ExecutionConfiguration json.RawMessage           `json:"execution_configuration"`
 	ModelInputContract     json.RawMessage           `json:"model_input_contract"`
 	Recovery               *RecoveryCapability       `json:"recovery,omitempty"`

@@ -81,7 +81,7 @@ func (c Client) RunUsageEvents(ctx context.Context, usage runnercontract.UsageSn
 					return nil, errors.New("negative event tokens")
 				}
 			}
-			if e.Decision == "counted" {
+			if e.Decision == "counted" && (e.Scope == "" || e.Scope == "main_session") {
 				counted++
 			}
 			events = append(events, e)
@@ -101,13 +101,16 @@ func (c Client) RunUsageEvents(ctx context.Context, usage runnercontract.UsageSn
 	if counted != usage.Coverage.CountedResponses {
 		return nil, errors.New("usage summary and counted events disagree")
 	}
+	if err := validateInternalUsage(usage.ModelCallCoverage, events); err != nil {
+		return nil, err
+	}
 	if usage.Tokens != nil {
 		summary := counterFields(*usage.Tokens)
 		for i, want := range summary {
 			sum := new(big.Int)
 			known := true
 			for _, e := range events {
-				if e.Decision != "counted" {
+				if e.Decision != "counted" || e.Scope != "" && e.Scope != "main_session" {
 					continue
 				}
 				n := counterFields(e.Tokens)[i]
@@ -127,6 +130,54 @@ func (c Client) RunUsageEvents(ctx context.Context, usage runnercontract.UsageSn
 		}
 	}
 	return events, nil
+}
+
+func validateInternalUsage(coverage *runnercontract.ModelCallCoverage, events []runnercontract.UsageEvent) error {
+	var recorded, covered, uncovered, pending int64
+	seen := map[string]bool{}
+	for _, event := range events {
+		if event.Scope == "" || event.Scope == "main_session" {
+			continue
+		}
+		if event.Scope != "runner_internal" || event.CallID == "" || seen[event.CallID] || event.CallSource != "llm_parser" || event.CommandID == "" || event.SourceResultID == "" {
+			return errors.New("unknown or unbound internal usage source")
+		}
+		seen[event.CallID] = true
+		recorded++
+		switch event.CoverageStatus {
+		case "covered":
+			if event.Decision != "counted" || event.ConfiguredModel == "" {
+				return errors.New("covered internal call lacks counted model attribution")
+			}
+			covered++
+		case "pending", "uncovered":
+			if event.Decision == "counted" {
+				return errors.New("uncovered internal call was counted")
+			}
+			for _, value := range counterFields(event.Tokens) {
+				if value != nil {
+					return errors.New("uncovered internal call has tokens")
+				}
+			}
+			if event.CoverageStatus == "pending" {
+				pending++
+			} else {
+				uncovered++
+			}
+		default:
+			return errors.New("unknown internal coverage status")
+		}
+	}
+	if coverage == nil {
+		if recorded != 0 {
+			return errors.New("internal model coverage is missing")
+		}
+		return nil
+	}
+	if coverage.InternalRecorded != recorded || coverage.InternalCovered != covered || coverage.InternalUncovered != uncovered || coverage.InternalPending != pending {
+		return errors.New("internal model coverage differs from fixed events")
+	}
+	return nil
 }
 
 func counterFields(t runnercontract.UsageTokens) []*int64 {

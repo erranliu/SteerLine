@@ -113,6 +113,9 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
+	if id == "refactoring.local-codex" {
+		timeout = 35 * time.Minute
+	}
 	// Two independently prepared projects: observation-only, then explicit UI
 	// submissions. This is a scenario budget, never a production owner timeout.
 	if id == "runtime.async-activities" {
@@ -793,6 +796,11 @@ func (s *Scenario) cleanup() {
 	preserveScratch := false
 	for _, p := range s.projects {
 		preserveScratch = preserveScratch || p.RemoteCleanupFailed || p.RunnerCleanupFailed
+		if s.ID == "refactoring.local-codex" && p.Driver.NativeHome == filepath.Join(p.Home, "native-auth") {
+			if err := os.Remove(filepath.Join(p.Driver.NativeHome, "auth.json")); err != nil && !os.IsNotExist(err) {
+				failures = append(failures, "remove isolated native login: "+err.Error())
+			}
+		}
 		if p.RemoteCleanupFailed {
 			failures = append(failures, "remote cleanup unverified; retain original refs and scratch")
 		}

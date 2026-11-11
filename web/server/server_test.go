@@ -166,6 +166,20 @@ func TestRoadmapBrowserRoutes(t *testing.T) {
 	}
 }
 
+func TestRefactoringBrowserRoutes(t *testing.T) {
+	s, client := fixture(t)
+	base := "/projects/" + client.identity.ProjectID
+	if w := request(s, "GET", base+"/refactoring?action="+strings.Repeat("a", 32), "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {
+		t.Fatal("maintenance deep link failed", w.Code, w.Body.String())
+	}
+	cookie, _ := login(t, s)
+	for _, path := range []string{"/refactoring", "/refactoring/" + strings.Repeat("a", 32)} {
+		if w := request(s, "GET", "/api/v2/application"+base+path, "", cookie, ""); w.Code != 200 || client.route != base+path {
+			t.Fatal("maintenance read route failed", w.Code, w.Body.String())
+		}
+	}
+}
+
 func TestLegacyCheckRetirementBrowserRoutes(t *testing.T) {
 	s, client := fixture(t)
 	base := "/projects/" + client.identity.ProjectID

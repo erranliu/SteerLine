@@ -18,3 +18,6 @@ func TestWorkflowLocalCodexAudited(t *testing.T) {
 func TestManagementLocalCodex(t *testing.T) {
 	testenv.TestManagement(testenv.NewScenario(t, "testing.management-local-codex"))
 }
+func TestRefactoringLocalCodex(t *testing.T) {
+	testenv.RefactoringLive(testenv.NewScenario(t, "refactoring.local-codex"))
+}
