@@ -175,9 +175,11 @@ function CandidateDetail({
             {issue}
           </p>
         ))}
-        {run.runner_delivery?.resume_required && (
-          <p className="notice amber">待处理 · 核验原执行后显式恢复。</p>
-        )}
+        {run.runner_delivery?.resume_required &&
+          !(answerVisible &&
+            run.decision?.request.interaction_kind === "runner_resume") && (
+            <p className="notice amber">需处理 · 核验原执行后显式恢复。</p>
+          )}
         {stopApplied && run.participation === "active" && (
           <p className="notice amber">
             停止已生效，列表刷新中；可使用页面刷新重取。

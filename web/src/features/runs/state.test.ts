@@ -203,6 +203,37 @@ it("keeps optional merge feedback out of pending answers and exposes recovery wi
   ).toEqual(["running"]);
 });
 
+it("shows reconnecting under running and exhausted recovery under needs attention", () => {
+  const reconnecting = {
+    ...base,
+    workflow_status: "running",
+    execution_status: "running",
+    runner_delivery: { available: true, phase: "observation_reconnecting" },
+  } as Candidate;
+  expect(candidateStatuses(reconnecting)).toEqual(["observation_reconnecting"]);
+  expect(candidateFacets(reconnecting)).toEqual(["running"]);
+
+  const exhausted = {
+    ...reconnecting,
+    workflow_status: "blocked",
+    execution_status: "blocked",
+    recovery_required: true,
+    decision: {
+      status: "pending",
+      request: { interaction_kind: "runner_resume", blocks_progress: true },
+    },
+  } as Candidate;
+  expect(candidateStatuses(exhausted)).toEqual(["blocked", "needs_attention"]);
+  expect(candidateFacets(exhausted)).toEqual(["needs_attention"]);
+  expect(candidateStatuses({
+    ...exhausted,
+    workflow_status: "waiting_input",
+    execution_status: "waiting_input",
+    decision: undefined,
+    recovery_required: false,
+  })).toEqual(["waiting"]);
+});
+
 it.each([
   { participation: "abandoned" },
   { participation: "completed" },

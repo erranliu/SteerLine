@@ -60,6 +60,7 @@ export function matchesCandidate(
 
 export function optionalAnswer(run: Candidate) {
   return (
+    businessOpen(run) &&
     run.decision?.status === "pending" &&
     run.decision.request.interaction_kind === "async" &&
     !run.decision.request.blocks_progress &&
@@ -95,23 +96,35 @@ export function waitingForMerge(run: Candidate) {
   );
 }
 export function requiresAnswer(run: Candidate) {
+  const decision = run.decision;
   return (
     businessOpen(run) &&
+    decision?.status === "pending" &&
+    !["runner_resume", "business_feedback"].includes(
+      decision.request.interaction_kind ?? "",
+    ) &&
+    !waitingForMerge(run) &&
     (run.workflow_status === "waiting_input" ||
-      (run.decision?.status === "pending" &&
-        !waitingForMerge(run) &&
-        (run.decision.request.interaction_kind !== "async" ||
-          run.decision.request.blocks_progress)))
+      decision.request.interaction_kind !== "async" ||
+      decision.request.blocks_progress)
   );
 }
 export function candidateState(run: Candidate) {
   if (run.participation === "abandoned") return "abandoned";
   if (run.delivery_outcome === "winner") return "delivered";
   if (run.participation === "completed") return "completed";
+  if (
+    run.execution_status === "running" &&
+    run.runner_delivery?.available &&
+    run.runner_delivery.phase === "observation_reconnecting"
+  )
+    return "observation_reconnecting";
   if (run.execution_status === "running") return "running";
   if (requiresAnswer(run)) return "waiting_for_input";
   if (waitingForMerge(run)) return "waiting_for_merge";
-  return run.execution_status;
+  return run.execution_status === "waiting_input"
+    ? "waiting"
+    : run.execution_status;
 }
 
 export function candidateStatuses(run: Candidate, task?: Task) {
@@ -122,7 +135,10 @@ export function candidateStatuses(run: Candidate, task?: Task) {
   ) {
     return [run.stop_requested ? "stop_pending" : "historical"];
   }
-  return [...new Set([primary, ...candidateFacets(run, task)])];
+  const facets = candidateFacets(run, task);
+  if (primary === "observation_reconnecting")
+    return [primary, ...facets.filter((facet) => facet !== "running")];
+  return [...new Set([primary, ...facets])];
 }
 export function stopReason(run: Candidate, runs: Candidate[]) {
   if (!participating(run)) return "候选已结束，历史只读；资源保留";

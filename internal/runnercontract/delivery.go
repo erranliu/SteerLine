@@ -30,9 +30,11 @@ type DeliveryObservation struct {
 }
 
 type CommandObservation struct {
-	Command      string `json:"command"`
-	RequestID    string `json:"request_id"`
-	CommandID    string `json:"command_id,omitempty"`
-	ReceiptState string `json:"receipt_state"`
-	ActionStatus string `json:"action_status,omitempty"`
+	Command         string `json:"command"`
+	RequestID       string `json:"request_id"`
+	CommandID       string `json:"command_id,omitempty"`
+	ReceiptState    string `json:"receipt_state"`
+	ActionStatus    string `json:"action_status,omitempty"`
+	CallerRequestID string `json:"caller_request_id,omitempty"`
+	Diagnostic      string `json:"diagnostic,omitempty"`
 }

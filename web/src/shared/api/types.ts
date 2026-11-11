@@ -183,6 +183,8 @@ export interface Candidate {
       command_id?: string;
       receipt_state: string;
       action_status?: string;
+      caller_request_id?: string;
+      diagnostic?: string;
     }[];
   };
   runner_workflow?: { id: string; version: number };

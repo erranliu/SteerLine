@@ -73,6 +73,26 @@ type Candidate struct {
 	Diagnostic        string                    `json:"diagnostic,omitempty"`
 }
 
+// Only the latest resume can use the current Run's failure diagnostic.
+func (c Candidate) ResumeFailureDiagnostic(action Action) string {
+	r := c.Projection
+	if action.Command != "resume" || action.State != "accepted" || action.ActionStatus != "failed" ||
+		c.StopRequested || r == nil || r.Closed || r.Status != "blocked" ||
+		c.RunID == "" || r.RunID != c.RunID || r.Revision == 0 ||
+		r.InputDigest == "" || c.InputDigest != "" && c.InputDigest != r.InputDigest || !r.ResumeRequired {
+		return ""
+	}
+	for i := len(c.Actions) - 1; i >= 0; i-- {
+		if c.Actions[i].Command == "resume" {
+			if c.Actions[i].Request.RequestID == action.Request.RequestID {
+				return r.Diagnostic
+			}
+			break
+		}
+	}
+	return ""
+}
+
 // Withdrawal is a caller participation fact, independent of native stop intent.
 type Withdrawal struct {
 	RequestID        string    `json:"request_id"`

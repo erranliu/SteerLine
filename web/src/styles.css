@@ -677,7 +677,8 @@ textarea {
   color: #e6ce91;
   font-size: 10px;
 }
-.status-needs_attention {
+.status-needs_attention,
+.status-observation_reconnecting {
   color: #e6ce91;
 }
 .execution-panel {
