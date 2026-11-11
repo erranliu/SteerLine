@@ -75,3 +75,12 @@ Runner #146（`2de536cb`）已合入。自动项的命令、时点和证据要�
 早期 `go.roadmap` 试验保留原报告。规划用例的换行符夹具已固定为 LF。既有转正用例在较深临时路径下触发 Git for Windows 的 `$GIT_DIR` 长度限制，使用实际独立短临时目录 `C:\SteerlineDebug\rp` 复跑完整集合通过。
 
 早期 `web.unit` 试验出现既有页面等待超时和活动轮询计数波动，原报告保留。最终正式复测将测试进程限制为四个逻辑处理器，沿用原测试代码和选集，完整通过。
+
+## 合入 main 后的补验
+
+干净工作区提交 `34fbc18b711b9ab42eaac178ec0195e491386692` 合入 `main` `40d710fb89d21923c2a107399b582cd717c3709a`。两侧保留各自的 SQLite 表，合并候选使用 schema 48。独立复核确认规划和维护的提示词资产、黄金正文及原发送接线均保留。
+
+- 在 Windows、Edge、Codex CLI 0.166.0 和相同的 Runner #146 `2de536cb` 上重跑真实链。一个任务在原会话完成两轮改稿、解决实际 Git Rebase 冲突并继续。GitHub [SteerlineTest PR #798](https://github.com/erranliu/SteerlineTest/pull/798) 的文件清单只包含勾选的草稿和一个额外文件。合并后，滞后的项目 checkout 保持待同步，快进后原链接打开已合入草稿。测试远端分支、会话和服务已核验清理，进程与监听均为零。
+- 真实补验报告位于 `C:\SteerlineDebug\roadmap-planning-6999\test-results\L4\live-merge-34fbc18b`。后端与 Web EXE 的 SHA-256 分别为 `93a9eddc7d978702ebab8b8276fe5aaedf9c50e6a7819897cba674eca5afa9c0` 和 `8c40f6a9db5eb7d61bff4e821130c80f3ddf488e8c279d718e24310441ae184c`。
+- 同一提交的专属受控验收、L1、存储、Runner 客户端、HTTP API、规划和维护代理路由，以及原停止请求定向测试均通过。HTTP API 首轮出现 Windows 文件重命名拒绝访问，独立串行复跑全包通过。证据位于 `C:\SteerlineDebug\roadmap-planning-6999\diagnostics\main-merge-34fbc18b`。其他固定回归保留上节的原受测版本和报告。
+- RPW-M01 人工走查待安排。多任务批次和租约故障恢复以受控测试取证，真实浏览器场景未注入 SteerLine 整体进程崩溃。
