@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// View omits frozen execution settings and immutable transport inputs.
+// View exposes the action's direction snapshot and omits internal execution settings.
 func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 	amount, complete := r.CostTotal()
 	ops := make([]map[string]any, 0, len(r.Operations))
@@ -47,5 +47,5 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 		wallEnd = *r.FinishedAt
 	}
 	wallSeconds := wallEnd.Sub(r.CreatedAt).Seconds()
-	return map[string]any{"cost_breakdown": breakdown, "wall_seconds": wallSeconds, "id": r.ID, "revision": r.Revision, "input": r.Input, "phase": r.Phase, "round": r.Round, "source_commit": r.Frozen.Repository.BaseRevision, "source_branch": r.Frozen.Repository.BaseBranch, "summary": r.Summary, "diagnostic": r.Diagnostic, "question": r.Question, "operations": ops, "reports": r.Reports, "pr": r.PR, "elapsed_seconds": r.Elapsed(now).Seconds(), "amount": amount, "cost_complete": complete, "untracked": []string{"subagents", "tool_internal_models", "unobserved_provider_calls"}, "created_at": r.CreatedAt, "updated_at": r.UpdatedAt, "active": r.Active(), "can_finish": r.Phase == "stopped" || r.Phase == "blocked" || r.Active() && !r.FinishRequested && !r.StopRequested, "can_stop": r.Active() && !r.StopRequested, "can_conflict": r.Phase == "delivered" && r.PR != nil && !r.PR.Merged && r.PR.State == "open"}
+	return map[string]any{"cost_breakdown": breakdown, "wall_seconds": wallSeconds, "id": r.ID, "revision": r.Revision, "input": r.Input, "direction_name": r.Frozen.Direction.Name, "direction_prompt": r.Frozen.Direction.Prompt, "phase": r.Phase, "round": r.Round, "source_commit": r.Frozen.Repository.BaseRevision, "source_branch": r.Frozen.Repository.BaseBranch, "summary": r.Summary, "diagnostic": r.Diagnostic, "question": r.Question, "operations": ops, "reports": r.Reports, "pr": r.PR, "elapsed_seconds": r.Elapsed(now).Seconds(), "amount": amount, "cost_complete": complete, "untracked": []string{"subagents", "tool_internal_models", "unobserved_provider_calls"}, "created_at": r.CreatedAt, "updated_at": r.UpdatedAt, "active": r.Active(), "can_finish": r.Phase == "stopped" || r.Phase == "blocked" || r.Active() && !r.FinishRequested && !r.StopRequested, "can_stop": r.Active() && !r.StopRequested, "can_conflict": r.Phase == "delivered" && r.PR != nil && !r.PR.Merged && r.PR.State == "open"}
 }

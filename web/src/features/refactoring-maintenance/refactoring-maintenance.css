@@ -1,59 +1,69 @@
-.refactoring-page {
-  max-width: 1050px;
-  margin: 0 auto;
-  padding: 24px;
+.refactoring-panel h2 {
+  margin-bottom: 10px;
 }
-.refactoring-card {
-  margin: 20px 0;
-  padding: 22px;
-  border: 1px solid var(--border, #ddd);
-  border-radius: 10px;
-}
+
 .refactoring-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
-.refactoring-page label {
-  display: flex;
-  flex-direction: column;
+
+.refactoring-configuration {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.refactoring-panel label {
+  display: grid;
   gap: 6px;
+  min-width: 0;
   margin: 12px 0;
 }
-.refactoring-page input,
-.refactoring-page select,
-.refactoring-page textarea {
-  font: inherit;
-  padding: 8px;
-  color: inherit;
-  background: var(--panel, transparent);
-  border: 1px solid var(--border, #ccc);
+
+.refactoring-preview {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
   border-radius: 5px;
+  background: var(--color-background);
 }
-.refactoring-page textarea {
-  min-height: 90px;
-  resize: vertical;
+
+.refactoring-panel .refactoring-preview h3 {
+  margin: 0 0 6px;
 }
-.refactoring-page pre,
+
+.refactoring-panel pre,
+.refactoring-panel code,
 .refactoring-pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.refactoring-actions {
+
+.refactoring-panel pre {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.refactoring-actions,
+.refactoring-history {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
+  margin-block: 12px;
 }
-.refactoring-page details {
-  padding: 12px 0;
-  border-top: 1px solid var(--border, #ddd);
+
+.refactoring-panel details,
+.refactoring-panel article {
+  padding-block: 10px;
+  border-top: 1px solid var(--color-border);
 }
+
+.refactoring-panel summary {
+  cursor: pointer;
+}
+
 @media (max-width: 700px) {
   .refactoring-fields {
     grid-template-columns: 1fr;
     gap: 0;
-  }
-  .refactoring-page {
-    padding: 12px;
   }
 }

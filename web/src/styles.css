@@ -582,7 +582,8 @@ label {
 }
 select,
 textarea,
-input[type="text"] {
+input[type="text"],
+.refactoring-panel input[type="number"] {
   width: 100%;
   background: #101b14;
   border: 1px solid #3b5442;
@@ -1405,7 +1406,7 @@ textarea {
   margin: 16px 0;
 }
 
-.maintenance-panel { max-width: none; padding: 14px 18px; margin-bottom: 16px; }
+.maintenance-panel, .refactoring-panel { max-width: none; padding: 14px 18px; margin-bottom: 16px; }
 .maintenance-panel > div { display: grid; gap: 10px; margin-top: 12px; }
 .maintenance-panel label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .maintenance-panel input:not([type="checkbox"]) { flex: 1; min-width: 200px; }

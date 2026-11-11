@@ -25,16 +25,32 @@ func RefactoringMaintenance(s *Scenario) {
 	s.Must(e)
 	defer client.Close()
 	prefix := "/projects/" + identity.ProjectID
+	directionsDir := filepath.Join(p.Home, "etc", "refactoring-directions")
+	s.Must(os.MkdirAll(directionsDir, 0700))
+	template := filepath.Join(directionsDir, "shared-fixtures.md")
+	const directionPrompt = "# 收拢共享夹具\r\n\r\n优先处理共享测试夹具。  \r\n"
+	s.Must(os.WriteFile(template, []byte(directionPrompt), 0600))
 	var record struct {
-		ID         string
-		Revision   uint64
-		Phase      string
-		Round      int
-		Diagnostic string
-		Reports    []ref.Report
-		Operations []ref.Operation
-		PR         *struct{ URL string }
-		Question   *ref.Question
+		ID              string
+		Revision        uint64
+		Phase           string
+		Round           int
+		Diagnostic      string
+		Reports         []ref.Report
+		Operations      []ref.Operation
+		PR              *struct{ URL string }
+		Question        *ref.Question
+		DirectionName   string `json:"direction_name"`
+		DirectionPrompt string `json:"direction_prompt"`
+	}
+	stale := ref.Start{Direction: "custom:shared-fixtures", DirectionRevision: ref.Digest([]byte("old")), Profile: "local", Strategy: "cautious", Budget: ref.Budget{Rounds: 1}}
+	body, e := json.Marshal(stale)
+	s.Must(e)
+	staleRequest := httpcontract.CommandEnvelope{RequestID: ref.ID(), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "refactoring_start", TargetID: identity.RepositoryIdentity, ExpectedVersion: 1, Payload: body}
+	var rejected httpcontract.CommandResponse
+	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &rejected))
+	if rejected.Status != "rejected" || rejected.Diagnostic != "重构提示词已更新，请刷新并查看最新正文后重新启动" {
+		s.t.Fatal("stale preview did not reject before launch", rejected)
 	}
 	command := func(action, target string, revision uint64, payload any) httpcontract.CommandEnvelope {
 		body, e := json.Marshal(payload)
@@ -77,9 +93,10 @@ func RefactoringMaintenance(s *Scenario) {
 		})
 	}
 	wait("waiting_input")
-	if record.Question == nil {
-		s.t.Fatal("missing question")
+	if record.Question == nil || record.DirectionName != "收拢共享夹具" || record.DirectionPrompt != directionPrompt {
+		s.t.Fatal("missing question or direction snapshot", record)
 	}
+	s.Must(os.WriteFile(template, []byte("# 新模板\n\n更新后的内容。\n"), 0600))
 	// GETs and command replay must not create work or refresh identities.
 	var replay httpcontract.CommandResponse
 	s.Must(client.Post(s.Context, prefix+"/commands", request, &replay))
@@ -101,8 +118,29 @@ func RefactoringMaintenance(s *Scenario) {
 	identityKey := ""
 	origin := ""
 	for _, o := range record.Operations {
+		if o.RunID == "" {
+			continue
+		}
 		run, ok := fixture.Runs[o.RunID]
-		if !ok || run.Workflow.ID != "execute" {
+		if !ok {
+			s.t.Fatal("missing Runner operation", o.RunID)
+		}
+		if run.Workflow.ID == "generate" {
+			if len(run.Materials) != 2 || run.Materials[1].Path != "maintenance/context.json" {
+				s.t.Fatal("missing decision context", run.Materials)
+			}
+			contextRaw, err := os.ReadFile(run.Materials[1].SnapshotPath)
+			s.Must(err)
+			var decisionContext struct {
+				DirectionPrompt string `json:"direction_prompt"`
+			}
+			s.Must(json.Unmarshal(contextRaw, &decisionContext))
+			if decisionContext.DirectionPrompt != directionPrompt {
+				s.t.Fatal("decision lost original direction after template edit", o.RunID)
+			}
+			continue
+		}
+		if run.Workflow.ID != "execute" {
 			continue
 		}
 		writes++
@@ -124,7 +162,7 @@ func RefactoringMaintenance(s *Scenario) {
 	}
 	command("refactoring_conflict", record.ID, record.Revision, struct{}{})
 	wait("delivered")
-	if len(record.Reports) != 2 || record.PR.URL != original || record.Round != 2 {
+	if len(record.Reports) != 2 || record.PR.URL != original || record.Round != 2 || record.DirectionPrompt != directionPrompt {
 		s.t.Fatal("conflict changed original action/PR")
 	}
 	var activities api.AsyncActivities
@@ -139,6 +177,6 @@ func RefactoringMaintenance(s *Scenario) {
 		s.t.Fatal("missing maintenance activity")
 	}
 	browser(record.ID)
-	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-proof.json"), map[string]any{"rounds": 2, "executes": writes, "same_workspace": true, "original_pr": true, "independent_audit": true, "browser": true, "head": record.Reports[1].Head, "pr": original}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-proof.json"), map[string]any{"rounds": 2, "executes": writes, "same_workspace": true, "original_pr": true, "independent_audit": true, "browser": true, "direction_template": true, "head": record.Reports[1].Head, "pr": original}))
 	s.Must(s.FinishBody())
 }

@@ -36,7 +36,7 @@ func TestBudgetIsGateForNextRound(t *testing.T) {
 }
 func TestBudgetValidation(t *testing.T) {
 	for _, v := range []string{"0", "-1", "NaN", "Inf", "1e2", ".5", ""} {
-		s := Start{Direction: "simplify", Profile: "local", Strategy: "cautious", Budget: Budget{Dollars: v}}
+		s := Start{Direction: "simplify", DirectionRevision: Digest([]byte("方向")), Profile: "local", Strategy: "cautious", Budget: Budget{Dollars: v}}
 		if s.Validate() == nil {
 			t.Fatal("invalid budget accepted", v)
 		}

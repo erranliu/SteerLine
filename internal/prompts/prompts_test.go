@@ -109,11 +109,25 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		read         func() ([]byte, error)
 	}{
 		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
-		{"maintenance", "c3385287247e3b8ce1e6a1652eefc990c3eb3119d8135ecfc9295868f205b073", MaintenanceRules},
+		{"maintenance", "8f696fc61d85c6bbc444f98b43f2ef46371518430d7ebab632c3c23bb8390ba1", MaintenanceRules},
 		{"main-agent", "3a7a447bbe7527bf4c1c46867f9180cab32bc3b61359a92d9db9784172c38189", MainAgentRules},
 		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
 		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
+	}
+	for _, direction := range []struct{ id, sha256 string }{
+		{"simplify", "0eae9dbb8636492f585982d01964e43b8a3116d6957ed5fb92f39437477b1abd"},
+		{"cleanup", "feac63c598b83c95ffa1ec682f41a7a1d5b86ef277b1022f42fa61694a2a8e7d"},
+		{"boundaries", "6d2e4581612d586a8d41d9a7bdce889f3228f0654a5433747df64f201a428a5b"},
+		{"readability", "773a8da0d06062805ec61c91f0177bd316d5307806c331131e1c575d980f0f11"},
+		{"docs-tests", "c38c3472c7e3cfead403511934779c3dc677251a6d518d660dd0b36a08ad0eaf"},
+	} {
+		cases = append(cases, struct {
+			name, sha256 string
+			read         func() ([]byte, error)
+		}{"maintenance-direction/" + direction.id, direction.sha256, func() ([]byte, error) {
+			return MaintenanceDirection(direction.id)
+		}})
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

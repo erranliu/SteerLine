@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
+import { Button } from "../../shared/ui/button";
 import { SafeLink } from "../../shared/ui/status";
 import type { ProjectReadiness } from "../../shared/api/types";
 import "./refactoring-maintenance.css";
@@ -19,6 +20,8 @@ export type MaintenanceRecord = {
   revision: number;
   phase: string;
   input: Input;
+  direction_name: string;
+  direction_prompt?: string;
   round: number;
   active: boolean;
   source_commit: string;
@@ -61,12 +64,9 @@ type Index = {
   profiles: { id: string; name: string }[];
   default_profile: string;
 };
-const directions = {
-  simplify: "简化结构",
-  cleanup: "清理冗余",
-  boundaries: "理顺边界",
-  readability: "改善可读性",
-  "docs-tests": "文档与测试",
+type DirectionCatalogue = {
+  directions: { id: string; name: string; prompt: string; revision: string }[];
+  diagnostics?: string[];
 };
 const phases: Record<string, string> = {
   select: "选择下一轮",
@@ -108,6 +108,13 @@ export function RefactoringMaintenance() {
     enabled: online,
     refetchInterval: 2000,
   });
+  const catalogue = useQuery({
+    queryKey: [...key, "directions"],
+    queryFn: ({ signal }) =>
+      api.get<DirectionCatalogue>("/refactoring/directions", signal),
+    enabled: online,
+    refetchOnWindowFocus: false,
+  });
   const detail = useQuery({
     queryKey: [...key, selected],
     queryFn: ({ signal }) =>
@@ -137,6 +144,8 @@ export function RefactoringMaintenance() {
     setAnswer("");
   }, [detail.data?.question?.id]);
   const current = detail.data;
+  const directions = catalogue.data?.directions ?? [];
+  const selectedDirection = directions.find(({ id }) => id === direction);
   const working =
     (index.data?.records.some((r) => r.active) ?? false) ||
     (pendingRequests?.().some((r) => r.action === "refactoring_start") ??
@@ -155,6 +164,7 @@ export function RefactoringMaintenance() {
       );
       if (receipt?.status === "rejected") {
         setError(receipt.diagnostic ?? "操作被拒绝");
+        if (action === "refactoring_start") void catalogue.refetch();
         return;
       }
       const result = receipt?.refactoring as { id?: string } | undefined;
@@ -168,24 +178,32 @@ export function RefactoringMaintenance() {
   const disabled = !online || busy;
   return (
     <div className="refactoring-page">
-      <header>
-        <h1>重构与维护</h1>
-        <p>
-          SteerAgent 只读调查与决策，Runner
-          在独立工作区实施。与任务开发并行推进。
-        </p>
+      <header className="page-heading">
+        <div>
+          <h1>重构与维护</h1>
+          <p>
+            SteerAgent 只读调查与决策，Runner
+            在独立工作区实施。与任务开发并行推进。
+          </p>
+        </div>
       </header>
       {(error || index.error || detail.error) && (
-        <p role="alert">{error || String(index.error ?? detail.error)}</p>
+        <p className="notice amber" role="alert">
+          {error || String(index.error ?? detail.error)}
+        </p>
       )}
-      <section className="refactoring-card">
+      <section className="settings-panel refactoring-panel">
         <h2>发起维护</h2>
         {working && (
           <p>
             已有维护行动在进行，启动配置已冻结；结束或停止后可发起新的维护。
           </p>
         )}
-        <p>
+        <p
+          className={
+            readiness.data?.status === "ready" ? "muted" : "notice amber"
+          }
+        >
           {readiness.data?.status === "ready"
             ? "项目维护已就绪"
             : "项目维护未就绪"}{" "}
@@ -195,8 +213,11 @@ export function RefactoringMaintenance() {
           hidden={working}
           onSubmit={(e) => {
             e.preventDefault();
+            if (!selectedDirection || catalogue.isError || catalogue.isFetching)
+              return;
             void command("refactoring_start", identity.repository_identity, 1, {
-              direction,
+              direction: selectedDirection.id,
+              direction_revision: selectedDirection.revision,
               requirements,
               profile,
               strategy,
@@ -204,20 +225,56 @@ export function RefactoringMaintenance() {
             });
           }}
         >
-          <div className="refactoring-fields">
-            <label>
-              重构方向
-              <select
-                value={direction}
-                onChange={(e) => setDirection(e.target.value)}
-              >
-                {Object.entries(directions).map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <label>
+            重构方向
+            <select
+              required
+              value={selectedDirection?.id ?? ""}
+              onChange={(e) => setDirection(e.target.value)}
+            >
+              <option value="" disabled>
+                {catalogue.isPending ? "正在读取重构方向…" : "选择重构方向"}
+              </option>
+              {[
+                { label: "内置方向", custom: false },
+                { label: "自定义方向", custom: true },
+              ].map(({ label, custom }) => {
+                const options = directions.filter(
+                  ({ id }) => id.startsWith("custom:") === custom,
+                );
+                return (
+                  options.length > 0 && (
+                    <optgroup key={label} label={label}>
+                      {options.map(({ id, name }) => (
+                        <option key={id} value={id}>
+                          {name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )
+                );
+              })}
+            </select>
+          </label>
+          {catalogue.isError && (
+            <p className="notice amber" role="alert">
+              无法读取重构方向：{String(catalogue.error)}
+            </p>
+          )}
+          {catalogue.data?.diagnostics?.map((diagnostic) => (
+            <p className="notice amber" key={diagnostic}>
+              {diagnostic}
+            </p>
+          ))}
+          {selectedDirection && (
+            <div className="refactoring-preview">
+              <h3>方向提示词</h3>
+              <pre aria-label="方向提示词" tabIndex={0}>
+                {selectedDirection.prompt}
+              </pre>
+            </div>
+          )}
+          <div className="refactoring-fields refactoring-configuration">
             <label>
               执行配置
               <select
@@ -286,14 +343,18 @@ export function RefactoringMaintenance() {
               />
             </label>
           </div>
-          <p>
+          <p className="muted">
             至少设置一项预算；任一项耗尽后自动收尾，已有成果仍推进至 PR
             和报告，不因预算等待人工。
           </p>
-          <button
+          <Button
+            variant="default"
             disabled={
               disabled ||
               working ||
+              !selectedDirection ||
+              catalogue.isError ||
+              catalogue.isFetching ||
               !profile ||
               readiness.data?.status !== "ready" ||
               !(dollars || minutes || rounds)
@@ -301,20 +362,28 @@ export function RefactoringMaintenance() {
             type="submit"
           >
             开始维护
-          </button>
+          </Button>
         </form>
       </section>
       {current && (
-        <section className="refactoring-card" aria-label="维护详情">
+        <section
+          className="settings-panel refactoring-panel"
+          aria-label="维护详情"
+        >
           <h2>{phases[current.phase] ?? current.phase}</h2>
           <p>
-            {directions[current.input.direction as keyof typeof directions]} ·
-            第 {current.round} 轮 · 已用{" "}
+            {current.direction_name} · 第 {current.round} 轮 · 已用{" "}
             {Math.floor(current.elapsed_seconds / 60)} 分钟
           </p>
           <p>
             起始提交 <code>{current.source_commit}</code>
           </p>
+          {current.direction_prompt && (
+            <details>
+              <summary>方向提示词</summary>
+              <pre>{current.direction_prompt}</pre>
+            </details>
+          )}
           <p>
             策略：
             {
@@ -368,10 +437,14 @@ export function RefactoringMaintenance() {
             Agent、工具内部模型和不可观测供应商调用。
           </p>
           {current.summary && <p>{current.summary}</p>}
-          {current.diagnostic && <p role="alert">{current.diagnostic}</p>}
+          {current.diagnostic && (
+            <p className="notice amber" role="alert">
+              {current.diagnostic}
+            </p>
+          )}
           <div className="refactoring-actions">
             {current.can_finish && (
-              <button
+              <Button
                 disabled={disabled}
                 onClick={() =>
                   void command(
@@ -383,10 +456,11 @@ export function RefactoringMaintenance() {
                 }
               >
                 结束并交付
-              </button>
+              </Button>
             )}
             {current.can_stop && (
-              <button
+              <Button
+                variant="destructive"
                 disabled={disabled}
                 onClick={() =>
                   void command(
@@ -398,10 +472,10 @@ export function RefactoringMaintenance() {
                 }
               >
                 立即停止
-              </button>
+              </Button>
             )}
             {current.can_conflict && (
-              <button
+              <Button
                 disabled={disabled || working}
                 onClick={() =>
                   void command(
@@ -413,7 +487,7 @@ export function RefactoringMaintenance() {
                 }
               >
                 处理冲突并更新报告
-              </button>
+              </Button>
             )}
             {current.pr && <SafeLink url={current.pr.url}>查看 PR</SafeLink>}
           </div>
@@ -439,7 +513,9 @@ export function RefactoringMaintenance() {
                   onChange={(e) => setAnswer(e.target.value)}
                 />
               </label>
-              <button disabled={disabled || !answer.trim()}>答复并继续</button>
+              <Button variant="default" disabled={disabled || !answer.trim()}>
+                答复并继续
+              </Button>
             </form>
           )}
           {current.reports?.map((r, i) => (
@@ -468,21 +544,29 @@ export function RefactoringMaintenance() {
               <h4>提示词</h4>
               <pre>{o.prompt}</pre>
               <h4>反馈</h4>
-                <pre>{o.feedback || (o.state === "complete" ? "未返回文字" : "等待反馈")}</pre>
+              <pre>
+                {o.feedback ||
+                  (o.state === "complete" ? "未返回文字" : "等待反馈")}
+              </pre>
             </details>
           ))}
         </section>
       )}
-      <section className="refactoring-card">
+      <section className="settings-panel refactoring-panel">
         <h2>维护历史</h2>
         {index.data?.records.length === 0 && <p>暂无维护行动</p>}
-        <ul>
+        <ul className="refactoring-history">
           {index.data?.records.map((r) => (
             <li key={r.id}>
-              <button onClick={() => setParams({ action: r.id })}>
-                {directions[r.input.direction as keyof typeof directions]} ·{" "}
-                {phases[r.phase] ?? r.phase} · {r.id.slice(0, 8)}
-              </button>
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-pressed={selected === r.id}
+                onClick={() => setParams({ action: r.id })}
+              >
+                {r.direction_name} · {phases[r.phase] ?? r.phase} ·{" "}
+                {r.id.slice(0, 8)}
+              </Button>
             </li>
           ))}
         </ul>

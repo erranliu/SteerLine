@@ -105,6 +105,18 @@ console.log('checks passed');
 	s.Must(e)
 	defer client.Close()
 	prefix := "/projects/" + identity.ProjectID
+	var catalogue struct{ Directions []ref.Direction }
+	s.Must(client.Get(s.Context, prefix+"/refactoring/directions", &catalogue))
+	var directionRevision string
+	for _, direction := range catalogue.Directions {
+		if direction.ID == "simplify" {
+			directionRevision = direction.Revision
+			break
+		}
+	}
+	if directionRevision == "" {
+		s.t.Fatal("missing simplify direction")
+	}
 	post := func(action, target string, revision uint64, payload any) (string, httpcontract.CommandResponse) {
 		body, e := json.Marshal(payload)
 		s.Must(e)
@@ -114,7 +126,7 @@ console.log('checks passed');
 		s.Must(client.Post(s.Context, prefix+"/commands", request, &response))
 		return id, response
 	}
-	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, ref.Start{Direction: "simplify", Requirements: "每轮只简化 alpha.cjs 或 beta.cjs 一个文件，完成两个独立切片；保留 calculate 导出及行为。验证 node check.cjs，不能修改检查或项目材料。交付一个 draft PR，报告原样放入原 PR 正文。", Profile: "local-codex", Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
+	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, ref.Start{Direction: "simplify", DirectionRevision: directionRevision, Requirements: "每轮只简化 alpha.cjs 或 beta.cjs 一个文件，完成两个独立切片；保留 calculate 导出及行为。验证 node check.cjs，不能修改检查或项目材料。交付一个 draft PR，报告原样放入原 PR 正文。", Profile: "local-codex", Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
 	if started.Status != "applied" {
 		s.t.Fatalf("refactoring_start: %s", started.Diagnostic)
 	}

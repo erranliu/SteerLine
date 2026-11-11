@@ -168,12 +168,17 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 	t.Cleanup(func() { store.Close() })
 	f := &maintenanceRunner{t: t, dir: dir, runs: map[string]*rc.Run{}, files: map[string]rc.ResultFile{}}
 	s := &Service{Project: "project", Store: store, Runner: f, Queue: runnerbinding.NewContentQueue(1), Prepare: func(context.Context, m.Start) (m.Frozen, error) {
-		return m.Frozen{Repository: rc.Repository{LocalPath: dir, BaseRevision: strings.Repeat("b", 40)}, Rules: "完整规则", Runner: rc.BuildPin{StateDir: dir}}, nil
+		direction, err := readBuiltInDirection("simplify")
+		return m.Frozen{Direction: direction, Repository: rc.Repository{LocalPath: dir, BaseRevision: strings.Repeat("b", 40)}, Rules: "完整规则", Runner: rc.BuildPin{StateDir: dir}}, err
 	}, Verify: func(_ context.Context, _ m.Record, v m.Result) (*rc.PRFact, error) {
 		return &rc.PRFact{URL: v.PR, HeadRevision: v.Head, HeadBranch: "codex/maintenance", State: "open"}, nil
 	}}
 	cmd := m.Command{ID: m.ID(), Action: "refactoring_start", Target: s.Project, Expected: 1, Raw: json.RawMessage(`{"start":true}`)}
-	r, e := s.Command(context.Background(), cmd, &m.Start{Direction: "simplify", Profile: "local", Strategy: "cautious", Budget: m.Budget{Rounds: 2}})
+	direction, e := readBuiltInDirection("simplify")
+	if e != nil {
+		t.Fatal(e)
+	}
+	r, e := s.Command(context.Background(), cmd, &m.Start{Direction: direction.ID, DirectionRevision: direction.Revision, Profile: "local", Strategy: "cautious", Budget: m.Budget{Rounds: 2}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -442,6 +447,7 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 		t.Fatal(e)
 	}
 	r.Frozen.Rules = string(rules)
+	r.Frozen.Direction.Prompt = "# 自定义方向\r\n\r\n只整理给定范围  \r\n"
 	read, e := s.prepareOperation(r)
 	if e != nil {
 		t.Fatal(e)
@@ -456,6 +462,12 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 	}
 	if g.Generate.Instruction != string(golden) || g.Generate.Repository == nil || g.Generate.Repository.Commit != r.Frozen.Repository.BaseRevision || g.Generate.Directory != nil || len(g.Generate.Materials) != 2 || *g.Generate.Materials[0].Content != string(rules) {
 		t.Fatal("actual read-only wire differs")
+	}
+	var initial struct {
+		DirectionPrompt string `json:"direction_prompt"`
+	}
+	if e = json.Unmarshal([]byte(*g.Generate.Materials[1].Content), &initial); e != nil || initial.DirectionPrompt != r.Frozen.Direction.Prompt {
+		t.Fatal("read-only context lost exact direction text", e)
 	}
 	r.Workspace = filepath.Join(t.TempDir(), "original-worktree")
 	r.LatestOwner = "latest-failed-owner"
@@ -515,12 +527,15 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 	}
 	var seed struct {
 		Instruction, Rules string
-		Context            facts
+		Context            struct {
+			facts
+			DirectionPrompt *string `json:"direction_prompt"`
+		}
 	}
 	if e = json.Unmarshal(raw, &seed); e != nil {
 		t.Fatal(e)
 	}
-	if seed.Instruction != r.PendingPrompt || seed.Rules != string(rules) || seed.Context.ManagedBranch != "codex/original" || !seed.Context.AsOf.Equal(frozenAt) || !write.ReportAsOf.Equal(frozenAt) || seed.Context.Amount == nil || *seed.Context.Amount != "0.750000000000000000" || seed.Context.CostComplete || len(seed.Context.CostIssues) != 1 || !strings.Contains(seed.Context.CostIssues[0], "pending usage") {
+	if seed.Instruction != r.PendingPrompt || seed.Rules != string(rules) || seed.Context.DirectionPrompt != nil || seed.Context.ManagedBranch != "codex/original" || !seed.Context.AsOf.Equal(frozenAt) || !write.ReportAsOf.Equal(frozenAt) || seed.Context.Amount == nil || *seed.Context.Amount != "0.750000000000000000" || seed.Context.CostComplete || len(seed.Context.CostIssues) != 1 || !strings.Contains(seed.Context.CostIssues[0], "pending usage") {
 		t.Fatal("complete original file lost bytes/snapshot")
 	}
 	late := "1.00"

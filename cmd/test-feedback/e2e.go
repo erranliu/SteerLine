@@ -726,13 +726,14 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				Same             bool `json:"same_workspace"`
 				Original         bool `json:"original_pr"`
 				Audit            bool `json:"independent_audit"`
+				Direction        bool `json:"direction_template"`
 				Browser          bool
 			}
 			raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "refactoring-proof.json"))
 			if err != nil {
 				return err
 			}
-			if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Original || !proof.Audit || !proof.Browser {
+			if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Original || !proof.Audit || !proof.Browser || !proof.Direction {
 				return errors.New("maintenance evidence incomplete")
 			}
 		}
