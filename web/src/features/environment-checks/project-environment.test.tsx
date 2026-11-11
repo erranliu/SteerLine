@@ -64,6 +64,54 @@ async function openHistory() {
   await screen.findByLabelText("历史范围");
 }
 
+it("refreshes current readiness within one active poll and slows down after settlement", async () => {
+  vi.useFakeTimers();
+  try {
+    let settled = false;
+    const { api } = fixture(
+      true,
+      undefined,
+      false,
+      "",
+      false,
+      false,
+      (options) => {
+        const status = settled ? "ready" : "not_ready";
+        const stage = settled ? "ready" : "verifying";
+        Object.assign(options.environments[0], {
+          activity_settled: settled,
+          status,
+          stage,
+        });
+        Object.assign(options.profiles[0], { status, stage });
+      },
+    );
+    const readinessReads = () =>
+      vi
+        .mocked(api.get)
+        .mock.calls.filter(([path]) => path === "/environment/options").length;
+    await act(() => vi.advanceTimersByTimeAsync(10));
+    expect(
+      within(currentCard()).getByRole("heading", { name: "检测中" }),
+    ).toBeVisible();
+    expect(readinessReads()).toBe(1);
+
+    settled = true;
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    expect(
+      within(currentCard()).getByRole("heading", { name: "已就绪" }),
+    ).toBeVisible();
+    expect(readinessReads()).toBe(2);
+
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    expect(readinessReads()).toBe(2);
+    await act(() => vi.advanceTimersByTimeAsync(12000));
+    expect(readinessReads()).toBe(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("copies the canonical preparation prompt without submitting a detection and offers manual copying on failure", async () => {
   const { send } = fixture(true, undefined, false, "", true);
   const writeText = vi.fn().mockResolvedValue(undefined);
