@@ -74,25 +74,41 @@ export function Answer({ run }: { run: Candidate }) {
       )
     : undefined;
   const latestResume = resumeCommands?.at(-1);
-  const observedResume = envelope
-    ? resumeCommands?.find(
-        (command) => command.caller_request_id === envelope.request_id,
-      )
-    : latestResume;
   const resumeFailed = (command: typeof latestResume) =>
     !!command &&
     [command.receipt_state, command.action_status].some(
       (status) =>
         status === "failed" || status === "rejected" || status === "cancelled",
     );
+  const localResume = envelope
+    ? resumeCommands?.find(
+        (command) => command.caller_request_id === envelope.request_id,
+      )
+    : undefined;
+  const localResumeCompleted =
+    resume &&
+    (localResume?.action_status === "completed" ||
+      receipt?.command?.status === "confirmed");
+  const submittedRecoveryVersion = envelope?.payload.expected_recovery_version;
+  const localResumeSuperseded =
+    (!!localResume &&
+      (localResumeCompleted || resumeFailed(localResume)) &&
+      localResume !== latestResume) ||
+    (localResumeCompleted &&
+      typeof submittedRecoveryVersion === "number" &&
+      run.recovery_version > submittedRecoveryVersion);
+  const observedResume =
+    !envelope || localResumeSuperseded ? latestResume : localResume;
+  const activeReceipt = localResumeSuperseded ? undefined : receipt;
   const latestResumePending =
     !!latestResume &&
     !resumeFailed(latestResume) &&
     latestResume.action_status !== "completed" &&
-    !(latestResume === observedResume && receipt?.status === "rejected");
+    !(latestResume === observedResume && activeReceipt?.status === "rejected");
   const answered =
     (!!envelope &&
-      receipt?.status !== "rejected" &&
+      !localResumeSuperseded &&
+      activeReceipt?.status !== "rejected" &&
       !resumeFailed(observedResume)) ||
     latestResumePending;
   const rejected =
@@ -227,14 +243,16 @@ export function Answer({ run }: { run: Candidate }) {
   if (resume) {
     const failure =
       !answered &&
-      (resumeFailed(observedResume) || receipt?.status === "rejected") &&
-      (observedResume?.diagnostic || receipt?.diagnostic || "Runner 恢复失败。");
+      (resumeFailed(observedResume) || activeReceipt?.status === "rejected") &&
+      (observedResume?.diagnostic ||
+        activeReceipt?.diagnostic ||
+        "Runner 恢复失败。");
     return (
       <section className="answer-panel" aria-label="恢复原执行">
         <p>需处理 · 核验原执行后恢复。</p>
         {answered ? (
           <p role="status">
-            {!receipt || receipt.status === "outcome_unknown"
+            {!activeReceipt || activeReceipt.status === "outcome_unknown"
               ? "恢复结果待核实，请在操作记录中核实原请求。"
               : "恢复请求已提交，等待状态更新。"}
           </p>

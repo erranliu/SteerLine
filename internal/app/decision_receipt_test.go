@@ -51,4 +51,12 @@ func TestRunnerResumeReceiptUsesOriginalCallerRequestAndFinalOutcome(t *testing.
 	if !applyRunnerAnswerAction(&receipt, candidate, req) || receipt.Status != "failed" || receipt.ResultError != "" {
 		t.Fatalf("newer resume diagnostic was assigned to the original request: %+v", receipt)
 	}
+	candidate.Actions[0].State = "rejected"
+	candidate.Actions[0].ErrorCode = "stale_revision"
+	candidate.Actions[0].RejectionDiagnostic = "Runner revision changed before recovery"
+	receipt = api.CommandReceipt{Status: "pending"}
+	if !applyRunnerAnswerAction(&receipt, candidate, req) || receipt.Status != "rejected" ||
+		receipt.ResultCode != "stale_revision" || receipt.ResultError != "Runner revision changed before recovery" {
+		t.Fatalf("direct rejection lost its own reason: %+v", receipt)
+	}
 }

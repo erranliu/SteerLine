@@ -18,6 +18,7 @@ type Action struct {
 	State               string                 `json:"state"`
 	CommandID           string                 `json:"command_id,omitempty"`
 	ErrorCode           string                 `json:"error_code,omitempty"`
+	RejectionDiagnostic string                 `json:"rejection_diagnostic,omitempty"`
 	ActionStatus        string                 `json:"action_status,omitempty"`
 }
 
@@ -74,9 +75,16 @@ type Candidate struct {
 }
 
 // Only the latest resume can use the current Run's failure diagnostic.
+// A direct rejection carries its own diagnostic independently of the Run.
 func (c Candidate) ResumeFailureDiagnostic(action Action) string {
+	if action.Command != "resume" {
+		return ""
+	}
+	if action.State == "rejected" {
+		return action.RejectionDiagnostic
+	}
 	r := c.Projection
-	if action.Command != "resume" || action.State != "accepted" || action.ActionStatus != "failed" ||
+	if action.State != "accepted" || action.ActionStatus != "failed" ||
 		c.StopRequested || r == nil || r.Closed || r.Status != "blocked" ||
 		c.RunID == "" || r.RunID != c.RunID || r.Revision == 0 ||
 		r.InputDigest == "" || c.InputDigest != "" && c.InputDigest != r.InputDigest || !r.ResumeRequired {

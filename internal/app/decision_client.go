@@ -194,6 +194,7 @@ func applyRunnerAnswerAction(result *api.CommandReceipt, candidate runnerstate.C
 		case "rejected":
 			result.Status = "rejected"
 			result.ResultCode = action.ErrorCode
+			result.ResultError = candidate.ResumeFailureDiagnostic(action)
 		case "accepted":
 			switch action.ActionStatus {
 			case "completed":

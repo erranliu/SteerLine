@@ -313,6 +313,7 @@ export interface Envelope {
   payload: Record<string, unknown>;
 }
 export interface Receipt {
+  command?: { status: string };
   refactoring?: unknown;
   roadmap?: unknown;
   environment?: unknown;

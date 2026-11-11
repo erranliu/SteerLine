@@ -252,7 +252,7 @@ func run() error {
 			}
 			data, _ := json.Marshal(result)
 			fmt.Println(string(data))
-			if result.Status != "accepted" {
+			if result.Status != "accepted" && result.Status != "confirmed" {
 				return fmt.Errorf("decision command is %s: %s", result.Status, strings.TrimSpace(result.ResultError))
 			}
 		}

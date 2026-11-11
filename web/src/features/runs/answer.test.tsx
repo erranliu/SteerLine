@@ -93,7 +93,7 @@ it("keeps recovery locked until the original Runner action fails and retries wit
     recoveryVersion = 7,
   ) => ({
     ...run,
-    control_revision: recoveryVersion === 7 ? 4 : 6,
+    control_revision: recoveryVersion - 3,
     recovery_version: recoveryVersion,
     decision: { ...run.decision!, version: recoveryVersion },
     runner_delivery: { commands },
@@ -115,19 +115,50 @@ it("keeps recovery locked until the original Runner action fails and retries wit
   rendered.rerender(view(failed));
   expect(screen.getByRole("alert")).toHaveTextContent("original history changed");
   expect(screen.queryByText("恢复请求已提交，等待状态更新。")).not.toBeInTheDocument();
+  const newerFailure = {
+    ...unrelatedFailure,
+    request_id: "other-runner-request",
+    caller_request_id: "other-caller-request",
+    diagnostic: "newer recovery failed",
+  };
+  rendered.rerender(
+    view(withActions([...failed.runner_delivery!.commands, newerFailure], 10)),
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("newer recovery failed");
   const retry = screen.getByRole("button", { name: "继续原任务" });
   expect(retry).toBeEnabled();
+  submit.mockImplementationOnce(async (e) => ({
+    status: "applied",
+    original: e,
+    command: { status: "confirmed" },
+  }));
   fireEvent.click(retry);
   fireEvent.click(retry);
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
   expect(submit.mock.calls[1][0].request_id).not.toBe(firstRequest.request_id);
   expect(submit.mock.calls[1][0].payload).toMatchObject({
     source_attempt_id: "original-attempt",
-    expected_run_revision: 6,
-    expected_recovery_version: 9,
+    expected_run_revision: 7,
+    expected_recovery_version: 10,
     option_id: "resume",
   });
   expect(screen.queryByRole("button", { name: "继续原任务" })).not.toBeInTheDocument();
+  rendered.rerender(
+    view(withActions([
+      newerFailure,
+      {
+        ...action,
+        request_id: "retry-runner-request",
+        caller_request_id: submit.mock.calls[1][0].request_id,
+        action_status: "completed",
+      },
+    ], 12)),
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
+  // The bounded command summary can also drop the old completed action.
+  rendered.rerender(view(withActions([], 12)));
+  expect(screen.getByRole("button", { name: "继续原任务" })).toBeEnabled();
 
   rendered.unmount();
   render(view(failed));
