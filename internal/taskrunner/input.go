@@ -33,6 +33,10 @@ func Decision(run *runnerclient.Run) *model.DecisionState {
 		q := run.Question
 		d.ID = q.ID
 		d.Request.InteractionKind = "runner_question"
+		if q.InteractionKind == "async" {
+			d.Request.InteractionKind = "async"
+			d.Request.BlocksProgress = false
+		}
 		d.Request.Question = q.Text
 		d.Request.AllowFreeText = q.AllowFreeText
 		if !run.Controls.CanReply {
