@@ -81,14 +81,15 @@ type Publication struct {
 	Settings   json.RawMessage `json:"settings"`
 }
 type RunInput struct {
-	ResultFile   *ProgressFileInput `json:"result_file,omitempty"`
-	ProgressFile *ProgressFileInput `json:"progress_file,omitempty"`
-	Title        string             `json:"title"`
-	NamePrefix   string             `json:"name_prefix,omitempty"`
-	Correlation  map[string]string  `json:"correlation,omitempty"`
-	Repository   Repository         `json:"repository"`
-	Documents    Documents          `json:"documents"`
-	Workflow     Workflow           `json:"workflow"`
-	Execution    ExecutionInput     `json:"execution"`
-	Publication  Publication        `json:"publication,omitzero"`
+	ReuseWorktreeFromRunID string             `json:"reuse_worktree_from_run_id,omitempty"`
+	ResultFile             *ProgressFileInput `json:"result_file,omitempty"`
+	ProgressFile           *ProgressFileInput `json:"progress_file,omitempty"`
+	Title                  string             `json:"title"`
+	NamePrefix             string             `json:"name_prefix,omitempty"`
+	Correlation            map[string]string  `json:"correlation,omitempty"`
+	Repository             Repository         `json:"repository"`
+	Documents              Documents          `json:"documents"`
+	Workflow               Workflow           `json:"workflow"`
+	Execution              ExecutionInput     `json:"execution"`
+	Publication            Publication        `json:"publication,omitzero"`
 }

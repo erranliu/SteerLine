@@ -17,7 +17,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/prompts"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/steeragent/maintenance"
 )
 
 // One caller/public-EXE boundary test. The native protocol fixture is supplied
@@ -328,4 +331,144 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 		t.Fatal("sealed result refreshed")
 	}
 	t.Logf("public EXE result round trip: source=%s Run=%s version=%d SHA256=%s; controlled native fixture, no real PR", version.SourceCommit, runID, sealed.Version, sealed.SHA256)
+	testMaintenancePublicReuse(t, ctx, c, cat, input, state)
+}
+
+// Exercise the caller's new fields against the fixed actual Runner. The native
+// app-server peer is controlled; this proves no model judgement or real PR.
+func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat *Catalog, base runnercontract.RunInput, nativeState string) {
+	t.Helper()
+	input := base
+	executePrompt, promptErr := prompts.MaintenanceExecute()
+	if promptErr != nil {
+		t.Fatal(promptErr)
+	}
+	input.Workflow = runnercontract.Workflow{ID: "execute", Version: 1, PromptOverrides: map[string]string{"execute": executePrompt}}
+	input.Publication = runnercontract.Publication{}
+	input.ProgressFile = nil
+	read, err := c.ConfigureExecution(ctx, cat, runnercontract.ExecutionConfigurationRequest{Operation: "derive", Execution: &input.Execution, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, AccessMode: "read_only"})
+	if err != nil || read.Execution == nil {
+		t.Fatal(read, err)
+	}
+	if err = cat.ValidateMaintenance(input.Execution, *read.Execution); err != nil {
+		t.Fatal(err)
+	}
+	runs := []string{}
+	t.Cleanup(func() {
+		for _, id := range runs {
+			v, e := c.Inspect(context.Background(), "run-id", id)
+			if e != nil {
+				t.Error(e)
+				continue
+			}
+			if v.Run.StopStatus != "stopped" {
+				request := runnerbinding.ContentStop("cleanup-"+id, v.Run.Revision)
+				if _, e = c.Call(context.Background(), "stop", []string{"--run-id", id}, request); e != nil {
+					t.Error(e)
+				}
+			}
+		}
+	})
+	wait := func(id string, done bool) *Run {
+		t.Helper()
+		for ctx.Err() == nil {
+			v, e := c.Inspect(ctx, "run-id", id)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if done && v.Run.StopStatus == "stopped" || !done && v.Run.Execution.TurnID != "" {
+				return v.Run
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		t.Fatal(ctx.Err())
+		return nil
+	}
+	latest, origin, identity, workspace, branch := "", "", "", "", ""
+	sessions := map[string]bool{}
+	for i := 0; i < 4; i++ {
+		input.ReuseWorktreeFromRunID = latest
+		input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte("maintenance seed"))}
+		body, _ := json.Marshal(input)
+		receipt, e := c.Submit(ctx, Request{Protocol: Protocol, RequestID: fmt.Sprintf("maintenance-reuse-%d", i), Input: body})
+		if e != nil {
+			t.Fatal(e)
+		}
+		runs = append(runs, receipt.RunID)
+		run := wait(receipt.RunID, false)
+		if i == 0 {
+			origin, identity, workspace, branch = run.WorkspaceOriginRunID, run.WorkspaceIdentity, run.Execution.Workspace, run.Execution.Branch
+			if origin == "" || identity == "" || workspace == "" || branch == "" {
+				t.Fatal("missing workspace incarnation", run)
+			}
+		}
+		if run.ReuseWorktreeFromRunID != latest || run.WorkspaceOriginRunID != origin || run.WorkspaceIdentity != identity || run.Execution.Workspace != workspace || run.Execution.Branch != branch || sessions[run.Execution.SessionID] {
+			t.Fatal("actual Runner reuse identity changed", run)
+		}
+		sessions[run.Execution.SessionID] = true
+		dirty := filepath.Join(workspace, "maintenance-retained.txt")
+		if i == 0 {
+			if e = os.WriteFile(dirty, []byte("untracked retained fixture"), 0600); e != nil {
+				t.Fatal(e)
+			}
+		} else {
+			b, e := os.ReadFile(dirty)
+			if e != nil || string(b) != "untracked retained fixture" {
+				t.Fatal("worktree content lost", e)
+			}
+		}
+		request := runnerbinding.ContentStop(fmt.Sprintf("maintenance-stop-%d", i), run.Revision)
+		if _, e = c.Call(ctx, "stop", []string{"--run-id", run.RunID}, request); e != nil {
+			t.Fatal(e)
+		}
+		wait(run.RunID, true)
+		sealed, e := c.ResultFile(ctx, run.RunID)
+		if e != nil || sealed.CollectionStatus != "closed" {
+			t.Fatal("source result not sealed", sealed, e)
+		}
+		latest = run.RunID
+	}
+	// A read-only generation must observe the original dirty directory and not
+	// acquire its writable holder. Both uploaded file manifests are consumed.
+	decision := `{"kind":"finish","prompt":"","summary":"controlled read-only result","question":""}`
+	if err = os.WriteFile(filepath.Join(nativeState, "content-final"), []byte(decision), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(filepath.Join(nativeState, "hold-turn")); err != nil {
+		t.Fatal(err)
+	}
+	rules, contextBody := "controlled immutable file", "{\"mode\":\"audit\"}"
+	readPrompt, promptErr := prompts.MaintenanceDecision()
+	if promptErr != nil {
+		t.Fatal(promptErr)
+	}
+	g := runnercontract.GenerateRunInput{Title: "Maintenance readonly caller fixture", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: *read.Execution, Generate: runnercontract.GenerateInput{Directory: &runnercontract.DirectoryAccess{Path: workspace, Access: "read_only"}, Instruction: readPrompt, OutputSchema: maintenance.Schema(), Materials: []runnercontract.Document{{Kind: "file", Path: "maintenance/rules.md", Content: &rules}, {Kind: "file", Path: "maintenance/context.json", Content: &contextBody}}}}
+	body, _ := json.Marshal(g)
+	receipt, err := c.Submit(ctx, Request{Protocol: Protocol, RequestID: "maintenance-directory", Input: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs = append(runs, receipt.RunID)
+	run := wait(receipt.RunID, true)
+	if run.Execution.Workspace != workspace || run.ContentResult == nil || run.ContentResult.Status != "succeeded" || run.Final == nil || !run.Final.Verified {
+		t.Fatal("read-only directory result unavailable", run)
+	}
+	if err = VerifyFileMaterials(g.Generate.Materials, run.Materials); err != nil {
+		t.Fatal(err)
+	}
+	if err = VerifyFileMaterials(g.Generate.Materials, run.ContentResult.FileMaterials); err != nil {
+		t.Fatal(err)
+	}
+	input.ReuseWorktreeFromRunID = latest
+	body, _ = json.Marshal(input)
+	receipt, err = c.Submit(ctx, Request{Protocol: Protocol, RequestID: "maintenance-after-readonly", Input: body})
+	if err != nil {
+		t.Fatal("readonly transferred writable ownership", err)
+	}
+	runs = append(runs, receipt.RunID)
+	after := wait(receipt.RunID, true)
+	if after.WorkspaceIdentity != identity || after.ReuseWorktreeFromRunID != latest {
+		t.Fatal("readonly changed original writer chain", after)
+	}
+	t.Logf("fixed EXE maintenance: four execute Runs share origin=%s identity=%s workspace=%s branch=%s; distinct sessions; dirty file retained; readonly directory/file manifests verified", origin, identity, workspace, branch)
 }

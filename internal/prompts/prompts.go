@@ -43,6 +43,9 @@ func RoadmapParseRules() ([]byte, error)    { return files.ReadFile("materials/r
 func RoadmapDocumentRules() ([]byte, error) { return files.ReadFile("materials/roadmap-documents.md") }
 func RoadmapSpecGuide() ([]byte, error)     { return files.ReadFile("materials/roadmap-spec-guide.md") }
 func MainAgentRules() ([]byte, error)       { return files.ReadFile("materials/main-agent.md") }
+func MaintenanceRules() ([]byte, error)     { return files.ReadFile("materials/maintenance.md") }
+func MaintenanceDecision() (string, error)  { return render("maintenance-decision", nil) }
+func MaintenanceExecute() (string, error)   { return render("maintenance-execute", nil) }
 func MainAgentAdvisory(context string) (string, error) {
 	rules, err := MainAgentRules()
 	if err != nil {

@@ -197,5 +197,22 @@
     "package": "./tests/e2e/suites/runtime",
     "test": "TestContinuationSuggestionAdvisory",
     "env": "controlled"
+  },
+  {
+    "package": "./tests/e2e/suites/runtime",
+    "suite": "runtime",
+    "test": "TestRefactoringMaintenance",
+    "id": "runtime.refactoring-maintenance",
+    "env": "controlled",
+    "level": "L3"
+  },
+  {
+    "test": "TestRefactoringLocalCodex",
+    "level": "L4",
+    "chain": "local-codex",
+    "package": "./tests/e2e/live",
+    "suite": "refactoring",
+    "id": "refactoring.local-codex",
+    "env": "live"
   }
 ]

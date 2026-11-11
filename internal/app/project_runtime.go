@@ -139,10 +139,14 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	var preparationDone chan struct{}
 	var environmentDone chan struct{}
 	var advisoryDone chan struct{}
+	var refactoringDone chan struct{}
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
 	defer startupTimer.Stop()
 	defer func() {
 		cancel()
+		if refactoringDone != nil {
+			<-refactoringDone
+		}
 		if r.config.runtimeMessages != nil {
 			r.config.runtimeMessages.release(r.config.Identity())
 		}
@@ -210,6 +214,10 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
 	r.tests.roadmaps = r.config.runtimeRoadmaps
 	r.config.runtimeContinuationSuggestion = newContinuationSuggestionPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	if retErr = r.config.runtimeRefactoring.service.Recover(ctx); retErr != nil {
+		return
+	}
 	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
@@ -239,6 +247,10 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		}
 		if service.State.Service.Ready {
 			startupTimer.Stop()
+			if refactoringDone == nil {
+				refactoringDone = make(chan struct{})
+				go func() { defer close(refactoringDone); r.config.runtimeRefactoring.run(ctx) }()
+			}
 			if advisoryDone == nil {
 				advisoryDone = make(chan struct{})
 				go func() { defer close(advisoryDone); r.config.runtimeContinuationSuggestion.run(ctx) }()
@@ -274,6 +286,13 @@ func (r *ProjectRuntime) close() {
 			stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			if err := r.config.runtimeContinuationSuggestion.service.Close(stopCtx); err != nil && r.log != nil {
 				fmt.Fprintf(r.log, "advisory stop unverified: %v\n", err)
+			}
+			cancel()
+		}
+		if r.config.runtimeRefactoring != nil {
+			stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if err := r.config.runtimeRefactoring.service.Close(stopCtx); err != nil && r.log != nil {
+				fmt.Fprintf(r.log, "refactoring stop unverified: %v\n", err)
 			}
 			cancel()
 		}
@@ -333,6 +352,9 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 		return httpcontract.CommandResponse{}, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(in.Action, "refactoring_") {
+		return p.refactoringCommand(ctx, in)
+	}
 	if strings.HasPrefix(in.Action, "main_agent_") {
 		return p.Server.CommandContinuationSuggestion(ctx, in, p)
 	}
@@ -439,6 +461,12 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 	if route == "/activities" {
 		return p.readAsyncActivities(ctx, values)
 	}
+	if route == "/refactoring" || strings.HasPrefix(route, "/refactoring/") {
+		if p.config.runtimeRefactoring == nil {
+			return nil, errors.New("refactoring unavailable")
+		}
+		return p.config.runtimeRefactoring.read(ctx, route, values)
+	}
 	if strings.HasPrefix(route, "/activities/") {
 		return p.readActivity(ctx, route, values)
 	}
@@ -481,6 +509,13 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.maintenanceRead(ctx, route, values.Get("page"), values.Get("scope"))
 	}
 	if strings.HasPrefix(route, "/commands/") {
+		if p.config.runtimeRefactoring != nil {
+			if r, e := p.refactoringReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
+				return nil, e
+			} else if r != nil {
+				return r, nil
+			}
+		}
 		if p.config.runtimeContinuationSuggestion != nil {
 			if r, e := p.ContinuationSuggestionReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
 				return nil, e

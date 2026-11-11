@@ -40,7 +40,7 @@ flowchart TB
 
 Web 拥有浏览器认证、项目选择、草稿、原信封和查询缓存；Go 产品用例拥有业务资格和状态提交。应用与项目 Bearer 留在本机服务侧，浏览器使用绑定 home/Web 实例的会话。离线显示最后观察并禁写，实例变化重新核验；旧请求不自动改投新实例或候选。认证与工程操作归 [Web README](../../web/README.md)，具体路径、回执与补交资格归[本机协议](../product-design/local-client-protocol.md)。
 
-当前采用查询刷新与受控轮询，尚未提供 SSE、远程 Web 访问和多轮规划及持续维护工作台；原型不能作为这些能力已实现的证据。
+当前采用查询刷新与受控轮询，尚未提供 SSE、远程 Web 访问或复杂规划工作台。重构与维护已接入最小分页和后台行动，独立维护[自身边界](refactoring-maintenance.md)，不改变 Task/DAG 交付。
 
 ## 模块与资源归属
 
@@ -56,6 +56,7 @@ Web 拥有浏览器认证、项目选择、草稿、原信封和查询缓存；G
 | [projectmaintenance](../../internal/projectmaintenance) | 远端/本地观察、材料准备及项目就绪；维护自身活动，不持有候选执行状态机 |
 | [testmanagement](../../internal/testmanagement) | 测试清单、生成输入与结果、取消及停止责任；共享生成准入由应用宿主协调 |
 | [environmentadaptation](../../internal/environmentadaptation) | 普通 Run 执行项目检测并消费封存结果，保存项目×环境资格，不创建任务 DAG |
+| [refactoring](../../internal/refactoring) · [只读决策](../../internal/steeragent/maintenance) | 唯一维护行动、预算、轮次与停止/收尾；纯决策只生成提示词，所有项目写入由 Runner 完成；存储和查询只依赖 refactoring/model |
 | [roadmap](../../internal/roadmap) · [文档发布组装](../../internal/app/roadmap_publication.go) | 解析、确认及生成记录；文档 Git/provider 发布由 app 组装，正式编号和入图归 task |
 | [storage/ports](../../internal/storage/ports) · [storage/sqlite](../../internal/storage/sqlite) | 返回领域事实，原子保存业务记录、候选、停止义务及 checkpoint；不生成产品 DTO |
 | [product/api](../../internal/product/api) · [query](../../internal/product/query) · [client](../../internal/product/client) | 产品 DTO、只读投影和注入能力的内部产品客户端；查询层处理公开字段、分页与输出预算 |

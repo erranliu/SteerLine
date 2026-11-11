@@ -108,3 +108,41 @@ func TestRunUsageCapabilityAndStartupPolicy(t *testing.T) {
 		t.Fatal("startup policy missing or altered", string(wire))
 	}
 }
+
+func TestRunUsageMixedScopesKeepMainSummary(t *testing.T) {
+	c := takeoverCLI(t)
+	u := usageFixture()
+	u.ModelCallCoverage = &runnercontract.ModelCallCoverage{InternalRecorded: 1, InternalCovered: 1}
+	internal := runnercontract.UsageEvent{ID: "internal", RunID: u.RunID, Scope: "runner_internal", CallID: "call", CallSource: "llm_parser", SourceResultID: "result", CommandID: "command", AttemptID: "attempt", CoverageStatus: "covered", Decision: "counted", ConfiguredModel: "parser-model"}
+	page := runnercontract.UsagePage{RunID: u.RunID, Revision: u.Revision, Events: []runnercontract.UsageEvent{{ID: "main", RunID: u.RunID, Decision: "counted"}, internal}}
+	fixtureResponse(t, page)
+	events, err := c.RunUsageEvents(context.Background(), u)
+	if err != nil || len(events) != 2 {
+		t.Fatal("internal polluted main counter", events, err)
+	}
+	for _, change := range []string{"unknown-scope", "duplicate-call", "covered-count", "uncovered-tokens"} {
+		t.Run(change, func(t *testing.T) {
+			v := page
+			v.Events = append([]runnercontract.UsageEvent(nil), page.Events...)
+			switch change {
+			case "unknown-scope":
+				v.Events[1].Scope = "everything"
+			case "duplicate-call":
+				other := internal
+				other.ID = "different-id"
+				v.Events = append(v.Events, other)
+			case "covered-count":
+				v.Events[1].CoverageStatus = "uncovered"
+			case "uncovered-tokens":
+				v.Events[1].CoverageStatus = "uncovered"
+				v.Events[1].Decision = "not_counted"
+				one := int64(1)
+				v.Events[1].Tokens.Total = &one
+			}
+			fixtureResponse(t, v)
+			if _, err := c.RunUsageEvents(context.Background(), u); err == nil {
+				t.Fatal("invalid internal source accepted")
+			}
+		})
+	}
+}

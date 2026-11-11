@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+重构与维护最小闭环（2026-11-11，已实现，隔离真实联验通过，未部署）。[验收记录](refactoring-maintenance.md) · [Spec](../../spec/refactoring-maintenance.spec.md) · [Plan](../../plans/refactoring-maintenance.plan.md)
+
 显式放弃旧运行时重建任务库（2026-11-11）：兼容旧 schema 只读归档，重建任务和依赖，暂停派发。记录了 schema 44 隔离回归及部署边界。[验收记录](deployment-old-schema-discard.md)
 
 活动中心独立阅读页（2026-11-10，已实现，自动验收及独立代码审核修复完成）：[专属验收记录](activity-reading-page.md)。独立页、最新可读快照、已记录交互与正文按需读取，明确来源/预算/零副作用；普通开发，不启动 roadmap，未部署，人工体验待安排。

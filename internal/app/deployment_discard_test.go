@@ -184,7 +184,7 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 }
 
 func testDiscardOfflineFlow(t *testing.T) {
-	for _, fault := range []string{"original", "schema44", "schema44-missing-shutdown", "schema44-wrong-host", "schema44-invalid-definition", "schema44-unbound-roadmap", "unsupported-schema", "future-schema", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown"} {
+	for _, fault := range []string{"original", "schema46", "schema44", "schema44-missing-shutdown", "schema44-wrong-host", "schema44-invalid-definition", "schema44-unbound-roadmap", "unsupported-schema", "future-schema", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown"} {
 		t.Run(fault, func(t *testing.T) { testDiscardOfflineConfiguration(t, fault) })
 	}
 }
@@ -270,6 +270,8 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	require(t, err)
 	if strings.HasPrefix(fault, "schema44") {
 		makeDiscardSchema44(t, c)
+	} else if fault == "schema46" {
+		execDiscardFixtureSQL(t, c, `DROP TABLE refactoring_actions; UPDATE schema_migrations SET version=46`)
 	}
 	switch fault {
 	case "schema44-invalid-definition":
@@ -359,7 +361,8 @@ func makeDiscardSchema44(t *testing.T, c Config) {
 
 func makeDiscardSchema45(t *testing.T, c Config) {
 	t.Helper()
-	execDiscardFixtureSQL(t, c, `ALTER TABLE project_task_authorities RENAME TO current_authorities;
+	execDiscardFixtureSQL(t, c, `DROP TABLE refactoring_actions;
+		ALTER TABLE project_task_authorities RENAME TO current_authorities;
 		CREATE TABLE project_task_authorities (project_identity TEXT PRIMARY KEY, authority TEXT NOT NULL CHECK(authority='native'), authority_version INTEGER NOT NULL CHECK(authority_version>0), graph_revision INTEGER NOT NULL CHECK(graph_revision>=0), repository TEXT NOT NULL, remote TEXT NOT NULL, branch TEXT NOT NULL, dispatch_mode TEXT NOT NULL CHECK(dispatch_mode IN ('manual','auto')), dispatch_paused INTEGER NOT NULL CHECK(dispatch_paused IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 		INSERT INTO project_task_authorities SELECT project_identity,authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,1,created_at,updated_at FROM current_authorities;
 		DROP TABLE current_authorities;

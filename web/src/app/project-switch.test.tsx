@@ -294,6 +294,25 @@ afterEach(() => {
   setJournalHome("");
 });
 
+it("recognizes a direct maintenance action route", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((...args) =>
+    String(args[0]).endsWith("/refactoring")
+      ? Promise.resolve(
+          Response.json({ records: [], profiles: [], default_profile: "" }),
+        )
+      : original(...args),
+  );
+  mount(`/projects/${a}/refactoring`);
+  await screen.findByRole(
+    "heading",
+    { name: "重构与维护", level: 1 },
+    { timeout: 5000 },
+  );
+  expect(screen.getByRole("combobox", { name: "当前项目" })).toHaveValue(a);
+});
+
 it("recognizes direct roadmap routes, keeps the page when switching projects, and restores its exact return target", async () => {
   mock();
   const original = vi.mocked(fetch).getMockImplementation()!;

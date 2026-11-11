@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+重构与维护最小闭环（2026-11-11，已实现，隔离真实联验通过）。[Spec](refactoring-maintenance.spec.md) · [Plan](../plans/refactoring-maintenance.plan.md) · [测试选择](../plans/refactoring-maintenance.tests.json) · [验收记录](../testing/acceptance/refactoring-maintenance.md)
+
 Roadmap 按任务并行生成（2026-11-10，已实现并通过自动验证）：[Spec](roadmap-per-task-generation.spec.md) · [Plan](../plans/roadmap-per-task-generation.plan.md) · [测试安排](../plans/roadmap-per-task-generation.tests.json) · [专属验收](../testing/acceptance/roadmap-per-task-generation.md)。确认前补齐整批任务与协作契约，确认后每任务独立 Run/session，复用共享额度并行生成，失败项单独重生成，程序汇总后整批审阅发布；由当前聊天直接实现，测试及独立审核见专属验收，不启动 roadmap。
 
 活动中心独立阅读页（2026-11-10，已实现，必要验证及独立代码审核修复完成）：[Spec](activity-reading-page.spec.md) · [Plan](../plans/activity-reading-page.plan.md) · [测试选择](../plans/activity-reading-page.tests.json) · [专属验收记录](../testing/acceptance/activity-reading-page.md)。当前项目活动双栏阅读、最近可读快照及历史交互按需索引/正文读取；明确公开来源、采样缺口与只读边界，效率与解耦优先，未部署、不启动 roadmap，人工体验待安排。

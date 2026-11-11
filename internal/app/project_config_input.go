@@ -52,6 +52,7 @@ type Config struct {
 	runtimeEnvironment            *environmentPort
 	environmentPolicy             env.AdmissionPolicy
 	runtimeRoadmaps               *roadmapPort
+	runtimeRefactoring            *refactoringPort
 	runtimeContinuationSuggestion *continuationSuggestionPort
 	startup                       *startupQueries
 

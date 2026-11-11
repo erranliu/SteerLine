@@ -77,6 +77,7 @@ v7 及更早状态由原安装收尾，新安装使用分离的 home 与当前�
 | 项目材料与测试安排生成 | [项目维护](../product-design/project-maintenance.md)；生成 Run 不伪造开发候选 |
 | Roadmap 解析及固定版本文档生成 | [Roadmap 设计](../product-design/roadmap-promotion.md)；文件版本证明不等于模型逐文件已读或结论正确 |
 | 项目环境检测与结果封存 | [项目环境工作流](../../SteerlineFlow/spec/project-environment-workflow.spec.md)；使用普通 Run，旧专用 Check 已退役 |
+| 重构与维护 | [实现边界](../architecture/refactoring-maintenance.md)；仅本地 Codex 完整组合，generate 首次固定提交/后继只读目录，所有写入经 execute/1，后继引用最新 reuse_worktree_from_run_id；需正式文件材料、最终封存及 worktree_reuse 声明。费用分 main_session 与 runner_internal 验证。自定义 PR query 必须返回 body，供维护核对同源报告；已有任务费用口径保持主会话。固定受测 EXE 与未验边界归[验收](../../SteerlineFlow/testing/acceptance/refactoring-maintenance.md)，不代表安装版升级。 |
 | 候选测试进度 | [progress-file](runtime-progress.md)；旧 R2 候选产物收集已移除 |
 | 用量、费用及远端采集授权 | [计费职责](../../SteerlineFlow/spec/billing-ownership.spec.md) · [验收](../../SteerlineFlow/testing/acceptance/billing-ownership.md)；Runner 提供用量，SteerLine 管理价表和估算，采集授权独立 |
 

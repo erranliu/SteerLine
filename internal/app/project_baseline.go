@@ -133,7 +133,7 @@ func (m *projectMaintenance) localBaseline(ctx context.Context) localBaseline {
 		result.Reason = "Git操作尚未结束：" + e.Error()
 		return result
 	}
-	dirty, e := m.git(ctx, "status", "--porcelain", "--untracked-files=all")
+	dirty, e := m.git(ctx, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all")
 	if e != nil {
 		result.Reason = e.Error()
 		return result

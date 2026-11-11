@@ -26,6 +26,7 @@
 | 入口 | 职责 |
 | --- | --- |
 | [客户端与服务边界](../architecture/current-code-architecture.md#客户端与服务边界) | Web、应用 API、项目端口及状态所有权 |
+| [重构与维护实现方案](../architecture/refactoring-maintenance.md) | 维护业务、只读决策与 Runner 执行的边界，以及接入前提 |
 | [Web 工程使用](../../web/README.md) | 技术栈、认证、构建启动、缓存与隔离验证 |
 | [Runner 协作契约](../../SteerlineFlow/spec/runner-collaboration.spec.md) | 所选构建公开 workflow、执行预设及跨仓交接 |
 | [提示词治理](../prompt-governance.md) | 固定正文、来源、实际差异和独立审核 |
@@ -37,6 +38,7 @@
 
 | 方案 | 当前限制 |
 | --- | --- |
+| [重构与维护](refactoring-maintenance.md) | 单页最小流程，支持单方向、每项目一个在途行动、默认谨慎与 1 轮、预算耗尽自动收尾、PR 报告及手动冲突续作 |
 | [对话续作：给定上下文提示词建议](main-agent.md) | 原“主 Agent”的现有建议能力；明确待答自动接入 Runner generate，本地只读生成、活动与查看/复制；未部署 |
 | [添加、核验与登记](project-onboarding.md#拟议添加流程) | 角色清单及 PS-01–PS-07；完整 UI、核验器和正式登记尚未实现 |
 | [项目准备提示词](project-onboarding-prompt.md) | 用户自行复制使用；不触发产品 Agent、纳管或 Task |
