@@ -1,5 +1,12 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
 import {
@@ -50,7 +57,15 @@ const record: MaintenanceRecord = {
   operations: [],
   reports: [],
 };
-function setup(records: MaintenanceRecord[] = []) {
+const ready = {
+  branch: "main",
+  project: { status: "ready", commit: "b".repeat(40), blockers: [] },
+  environment: "ready",
+};
+function setup(
+  records: MaintenanceRecord[] = [],
+  readiness = vi.fn(async (_path: string) => ready),
+) {
   const api = new Api(identity, "token", "home");
   vi.spyOn(api, "get").mockImplementation(async (path: string) =>
     path === "/refactoring/directions"
@@ -58,12 +73,15 @@ function setup(records: MaintenanceRecord[] = []) {
       : path === "/refactoring"
         ? {
             records,
-            profiles: [{ id: "local", name: "本机 Codex" }],
+            profiles: [
+              { id: "local", name: "本机 Codex" },
+              { id: "second", name: "另一个配置" },
+            ],
             default_profile: "local",
           }
-        : path.startsWith("/refactoring/")
-          ? records[0]
-          : { status: "ready", blockers: [] },
+        : path.startsWith("/refactoring/readiness")
+          ? readiness(path)
+          : records[0],
   );
   const submit = vi.fn(async (envelope) => ({
     ...envelope,
@@ -71,8 +89,9 @@ function setup(records: MaintenanceRecord[] = []) {
     refactoring: { id, revision: 8 },
     sampled_at: "now",
   }));
-  mountFeature(<RefactoringMaintenance />, api, testClient(), true, { submit });
-  return { submit, api };
+  const client = testClient();
+  mountFeature(<RefactoringMaintenance />, api, client, true, { submit });
+  return { submit, client };
 }
 it("defaults to cautious and one round, submits the original project identity", async () => {
   const { submit } = setup();
@@ -107,7 +126,9 @@ it("previews the full selected Markdown and submits only its identity and versio
   fireEvent.change(screen.getByLabelText("补充要求"), {
     target: { value: "先检查共享夹具" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "开始维护" }));
+  const start = screen.getByRole("button", { name: "开始维护" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
   expect(submit.mock.calls[0][0].payload).toEqual({
     direction: custom.id,
@@ -117,6 +138,109 @@ it("previews the full selected Markdown and submits only its identity and versio
     profile: "local",
     budget: { dollars: "", minutes: "", rounds: 1 },
   });
+});
+it("blocks clicking, Enter and form submission until the selected environment is ready", async () => {
+  const reason = "环境未就绪：尚未准备当前项目环境";
+  const readiness = vi.fn(async (path: string) =>
+    path.endsWith("profile=local")
+      ? { ...ready, environment: "not_ready", reason }
+      : ready,
+  );
+  const { submit, client } = setup([], readiness);
+  const start = screen.getByRole("button", { name: "开始维护" });
+  await screen.findByText(reason, { exact: false });
+  expect(screen.getByText(/项目基线已就绪 · main/)).toBeInTheDocument();
+  expect(screen.getByLabelText("执行配置")).toHaveValue("local");
+  expect(
+    screen.getByRole("link", { name: "打开项目运行环境" }),
+  ).toHaveAttribute(
+    "href",
+    `/projects/${identity.project_id}/environment?profile=local`,
+  );
+  expect(start).toBeDisabled();
+  const user = userEvent.setup();
+  await user.click(start);
+  await user.click(screen.getByLabelText("重构轮次"));
+  await user.keyboard("{Enter}");
+  fireEvent.submit(start.closest("form")!);
+  expect(submit).not.toHaveBeenCalled();
+
+  fireEvent.change(screen.getByLabelText("执行配置"), {
+    target: { value: "second" },
+  });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.change(screen.getByLabelText("执行配置"), {
+    target: { value: "local" },
+  });
+  expect(start).toBeDisabled();
+  readiness.mockResolvedValue(ready);
+  await act(async () =>
+    client.invalidateQueries({
+      queryKey: [
+        "home",
+        identity.project_id,
+        identity.instance_id,
+        "refactoring",
+        "readiness",
+        "local",
+      ],
+    }),
+  );
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.submit(start.closest("form")!);
+  expect(submit.mock.calls[0][0].payload.profile).toBe("local");
+});
+it("blocks a previously ready profile when its latest query fails", async () => {
+  const readiness = vi.fn(async (_path: string) => ready);
+  const { submit, client } = setup([], readiness);
+  const start = screen.getByRole("button", { name: "开始维护" });
+  await waitFor(() => expect(start).toBeEnabled());
+  readiness.mockRejectedValue(new Error("offline"));
+  await act(async () =>
+    client.invalidateQueries({
+      queryKey: [
+        "home",
+        identity.project_id,
+        identity.instance_id,
+        "refactoring",
+        "readiness",
+        "local",
+      ],
+    }),
+  );
+  expect(await screen.findByText(/运行环境状态查询失败/)).toBeInTheDocument();
+  expect(start).toBeDisabled();
+  fireEvent.submit(start.closest("form")!);
+  expect(submit).not.toHaveBeenCalled();
+});
+it("refreshes the selected qualification after a rejected start and keeps the form", async () => {
+  const readiness = vi.fn(async (_path: string) => ({ ...ready, reason: "" }));
+  const { submit } = setup([], readiness);
+  const start = screen.getByRole("button", { name: "开始维护" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.change(screen.getByLabelText("补充要求"), {
+    target: { value: "检查共享夹具" },
+  });
+  submit.mockImplementationOnce(async (envelope) => {
+    readiness.mockResolvedValue({
+      ...ready,
+      environment: "not_ready",
+      reason: "环境检测资格已撤销",
+    });
+    return {
+      ...envelope,
+      status: "rejected",
+      diagnostic: "环境已变化，请重新检测",
+      sampled_at: "now",
+    };
+  });
+  fireEvent.click(start);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "环境已变化，请重新检测",
+  );
+  await screen.findByText(/环境检测资格已撤销/);
+  expect(start).toBeDisabled();
+  expect(screen.getByLabelText("补充要求")).toHaveValue("检查共享夹具");
 });
 it("shows coverage exclusions and answers the original question without another chat", async () => {
   const { submit } = setup([record]);

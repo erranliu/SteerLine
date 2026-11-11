@@ -263,6 +263,19 @@ func (p *environmentPort) admission(ctx context.Context, id, candidateCommit str
 			return envmodel.Admission{}, envmodel.Record{}, err
 		}
 	}
+	return p.qualifyEnvironment(ctx, id, candidateCommit, func(ctx context.Context) (string, error) {
+		if !refresh {
+			return p.observedSource(ctx, false)
+		}
+		if maintenance := p.config.runtimeMaintenance; maintenance != nil {
+			observation, err := maintenance.check(ctx)
+			return observation.Commit, err
+		}
+		return p.source(ctx)
+	})
+}
+
+func (p *environmentPort) qualifyEnvironment(ctx context.Context, id, candidateCommit string, source func(context.Context) (string, error)) (envmodel.Admission, envmodel.Record, error) {
 	current, record, err := p.current(ctx, id)
 	if err != nil {
 		return envmodel.Admission{}, record, err
@@ -270,17 +283,7 @@ func (p *environmentPort) admission(ctx context.Context, id, candidateCommit str
 	if _, err := envmodel.Qualify(current, record, record.Prepared.Inputs); err != nil {
 		return envmodel.Admission{}, record, err
 	}
-	var commit string
-	if refresh {
-		if maintenance := p.config.runtimeMaintenance; maintenance != nil {
-			observation, readErr := maintenance.check(ctx)
-			commit, err = observation.Commit, readErr
-		} else {
-			commit, err = p.source(ctx)
-		}
-	} else {
-		commit, err = p.observedSource(ctx, false)
-	}
+	commit, err := source(ctx)
 	if err != nil {
 		return envmodel.Admission{}, record, err
 	}
