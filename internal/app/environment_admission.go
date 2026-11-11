@@ -2,14 +2,12 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 )
 
 // One home-owned mutex covers only new target work reservations. Durable
@@ -27,7 +25,7 @@ func (a *environmentAdmission) register(c Config) {
 	}
 	a.projects[c.Identity()] = c
 }
-func (a *environmentAdmission) check(ctx context.Context, target, owner string, tasks bool) error {
+func (a *environmentAdmission) check(ctx context.Context, target, owner string) error {
 	for _, c := range a.projects {
 		if _, e := os.Stat(filepath.Join(c.RunDir, "steerline.db")); os.IsNotExist(e) {
 			continue
@@ -49,27 +47,6 @@ func (a *environmentAdmission) check(ctx context.Context, target, owner string, 
 				return errors.New("环境未就绪：该目标环境仍有未核实的环境适配")
 			}
 		}
-		if tasks {
-			snapshot, e := reader.ReadRunnerSnapshot(ctx, c.Identity())
-			if e != nil {
-				reader.Close()
-				return e
-			}
-			for _, candidate := range snapshot.Candidates {
-				if candidate.RunID == "" && (candidate.SubmitState == "rejected" || candidate.SubmitState == "cancelled") || candidate.Projection != nil && candidate.Projection.StopStatus == "stopped" {
-					continue
-				}
-				var input runnercontract.RunInput
-				if e = json.Unmarshal(candidate.Submit.Input, &input); e != nil {
-					reader.Close()
-					return e
-				}
-				if executionconfig.Target(input.Execution) == target {
-					reader.Close()
-					return errors.New("该目标环境仍有未停止的原任务，不能开始环境适配")
-				}
-			}
-		}
 		if e := reader.Close(); e != nil {
 			return e
 		}
@@ -79,7 +56,7 @@ func (a *environmentAdmission) check(ctx context.Context, target, owner string, 
 func (a *environmentAdmission) adapt(ctx context.Context, target, owner string, save func() error) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if e := a.check(ctx, target, owner, true); e != nil {
+	if e := a.check(ctx, target, owner); e != nil {
 		return e
 	}
 	return save()
