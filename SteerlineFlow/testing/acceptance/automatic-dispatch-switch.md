@@ -27,3 +27,5 @@
 首轮 HTTP 跨动作冲突夹具误用了相同信封，已改为不同有效动作。首轮存储专项的活动分页关联查询断言失败，同一测试串行复验通过。首轮 Go 专项报告保存在初始报告根下的对应子目录。
 
 活动场景首轮在浏览器等待窗口内未收到首次启动回执。第一次单独复验通过浏览器断言，诊断读连接占用测试库，导致清理失败，报告为 `steerline-dispatch-async-1b7f57752f3945fd9948ed958c457144/summary.json`。第二次单独复验在全新现场验证手动启动、新增候选和正常清理。
+
+PR 合入主干提交 `3d88884b` 后复验显式放弃部署流程。当前库与 schema 44、45 均通过任务图重建检查，离线流程回归通过。旧库只沿主干已有的显式放弃入口读取，重建后的任务库关闭自动派发。执行 `go test ./internal/app -run '^TestDeploymentDiscardRuns$/(task-graph-(current|schema44|schema45)|offline-flow)/(.*)?$' -count=1`，原日志为 `steerline-dispatch-pr498-9b521c74024f45dda90039b6e75eab74.log`。

@@ -108,8 +108,8 @@ func OpenSQLiteReader(path string) (_ *SQLiteStore, retErr error) {
 	return reader, nil
 }
 
-// openSQLiteInspector reads only metadata needed to reject an unsupported file.
-// Callers must validate the current schema before exposing business data.
+// openSQLiteInspector opens a query-only connection. Callers must validate the
+// schema for their operation before exposing business data.
 func openSQLiteInspector(path string) (*SQLiteStore, error) {
 	if path == "" {
 		return nil, errors.New("sqlite path is required")

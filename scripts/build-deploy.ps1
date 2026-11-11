@@ -154,7 +154,7 @@ try {
     $env:STEERLINE_HOME = $InstallHome
     $installed = Join-Path $bin 'steerline.exe'
     Next-DeploymentStage 'deploy.stop-and-verify'
-    if ($DiscardRuns) { Write-Output 'Discarding all old executions in this installation; tasks will reopen with automatic dispatch disabled. Original state will be archived.' }
+    if ($DiscardRuns) { Write-Output 'Discarding all old executions in this installation. After shutdown is verified, original state will be archived and tasks and dependencies rebuilt in fresh databases with automatic dispatch disabled.' }
     if (Test-Path -LiteralPath $installed) {
         $verification = Stop-DeploymentApplication (Join-Path $package 'steerline.exe') $runnerStage -AllowRestart:$allowRestart -DiscardRuns:$DiscardRuns
         if ($null -ne $verification) {

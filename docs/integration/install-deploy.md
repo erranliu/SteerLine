@@ -84,7 +84,9 @@ Windows 安装根目录须向普通子目录传递当前用户的访问权限。
 
 原宿主中断且缺停机回执时，可严格离线核验原进程退出、租约/锁、全部数据库 checkpoint 身份及原 Runner 绑定，再由原 Runner 停止资源，不临时重启项目宿主。只允许明确缺失回执；已有但损坏、过期或本地关闭未核实的回执仍阻断。discard.json 保留 interrupted_host 和原停止诊断。
 
-original-shutdown.json、discard.json 记录原请求、结算、任务数量和切换进度；shutdown-verification.json 绑定部署包。开始切换后中断会留下 `<home>/deployment-discard.json`，阻断 start/serve、后续部署及升级预检，须按该记录完成现场恢复；不自动重发未知 stop 或回滚。开始切换前失败不移动原执行目录，服务可能已停止。本功能使用当前 Runner 命名空间，不迁移旧运行状态。项目数据库仅接受[当前完整定义](../product-design/data-model.md#当前格式来源)；旧开发格式需用原构建核实和结算，不提供迁移、双读或旧库任务导入。schema 41 对 schema 40 的历史显式放弃行为仅按原版本追溯，原验收见[清理修复验收](../../SteerlineFlow/testing/acceptance/deployment-schema40-discard-20261106.md)。
+显式放弃模式可只读处理兼容的旧库，包括 schema 44 和 45。任务图和停机核验所需的表定义须匹配，原宿主、项目及 Runner 绑定须可核实。新版程序用当前 schema 建库，通过正式任务入口重建任务图。普通部署核验和启动在读取数据库时要求[当前完整定义](../product-design/data-model.md#当前格式来源)。缺少版本记录、来自更新版本、表定义不兼容或原资源未结算时，显式放弃会在切换前阻断。
+
+original-shutdown.json、discard.json 记录原请求、结算、任务数量和切换进度；shutdown-verification.json 绑定部署包。开始切换后中断会留下 `<home>/deployment-discard.json`，阻断 start/serve、后续部署及升级预检，须按该记录完成现场恢复；不自动重发未知 stop 或回滚。开始切换前失败不移动原执行目录，服务可能已停止。schema 41 对 schema 40 的历史显式放弃行为见[清理修复验收](../../SteerlineFlow/testing/acceptance/deployment-schema40-discard-20261106.md)。
 
 ## 实现与历史证据
 
