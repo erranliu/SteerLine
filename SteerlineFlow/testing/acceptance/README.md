@@ -2,6 +2,8 @@
 
 项目运行环境表内检测（2026-11-11）。[实现与验证](project-environment-inline-checks.md)
 
+任务 DAG 启动反馈（2026-11-11，已实现，未部署）。[验收记录](task-dag-start-feedback.md)
+
 重构方向模板与界面统一（2026-11-11）。[验收记录与提示词差异](refactoring-directions.md)
 
 重构与维护最小闭环（2026-11-11，已实现，隔离真实联验通过，未部署）。[验收记录](refactoring-maintenance.md) · [Spec](../../spec/refactoring-maintenance.spec.md) · [Plan](../../plans/refactoring-maintenance.plan.md)
