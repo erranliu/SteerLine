@@ -47,7 +47,7 @@ func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
 	if err := reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if authority.Authority != "native" || authority.AuthorityVersion != 1 || authority.GraphRevision != 0 || authority.DispatchMode != "manual" || !authority.DispatchPaused {
+	if authority.Authority != "native" || authority.AuthorityVersion != 1 || authority.GraphRevision != 0 || authority.DispatchMode != "manual" {
 		t.Fatalf("bad initial native authority: %+v", authority)
 	}
 	repeated, err := OpenNativeTaskProject(context.Background(), &config)
@@ -62,11 +62,11 @@ func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	mode := "auto"
-	_, err = writer.SetRunnerDispatch(context.Background(), ports.RunnerDispatch{Project: authority.ProjectIdentity, RequestID: "authority-change", ExpectedAuthorityVersion: 1, Mode: &mode, RequestedBy: "fixture"})
+	_, err = writer.SetRunnerDispatch(context.Background(), ports.RunnerDispatch{Project: authority.ProjectIdentity, RequestID: "authority-change", ExpectedAuthorityVersion: 1, Mode: mode, RequestedBy: "fixture"})
 	if err != nil {
 		t.Fatalf("authority CAS 1->2 failed: %v", err)
 	}
-	_, err = writer.SetRunnerDispatch(context.Background(), ports.RunnerDispatch{Project: authority.ProjectIdentity, RequestID: "stale-change", ExpectedAuthorityVersion: 1, Mode: &mode, RequestedBy: "fixture"})
+	_, err = writer.SetRunnerDispatch(context.Background(), ports.RunnerDispatch{Project: authority.ProjectIdentity, RequestID: "stale-change", ExpectedAuthorityVersion: 1, Mode: mode, RequestedBy: "fixture"})
 	if err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("stale authority was accepted: %v", err)
 	}

@@ -52,6 +52,16 @@ func (s *SQLiteStore) Refactorings(ctx context.Context, project string) ([]refac
 	}
 	return out, rows.Err()
 }
+
+// The explicit discard reader can inspect databases created before maintenance existed.
+func (s *SQLiteStore) RefactoringsForDiscard(ctx context.Context, project string) ([]refactoring.Record, error) {
+	version, err := readDatabaseSchemaVersion(ctx, s.db)
+	if err != nil || version < 47 {
+		return nil, err
+	}
+	return s.Refactorings(ctx, project)
+}
+
 func (s *SQLiteStore) RefactoringCommand(ctx context.Context, project, id string) ([]byte, []byte, error) {
 	var raw, result []byte
 	var kind string

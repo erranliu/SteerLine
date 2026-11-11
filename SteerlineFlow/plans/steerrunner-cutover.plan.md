@@ -11,7 +11,7 @@
 5. 替换实际 app service、配置、命令、查询投影和调试/分级测试 driver；固定 Runner 版本及 SHA。删除 SteerLine 旧执行 actor、worker、适配器、写表及对应专属测试。保留 Task/DAG、候选参与关系、唯一交付及 UI 的业务入口。切换和删除必须在同一 SteerLine PR 中完成。
 6. 两仓最小验证及文档审计通过后提交 Runner，再以可获取版本固定 SteerLine；分别创建并关联 PR。未完成实际切换或未验的支持目标，不声明跨仓交付完成。
 
-生命周期规则只链接[统一入口](../../docs/product-design/worker-lifecycle.md)。本次差异是执行 owner 迁到独立进程，Task 侧只对原 CLI 操作记账，不再维护原生轮次状态机。
+生命周期规则只链接[统一入口](../../docs/product-design/runner-lifecycle.md)。本次差异是执行 owner 迁到独立进程，Task 侧只对原 CLI 操作记账，不再维护原生轮次状态机。
 
 ## 测试计划
 

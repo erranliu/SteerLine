@@ -104,7 +104,7 @@ flowchart LR
 
 活动读取流保持同一只读事务，查询层逐条投影并计数；超预算记录不推进游标。正常、预算终止、取消或错误路径均须关闭流，关闭失败不返回成功页。具体格式和预算归[数据模型](../product-design/data-model.md)与[执行观察和结果](../product-design/execution-observability.md)。
 
-关闭顺序为拒绝并排空项目 Read/Command/Task → 关闭本地资源并记录锁结果 → 应用结算共享 Runner。关闭 Web、项目本地退出和原生资源停止分别判断；失败不丢原绑定或停止义务。原生恢复及 v8 升级遵守[生命周期](../product-design/worker-lifecycle.md)，不在组装层另建规则。
+关闭顺序为拒绝并排空项目 Read/Command/Task → 关闭本地资源并记录锁结果 → 应用结算共享 Runner。关闭 Web、项目本地退出和原生资源停止分别判断；失败不丢原绑定或停止义务。原生恢复及 v8 升级遵守[生命周期](../product-design/runner-lifecycle.md)，不在组装层另建规则。
 
 ## 维护范围
 

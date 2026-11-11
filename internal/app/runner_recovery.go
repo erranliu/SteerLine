@@ -26,7 +26,7 @@ func inspectRunnerRecovery(ctx context.Context, config Config, id string) (api.R
 		return view, err
 	}
 	view.TaskID, view.RunRevision = candidate.TaskID, candidate.Revision
-	view.DispatchMode, view.DispatchPaused = snapshot.Graph.Authority.DispatchMode, snapshot.Graph.Authority.DispatchPaused
+	view.DispatchMode = snapshot.Graph.Authority.DispatchMode
 	if snapshot.Checkpoint != nil {
 		view.ServiceInstanceID = snapshot.Checkpoint.Service.InstanceID
 		view.ServiceStatus = snapshot.Checkpoint.Service.Status

@@ -15,6 +15,7 @@ import (
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -36,6 +37,11 @@ func TestEnvironmentConfigurationQueryDoesNotTouchProject(t *testing.T) {
 	value, err := port.environmentRead(context.Background(), "/environment/options", url.Values{"configuration": {"true"}})
 	require(t, err)
 	options := value.(environmentOptions)
+	wantPrompt, err := prompts.EnvironmentRepair(env.DocumentPath())
+	require(t, err)
+	if options.RepairPrompt != wantPrompt || wantPrompt == "" {
+		t.Fatal("configuration lost the canonical repair prompt", options.RepairPrompt)
+	}
 	if len(options.Profiles) != len(c.RunnerExecution.Profiles) || len(options.Environments) == 0 {
 		t.Fatal(options)
 	}

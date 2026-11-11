@@ -74,17 +74,19 @@ Windows 安装根目录须向普通子目录传递当前用户的访问权限。
 
 -DiscardRuns 必须与 -UpdateRunner 组合，可加 -NoStart。构建及能力预检完成后，先在独立位置通过正式任务校验/创建入口准备任务定义与 DAG，再核对原应用/Web 退出、checkpoint、项目/仓库身份及锁。已保存待重启的 profile/default/开发设置可与原冻结摘要不同，仓库、remote、分支及 Runner 绑定须一致，准备期间再改配置会阻断。
 
-原固定 Runner 公开冷查询全部 Run/input，先持久保存原 stop 信封并在 worker 启动前受理，沿原号结算、停止服务并核实全部资源。未知停止、未完成恢复授权、输入/项目归属不明、锁或证明缺失均阻断，不把“放弃”当作资源已消失。
+通过原固定 Runner 的公开接口冷查询全部 Run/input。先持久保存原 stop 信封，由 Runner 在恢复执行前受理，再沿原号结算、停止服务并核实全部资源。未知停止、未完成恢复授权、输入/项目归属不明、锁或证明缺失均阻断，不把“放弃”当作资源已消失。
 
 通过后将原项目 state、应用/Web 状态及 Runner 命名空间归档到 `<home>/maintenance/discard-runs-<调用ID>/`，切换准备好的任务库，再安装新程序：
 
 - 保留配置/profiles/default、任务编号/内容/固定契约/DAG、业务 Git 和远端 PR。
-- **全部任务恢复 open（包括原已完成/放弃），所有项目 manual 且暂停派发。** 旧执行、交付、环境资格、生成、Roadmap 和控制历史仅供归档查证，不恢复为新执行状态。
-- -NoStart 不需要临时启动服务或人工导入；恢复派发前须按实际业务选定任务。
+- **全部任务恢复 open（包括原已完成/放弃），所有项目关闭自动派发。** 旧执行、交付、环境资格、生成、Roadmap 和控制历史仅供归档查证，不恢复为新执行状态。
+- -NoStart 不需要临时启动服务或人工导入；可按实际业务手动启动任务或开启自动派发。
 
 原宿主中断且缺停机回执时，可严格离线核验原进程退出、租约/锁、全部数据库 checkpoint 身份及原 Runner 绑定，再由原 Runner 停止资源，不临时重启项目宿主。只允许明确缺失回执；已有但损坏、过期或本地关闭未核实的回执仍阻断。discard.json 保留 interrupted_host 和原停止诊断。
 
-original-shutdown.json、discard.json 记录原请求、结算、任务数量和切换进度；shutdown-verification.json 绑定部署包。开始切换后中断会留下 `<home>/deployment-discard.json`，阻断 start/serve、后续部署及升级预检，须按该记录完成现场恢复；不自动重发未知 stop 或回滚。开始切换前失败不移动原执行目录，服务可能已停止。本功能使用当前 Runner 命名空间，不迁移旧运行状态。当前 schema 42 仅接受当前完整定义；旧开发格式需用原构建核实和结算，不提供迁移、双读或旧库任务导入。schema 41 对 schema 40 的历史显式放弃行为仅按原版本追溯，原验收见[清理修复验收](../../SteerlineFlow/testing/acceptance/deployment-schema40-discard-20261106.md)。
+显式放弃模式可只读处理兼容的旧库，包括 schema 44 和 45。任务图和停机核验所需的表定义须匹配，原宿主、项目及 Runner 绑定须可核实。新版程序用当前 schema 建库，通过正式任务入口重建任务图。普通部署核验和启动在读取数据库时要求[当前完整定义](../product-design/data-model.md#当前格式来源)。缺少版本记录、来自更新版本、表定义不兼容或原资源未结算时，显式放弃会在切换前阻断。
+
+original-shutdown.json、discard.json 记录原请求、结算、任务数量和切换进度；shutdown-verification.json 绑定部署包。开始切换后中断会留下 `<home>/deployment-discard.json`，阻断 start/serve、后续部署及升级预检，须按该记录完成现场恢复；不自动重发未知 stop 或回滚。开始切换前失败不移动原执行目录，服务可能已停止。schema 41 对 schema 40 的历史显式放弃行为见[清理修复验收](../../SteerlineFlow/testing/acceptance/deployment-schema40-discard-20261106.md)。
 
 ## 实现与历史证据
 

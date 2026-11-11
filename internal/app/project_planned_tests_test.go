@@ -30,8 +30,9 @@ func plannedTestsWaitWithoutBlockingProviderAndRequireDeliveredDefinitions(t *te
 	m, base := pmsFixture(t)
 	_, err := m.check(ctx)
 	require(t, err)
-	a := roadmap.Analysis{Tasks: []roadmap.Node{{Key: "tools"}, {Key: "sample", Proposed: roadmap.Dependencies{Local: []string{"tools"}}}}}
-	r := roadmap.Record{State: "admitted", Source: roadmap.Source{ID: strings.Repeat("a", 32)}, Analysis: &a, ConfirmedDigest: roadmap.ValueDigest(a), CodeCommit: m.current().Commit, DocumentsVerified: true, Mapping: map[string]string{"tools": "101", "sample": "102"}}
+	a := roadmap.Analysis{Coordination: "Reuse the declared owners and confirmed dependency handoffs.", Tasks: []roadmap.Node{{Key: "tools", ProvidesTests: []string{"new.content"}}, {Key: "sample", Proposed: roadmap.Dependencies{Local: []string{"tools"}}}}}
+	r := roadmap.Record{State: "admitted", Source: roadmap.Source{ID: strings.Repeat("a", 32)}, Analysis: &a, CodeCommit: m.current().Commit, DocumentsVerified: true, Mapping: map[string]string{"tools": "101", "sample": "102"}}
+	r.ConfirmedDigest = roadmap.ConfirmationDigest(r)
 	r.Documents = roadmap.PlannedDocuments(r)
 	for _, path := range []string{"SteerlineFlow/environment-project.json", "SteerlineFlow/testing/test-list.json"} {
 		raw, err := m.read(ctx, r.CodeCommit, path)

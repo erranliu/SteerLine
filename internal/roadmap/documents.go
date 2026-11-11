@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/prompts"
-	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/prompts"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 
 	"github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -83,11 +84,14 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	if err != nil {
 		return r, err
 	}
+	if err = s.verifyPlanning(ctx, r, fixed.Commit); err != nil {
+		return r, err
+	}
 	r = model.Record{ID: request, RequestID: request, Purpose: "documents", ParentID: parent, Project: s.Project, Revision: 1,
 		Source: r.Source, Existing: r.Existing, GraphDigest: r.GraphDigest, Profile: r.Profile, CreatedAt: time.Now().UTC(),
-		State: "queued", Runner: s.Build, Submission: "pending", Analysis: r.Analysis, ConfirmedDigest: r.ConfirmedDigest,
-		CodeCommit: fixed.Commit, RepositoryTree: fixed.Tree, Materials: fixed.Materials, Documents: []model.Documents{}, Mapping: r.Mapping}
-	_, err = TestCatalogue(r)
+		State: "queued", Runner: s.Build, Analysis: r.Analysis, ConfirmedDigest: r.ConfirmedDigest,
+		CodeCommit: fixed.Commit, RepositoryTree: fixed.Tree, Materials: fixed.Materials, Documents: []model.Documents{}, Mapping: r.Mapping, PlanningMaterials: r.PlanningMaterials}
+	err = validateProviders(r)
 	if err != nil {
 		return r, err
 	}
@@ -119,31 +123,36 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		return r, err
 	}
 	r.Materials = append(r.Materials, file)
-	instruction, err := prompts.RoadmapDocuments(r.CodeCommit, r.Source.Path)
-	if err != nil {
-		return r, err
+	for _, d := range model.PlannedDocuments(r) {
+		g := model.Generation{ID: Token(), Key: d.Key, CreatedAt: r.CreatedAt, State: "queued", Submission: "pending"}
+		r.Generations = append(r.Generations, g)
+		view := r.Execution(g)
+		instruction, err := prompts.RoadmapDocuments(r.CodeCommit, r.Source.Path, d.Key)
+		if err != nil {
+			return r, err
+		}
+		input := runnercontract.GenerateRunInput{Title: "Roadmap Spec / Plan: " + d.Key,
+			Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
+			Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
+			Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit}, Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(view)}}
+		if err = catalog.ValidateRepositoryGenerate(input); err != nil {
+			return r, err
+		}
+		payload, err := json.Marshal(input)
+		if err != nil {
+			return r, err
+		}
+		if len(payload) > 8<<20 {
+			return r, errors.New("生成请求超过 Runner 完整输入上限")
+		}
+		r.Generations[len(r.Generations)-1].Request = runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}
 	}
-	input := runnercontract.GenerateRunInput{Title: "Roadmap Spec / Plan: " + r.Source.Path,
-		Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
-		Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
-		Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit},
-			Instruction: instruction, Materials: inputs, OutputSchema: model.DocumentSchema(r)}}
-	if err = catalog.ValidateRepositoryGenerate(input); err != nil {
-		return r, err
-	}
-	payload, err := json.Marshal(input)
-	if err != nil {
-		return r, err
-	}
-	if len(payload) > 8<<20 {
-		return r, errors.New("生成请求超过 Runner 完整输入上限")
-	}
-	r.Request = runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}
+
 	if err = s.Store.SaveRoadmap(ctx, r, 0); err != nil {
 		return r, err
 	}
 	s.track(r)
-	return s.dispatch(ctx, r)
+	return r, nil
 }
 
 // DocumentConfirmationRequest binds the confirmation milestone of one generation command.

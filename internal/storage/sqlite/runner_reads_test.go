@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,10 +22,6 @@ import (
 func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
 	ctx := context.Background()
 	s, project, tasks := nativeAuditStore(t)
-	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, project)
-		return err
-	}))
 	graph, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	contract, err := s.TaskContract(ctx, project, tasks[0])
@@ -47,6 +44,19 @@ func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
 	// Public event replay cannot duplicate history or change a stored final.
 	c.Revision++
 	require(t, s.SaveCandidate(ctx, c, 2, events))
+	readingID := base64.RawURLEncoding.EncodeToString([]byte(project + "\x00task_candidate\x00" + c.ID))
+	reading := query.ReadingService{Reader: s, Project: project, Instance: "fixture", Bodies: query.NewReadingBodyCache()}
+	readingPage, err := reading.Page(ctx, readingID, "", 50)
+	require(t, err)
+	if len(readingPage.Items) != 1 || readingPage.Items[0].AttemptID != "attempt" || readingPage.Items[0].TurnID != "turn" {
+		t.Fatalf("reading index lost original event or duplicated replay: %+v", readingPage)
+	}
+	readingItem := readingPage.Items[0]
+	readingBody, err := reading.Body(ctx, readingID, readingItem.ID, readingItem.SHA256, 0)
+	require(t, err)
+	if readingBody.Text != final.Text || !readingBody.Complete {
+		t.Fatal("reading page changed original final")
+	}
 	q := query.NewConversationService(s, project)
 	page, err := q.ReadConversation(ctx, api.ConversationFilter{WorkflowID: c.ID, ExecutionID: c.RunID, FinalsOnly: true}, "", 100)
 	require(t, err)

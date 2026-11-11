@@ -362,7 +362,7 @@ func prepareDiscardedTasks(ctx context.Context, c Config, dir string) (counts Di
 	defer func() { retErr = errors.Join(retErr, fresh.Close()) }()
 	authority := graph.Authority
 	authority.AuthorityVersion, authority.GraphRevision = 1, 0
-	authority.DispatchMode, authority.DispatchPaused = "manual", true
+	authority.DispatchMode = "manual"
 	authority.CreatedAt, authority.UpdatedAt = time.Now().UTC(), time.Now().UTC()
 	if err := fresh.InitializeProject(ctx, authority); err != nil {
 		return counts, err

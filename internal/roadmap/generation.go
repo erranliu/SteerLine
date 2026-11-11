@@ -64,6 +64,9 @@ func Token() string {
 	return hex.EncodeToString(b[:])
 }
 func (s *Service) save(ctx context.Context, r model.Record) (model.Record, error) {
+	if r.GenerationID != "" {
+		return s.saveGeneration(ctx, r)
+	}
 	old := r.Revision
 	r.Revision++
 	e := s.Store.SaveRoadmap(ctx, r, old)
@@ -74,7 +77,9 @@ func (s *Service) save(ctx context.Context, r model.Record) (model.Record, error
 }
 func (s *Service) track(r model.Record) {
 	if s.Queue != nil {
-		s.Queue.UpdateContent(s.Project, "roadmap:"+r.ID, r.CreatedAt, r.Submission != "pending", r.Settled())
+		for _, v := range r.Executions() {
+			s.Queue.UpdateContent(s.Project, queueID(v), v.CreatedAt, v.Submission != "pending", v.Settled())
+		}
 	}
 }
 func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error) {
@@ -146,6 +151,11 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
 		return model.Record{}, e
 	}
 	materials := []runnercontract.Document{file}
+	planning, err := s.planningMaterials(ctx, source.Head)
+	if err != nil {
+		return model.Record{}, err
+	}
+	materials = append(materials, planning...)
 	instruction, e := prompts.RoadmapParse(source.Path, source.Head)
 	if e != nil {
 		return model.Record{}, e
@@ -164,7 +174,7 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
 	if e != nil {
 		return model.Record{}, e
 	}
-	r := model.Record{ID: in.RequestID, RequestID: in.RequestID, Project: s.Project, Revision: 1, Source: source, Existing: graph, GraphDigest: model.GraphDigest(graph), Profile: in.Profile, CreatedAt: time.Now().UTC(), State: "queued", Runner: s.Build, Submission: "pending", CodeCommit: source.Head, Materials: materials, Documents: []model.Documents{}, Mapping: mapping, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}}
+	r := model.Record{ID: in.RequestID, RequestID: in.RequestID, Project: s.Project, Revision: 1, Source: source, Existing: graph, GraphDigest: model.GraphDigest(graph), Profile: in.Profile, CreatedAt: time.Now().UTC(), State: "queued", Runner: s.Build, Submission: "pending", CodeCommit: source.Head, Materials: materials, PlanningMaterials: materials, Documents: []model.Documents{}, Mapping: mapping, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}}
 	if e = s.Store.SaveRoadmap(ctx, r, 0); e != nil {
 		return r, e
 	}
@@ -183,7 +193,7 @@ func (s *Service) dispatch(ctx context.Context, r model.Record) (model.Record, e
 			return r, e
 		}
 	}
-	if s.Queue != nil && !s.Queue.AcquireContent(s.Project, "roadmap:"+r.ID) {
+	if s.Queue != nil && !s.Queue.AcquireContent(s.Project, queueID(r)) {
 		return r, nil
 	}
 	r.Submission = "started"
@@ -192,6 +202,9 @@ func (s *Service) dispatch(ctx context.Context, r model.Record) (model.Record, e
 	r, e = s.save(ctx, r)
 	if e != nil {
 		return r, e
+	}
+	if r.Cancelled {
+		return r, nil
 	}
 	receipt, callErr := s.Runner.Submit(ctx, r.Request)
 	if callErr == nil {
@@ -220,8 +233,10 @@ func (s *Service) ObserveNext(ctx context.Context) error {
 	pending := []model.Record{}
 	for _, r := range rows {
 		s.track(r)
-		if !r.ObservationComplete() {
-			pending = append(pending, r)
+		for _, v := range r.Executions() {
+			if !v.ObservationComplete() {
+				pending = append(pending, v)
+			}
 		}
 	}
 	if len(pending) == 0 {
@@ -246,6 +261,9 @@ func (s *Service) Observe(ctx context.Context, id string) (model.Record, error) 
 	}
 	if r.ObservationComplete() {
 		return r, nil
+	}
+	if r.Purpose == "documents" {
+		return s.driveDocuments(ctx, r)
 	}
 	if r.Submission == "pending" {
 		return s.dispatch(ctx, r)
@@ -380,6 +398,11 @@ func (s *Service) observe(ctx context.Context, r model.Record) (out model.Record
 					r.Diagnostic = err.Error()
 				} else {
 					r.Analysis = &a
+					if err := validateProviders(r); err != nil {
+						r.State = "invalid"
+						r.Diagnostic = err.Error()
+						return s.save(ctx, r)
+					}
 					r.State = "review"
 					if len(a.Questions) > 0 {
 						r.State = "blocked"
@@ -413,6 +436,9 @@ func (s *Service) Confirm(ctx context.Context, id, request string, expected uint
 	}
 	graph, e := s.Graph(ctx)
 	if e != nil {
+		return r, e
+	}
+	if e = s.verifyPlanning(ctx, r, source.Head); e != nil {
 		return r, e
 	}
 	r, e = model.Confirm(r, source, graph, request)
@@ -484,7 +510,7 @@ func (s *Service) Close(ctx context.Context) error {
 func ParseSchema() json.RawMessage {
 	dependency := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"local", "formal"}, "properties": map[string]any{"local": map[string]any{"type": "array", "uniqueItems": true, "items": map[string]string{"type": "string"}}, "formal": map[string]any{"type": "array", "uniqueItems": true, "items": map[string]string{"type": "string", "pattern": "^(0|[1-9][0-9]*)$"}}}}
 	properties := map[string]any{}
-	required := []string{"local_key", "key_origin", "title", "goal", "scope", "constraints", "acceptance", "evidence", "original_dependencies", "proposed_dependencies", "reason", "existing_task_id"}
+	required := []string{"local_key", "key_origin", "title", "goal", "scope", "constraints", "acceptance", "evidence", "original_dependencies", "proposed_dependencies", "reason", "existing_task_id", "provides_tests"}
 	for _, key := range required {
 		properties[key] = map[string]string{"type": "string"}
 	}
@@ -492,9 +518,10 @@ func ParseSchema() json.RawMessage {
 	// pinned file and DecodeAnalysis verifies literal source lines afterwards.
 	properties["evidence"] = map[string]any{"type": "string", "minLength": 1}
 	properties["key_origin"] = map[string]any{"type": "string", "enum": []string{"markdown", "suggested"}}
+	properties["provides_tests"] = map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}}
 	properties["original_dependencies"] = dependency
 	properties["proposed_dependencies"] = dependency
-	schema := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"tasks", "questions", "overlap"}, "properties": map[string]any{"tasks": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}}, "questions": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "overlap": map[string]string{"type": "string"}}}
+	schema := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"tasks", "questions", "overlap", "coordination"}, "properties": map[string]any{"tasks": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}}, "questions": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "overlap": map[string]string{"type": "string"}, "coordination": map[string]any{"type": "string", "minLength": 1}}}
 	raw, e := json.Marshal(schema)
 	if e != nil {
 		panic(fmt.Sprint(e))

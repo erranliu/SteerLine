@@ -157,5 +157,5 @@ func saveEnvironmentTx(ctx context.Context, tx *sql.Tx, r env.Record, expected u
 			return errors.New("request_conflict: environment request already bound")
 		}
 	}
-	return nil
+	return indexEnvironmentReading(ctx, tx, r)
 }

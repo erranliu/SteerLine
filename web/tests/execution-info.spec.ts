@@ -196,7 +196,6 @@ test("copies exact current, historical and local-operation IDs with visible ques
               control: {
                 revision: 1,
                 dispatch_mode: "manual",
-                dispatch_paused: true,
                 blockers: [],
               },
             },

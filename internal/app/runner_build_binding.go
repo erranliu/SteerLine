@@ -49,7 +49,7 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 		return err
 	}
 	for _, r := range roadmaps {
-		if r.Submission != "pending" && !runnerbinding.SamePath(r.Runner.StateDir, pin.StateDir) {
+		if !r.Settled() && !runnerbinding.SamePath(r.Runner.StateDir, pin.StateDir) {
 			return errors.New("Roadmap Runner namespace differs")
 		}
 	}

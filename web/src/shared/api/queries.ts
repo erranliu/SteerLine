@@ -263,8 +263,6 @@ const dynamicResources = new Set([
 ]);
 const taskActions = new Set([
   "set_dispatch_mode",
-  "pause_dispatch",
-  "resume_dispatch",
   "start_task",
   "start_candidate",
 ]);

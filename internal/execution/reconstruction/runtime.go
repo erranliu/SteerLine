@@ -9,14 +9,13 @@ import (
 type Metadata struct {
 	Checkpoint        hostcontract.ServiceCheckpoint
 	DispatchMode      string
-	DispatchPaused    bool
 	AuthorityRevision uint64
 }
 
 func MetadataOf(v Runtime) Metadata {
 	checkpoint := Checkpoint(v)
 	checkpoint.SchemaVersion = v.SchemaVersion
-	return Metadata{Checkpoint: checkpoint, DispatchMode: v.Control.DispatchMode, DispatchPaused: v.Control.DispatchPaused, AuthorityRevision: v.Control.Revision}
+	return Metadata{Checkpoint: checkpoint, DispatchMode: v.Control.DispatchMode, AuthorityRevision: v.Control.Revision}
 }
 
 func Checkpoint(v Runtime) hostcontract.ServiceCheckpoint {
@@ -37,11 +36,11 @@ func Checkpoint(v Runtime) hostcontract.ServiceCheckpoint {
 	return checkpoint
 }
 
-func RuntimeFromCheckpoint(checkpoint hostcontract.ServiceCheckpoint, dispatchMode string, dispatchPaused bool, authorityRevision uint64) Runtime {
+func RuntimeFromCheckpoint(checkpoint hostcontract.ServiceCheckpoint, dispatchMode string, authorityRevision uint64) Runtime {
 	state := checkpoint.Service
 	service := hostcontract.ServiceState{RunnerBuild: copyValue(state.RunnerBuild), Mode: state.Mode, InstanceID: state.InstanceID, PID: state.PID, Status: state.Status, Claimant: state.Claimant, Error: copyString(state.Error), ProcessIdentity: copyValue(state.ProcessIdentity), StartupID: copyString(state.StartupID), ConfigDigest: state.ConfigDigest, Ready: state.Ready, ControlProtocol: state.ControlProtocol, Capabilities: append([]string(nil), state.Capabilities...), HeartbeatIntervalMS: state.HeartbeatIntervalMS}
 	repository := hostcontract.Repository{Path: checkpoint.Repository.Path, Remote: checkpoint.Repository.Remote, Branch: checkpoint.Repository.Branch, Identity: checkpoint.Repository.Identity}
-	control := hostcontract.ControlState{DispatchMode: dispatchMode, DispatchPaused: dispatchPaused, Revision: authorityRevision, Blockers: []hostcontract.ControlBlocker{}}
+	control := hostcontract.ControlState{DispatchMode: dispatchMode, Revision: authorityRevision, Blockers: []hostcontract.ControlBlocker{}}
 	if checkpoint.Operation != nil {
 		op := checkpoint.Operation
 		control.Operation = &hostcontract.ControlOperation{RequestID: op.RequestID, Action: op.Action, TaskID: op.TaskID, Payload: append([]byte(nil), op.Payload...), Phase: op.Phase, RunID: op.RunID, AttemptID: op.AttemptID, DecisionID: op.DecisionID, RequestDigest: op.RequestDigest, Result: copyReceipt(op.Result)}

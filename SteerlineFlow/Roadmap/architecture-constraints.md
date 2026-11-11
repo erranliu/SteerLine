@@ -12,7 +12,7 @@
 
 ## 业务权威与执行边界
 
-SteerLine 负责任务领取、DAG、候选与公开 Run 的关联、原请求及授权输入转交、公开状态投影、PR 关联和真实合并后的唯一 TaskDelivery。工作区准备、workflow 步骤推进、LLM 调用、原生会话、反馈投递与执行资源管理归独立 SteerRunner。worker 按 Spec/Plan 实现、测试、修复、提交及创建 PR；Runner 管理所选 workflow，SteerLine 消费公开事实，不重建执行状态机。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
+SteerLine 负责任务领取、DAG、候选与公开 Run 的绑定、原请求及授权输入转交、公开状态投影、PR 关联和真实合并后的唯一 TaskDelivery。独立 SteerRunner 管理 Run 的工作区、workflow 步骤、LLM 调用、原生会话、反馈投递和执行资源。执行 Agent 在 Run 的工作区内按 Spec/Plan 实现、测试、修复并提交代码，SteerRunner 按所选 workflow 组织发布和 PR 创建。SteerLine 通过公开契约读取 Run 的执行事实。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
 
 规划任何涉及 LLM 的产品功能，均须遵循[LLM 执行边界](../../docs/architecture.md#llm-执行边界)，通过 Runner 的公开能力执行；SteerLine 的默认方案选择和 Runner 内部辅助操作的默认链路按[执行配置](../../docs/product-design/execution-configuration.md#两层默认链路)分别设计。能力不足时明确 Runner 契约的补齐与接入安排，不在 SteerLine 另接模型或原生代理。
 
@@ -28,11 +28,11 @@ Task、候选、Runner Run、Execution、Attempt、会话/轮次、用户消息�
 
 原生任务复用 SteerLine 任务状态机与 SQLite，任务 DAG 决定任务间资格；Runner 管理执行及会话，SteerLine 核验唯一交付。创建任务与加入 DAG 为同一事务，交付契约随创建固定；未交付任务只能通过受控命令追加前置，事务核验身份、版本和无环关系，保留原固定契约。PR 合并前可受控丢弃，但不释放后继或抹去执行事实。已合并 PR 的任务不可丢弃或补前置。新规划改变固定交付范围或要移除旧前置时，须重新规划受影响任务，不能用普通反馈或追加边改写旧契约。
 
-用户可通过 Codex 分析并人工处置任务与成果，系统不承诺自动修复任意人工改动。SteerLine 经 Runner 公开契约观察原执行、转交授权输入并对账原请求；原生会话重接、恢复及停止由 Runner 执行。具体允许动作、授权与已知缺口统一按[Worker 生命周期](../../docs/product-design/worker-lifecycle.md)及所选构建契约核对，不在 roadmap 维护平行恢复状态机。关系视图和 UI 均不成为业务写者；未核实原执行或其他写者时保留未知状态。
+用户可通过 Codex 分析并人工处置任务与成果，系统不承诺自动修复任意人工改动。SteerLine 经 Runner 公开契约观察原执行、转交授权输入并对账原请求；原生会话重接、恢复及停止由 Runner 执行。具体允许动作、授权与已知缺口统一按[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)及所选构建契约核对，不在 roadmap 维护平行恢复状态机。关系视图和 UI 均不成为业务写者；未核实原执行或其他写者时保留未知状态。
 
 ## 远端设计边界
 
-远端只需 Orca、agent 和仓库工具，不要求部署 SteerLine 服务或共享中心磁盘；远端路径属于其目标，不能当作本机文件。远端失联也不能自动改投本机；必须独立规划其权限、原身份和恢复/取消能力。
+远端只需 Orca、执行 Agent 和仓库工具，不要求部署 SteerLine 服务或共享中心磁盘；远端路径属于其目标，不能当作本机文件。远端失联也不能自动改投本机；必须独立规划其权限、原身份和恢复/取消能力。
 
 ## 未发布版本的兼容策略
 

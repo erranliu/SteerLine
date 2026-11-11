@@ -16,8 +16,6 @@ import (
 func TestTMReservationBindsArrangementWithoutTestReferences(t *testing.T) {
 	s, project, tasks := nativeAuditStore(t)
 	ctx := context.Background()
-	_, e := s.db.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, project)
-	require(t, e)
 	graph, e := s.TaskGraphSnapshot(ctx, project)
 	require(t, e)
 	contract, e := s.TaskContract(ctx, project, tasks[0])

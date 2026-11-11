@@ -73,7 +73,7 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	}
 	at := time.Now().UTC()
 	checkpoint := hostcontract.ServiceCheckpoint{SchemaVersion: hostcontract.ServiceCheckpointSchema, Repository: options.Repository, UpdatedAt: at, HeartbeatAt: at,
-		Service: hostcontract.ServiceState{RunnerBuild: options.RunnerBuild, Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "resolve_pr_conflict", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
+		Service: hostcontract.ServiceState{RunnerBuild: options.RunnerBuild, Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "resolve_pr_conflict", "set_dispatch_mode", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
 	viewerAvailable := false
 	for _, adapter := range options.NativeSessionAdapters {
 		if adapter == "codex-app-server" || adapter == "orca-terminal" {
@@ -84,7 +84,7 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	if viewerAvailable {
 		checkpoint.Service.Capabilities = append(checkpoint.Service.Capabilities, "open_native_session")
 	}
-	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall), wakeup: make(chan struct{}, 1), deliveryWakeup: make(chan struct{}, 1)}, nil
+	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, 0), options: options, calls: make(chan actorCall), wakeup: make(chan struct{}, 1), deliveryWakeup: make(chan struct{}, 1)}, nil
 }
 
 func (a *Actor) ControlWakeup() <-chan struct{} { return a.wakeup }
@@ -209,7 +209,7 @@ func (a *Actor) TickTask(ctx context.Context, _ context.CancelFunc) error {
 	if err != nil {
 		return err
 	}
-	if snapshot.Graph.Authority.DispatchMode != "auto" || snapshot.Graph.Authority.DispatchPaused {
+	if snapshot.Graph.Authority.DispatchMode != "auto" {
 		return nil
 	}
 	return a.observeError(ctx, a.options.Tasks.Dispatch(ctx))

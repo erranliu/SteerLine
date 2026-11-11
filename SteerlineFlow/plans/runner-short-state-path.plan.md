@@ -4,7 +4,7 @@
 
 SteerlineTest 101/C1 的安装现场在 `prepare_session` 因 `authentication_api_socket_path_too_long` 阻断。原 `home/state/<项目名与摘要>/runner` 使认证 socket 达到 124 字节，Runner 上限保持 106。SteerLine 改为本地卷根 `slr/<128-bit base32 key>`；key 取完整应用 run-dir 的 SHA-256 前 128 位，因此绑定 home 和项目，不随 home 深度增长。Windows 标准本地卷下 state-dir 固定 34 字节、当前 Runner socket 98 字节。
 
-只调整调用方目录布局，不修改 Runner、执行权限、W01–W18 推进、重试或恢复授权。统一规则见 [worker 生命周期](../../docs/product-design/worker-lifecycle.md)；本次差异为 W02 目录准备和 W18 资源定位。旧目录不迁移、不双读、不重新绑定原 Run，已有现场保持原始证据。
+只调整调用方目录布局，不修改 Runner、执行权限、W01–W18 推进、重试或恢复授权。统一规则见 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)；本次差异为 W02 目录准备和 W18 资源定位。旧目录不迁移、不双读、不重新绑定原 Run，已有现场保持原始证据。
 
 ## 实施
 

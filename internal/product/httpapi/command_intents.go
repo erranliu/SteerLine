@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -137,14 +136,6 @@ func parseActionEnvelope(envelope CommandEnvelope) (parsed actionPayload, err er
 			payload.Target.ExecutionID == "" || payload.Target.AttemptID == "" || payload.Target.TurnID == "" || payload.Target.BlockerID == "" || envelope.ExpectedControlRevision == 0 {
 			return parsed, invalidCommand(envelope.Action + " requires its exact run/execution/attempt/turn/blocker target")
 		}
-	case "pause_dispatch", "resume_dispatch":
-		var empty map[string]json.RawMessage
-		if err := decodeStrict(envelope.Payload, &empty); err != nil || len(empty) != 0 {
-			return parsed, invalidCommand(envelope.Action + " accepts an empty JSON object")
-		}
-		if envelope.Action != "stop_service" && (envelope.ExpectedVersion == 0 || envelope.ExpectedControlRevision == 0) {
-			return parsed, invalidCommand(envelope.Action + " requires the displayed target and control revisions")
-		}
 	case "create_task", "add_predecessors", "planning", "manual_acceptance", "custom_prerequisite":
 		return parsed, &protocolError{status: http.StatusNotImplemented, code: "unsupported", reason: "action is outside the current local client protocol"}
 	default:
@@ -206,15 +197,12 @@ func (s *commandRegistry) mappedControlInput(ctx context.Context, envelope Comma
 		control.Action = api.ControlAction(envelope.Action)
 		target := payload.Target
 		control.Payload = api.ControlPayload{Environment: &target}
-	case "set_dispatch_mode", "pause_dispatch", "resume_dispatch":
+	case "set_dispatch_mode":
 		if envelope.TargetID != "dispatch" && envelope.TargetID != envelope.ProjectID || envelope.ExpectedVersion != envelope.ExpectedControlRevision {
 			return control, invalidCommand("dispatch control target and expected version must match the displayed control revision")
 		}
 		control.Action = api.ControlAction(envelope.Action)
-		if envelope.Action == "set_dispatch_mode" {
-			payload := parsed.mode
-			control.Payload = api.ControlPayload{Mode: payload.Mode}
-		}
+		control.Payload = api.ControlPayload{Mode: parsed.mode.Mode}
 	case "stop_service":
 		if envelope.TargetID != envelope.InstanceID {
 			return control, &protocolError{status: http.StatusConflict, code: "stale_instance", reason: "stop target is not the discovered service instance"}

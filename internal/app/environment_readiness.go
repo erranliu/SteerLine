@@ -41,7 +41,8 @@ type environmentView struct {
 }
 
 type environmentOptions struct {
-	ReadinessRequired bool `json:"environment_readiness_required"`
+	ReadinessRequired bool   `json:"environment_readiness_required"`
+	RepairPrompt      string `json:"repair_prompt,omitempty"`
 
 	Profiles       []environmentProfileView `json:"profiles"`
 	Environments   []environmentView        `json:"environments"`

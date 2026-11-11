@@ -10,6 +10,7 @@
 | `<scope-id>` | 一项开发/验证工作的短目录名，例如 `wt-c751-paths`。不同 worktree 或同时推进的工作使用不同值，同一工作后续查证沿用原值。 |
 | `<test-run-id>` | 一次实际测试调用的唯一标识，建议 UTC 时间加随机 UUID；补测生成新值，不覆盖原结果。 |
 | `<release-id>` | 调试生成器返回的 `dev-yyyyMMdd-HHmmss-<短commit>[-dirty]`，其中时间为北京时间；从 stdout/manifest 读取，不自行猜测。 |
+| `generation_id` | 文档批次内一项独立内容执行的身份；用于共享队列、Run/session、停止与历史定位，不能替代批次 record_id 或正式 Task 编号。 |
 | `<test-id>` / `<scenario-id>` | 来自项目机器清单及 E2E manifest 的稳定 ID；不要用表格序号或包执行顺序代替。 |
 | `<home>` | 显式选定的应用 home。调试时为新包自己的 home，不能沿用安装版或另一现场的 `STEERLINE_HOME`。 |
 
@@ -181,6 +182,8 @@ roadmap-runner 的仓库外状态目录约定为 `<CODEX_HOME>/task-state/roadma
 ## 结果留存与路径维护
 
 原 summary、JSONL、managed 报告和必要清理证据保留在本次独占运行目录；Git 中保存任务专属验收摘要、原始路径/版本/命令定位，以及 `SteerlineFlow/testing/records/` 下按受测 SHA 生成的简洁测试历史；不保存完整原始日志。失败与补测分目录保存，资源未确认停止或证据未登记完成时保留原现场。临时目录可能被系统清理，需要长期追溯时先保存完整证据并在验收记录更新实际定位，不仅复制一份“通过”文字。
+
+本清单定义实际执行的路径与隔离，不要求为每次提交新跑测试或为全部源文件、产物制作摘要；证据范围、结果复用与停止条件统一见[测试指南](testing.md#环境与证据)，Git 历史导出的资格见[报告约定](testing/reports.md#写入-git-历史)。
 
 源码中的 `.evidence/` 是已忽略的本地临时证据区，不是本约定的仓库外并行调试根；新建持续现场使用上面的外部 scope。`SteerlineFlow/testing/acceptance/` 和 archive/ 也不放运行中的数据库、认证、服务锁或大体积原始现场。
 

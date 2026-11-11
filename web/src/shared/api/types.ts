@@ -283,7 +283,6 @@ export interface ServicePage {
   control: {
     revision: number;
     dispatch_mode: string;
-    dispatch_paused: boolean;
     blockers: { Reason: string }[];
   };
 }

@@ -294,7 +294,11 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 		return proof, err
 	}
 	contents := make([]runnerbinding.Content, 0, len(roadmaps))
-	refactorings, err := reader.Refactorings(ctx, c.Identity())
+	readRefactorings := reader.Refactorings
+	if discard {
+		readRefactorings = reader.RefactoringsForDiscard
+	}
+	refactorings, err := readRefactorings(ctx, c.Identity())
 	if err != nil {
 		return proof, err
 	}
@@ -304,7 +308,14 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 		}
 	}
 	for _, r := range roadmaps {
-		contents = append(contents, roadmapContent(r))
+		// Older document batches stored their single Runner binding on the
+		// parent. Include it in discard settlement before archiving the row.
+		if discard && r.Purpose == "documents" && (r.Request.RequestID != "" || r.RunID != "") {
+			contents = append(contents, roadmapContent(r))
+		}
+		for _, execution := range r.Executions() {
+			contents = append(contents, roadmapContent(execution))
+		}
 	}
 	advisories, err := advisoryRecords(ctx, reader, c.Identity())
 	if err != nil {

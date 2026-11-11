@@ -21,16 +21,12 @@ import (
 func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
-	a := taskmodel.ProjectTaskAuthority{ProjectIdentity: "runner-control", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	a := taskmodel.ProjectTaskAuthority{ProjectIdentity: "runner-control", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual"}
 	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutProjectTaskAuthority(a) }))
 	docs := &runnerTaskDocuments{repository: a.Repository, body: []byte("# Acceptance\nfixed contract\n")}
 	sum := sha256.Sum256(docs.body)
 	ref := taskmodel.FileReference{Path: "SteerlineFlow/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: hex.EncodeToString(sum[:])}
 	tasks := nativeAuditRecordsWithReference(t, s, a, ref)
-	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, a.ProjectIdentity)
-		return err
-	}))
 	baseCalls := 0
 	svc := &taskrunner.Service{Project: a.ProjectIdentity, Claimant: "operator", StateDir: filepath.Join(t.TempDir(), "runner"), DefaultProfile: "live", Store: s, Tasks: taskapp.Service{Reader: s, Documents: docs, Input: taskapp.Input{Project: a.ProjectIdentity, Authority: "native", Remote: "origin", Branch: "main", ExecutableTypes: []string{"task"}}}, Profiles: map[string]taskrunner.Profile{"live": {ID: "live", Input: runnerclient.RunInput{Workflow: runnerclient.Workflow{ID: "development", Version: 1}}}}, ResolveBase: func(context.Context, taskmodel.FixedWork, bool) (string, error) {
 		baseCalls++
@@ -67,7 +63,7 @@ func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 		t.Fatal("accepted original start was lost or resubmitted", replayed)
 	}
 	changed := req
-	changed.Action = "pause_dispatch"
+	changed.Action = "set_dispatch_mode"
 	conflict, err := controls.Handle(ctx, changed, "replacement", 99)
 	require(t, err)
 	if conflict.Code != "idempotency_conflict" {

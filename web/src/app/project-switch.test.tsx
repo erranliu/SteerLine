@@ -106,7 +106,6 @@ function mock() {
                                 control: {
                                   revision: 1,
                                   dispatch_mode: "manual",
-                                  dispatch_paused: false,
                                 },
                               },
                             },
@@ -122,6 +121,66 @@ function mock() {
     ),
   );
 }
+
+it("resolves an activity summary deep link to its project and preserves it through global settings without reading conversation", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  const activity = {
+    activity_id: "chosen",
+    project_id: a,
+    source_id: "candidate",
+    source: "task_candidate",
+    kind: "task_execution",
+    request_ids: [],
+    title: "选中的活动",
+    state: "running",
+    phase: "实施中",
+    needs_attention: false,
+    observation: "current",
+    details_ref: { kind: "candidate", target: "candidate" },
+  };
+  vi.mocked(fetch).mockImplementation((...args) => {
+    const url = String(args[0]);
+    if (url.includes("/interactions?") || url.includes("/body?"))
+      throw new Error("deep link must remain summary-only");
+    if (url.includes("/activities?"))
+      return Promise.resolve(
+        Response.json({
+          project_id: a,
+          instance_id: identity(a).instance_id,
+          items: [activity],
+          request_links: {},
+          counts: { ongoing: 1, attention: 0, recent: 0, history: 0 },
+          counts_known: true,
+          sources: [],
+          has_more: false,
+        }),
+      );
+    if (url.endsWith("/activities/chosen"))
+      return Promise.resolve(Response.json(activity));
+    return original(...args);
+  });
+  const target = `/projects/${a}/activities?activity=chosen`;
+  mount(target);
+  await screen.findByRole("heading", { name: "选中的活动" });
+  expect(screen.getByRole("combobox", { name: "当前项目" })).toHaveValue(a);
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.some(
+        ([url]) =>
+          String(url).includes("/interactions?") ||
+          String(url).includes("/body?"),
+      ),
+  ).toBe(false);
+  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
+      "href",
+      target,
+    ),
+  );
+});
 
 it("keeps drawer UI outside keyed Workspace while isolating project and instance observations", async () => {
   mock();

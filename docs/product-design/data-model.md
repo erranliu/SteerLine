@@ -20,7 +20,7 @@
 
 项目状态位于仓库外的受管目录；同 common-dir 的 linked worktree 共用仓库身份。项目运行时持有仓库和状态目录锁，不允许另一 home 或 linked worktree 绕过同仓写者；数据库身份、格式及归属在业务写入前核验。现有 `.beads`、`.beads.db` 或 `beads.db` 状态阻断原生初始化，保留供人工处理，不自动删除或迁移，见[状态前置](../../internal/app/host/native_state_preflight.go)。
 
-Runner 按调用方固定 commit 创建专属工作区并管理原生资源。候选保存公开路径、分支/base 和 Run 绑定，不能把旧工作区重建成同名新执行。成功新建后的启动条件与未知创建的恢复分别按[生命周期](worker-lifecycle.md)处理。
+Runner 按调用方固定 commit 创建专属工作区并管理原生资源。候选保存公开路径、分支/base 和 Run 绑定，不能把旧工作区重建成同名新执行。成功新建后的启动条件与未知创建的恢复分别按[生命周期](runner-lifecycle.md)处理。
 
 应用 home 内项目共用一个 Runner 服务和准确 state-dir，任务库仍按项目隔离。目录布局与清理目标归[路径清单](../../SteerlineFlow/paths.md)，执行准备归[Runner 接入](../integration/steerrunner.md)。未知请求、原资源或停止义务未核实前不删除恢复依据，不用进程退出或窗口消失代替资源证明。
 
@@ -61,7 +61,7 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 
 | 格式或事实 | 当前来源 |
 | --- | --- |
-| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 45`；数值只在此表定位，正文不保留旧版本副本 |
+| Task SQLite | [reader.go](../../internal/storage/sqlite/reader.go) 的 `SchemaVersion = 47`；数值只在此表定位，正文不保留旧版本副本 |
 | 项目契约配置 | [app/config.go](../../internal/app/config.go) 要求显式 `task_authority=native`、`workflow_protocol=worker-flow-v2`；后者不代表 Runner 当前 workflow 版本 |
 | 全局执行配置 | [executionconfig](../../internal/executionconfig/config.go) 的严格解码与版本校验；构建选择由 [app](../../internal/app/runner_config.go) 校验 |
 | TaskContract 与 DAG | [taskcontract](../../internal/taskcontract) 的结构及 [task/model](../../internal/task/model) 的规则 |
@@ -77,4 +77,8 @@ Roadmap 编号按仓库权威从已有最大 Task 之后递增，不回收或补
 
 `refactoring_actions` 以项目身份和行动 ID 保存一份维护权威；从属轮次/操作、原请求、最新 worktree 持有者、问题、预算及报告都在该行动内。CAS 和项目在途唯一索引共同约束推进；原用户命令与状态同事务进入已有 commands 表，结果只存最小 ID/版本回执，不复制整份行动。维护活动从原表只读投影，不新增活动业务写表。类型归 [refactoring/model](../../internal/refactoring/model)，本版数据库唯一版本以 reader.go 为准，不迁移未发布旧库。
 
-`preparation_batches` 按项目与批次 ID 保存原准备事实和业务结果快照；`maintenance_settings.generation_batch` 只保存当前批次 ID。`preparation_associations` 保存原 TaskID/Inputs/GenerationID，随生成初次登记事务在外部提交前绑定，历史批次不被新引用覆盖。`source_observations` 独立保存最近成功观察及错误，不递增业务版本或赋予执行权限。查询返回来源事实，由产品 query 只读聚合；不存在统一活动业务写表或调度器。完整职责与接入约定见[异步活动中心](async-activities.md)。
+当前活动来源为检测、显式主分支检查、候选、Roadmap、提示词建议和重构维护；原测试准备批次及关联已退役。`source_observations` 独立保存最近成功观察及错误，不递增业务版本或赋予执行权限。
+
+独立阅读页的 `reading_fields` 只保存原记录字段指针、来源身份、512 字节预览、长度/摘要和显示元数据，正文仍归原持久记录；其拥有者在原事务维护索引。`reading_versions` 只为跨来源关联的读取索引提供廉价变化标记，不是业务 revision、消息增量流或执行 checkpoint。`message_observations` 仅按候选原 Run/Attempt/session 保存最后一条合法 assistant 样本及错误，不保存采样历史、不授予执行能力。新 schema 拒绝旧格式，不增加迁移或双写。
+
+查询返回来源事实，由产品 query 只读聚合；不存在统一活动业务写表或调度器。完整职责与接入约定见[异步活动中心](async-activities.md)。

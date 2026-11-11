@@ -31,8 +31,9 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		{"environment-invoke", func() (string, error) {
 			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/scripts/verify-environment.ps1")
 		}},
+		{"environment-repair", func() (string, error) { return EnvironmentRepair("SteerlineFlow/environment.md") }},
 		{"roadmap-parse", func() (string, error) { return RoadmapParse("roadmap.md", "fixed") }},
-		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md") }},
+		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md", "T1") }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -86,8 +87,9 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
 		{"bad-snapshot", func() (string, error) { return TestingContext([]byte(`{"status":"missing"}`)) }},
 		{"missing-body", func() (string, error) { return TestingStep("", []byte(testSnapshot), true) }},
 		{"missing-entry", func() (string, error) { return EnvironmentInvoke("powershell.exe", "") }},
+		{"missing-environment-document", func() (string, error) { return EnvironmentRepair("") }},
 		{"unsupported-interpreter", func() (string, error) { return EnvironmentInvoke("other", "entry") }},
-		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md") }},
+		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md", "T1") }},
 		{"missing-roadmap-source", func() (string, error) { return RoadmapParse("", "fixed") }},
 	}
 	for _, c := range cases {
@@ -106,11 +108,11 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		name, sha256 string
 		read         func() ([]byte, error)
 	}{
-		{"testing", "75671b11e26c540791678c1593c3b14ed4161ba53b721d8758ae8c9c1eba937a", TestingRules},
+		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
 		{"maintenance", "c3385287247e3b8ce1e6a1652eefc990c3eb3119d8135ecfc9295868f205b073", MaintenanceRules},
 		{"main-agent", "3a7a447bbe7527bf4c1c46867f9180cab32bc3b61359a92d9db9784172c38189", MainAgentRules},
-		{"roadmap-parse", "426c10f34a883e9066d3060bc06723bcf2823989e5cc74d78c50a3a3882738bb", RoadmapParseRules},
-		{"roadmap-documents", "f7c7324cc046e3d9b44b504e7553b637351384184eb8d3a05c57b0bf796df66c", RoadmapDocumentRules},
+		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
+		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
 	}
 	for _, c := range cases {

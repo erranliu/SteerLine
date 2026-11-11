@@ -39,7 +39,21 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	case "environment_detection":
 		table = "project_environments a"
 		id = "a.activity_id"
-		payload = "json_remove(CAST(a.payload AS TEXT),'$.prepared','$.execution','$.runner')"
+		payload = `json_object('id',a.activity_id,'project',a.project_identity,'revision',a.revision,
+		'kind',json_extract(a.payload,'$.kind'),'state',json_extract(a.payload,'$.state'),'profile_id',json_extract(a.payload,'$.profile_id'),
+		'observed_at',json_extract(a.payload,'$.observed_at'),'observation_diagnostic',json_extract(a.payload,'$.observation_diagnostic'),
+		'created_at',json_extract(a.payload,'$.created_at'),'diagnostic',json_extract(a.payload,'$.diagnostic'),
+		'cancelled',json(CASE WHEN json_extract(a.payload,'$.cancelled') THEN 'true' ELSE 'false' END),
+		'requests',json((SELECT COALESCE(json_group_array(json_object('request_id',json_extract(q.value,'$.request_id'),'action',json_extract(q.value,'$.action'))),'[]') FROM json_each(a.payload,'$.requests') q)),
+		'rounds',json((SELECT COALESCE(json_group_array(json_object(
+		'number',json_extract(r.value,'$.number'),'run_id',json_extract(r.value,'$.run_id'),
+		'settled',json(CASE WHEN json_extract(r.value,'$.settled') THEN 'true' ELSE 'false' END),
+		'timed_out',json(CASE WHEN json_extract(r.value,'$.timed_out') THEN 'true' ELSE 'false' END),
+		'diagnostic',json_extract(r.value,'$.diagnostic'),'submission_diagnostic',json_extract(r.value,'$.submission_diagnostic'),
+		'run',CASE WHEN json_type(r.value,'$.run')='object' THEN json_object(
+		'status',json_extract(r.value,'$.run.status'),'stop_status',json_extract(r.value,'$.run.stop_status'),
+		'diagnostic',json_extract(r.value,'$.run.diagnostic'),'updated_at',json_extract(r.value,'$.run.updated_at'),
+		'execution',json_object('attempt_id',json_extract(r.value,'$.run.execution.attempt_id'))) ELSE NULL END)), '[]') FROM json_each(a.payload,'$.rounds') r)))`
 		created = "json_extract(CAST(a.payload AS TEXT),'$.created_at')"
 		finished = "(SELECT MAX(json_extract(r.value,'$.run.updated_at')) FROM json_each(CAST(a.payload AS TEXT),'$.rounds') r)"
 		related = `json_object('current',EXISTS(SELECT 1 FROM project_environment_current c WHERE c.project_identity=a.project_identity AND json_extract(CAST(c.payload AS TEXT),'$.activity_id')=a.activity_id))`
@@ -55,7 +69,8 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	case "task_candidate":
 		table = "runner_candidates a"
 		id = "a.candidate_id"
-		payload = "json_remove(CAST(a.payload AS TEXT),'$.contract','$.submit','$.test_plan','$.runner_build','$.environment')"
+		payload = "json_remove(CAST(a.payload AS TEXT),'$.contract','$.submit','$.test_plan','$.runner_build','$.environment','$.actions','$.projection.final')"
+		payload = `CASE WHEN json_type(a.payload,'$.projection')='object' THEN json_set(json_remove(` + payload + `,'$.projection.question'),'$.projection.question',CASE WHEN json_type(a.payload,'$.projection.question')='object' THEN json('{}') ELSE NULL END) ELSE ` + payload + ` END`
 		created = "json_extract(CAST(a.payload AS TEXT),'$.created_at')"
 		finished = "json_extract(CAST(a.payload AS TEXT),'$.projection.updated_at')"
 		related = `json_object('task_status',(SELECT t.status FROM tasks t WHERE t.project_identity=a.project_identity AND t.task_id=a.task_id),'title',(SELECT json_extract(CAST(t.payload AS TEXT),'$.title') FROM tasks t WHERE t.project_identity=a.project_identity AND t.task_id=a.task_id),'winner',(SELECT d.selected_workflow_run_id FROM task_deliveries d WHERE d.project_identity=a.project_identity AND d.task_id=a.task_id),'progress',json((SELECT CAST(p.payload AS TEXT) FROM candidate_progress p WHERE p.project_identity=a.project_identity AND p.candidate_id=a.candidate_id)))`
@@ -68,7 +83,13 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		'created_at',json_extract(a.payload,'$.created_at'),'request_id',json_extract(a.payload,'$.request_id'),'run_id',json_extract(a.payload,'$.run_id'),
 		'diagnostic',json_extract(a.payload,'$.diagnostic'),'submission',json_extract(a.payload,'$.submission'),
 		'cancelled',json(CASE WHEN json_extract(a.payload,'$.cancelled') THEN 'true' ELSE 'false' END),'source',json_object('path',json_extract(a.payload,'$.source.path')),
-		'publication',json_extract(a.payload,'$.publication'),
+		 'publication',json_extract(a.payload,'$.publication'),
+        'generations',json((SELECT COALESCE(json_group_array(json_object(
+          'generation_id',json_extract(g.value,'$.generation_id'),'local_key',json_extract(g.value,'$.local_key'),
+          'created_at',json_extract(g.value,'$.created_at'),'state',json_extract(g.value,'$.state'),
+          'submission',json_extract(g.value,'$.submission'),'run_id',json_extract(g.value,'$.run_id'),
+          'diagnostic',json_extract(g.value,'$.diagnostic'),
+          'projection',CASE WHEN json_type(g.value,'$.projection')='object' THEN json_object('status',json_extract(g.value,'$.projection.status'),'stop_status',json_extract(g.value,'$.projection.stop_status'),'resume_required',json(CASE WHEN json_extract(g.value,'$.projection.resume_required') THEN 'true' ELSE 'false' END),'updated_at',json_extract(g.value,'$.projection.updated_at')) ELSE NULL END)), '[]') FROM json_each(a.payload,'$.generations') g)),
 		'operation',json((SELECT json_object('id',c.command_id,'action',json_extract(c.payload,'$.action'),'status',c.status,'instance',json_extract(c.payload,'$.instance_id')) FROM commands c WHERE c.project_identity=a.project_identity AND c.kind='roadmap_command' AND c.target_id=a.roadmap_id AND json_extract(c.payload,'$.action') IN ('roadmap_publish','roadmap_admit','roadmap_resume') ORDER BY c.created_at DESC,c.command_id DESC LIMIT 1)),
 		'projection',CASE WHEN json_type(a.payload,'$.projection')='object' THEN json_object(
 		'status',json_extract(a.payload,'$.projection.status'),'stop_status',json_extract(a.payload,'$.projection.stop_status'),'execution',json_object('attempt_id',json_extract(a.payload,'$.projection.execution.attempt_id')),
@@ -82,37 +103,48 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		return nil, false, fmt.Errorf("unknown activity source %q", in.Source)
 	}
 	related = "json_set(" + related + ",'$.observation',json((SELECT json_object('observed_at',NULLIF(o.last_success,''),'diagnostic',o.diagnostic) FROM source_observations o WHERE o.project_identity=a.project_identity AND o.source='" + in.Source + "' AND o.source_id=" + id + ")))"
+	if in.Source == "task_candidate" {
+		related = `json_set(` + related + `,'$.pending_effects',json(CASE WHEN EXISTS(SELECT 1 FROM json_each(a.payload,'$.actions') action WHERE json_extract(action.value,'$.state')='unknown' OR json_extract(action.value,'$.state')='accepted' AND COALESCE(json_extract(action.value,'$.action_status'),'') NOT IN ('completed','failed','rejected','cancelled')) THEN 'true' ELSE 'false' END))`
+	}
+	if in.Filter != "summary" && len(in.RequestIDs) == 0 {
+		message := readingPreviewSQL(in.Source, id)
+		related = "json_set(" + related + ",'$.message',json(" + message + "))"
+	}
 	args := []any{project}
 	where := "a.project_identity=?"
+	if in.SourceID != "" {
+		where += " AND " + id + "=?"
+		args = append(args, in.SourceID)
+	}
 	if in.Source == "baseline_check" {
 		where += " AND a.kind='project_maintenance' AND json_extract(CAST(a.payload AS TEXT),'$.action')='maintenance_check'"
 	}
 
-	if len(in.RequestIDs) == 0 && in.Filter != "summary" {
+	if len(in.RequestIDs) == 0 && in.Filter != "summary" && in.SourceID == "" {
 		terminal := "COALESCE(json_extract(CAST(a.payload AS TEXT),'$.state'),'') IN ('ready','failed','cancelled')"
 		switch in.Source {
 		case "main_agent_advisory":
 			terminal = "(json_extract(a.payload,'$.settled')=1 AND " + terminal + ")"
-			if in.Filter == "recent" {
+			if in.Filter == "recent" || in.Filter == "history" {
 				where += " AND " + terminal
 			} else if in.Filter == "ongoing" {
 				where += " AND (NOT " + terminal + " OR json_extract(a.payload,'$.source_active')=1)"
 			}
 		case "environment_detection":
 			unsettled := "EXISTS(SELECT 1 FROM json_each(CAST(a.payload AS TEXT),'$.rounds') r WHERE COALESCE(json_extract(r.value,'$.settled'),0)=0)"
-			if in.Filter == "recent" {
+			if in.Filter == "recent" || in.Filter == "history" {
 				where += " AND (" + terminal + ")"
 			} else if in.Filter == "ongoing" {
 				where += " AND (NOT (" + terminal + ") OR " + unsettled + ")"
 			}
 		case "baseline_check":
-			if in.Filter == "recent" {
+			if in.Filter == "recent" || in.Filter == "history" {
 				where += " AND a.status IN ('applied','rejected')"
 			} else if in.Filter == "ongoing" {
 				where += " AND a.status NOT IN ('applied','rejected')"
 			}
 		case "task_candidate":
-			if in.Filter == "recent" {
+			if in.Filter == "recent" || in.Filter == "history" {
 				where += " AND (json_extract(CAST(a.payload AS TEXT),'$.participation')<>'active' OR json_extract(CAST(a.payload AS TEXT),'$.submit_state') IN ('rejected','cancelled') OR json_extract(CAST(a.payload AS TEXT),'$.projection.status') IN ('failed','completed','closed','stopped'))"
 			} else {
 				where += " AND (COALESCE(json_type(CAST(a.payload AS TEXT),'$.projection'),'null')='null' OR json_extract(CAST(a.payload AS TEXT),'$.participation')='active' OR json_extract(CAST(a.payload AS TEXT),'$.stop_requested')=1 AND COALESCE(json_extract(CAST(a.payload AS TEXT),'$.projection.stop_status'),'')<>'stopped' OR json_extract(CAST(a.payload AS TEXT),'$.submit_state')='unknown' OR EXISTS(SELECT 1 FROM json_each(CAST(a.payload AS TEXT),'$.actions') action WHERE json_extract(action.value,'$.state')='unknown' OR json_extract(action.value,'$.state')='accepted' AND COALESCE(json_extract(action.value,'$.action_status'),'') NOT IN ('completed','failed','rejected','cancelled')))"
@@ -129,11 +161,18 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		}
 	}
 	sortAt := created
-	desc := in.Filter == "recent"
+	if in.Filter == "history" {
+		created = "NULLIF(" + created + ",'0001-01-01T00:00:00Z')"
+		finished = "NULLIF(" + finished + ",'0001-01-01T00:00:00Z')"
+	}
+	desc := in.Filter == "recent" || in.Filter == "history"
 	if desc {
 		sortAt = "COALESCE(" + finished + ",'')"
 	} else {
 		sortAt = "COALESCE(" + created + ",'')"
+	}
+	if in.Filter == "history" {
+		sortAt = "CASE WHEN COALESCE(" + finished + ",'')<>'' THEN '2|'||" + finished + " WHEN COALESCE(" + created + ",'')<>'' THEN '1|'||" + created + " ELSE '0|' END"
 	}
 	cmp, order := ">", "ASC"
 	if desc {

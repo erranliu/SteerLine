@@ -36,16 +36,12 @@ func (d *runnerTaskDocuments) ReadCommittedRegularFile(context.Context, taskmode
 func TestRunnerPresetFreeze(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
-	a := taskmodel.ProjectTaskAuthority{ProjectIdentity: "runner-service", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	a := taskmodel.ProjectTaskAuthority{ProjectIdentity: "runner-service", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual"}
 	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutProjectTaskAuthority(a) }))
 	docs := &runnerTaskDocuments{repository: a.Repository, body: []byte("# Acceptance\nfixed spec and plan\n")}
 	sum := sha256.Sum256(docs.body)
 	ref := taskmodel.FileReference{Path: "SteerlineFlow/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: hex.EncodeToString(sum[:])}
 	tasks := nativeAuditRecordsWithReference(t, s, a, ref)
-	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, a.ProjectIdentity)
-		return err
-	}))
 	baseCalls := 0
 	promptCalls := 0
 	svc := taskrunner.Service{Project: a.ProjectIdentity, Claimant: "runner-test", StateDir: filepath.Join(t.TempDir(), "runner"), DefaultProfile: "live", Store: s, Bridge: &runnerbridge.Bridge{Store: s},

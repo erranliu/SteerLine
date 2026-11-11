@@ -60,7 +60,7 @@
 - Spec/Plan 规范：先调查代码和整合已有实现；Spec 写目标、范围、契约与验收要求，Plan 写实施及最小必要测试安排；自动/人工项区分，结果进入 SteerlineFlow/testing/acceptance；普通开发不强制 roadmap，也不默认新增兼容/迁移。
 - 目录 README：解释用途、已有文档入口及维护规则；没有专题设计时如实说明。
 
-每份必需 Markdown 都要合法 UTF-8、非空，有一级标题和实质正文；单份不超过 1 MiB，总和不超过 8 MiB。清单不超过 64 KiB。核对必需文档里的相对 Markdown 链接能在同一 Git 版本解析到实际文件/目录且不越出仓库；正文链接允许正常的 ../ 相对引用，不把代码示例里的路径当成实际文件要求。不要用空标题、伪造实现事实或复制 SteerLine 自身的 Go/worker/roadmap 规则填满文档。
+每份必需 Markdown 都要合法 UTF-8、非空，有一级标题和实质正文；单份不超过 1 MiB，总和不超过 8 MiB。清单不超过 64 KiB。核对必需文档里的相对 Markdown 链接能在同一 Git 版本解析到实际文件/目录且不越出仓库；正文链接允许正常的 ../ 相对引用，不把代码示例里的路径当成实际文件要求。不要用空标题、伪造实现事实或复制 SteerLine 自身的 Go、Runner 调用或 roadmap 规则填满文档。
 
 如本项目要使用 Roadmap 草稿转正，在正常 Git 提交前运行正式 SteerLine 命令 `steerline project prepare-roadmap -repository <本项目绝对根目录>`，准备两份平台静态规则及缺失的 SpecGuide；保留既有项目指南。命令不可用或规则冲突时如实报告，先更新工具或审阅规则，不手写动态 JSON 代替。任务图、来源映射与确认规划均由 SteerLine 在实际操作时冻结并通过 Runner 文件渠道提供，不加入项目初始化清单。
 

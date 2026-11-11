@@ -132,3 +132,17 @@ RM-A11 不要求将测试 PR 合入业务主线。专用测试 base、PR 状态�
 `decision-execute-fee-proof.json` 与 `conflict-fee-proof.json` 分别确认两次收尾的决策与执行使用同一参考费用快照，金额为 `0.591715` 和 `1.203929` USD。行动观察到的累计参考费用为 `1.684702` USD，覆盖未完结。参考金额按合成夹具价表计算，未覆盖子 Agent、工具内模型和不可观测调用。
 
 `remote-cleanup-verified.json` 另行核对 [测试 PR #796](https://github.com/erranliu/SteerlineTest/pull/796) 已关闭且未合并、专用 base 与原 head 分支已删除、隔离 Runner 及项目目录已清理。真实联验范围为本次合成项目与固定本地 Codex 配置，人工体验签收保留在 RM-M01。
+
+## 审阅 PR 的主线整合复验
+
+`native-09` 验证的源码对应功能提交 `b2eeec4e`。审阅分支整合主线 `32b452bc` 后保留活动阅读与重构维护的独立入口，统一使用 SQLite schema 47。既有显式放弃流程可只读检查维护表出现前的库；常规启动继续执行当前 schema 校验。提示词和对应黄金正文相对功能提交逐字不变，独立审核已复核整合后的组装和测试接线。整合后的复验使用受控环境。
+
+| 范围 | 结果及证据 |
+| --- | --- |
+| L1、L2 | 通过，`test-results/pr-main-l1-02`、`test-results/pr-main-l2-01`。 |
+| Web、SQLite、维护和活动阅读入口 | 前端全集及 SQLite 正式范围通过，见 `test-results/pr-main-web-01`、`test-results/pr-main-storage-01`。App、查询和 HTTP 的维护与活动阅读专项通过。 |
+| 显式放弃旧库 | schema 44/46 离线流程和 schema 44/45 任务图检查通过。schema 46 夹具实际缺少维护表。 |
+| `runtime.refactoring-maintenance` | 独立 L3 通过，见 `test-results/pr-main-maintenance-01` 的 `summary.json`。浏览器启动、报告、历史与刷新检查通过，场景完成清理。 |
+| 活动中心浏览器回归 | `test-results/pr-main-l3-01` 首次使用陈旧 Web 产物。重新构建后，`test-results/pr-main-l3-02` 的抽屉与独立阅读页通过，额外的活动反馈用例等待两次候选启动提交时仅观察到一次，整项 `runtime.async-activities` 仍失败。该用例及候选启动前端代码与整合基线一致，未在纯主线单独复现。 |
+
+本次 PR 整理未再次运行真实模型或写入测试远端。真实联验证据仍以 `native-09` 为准。

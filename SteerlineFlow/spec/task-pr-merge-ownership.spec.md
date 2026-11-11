@@ -6,7 +6,7 @@
 
 | 事实或动作 | 权威与消费方式 |
 | --- | --- |
-| Workflow 内的发布、原 PR 绑定、适用时的已审计 head 核验、后继及停止 | Runner 按[协作契约](runner-collaboration.spec.md)和[统一 worker 生命周期](../../docs/product-design/worker-lifecycle.md)自主处理。SteerLine 从公开 Run 投影消费原候选与 PR 的绑定。 |
+| Workflow 内的发布、原 PR 绑定、适用时的已审计 head 核验、后继及停止 | Runner 按[协作契约](runner-collaboration.spec.md)和[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)自主处理。SteerLine 从公开 Run 投影消费原候选与 PR 的绑定。 |
 | PR 此刻是否已合入 | PR 平台是权威。SteerLine 的交付、自动交付轮询和废弃共用一条只读平台查询路径。 |
 | 关闭任务、记录唯一交付、释放后继、废弃及候选停止义务 | SteerLine 在原有 SQLite 事务中核对绑定、版本和权限后提交。Runner 继续执行原有停止请求并报告资源结算。 |
 

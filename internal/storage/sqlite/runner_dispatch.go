@@ -15,8 +15,8 @@ import (
 // No worker operation or native execution record is created.
 func (s *SQLiteStore) SetRunnerDispatch(ctx context.Context, in ports.RunnerDispatch) (taskmodel.ProjectTaskAuthority, error) {
 	var result taskmodel.ProjectTaskAuthority
-	if in.Project == "" || in.RequestID == "" || in.ExpectedAuthorityVersion == 0 || strings.TrimSpace(in.RequestedBy) == "" || in.Mode == nil && in.Paused == nil || in.Mode != nil && *in.Mode != "manual" && *in.Mode != "auto" {
-		return result, errors.New("dispatch change requires fixed project/request/version and mode or pause intent")
+	if in.Project == "" || in.RequestID == "" || in.ExpectedAuthorityVersion == 0 || strings.TrimSpace(in.RequestedBy) == "" || in.Mode != "manual" && in.Mode != "auto" {
+		return result, errors.New("dispatch change requires fixed project/request/version and a dispatch mode")
 	}
 	body, _ := json.Marshal(in)
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
@@ -43,12 +43,7 @@ func (s *SQLiteStore) SetRunnerDispatch(ctx context.Context, in ports.RunnerDisp
 		result = graph.Authority
 		result.AuthorityVersion++
 		result.UpdatedAt = now()
-		if in.Mode != nil {
-			result.DispatchMode = *in.Mode
-		}
-		if in.Paused != nil {
-			result.DispatchPaused = *in.Paused
-		}
+		result.DispatchMode = in.Mode
 		command := ports.CommandRecord{ProjectIdentity: in.Project, CommandID: in.RequestID, Kind: "runner_dispatch", TargetID: in.Project, ExpectedVersion: in.ExpectedAuthorityVersion, IdempotencyKey: in.RequestID, RequestedBy: in.RequestedBy, Payload: body, Status: "pending", CreatedAt: result.UpdatedAt}
 		if _, created, err := tx.EnqueueCommand(command); err != nil {
 			return err

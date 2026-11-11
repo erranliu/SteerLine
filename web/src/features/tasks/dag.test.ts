@@ -47,7 +47,7 @@ it.each([
   {
     status: "discarded",
     dependency_ready: false,
-    startup_blockers: ["task_not_open", "dispatch_paused"],
+    startup_blockers: ["task_not_open"],
     blocked: false,
   },
   {
@@ -59,7 +59,7 @@ it.each([
   {
     status: "open",
     dependency_ready: true,
-    startup_blockers: ["dispatch_paused"],
+    startup_blockers: ["execution_slot_busy"],
     blocked: true,
   },
   {

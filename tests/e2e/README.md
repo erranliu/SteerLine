@@ -22,7 +22,7 @@ Windows 工具进程有 Job 约束时，使用 `scripts/test-l2.ps1`、`scripts/
 
 ## 真实链与环境
 
-Windows/amd64、Go/Git、已登录本机 Codex、固定独立 Runner EXE。交付和审计需要 gh 及 `erranliu/SteerlineTest` 写权限；每次只使用本次随机 base/head，不修改主分支。worker 实际执行任务实现、commit、push 和 PR 创建，驱动仅准备 fixture base、查询、转 ready、精确合并与清理。任务定义和输入公开，认证、原生转录及私有状态不写入共享证据。
+Windows/amd64、Go/Git、已登录本机 Codex、固定独立 Runner EXE。交付和审计需要 gh 及 `erranliu/SteerlineTest` 写权限；每次只使用本次随机 base/head，不修改主分支。执行 Agent 实现并提交任务改动，SteerRunner 的 Run 执行 push 和 PR 创建，驱动仅准备 fixture base、查询、转 ready、精确合并与清理。任务定义和输入公开，认证、原生转录及私有状态不写入共享证据。
 
 真实交付固定 `gpt-6-luna` / `medium`；审计通过 `STEERLINE_AUDIT_EXECUTION_MODEL` / `STEERLINE_AUDIT_MODEL` 显式指定两个不同模型，执行 medium、审计 high。验证公开 final、原候选/Run、真实 Git 产物、精确已合并 PR、唯一 TaskDelivery、后继 ready 未启动、资源结算；审计另核对正式产品详情中的模型、材料及审计来源。测试管理真实链按自己的 proof 核对安排和报告消费，不发布 PR。
 
@@ -42,13 +42,13 @@ SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地�
 ./scripts/test-project-progress-live.ps1 -Local -ProjectRepository C:/Projects/SteerlineTest -ProjectCommit <完整提交SHA> -SteerRunnerExe <固定Runner绝对路径> -OutRoot C:/SteerlineDebug/<本次全新scope>
 ```
 
-需要 Windows、Go、Git、Python、gh 和已登录的本机 Codex；原生认证必须可访问 `erranliu/SteerlineTest`。入口建立独立 clone/home/任务及 loopback Git，固定原项目的三个 Python 程序，读取已提交的 Plan 同名测试安排后让 worker 执行一次原程序；不启动样本 101–105，不发布 PR。默认每阶段六秒，核对六个 API 状态与同版本 Runner 原始快照、实际失败子进程和最终原报告，再停止原 Run 并验证资源清理。测试使用 `gpt-6-luna` / `medium`，会消耗模型。测试由 `e2e` build tag 隔离，普通 Go Full 不包含此项；显式编译后若未注入项目参数会跳过，不能计为本专项通过。
+需要 Windows、Go、Git、Python、gh 和已登录的本机 Codex；原生认证必须可访问 `erranliu/SteerlineTest`。入口建立独立 clone/home/任务及 loopback Git，固定原项目的三个 Python 程序，读取已提交的 Plan 同名测试安排后由执行 Agent 在原 Run 中执行一次原程序；不启动样本 101–105，不发布 PR。默认每阶段六秒，核对六个 API 状态与同版本 Runner 原始快照、实际失败子进程和最终原报告，再停止原 Run 并验证资源清理。测试使用 `gpt-6-luna` / `medium`，会消耗模型。测试由 `e2e` build tag 隔离，普通 Go Full 不包含此项；显式编译后若未注入项目参数会跳过，不能计为本专项通过。
 
 入口输出 `result.json`、`test.log` 和 `reports/scenarios/testing.project-progress-local-codex/`，其中保留 `source.json`、`initial-binding.json`、`runner-*.json`、`api-observations.json`、`original-run.json`、`worker-program-sha256.json`、`original-reports/`、原 stop 请求/回执、`stopped-run.json`、`proof.json` 及 `scenario.json`。只有实际执行通过且清理完整才写总结果通过；它尚未登记为统一受管测试，不导出 `go.full` 或其他 L4 项通过。
 
-远端模式不加`-Local`，使用下面的共享profile并委托正式L4，不因缺配置退回本机。需要 Node/npm、Edge、远端注册的 SteerlineTest 仓库及 Python。测试安排使用所选提交的同名 JSON；环境材料须已在所选提交中，先在隔离 home 调用项目入口并正式获得 ready，才开始远端进度任务。入口在 GitHub 推送本次随机源码 ref，仅在远端根仓fetch源码ref，核对根工作区未变；原 Runner负责创建、执行和停止实际worker。
+远端模式不加`-Local`，使用下面的共享profile并委托正式L4，不因缺配置退回本机。需要 Node/npm、Edge、远端注册的 SteerlineTest 仓库及 Python。测试安排使用所选提交的同名 JSON；环境材料须已在所选提交中，先在隔离 home 调用项目入口并正式获得 ready，才开始远端进度任务。入口在 GitHub 推送本次随机源码 ref，仅在远端根仓fetch源码ref，核对根工作区未变；SteerRunner 创建原 Run，管理远端执行及停止结算。
 
-远端模式每阶段十五秒，使用同一 Edge 页面连续观察 0→1→2→1→2→3，核对 DOM 完成项、计数、版本与相同版本的原 Runner 快照；观察期间不得刷新或导航。远端原报告和程序由独占诊断终端只读取得，终端必须关闭；驱动不修改进度、不向原 worker 输入。证据在`<out>/scenarios/testing.project-progress-orca-browser/`，另存`remote-target.json`、`remote-fetch.json`、`remote-source.json`、Orca公开回执，以及`browser/observations.json`、六张截图和Playwright trace。原Run停止后先核对调用方已观察同一原候选的stopped投影，再关闭调用方并清理自有源码 ref。进度任务主体不发布PR，项目内部产生的资源由项目自身管理。此项会构建Web，不与其他Web安装/构建并发；不覆盖安装版或Task 18。
+远端模式每阶段十五秒，使用同一 Edge 页面连续观察 0→1→2→1→2→3，核对 DOM 完成项、计数、版本与相同版本的原 Runner 快照；观察期间不得刷新或导航。远端原报告和程序由独占诊断终端只读取得，终端必须关闭；驱动不修改进度、不向原 Run 发送输入。证据在`<out>/scenarios/testing.project-progress-orca-browser/`，另存`remote-target.json`、`remote-fetch.json`、`remote-source.json`、Orca公开回执，以及`browser/observations.json`、六张截图和Playwright trace。原Run停止后先核对调用方已观察同一原候选的stopped投影，再关闭调用方并清理自有源码 ref。进度任务主体不发布PR，项目内部产生的资源由项目自身管理。此项会构建Web，不与其他Web安装/构建并发；不覆盖安装版或Task 18。
 
 ## 共享64G配置的三项远端L4
 

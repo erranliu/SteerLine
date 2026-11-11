@@ -16,7 +16,7 @@
 | 活动抽屉打开/收起分别约 2/10 秒读取；命令失效规则未覆盖活动查询 | `web/src/shared/api/queries.ts`：显式提交后应定向刷新活动及原页面，不能只等下一次周期 |
 | 环境、候选、项目维护分别维护提交反馈 | `project-environment.tsx`、`use-candidate-starts.ts`、`project-maintenance.tsx`：统一展示组件和动效，提交交接与资格继续归现有 owner |
 
-本设计补充[异步活动中心 Spec](async-activity-center.spec.md)的发起交互，对首批入口允许按本文改变原页反馈；活动中心的只读所有权、事实身份、观察故障、抽屉行为仍沿用原契约。原文中的测试准备来源属于历史范围，当前已删除，本次不恢复。异常、未知副作用与恢复遵循 [worker 生命周期](../../docs/product-design/worker-lifecycle.md)，本次没有新的执行恢复规则。
+本设计补充[异步活动中心 Spec](async-activity-center.spec.md)的发起交互，对首批入口允许按本文改变原页反馈；活动中心的只读所有权、事实身份、观察故障、抽屉行为仍沿用原契约。原文中的测试准备来源属于历史范围，当前已删除，本次不恢复。异常、未知副作用与恢复遵循 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，本次没有新的执行恢复规则。
 
 ## 2. 首批操作及交付范围
 

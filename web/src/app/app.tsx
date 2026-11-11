@@ -53,6 +53,11 @@ const Dag = lazy(() =>
 const Runs = lazy(() =>
   import("../features/runs/runs").then((module) => ({ default: module.Runs })),
 );
+const ActivityPage = lazy(() =>
+  import("../features/activities/activity-page").then((module) => ({
+    default: module.ActivityPage,
+  })),
+);
 
 export function Workspace({
   initial,
@@ -78,6 +83,7 @@ export function Workspace({
   onRefreshConnection?: () => void;
 }) {
   const environmentPage = useLocation().pathname.endsWith("/environment");
+  const readingPage = useLocation().pathname.endsWith("/activities");
   const { api, identity, snapshot, page, online, diagnostic, refresh } =
     useWorkspaceConnection({
       initial,
@@ -157,7 +163,7 @@ export function Workspace({
             </div>
           }
         >
-          {!environmentPage && (
+          {!environmentPage && !readingPage && (
             <ProjectMaintenance
               key={identity.project_id + identity.instance_id}
             />
@@ -203,12 +209,20 @@ export function Workspace({
               后才能启动新候选。已有执行保留原参数。
             </div>
           )}
-          {!environmentPage && <Dispatch />}
+          {!environmentPage && !readingPage && <Dispatch />}
           <Suspense fallback={<div className="empty">正在加载页面…</div>}>
             <Routes>
               <Route
                 path={"/projects/" + identity.project_id + "/refactoring"}
                 element={<RefactoringMaintenance />}
+              />
+              <Route
+                path={"/projects/" + identity.project_id + "/activities"}
+                element={
+                  <ActivityPage
+                    key={api.home + identity.project_id + identity.instance_id}
+                  />
+                }
               />
               <Route
                 path={"/projects/" + identity.project_id + "/roadmaps"}

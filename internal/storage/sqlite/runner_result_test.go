@@ -21,9 +21,6 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	ctx := context.Background()
 	s, project, tasks := nativeAuditStore(t)
 	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if _, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, project); err != nil {
-			return err
-		}
 		return tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: project, PredecessorID: tasks[0].TaskID, SuccessorID: tasks[1].TaskID})
 	}))
 	reserve := func(id string, extra bool) runnerbridge.Candidate {
@@ -60,6 +57,7 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	selected.RunID, selected.InputDigest, selected.Branch, selected.PRURL, selected.SubmitState = "original-run", "frozen-input", "original-head", "https://example.invalid/Org/Repo/pulls/84", "accepted"
 	selected.Projection = &runnerclient.Run{RunID: selected.RunID, Revision: 8, InputDigest: selected.InputDigest, Status: "running", Step: "publish.report", Execution: runnerclient.Execution{SessionID: "original-session", Branch: selected.Branch, Workspace: `C:\owned\workspace`}, PR: &runnerclient.PRFact{Provider: "gitea", Repository: "Org/Repo", HeadRepository: "Org/Repo", URL: selected.PRURL, Number: 84, BaseBranch: "main", HeadBranch: selected.Branch, State: "open", CheckedAt: at}}
 	selected.Revision++
+	selected.Actions = []runnerbridge.Action{{Command: "reply", State: "pending", Request: runnerclient.Request{RequestID: "answer", Input: json.RawMessage(`{"text":"delivery answer","kind":"answer"}`)}}}
 	require(t, s.SaveCandidate(ctx, selected, 1, nil))
 	graph, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
@@ -85,6 +83,11 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	if unchanged.ByID[selected.TaskID].Status != "in_progress" || len(unchanged.Deliveries) != 0 || unchanged.Authority.GraphRevision != graph.Authority.GraphRevision {
 		t.Fatal("partial task delivery after rollback")
 	}
+	reading, err := s.ReadReadingWindow(ctx, project, "task_candidate", selected.ID, 0, 0, 50)
+	require(t, err)
+	if len(reading.Records) != 1 || reading.Records[0].State != "pending" {
+		t.Fatal("failed delivery leaked interaction state", reading)
+	}
 	oldSibling, err := s.Candidate(ctx, project, sibling.ID)
 	require(t, err)
 	if oldSibling.StopRequested {
@@ -97,6 +100,11 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	require(t, err)
 	if receipt.Status != "closed" || receipt.Delivery.SelectedWorkflowRunID != selected.ID {
 		t.Fatal("wrong candidate delivery", receipt)
+	}
+	reading, err = s.ReadReadingWindow(ctx, project, "task_candidate", selected.ID, 0, 0, 50)
+	require(t, err)
+	if len(reading.Records) != 1 || reading.Records[0].State != "cancelled" {
+		t.Fatal("delivered candidate retained pending interaction state", reading)
 	}
 	retry, err := s.CommitRunnerTaskResult(ctx, input)
 	require(t, err)

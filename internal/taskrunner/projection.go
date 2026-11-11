@@ -18,7 +18,7 @@ import (
 // native process identities or writes legacy execution records.
 func Project(snapshot storageports.RunnerSnapshot, checkpoint hostcontract.ServiceCheckpoint) reconstruction.Runtime {
 	g := snapshot.Graph
-	view := reconstruction.RuntimeFromCheckpoint(checkpoint, g.Authority.DispatchMode, g.Authority.DispatchPaused, g.Authority.AuthorityVersion)
+	view := reconstruction.RuntimeFromCheckpoint(checkpoint, g.Authority.DispatchMode, g.Authority.AuthorityVersion)
 	view.Tasks = g.Tasks
 	view.Runs = []*reconstruction.RunView{}
 	for _, c := range snapshot.Candidates {

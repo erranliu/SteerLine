@@ -9,7 +9,13 @@ export const roadmapSourceChanged = (
 
 const pending = new Set(["queued", "accepted", "unknown"]);
 export const contentPending = (record: RoadmapRecord) =>
-  !record.cancelled && pending.has(record.state);
+  record.generations?.length
+    ? record.generations.some(
+        (g) =>
+          g.settled === false ||
+          (g.settled === undefined && pending.has(g.state)),
+      )
+    : !record.cancelled && pending.has(record.state);
 
 // A new parse starts a new flow; document attempts belong to their parse.
 // Unresolved external work must remain visible even if a newer record exists.
@@ -110,11 +116,49 @@ export function roadmapNextAction(record?: RoadmapRecord, restart = false) {
     case "invalid":
     case "rejected":
     case "cancelled":
-      return record.purpose === "documents" ? "generate" : "parse";
+      return record.purpose === "documents"
+        ? record.generations?.length && !record.cancelled
+          ? "observe"
+          : "generate"
+        : "parse";
     case "blocked":
     case "documents-blocked":
       return "parse";
     default:
       return "observe";
   }
+}
+
+export function roadmapGenerationLabel(
+  g: NonNullable<RoadmapRecord["generations"]>[number],
+  cancelled: boolean,
+) {
+  if (cancelled) return g.settled ? "已取消并结算" : "停止收尾中";
+  if (g.state === "accepted") {
+    if (g.resume_required) return "执行需要恢复核实";
+    return (
+      {
+        queued: "排队中",
+        running: "生成中",
+        blocked: "生成受阻，需处理",
+        waiting_input: "等待输入处理",
+        waiting_external: "等待外部结果",
+        completed: "结果收尾中",
+        failed: "结果收尾中",
+        stopped: "结果收尾中",
+        closed: "结果收尾中",
+      }[g.runner_status || ""] || "执行状态待核实"
+    );
+  }
+  return (
+    {
+      queued: "排队中",
+      unknown: "提交待核实",
+      "documents-review": "生成完成",
+      failed: "生成失败",
+      invalid: "结果校验失败",
+      rejected: "提交被拒绝",
+      "documents-blocked": "需要重新规划",
+    }[g.state] || g.state
+  );
 }

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestAsyncActivities(t *testing.T) {
+func TestAsyncActivitiesAndReadingPage(t *testing.T) {
 	t.Parallel()
 	testenv.AsyncActivities(testenv.NewScenario(t, "runtime.async-activities"))
 }

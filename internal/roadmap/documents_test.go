@@ -48,7 +48,9 @@ func documentPlanningSetup(t *testing.T, confirmed bool) (*Service, *memoryRoadm
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := json.Marshal(sampleAnalysis())
+	analysis := sampleAnalysis()
+	analysis.Tasks[0].ProvidesTests = []string{"new.content"}
+	raw, _ := json.Marshal(analysis)
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "parse", TurnID: "turn"}}
 	f.run.StopStatus = "stopped"
 	f.run.Status = "completed"
@@ -91,22 +93,22 @@ func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *
 	s.PrepareDocuments = func(context.Context, model.Record) (model.DocumentContext, error) {
 		return model.DocumentContext{}, fmt.Errorf("guideline unavailable")
 	}
-	if _, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
+	if _, err := startDocumentTest(s, ctx, parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
 		t.Fatal("missing generation prerequisite accepted")
 	}
 	confirmed, err := store.Roadmap(ctx, s.Project, parent.ID)
-	if err != nil || confirmed.State != "confirmed" || confirmed.ConfirmedDigest != model.ValueDigest(parent.Analysis) || confirmed.ConfirmationRequest == "" || confirmed.Revision != parent.Revision+1 {
+	if err != nil || confirmed.State != "confirmed" || confirmed.ConfirmedDigest != model.ConfirmationDigest(parent) || confirmed.ConfirmationRequest == "" || confirmed.Revision != parent.Revision+1 {
 		t.Fatal("confirmation was not persisted", confirmed, err)
 	}
 	if f.submits != 1 || len(store.rows) != 1 {
 		t.Fatal("failed preparation created a document run")
 	}
 	s.PrepareDocuments = prepare
-	r, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("e", 32), confirmed.Revision)
+	r, err := startDocumentTest(s, ctx, parent.ID, strings.Repeat("e", 32), confirmed.Revision)
 	if err != nil || r.ParentID != parent.ID || r.ConfirmedDigest != confirmed.ConfirmedDigest {
 		t.Fatal("retry lost confirmed planning", r, err)
 	}
-	if _, err = s.GenerateDocuments(ctx, parent.ID, r.RequestID, confirmed.Revision); err != nil || f.submits != 2 {
+	if _, err = startDocumentTest(s, ctx, parent.ID, r.RequestID, confirmed.Revision); err != nil || f.submits != 3 {
 		t.Fatal("replay submitted duplicate generation", err, f.submits)
 	}
 	// A settled model failure permits a fresh attempt without another confirmation.
@@ -116,7 +118,7 @@ func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *
 	if err != nil || r.State != "failed" || !r.ObservationComplete() {
 		t.Fatal("failed run did not settle", r, err)
 	}
-	if _, err = s.GenerateDocuments(ctx, parent.ID, strings.Repeat("f", 32), confirmed.Revision); err != nil || f.submits != 3 {
+	if _, err = startDocumentTest(s, ctx, parent.ID, strings.Repeat("f", 32), confirmed.Revision); err != nil || f.submits != 5 {
 		t.Fatal("failed generation could not be retried", err, f.submits)
 	}
 	after, err := store.Roadmap(ctx, s.Project, parent.ID)
@@ -126,11 +128,13 @@ func TestRoadmapDocumentsConfirmReviewedPlanningAndRetainConfirmationOnRetry(t *
 }
 
 func TestRoadmapDocumentsConfirmationGuards(t *testing.T) {
-	for _, guard := range []string{"revision", "source", "graph", "questions", "unsettled"} {
+	for _, guard := range []string{"revision", "source", "graph", "questions", "unsettled", "materials"} {
 		t.Run(guard, func(t *testing.T) {
 			s, store, f, parent := documentPlanningSetup(t, false)
 			expected := parent.Revision
 			switch guard {
+			case "materials":
+				f.files["quality/cases.json"] = append(f.files["quality/cases.json"], ' ')
 			case "revision":
 				expected++
 			case "source":
@@ -147,7 +151,7 @@ func TestRoadmapDocumentsConfirmationGuards(t *testing.T) {
 				parent.Projection.StopStatus = "pending"
 			}
 			store.rows[parent.ID] = model.StoreValue(parent)
-			if _, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), expected); err == nil {
+			if _, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), expected); err == nil {
 				t.Fatal("confirmation guard bypassed")
 			}
 			after, err := store.Roadmap(context.Background(), s.Project, parent.ID)
@@ -166,6 +170,15 @@ func documentResult(r model.Record) (model.GeneratedDocuments, *runnercontract.R
 	out := model.GeneratedDocuments{SourceDigest: r.Source.Digest, ConfirmedDigest: r.ConfirmedDigest, CodeCommit: r.CodeCommit,
 		Design: "Reuse the existing owner; no second workflow.", Investigation: []model.InvestigationReference{{Source: "repository", Path: "code.go", Reason: "Existing implementation"}},
 		Questions: []string{}, Documents: model.PlannedDocuments(r)}
+	if r.GenerationID != "" {
+		selected := []model.Documents{}
+		for _, d := range out.Documents {
+			if d.Key == r.TargetKey() {
+				selected = append(selected, d)
+			}
+		}
+		out.Documents = selected
+	}
 	for i := range out.Documents {
 		out.Documents[i].Spec.Body = "# Spec\n## 目标\n完整目标\n## 范围\n当前范围\n## 验收\n通过条件"
 		out.Documents[i].Tests = []string{"one"}
@@ -177,7 +190,7 @@ func documentResult(r model.Record) (model.GeneratedDocuments, *runnercontract.R
 func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	s, store, f, parent := documentSetup(t)
 	ctx := context.Background()
-	r, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
+	r, err := startDocumentTest(s, ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +208,7 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 		t.Fatal("materials expanded instead of referenced")
 	}
 
-	if _, err = s.GenerateDocuments(ctx, parent.ID, r.RequestID, parent.Revision); err != nil || f.submits != 2 {
+	if _, err = startDocumentTest(s, ctx, parent.ID, r.RequestID, parent.Revision); err != nil || f.submits != 3 {
 		t.Fatal("duplicate document submission", err, f.submits)
 	}
 	out, source := documentResult(r)
@@ -242,7 +255,7 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 
 func TestRoadmapFutureTestsRequireUniqueStrictPredecessor(t *testing.T) {
 	s, _, _, parent := documentSetup(t)
-	r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+	r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +271,7 @@ func TestRoadmapFutureTestsRequireUniqueStrictPredecessor(t *testing.T) {
 		t.Fatal(err)
 	}
 	var input runnercontract.GenerateRunInput
-	if err := json.Unmarshal(r.Request.Input, &input); err != nil {
+	if err := json.Unmarshal(r.Generations[0].Request.Input, &input); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(input.Generate.OutputSchema), "\"enum\":[\"one\"]") || !strings.Contains(string(input.Generate.OutputSchema), "\"provides_tests\"") {
@@ -291,12 +304,13 @@ func TestRoadmapFutureTestsRequireUniqueStrictPredecessor(t *testing.T) {
 }
 func TestRoadmapDocumentOutputRejectsMismatchesAndSupportsQuestions(t *testing.T) {
 	s, _, _, parent := documentSetup(t)
-	r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+	r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
 	if err != nil {
 		t.Fatal(err)
 	}
+	r = r.Execution(r.Generations[0])
 	for _, mutate := range []func(*model.GeneratedDocuments, *runnercontract.RepositorySource){
-		func(o *model.GeneratedDocuments, _ *runnercontract.RepositorySource) { o.Documents = o.Documents[:1] },
+		func(o *model.GeneratedDocuments, _ *runnercontract.RepositorySource) { o.Documents = o.Documents[:0] },
 		func(o *model.GeneratedDocuments, _ *runnercontract.RepositorySource) {
 			o.Documents[0].Spec.Path = "outside.md"
 		},
@@ -333,7 +347,7 @@ func TestRoadmapDocumentsUnknownAndLateStopNeverResubmits(t *testing.T) {
 	s, _, f, parent := documentSetup(t)
 	ctx := context.Background()
 	f.lost = true
-	r, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
+	r, err := startDocumentTest(s, ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
 	if err == nil || r.State != "unknown" {
 		t.Fatal(r, err)
 	}
@@ -353,6 +367,17 @@ func TestRoadmapDocumentsUnknownAndLateStopNeverResubmits(t *testing.T) {
 	}
 }
 func TestRoadmapDocumentsDoNotSubmitWithoutCapabilityOrGuidelines(t *testing.T) {
+	t.Run("changed-confirmed-material", func(t *testing.T) {
+		s, store, f, parent := documentSetup(t)
+		f.files["quality/cases.json"] = append(f.files["quality/cases.json"], ' ')
+		if _, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
+			t.Fatal("changed planning material accepted")
+		}
+		if f.submits != 1 || len(store.rows) != 1 {
+			t.Fatal("material conflict created work")
+		}
+	})
+
 	for _, missing := range []string{"capability", "guidelines"} {
 		t.Run(missing, func(t *testing.T) {
 			s, store, f, parent := documentSetup(t)
@@ -368,7 +393,7 @@ func TestRoadmapDocumentsDoNotSubmitWithoutCapabilityOrGuidelines(t *testing.T) 
 					return exec, cat, err
 				}
 			}
-			if _, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
+			if _, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision); err == nil {
 				t.Fatal("missing prerequisite accepted")
 			}
 			if f.submits != 1 || len(store.rows) != 1 {
@@ -380,10 +405,11 @@ func TestRoadmapDocumentsDoNotSubmitWithoutCapabilityOrGuidelines(t *testing.T) 
 
 func TestRoadmapDocumentInvestigationSeparatesInputFiles(t *testing.T) {
 	s, _, _, parent := documentSetup(t)
-	r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+	r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
 	if err != nil {
 		t.Fatal(err)
 	}
+	r = r.Execution(r.Generations[0])
 	var request runnercontract.GenerateRunInput
 	if err := json.Unmarshal(r.Request.Input, &request); err != nil {
 		t.Fatal(err)
@@ -421,7 +447,7 @@ func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
 	for _, mismatch := range []string{"digest", "size", "missing", "read_error", "changed_bytes"} {
 		t.Run(mismatch, func(t *testing.T) {
 			s, _, f, parent := documentSetup(t)
-			r, err := s.GenerateDocuments(context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
+			r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -478,4 +504,12 @@ func TestRoadmapDocumentTestsUseFrozenCatalogue(t *testing.T) {
 	if err := ValidateTestIDs(record, catalogue); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func startDocumentTest(s *Service, ctx context.Context, parent, request string, version uint64) (model.Record, error) {
+	r, err := s.GenerateDocuments(ctx, parent, request, version)
+	if err != nil {
+		return r, err
+	}
+	return s.Observe(ctx, r.ID)
 }

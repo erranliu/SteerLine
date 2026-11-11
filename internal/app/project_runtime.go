@@ -21,6 +21,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/projectconnection"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -146,6 +147,9 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		if refactoringDone != nil {
 			<-refactoringDone
 		}
+		if r.config.runtimeMessages != nil {
+			r.config.runtimeMessages.release(r.config.Identity())
+		}
 		if advisoryDone != nil {
 			<-advisoryDone
 		}
@@ -172,6 +176,10 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		return result, err
 	}
 	r.config.runtimeRunner = &runner.client
+	r.config.runtimeMessages = runner.messages
+	if runner.messages != nil {
+		runner.messages.register(ctx, r.config.Identity(), r.store)
+	}
 	r.config.runtimeGenerations = runner.generations
 	r.config.runtimeCatalog = runner.catalog
 	r.config.runtimeNative = runner.native
@@ -229,7 +237,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr != nil {
 		return
 	}
-	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance}
+	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance, readingBodies: runner.readingBodies}
 	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -329,11 +337,13 @@ type runtimeProjectPort struct {
 	actor    *taskrunner.Actor
 	instance string
 	*httpapi.Server
-	product  *productclient.Client
-	config   Config
-	store    taskStorage
-	stopping atomic.Bool
-	users    sync.RWMutex
+	product       *productclient.Client
+	config        Config
+	store         taskStorage
+	stopping      atomic.Bool
+	users         sync.RWMutex
+	readingOnce   sync.Once
+	readingBodies *query.ReadingBodyCache
 }
 
 func (p *runtimeProjectPort) StopAccepting() { p.stopping.Store(true) }
@@ -456,6 +466,9 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 			return nil, errors.New("refactoring unavailable")
 		}
 		return p.config.runtimeRefactoring.read(ctx, route, values)
+	}
+	if strings.HasPrefix(route, "/activities/") {
+		return p.readActivity(ctx, route, values)
 	}
 	if route == "/main-agent" || strings.HasPrefix(route, "/main-agent/") {
 		if p.config.runtimeContinuationSuggestion == nil {

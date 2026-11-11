@@ -16,7 +16,7 @@ SteerLine 使用 Runner 的 `observe` 同步已绑定任务候选的 Run 投影�
 | 启动前离线读取 | 保留 `InspectBeforeStart`。服务 ready 时核对原服务绑定后在线 inspect，`not_running` 时由 Runner 持原 writer lease 执行 `inspect --offline`。仅合格的离线 `request_not_found` 可以证明原提交未受理。身份、lease 或启动归属未知时维持原阻断。已有停止义务继续先持久化原信封，再经 `pending_stops` 在 Runner worker 恢复前受理。 |
 | stop 前后 revision | stop 前继续用 `inspect --run-id` 获取新读取的 revision，首次构造信封时将其固定为 `expected_revision`。未知结果先按原请求查询并按既有规则处理原信封。只有明确拒绝后才允许按现有策略用重新读取的 revision 构造后续信封。控制成功后的观察单独发起，保存 stop 后当时可读的新 revision 和同快照事件。受理回执继续先独立持久化，快照读取失败不撤销回执、不推进游标，也不把受理视为停止完成或资源已结算。 |
 
-适用的启动、恢复和结算规则见[统一 worker 生命周期](../../docs/product-design/worker-lifecycle.md)。测试生成、roadmap、环境准备、原生会话和部署预检继续使用各自的查询。Runner 公共命令、发布、恢复、文件通道和 SteerLine 平台交付查询沿用现有行为。
+适用的启动、恢复和结算规则见[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)。测试生成、roadmap、环境准备、原生会话和部署预检继续使用各自的查询。Runner 公共命令、发布、恢复、文件通道和 SteerLine 平台交付查询沿用现有行为。
 
 ## 通过条件
 

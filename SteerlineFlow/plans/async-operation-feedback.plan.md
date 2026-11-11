@@ -2,7 +2,7 @@
 
 状态：2026-11-09，审计修订后按用户授权实施。依据 [Spec](../spec/async-operation-feedback.spec.md)，原安排保留，实际结果及未验边界只登记于[专属验收](../testing/acceptance/async-operation-feedback.md)。普通开发不分配 Task ID，不启动 roadmap-runner，不改 execution-map，不部署。
 
-测试选择固定于同名 [async-operation-feedback.tests.json](async-operation-feedback.tests.json)，定义以同提交[正式清单](../testing/test-list.json)为准。流程依照[文档规范](../../SteerlineProjectGuideDoc/spec-plan-guidelines.md)、[测试指南](../testing.md)、[验收流程](../testing/acceptance/README.md)和[路径清单](../paths.md)。异常与恢复复用 [worker 生命周期](../../docs/product-design/worker-lifecycle.md)，没有新增业务重试器。
+测试选择固定于同名 [async-operation-feedback.tests.json](async-operation-feedback.tests.json)，定义以同提交[正式清单](../testing/test-list.json)为准。流程依照[文档规范](../../SteerlineProjectGuideDoc/spec-plan-guidelines.md)、[测试指南](../testing.md)、[验收流程](../testing/acceptance/README.md)和[路径清单](../paths.md)。异常与恢复复用 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，没有新增业务重试器。
 
 ## 1. 实施范围与约束
 

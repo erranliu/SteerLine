@@ -33,7 +33,7 @@
 
 候选预留时固定预设 ID/名称/摘要、任务材料、base 与完整提交；Runner 受理时固定规范化 execution/workflow、材料及模板。每轮在结果与授权确定后保存实际输入、模型和来源，不预填未来轮次或原生身份。配置刷新、恢复不重渲染原请求。
 
-普通/审计流程的 ID/version、支持组合、审计模型和允许覆盖步骤取公开目录。Runner 管步骤、裁决、修复与补报预算；SteerLine 不从终端文字推进阶段，不因新增预设取得另一套发布资格。契约见[Runner 协作](../../SteerlineFlow/spec/runner-collaboration.spec.md)，实例、停止和换构建排空见[生命周期](worker-lifecycle.md)。
+普通/审计流程的 ID/version、支持组合、审计模型和允许覆盖步骤取公开目录。Runner 管步骤、裁决、修复与补报预算；SteerLine 不从终端文字推进阶段，不因新增预设取得另一套发布资格。契约见[Runner 协作](../../SteerlineFlow/spec/runner-collaboration.spec.md)，实例、停止和换构建排空见[生命周期](runner-lifecycle.md)。
 
 ## 调用方设置与环境边界
 

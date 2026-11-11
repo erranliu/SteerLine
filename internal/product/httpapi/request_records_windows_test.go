@@ -18,7 +18,7 @@ func TestRequestRecordReaderAllowsOutcomeReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := newFileRequestRecordOwner(root)
-	envelope := CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: ProjectID("repo"), InstanceID: "original", Action: "pause_dispatch", TargetID: "dispatch", Payload: json.RawMessage(`{}`)}
+	envelope := CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: ProjectID("repo"), InstanceID: "original", Action: "set_dispatch_mode", TargetID: "dispatch", Payload: json.RawMessage(`{"mode":"manual"}`)}
 	canonical, err := json.Marshal(envelope)
 	if err != nil {
 		t.Fatal(err)

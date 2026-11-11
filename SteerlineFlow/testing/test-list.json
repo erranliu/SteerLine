@@ -2,11 +2,11 @@
   "tests": [
     {
       "id": "runtime.async-activities",
-      "name": "异步活动中心只读观察与抽屉",
+      "name": "异步活动中心抽屉与独立阅读页",
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.async-activities",
-      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测与候选可发现，退役测试准备活动缺席，PR-ready保持等待；原观察阶段跨路由、320px模态/焦点、断连/刷新/重启原活动和Run不变且零新增输入。另一个独立项目从浏览器发起草稿解析（真实来源变化拒绝）、检查更新、首次及并行候选、环境检测，验证即时局部反馈、飞入动效及窄屏减少动态效果，每意图一次原命令；分别核对浏览器证据和两次候选提交，完整交付与资源结算。",
+      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测与候选可发现，退役测试准备活动缺席，PR-ready保持等待；原观察阶段跨路由、320px模态/焦点、断连/刷新/重启原活动和Run不变且零新增输入。独立活动页及摘要深链接默认不读交互/正文，显式展开一页索引，连续轻量变化检查不追页，正文显式一段或完整短预览免查询，历史无焦点重取，1440/768/320px截图及请求计数证据经执行器校验。另一个独立项目从浏览器发起草稿解析（真实来源变化拒绝）、检查更新、首次及并行候选、环境检测，验证即时局部反馈、飞入动效及窄屏减少动态效果，每意图一次原命令；分别核对浏览器证据和两次候选提交，完整交付与资源结算。",
       "note": "Windows/Go/Git、Node/npm/Edge；先 npm --prefix web ci 和 npm --prefix web run build，场景只读共享资产/依赖，Web EXE由本次构建冻结；两独立项目按顺序运行观察与发起阶段，正文10分钟/包12分钟，清理沿原独立上下文。home/repo/DB/provider/端口/浏览器/证据独立，不依赖其他场景产物。总并发最多二；受控不证明真实模型/PR。"
     },
     {
@@ -293,7 +293,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.roadmap",
-      "check": "isolated；三组串行：internal/roadmap普通owner全量、App固定11根及全部子项、host状态重开守卫一根。覆盖静态初始化/原请求恢复/固定材料、真实本地Git与受控provider、LF/CRLF、文档发布/未知回执/原PR对账/准入原子性和目录拒绝；含同批前置提供新增测试ID、后继等待不阻断前置及交付后严格展开；含草稿与正式编号混合依赖、原/建议引用校验、正式别名归一去重、跨图环及正式前置入图；沿原链验证解析/文档生成/发布/入图活动及发布观察失败后恢复。排除e2e标签live根，不调用真实模型或远端PR。源/标签/平台及正式定义漂移阻断，每包非零，缺失/重复/额外/skip或任何不完整终态整体不通过；count1/25m/p1/parallel1。",
+      "check": "isolated；三组串行：internal/roadmap普通owner全量、App固定11根及全部子项、host状态重开守卫一根。覆盖按任务独立生成、确认规划/测试提供关系、五槽并行/单项重生成/整批停止/原请求恢复/固定材料、真实本地Git与受控provider、六任务单PR/原子入图、LF/CRLF、文档发布/未知回执/原PR对账/准入原子性和目录拒绝；含同批前置提供新增测试ID、后继等待不阻断前置及交付后严格展开；含草稿与正式编号混合依赖、原/建议引用校验、正式别名归一去重、跨图环及正式前置入图；沿原链验证解析/文档生成/发布/入图活动及发布观察失败后恢复。排除e2e标签live根，不调用真实模型或远端PR。源/标签/平台及正式定义漂移阻断，每包非零，缺失/重复/额外/skip或任何不完整终态整体不通过；count1/25m/p1/parallel1。",
       "note": "按影响选择；本专项不能代替go.full或原L3/live；源码Web构建与E2E/Full/压力任务安排串行，使用全新外部-out。实际组command与execution_parameters必须对应，原断言与期限不变。"
     },
     {

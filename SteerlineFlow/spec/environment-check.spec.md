@@ -18,7 +18,7 @@ Runner 契约与原生验收归属 `C:/Project/SteerRunner`。本轮固定其已
 
 SteerLine 不固定 MXC 参数、签发/注入凭据、解析 rollout/终端、判定原生权限通过或指挥 Runner 内部节点。Runner 不依赖 SteerLine Task/项目状态来运行检查，project ID 仅为不透明关联。两仓各自拥有 Spec/Plan/acceptance；本仓不再复制 Runner 状态/策略/原生测试矩阵。
 
-调查读取 `docs/spec/SpecGuide.md`（最后修改 `94e704300485b82d54e44991148074841ed66019`），SteerLine HEAD `6f40f2dd70c2226c38e1599f81546652f475d563`；本次编辑前有上一轮未提交文档，未把它们当作已合入实现。已读[生命周期](../../docs/product-design/worker-lifecycle.md)、[执行配置](../../docs/product-design/execution-configuration.md)、[测试入口](../../tests/e2e/README.md)。代码调查：`runner_config.go`/`runnerclient/catalog.go` 提供公开方案与 schema；`runnerclient/client.go` 只有现有 CLI 白名单；`runnerbridge` 绑定 Candidate，不能伪造候选复用；HTTP 项目认证/请求注册、SQLite 与 Query 可复用。
+调查读取 `docs/spec/SpecGuide.md`（最后修改 `94e704300485b82d54e44991148074841ed66019`），SteerLine HEAD `6f40f2dd70c2226c38e1599f81546652f475d563`；本次编辑前有上一轮未提交文档，未把它们当作已合入实现。已读[生命周期](../../docs/product-design/runner-lifecycle.md)、[执行配置](../../docs/product-design/execution-configuration.md)、[测试入口](../../tests/e2e/README.md)。代码调查：`runner_config.go`/`runnerclient/catalog.go` 提供公开方案与 schema；`runnerclient/client.go` 只有现有 CLI 白名单；`runnerbridge` 绑定 Candidate，不能伪造候选复用；HTTP 项目认证/请求注册、SQLite 与 Query 可复用。
 
 ## 2. 与沙箱认证工作的边界
 
@@ -67,7 +67,7 @@ Runner 的 input_digest 是首个已核实 Check 返回的权威值，本仓保�
 
 capabilities 表示已实现且声明支持的机制，不表示某机器当前登录/资源就绪。原生机制缺失为 unsupported；支持组合当前缺凭据、401/权限拒绝或超时进入本次报告，不通过隐藏组合或标 not_applicable 掩盖失败。集成使用 Runner Controlled 校验过的同版公开请求/响应样例构造 fixture；本仓产品通过仍须固定真实 Runner 契约核对，fixture 不能替代其原生/SA 验收。
 
-Runner 实现的内部准备、模型轮次数、预算、Git/PR 对象守卫和资源收尾仅引用 Runner Spec，不在本仓规定。共用节点/异常语义见[生命周期](../../docs/product-design/worker-lifecycle.md)，仅保持 W03/W07/W18 和 E/V 的语义衔接。
+Runner 实现的内部准备、模型轮次数、预算、Git/PR 对象守卫和资源收尾仅引用 Runner Spec，不在本仓规定。共用节点/异常语义见[生命周期](../../docs/product-design/runner-lifecycle.md)，仅保持 W03/W07/W18 和 E/V 的语义衔接。
 
 本仓验收 SLEC-A01–A04、人工 SLEC-M01 见[专属记录](../testing/acceptance/environment-check.md)；Runner 前置另验 SREC-A01–A06，SA 工作仍验自己的 SA01–SA08，互不共用通过状态。本轮按用户授权实现 SteerLine；未实现 Runner、未启动真实 Agent 或操作外部 Git/PR。调用方自动结果与仍待前置的真实契约核对分别登记，不据夹具宣称远端或原生权限通过。
 

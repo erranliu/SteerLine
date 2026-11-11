@@ -19,10 +19,6 @@ import (
 func TestRunnerDiscardRequiresCompleteFreshPRSetAndAtomicStops(t *testing.T) {
 	ctx := context.Background()
 	s, project, tasks := nativeAuditStore(t)
-	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, project)
-		return err
-	}))
 	graph, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	contract, err := s.TaskContract(ctx, project, tasks[0])

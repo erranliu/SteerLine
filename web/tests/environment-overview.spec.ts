@@ -111,6 +111,19 @@ test("all environment readiness remains visible across detail changes, refresh f
   const writes: string[] = [];
   const reads: string[] = [];
   const errors: string[] = [];
+  const repairPrompt = readFileSync(
+    resolve("../internal/prompts/testdata/environment-repair.golden.md"),
+    "utf8",
+  );
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        writeText: async (text: string) => {
+          (window as unknown as { copiedPrompt: string }).copiedPrompt = text;
+        },
+      },
+    });
+  });
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/auth/status", (route) =>
     route.fulfill({
@@ -152,7 +165,6 @@ test("all environment readiness remains visible across detail changes, refresh f
               control: {
                 revision: 1,
                 dispatch_mode: "manual",
-                dispatch_paused: true,
                 blockers: [],
               },
             },
@@ -168,6 +180,7 @@ test("all environment readiness remains visible across detail changes, refresh f
         return;
       }
       data = {
+        repair_prompt: repairPrompt,
         environments,
         profiles,
         default_profile_id: "orca-0",
@@ -197,6 +210,17 @@ test("all environment readiness remains visible across detail changes, refresh f
   const rows = overview.locator("tbody tr");
   const detail = page.getByRole("region", { name: "当前运行环境" });
   await expect(rows).toHaveCount(4);
+  const copyPrompt = page.getByRole("button", { name: "复制修正环境提示词" });
+  await expect(copyPrompt).toBeEnabled();
+  await copyPrompt.click();
+  await expect(
+    page.getByText("已复制修正环境提示词", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { copiedPrompt: string }).copiedPrompt,
+    ),
+  ).toBe(repairPrompt);
   await expect(overview.getByRole("status")).toContainText("1/4 已就绪");
   await expect(rows.locator("td:first-child strong")).toHaveText([
     "本机 · Orca → Codex",
@@ -213,6 +237,7 @@ test("all environment readiness remains visible across detail changes, refresh f
   for (const width of [1440, 800, 375, 960, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(rows).toHaveCount(4);
+    await expect(copyPrompt).toBeVisible();
     const bounds = await page
       .locator(".environment-page")
       .evaluate((element) => {

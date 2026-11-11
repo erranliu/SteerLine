@@ -498,14 +498,12 @@ test("runtime environments keep card actions, failed observations and task retur
                   "start_task",
                   "start_candidate",
                   "set_dispatch_mode",
-                  "pause_dispatch",
                 ],
               },
               runs: [],
               control: {
                 revision: 1,
                 dispatch_mode: "manual",
-                dispatch_paused: false,
                 blockers: [],
               },
             },
@@ -792,7 +790,6 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
               control: {
                 revision: 1,
                 dispatch_mode: "manual",
-                dispatch_paused: false,
                 blockers: [],
               },
             },

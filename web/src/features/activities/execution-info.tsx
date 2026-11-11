@@ -7,6 +7,7 @@ export type ExecutionReference = {
   request_id?: string;
   run_id?: string;
   attempt_id?: string;
+  session_id?: string;
   action?: string;
 };
 export type ExecutionInfo = {
@@ -15,12 +16,14 @@ export type ExecutionInfo = {
   requestID?: string;
   record?: { id: string; label: string };
   taskID?: string;
+  generationID?: string;
   runner?: ExecutionReference;
   runnerUnverified?: boolean;
 };
 export const operationNames: Record<string, string> = {
   roadmap_parse: "Roadmap 解析",
   roadmap_generate_documents: "Spec / Plan 生成",
+  roadmap_retry_documents: "单任务文档重生成",
   roadmap_publish: "Roadmap 文档发布",
   roadmap_admit: "Roadmap 入图",
   roadmap_resume: "继续 Roadmap 操作",
@@ -60,6 +63,8 @@ export function formatExecutionInfo(info: ExecutionInfo) {
     if (info.record)
       lines.push(`${info.record.label} ID：${info.record.id}（关联业务记录）`);
   }
+  if (info.generationID)
+    lines.push(`Generation ID：${info.generationID}（任务生成）`);
   if (info.runner) {
     lines.push(
       info.runner.run_id
@@ -71,6 +76,8 @@ export function formatExecutionInfo(info: ExecutionInfo) {
     if (info.runner.attempt_id)
       lines.push(`Attempt ID：${info.runner.attempt_id}（具体执行轮次）`);
   }
+  if (info.runner?.session_id)
+    lines.push(`Session ID：${info.runner.session_id}（原生会话）`);
   return lines.join("\n");
 }
 
@@ -84,7 +91,6 @@ export function requestExecutionInfo(
     | undefined;
   const runner = [
     "roadmap_parse",
-    "roadmap_generate_documents",
     "environment_start",
     "start_task",
     "start_candidate",

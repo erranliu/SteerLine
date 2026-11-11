@@ -70,6 +70,13 @@ func (s *SQLiteStore) SaveRoadmap(ctx context.Context, r roadmap.Record, expecte
 	if s.readOnly || r.Project == "" || !roadmap.IDPattern.MatchString(r.ID) || r.Revision != expected+1 {
 		return errors.New("invalid roadmap write")
 	}
+	ids, requests := map[string]bool{}, map[string]bool{}
+	for _, g := range r.Generations {
+		if !roadmap.IDPattern.MatchString(g.ID) || g.Key == "" || g.CreatedAt.IsZero() || g.Request.RequestID == "" || ids[g.ID] || requests[g.Request.RequestID] {
+			return errors.New("invalid or duplicate document execution")
+		}
+		ids[g.ID], requests[g.Request.RequestID] = true, true
+	}
 	tx, e := s.db.BeginTx(ctx, nil)
 	if e != nil {
 		return e
@@ -88,8 +95,22 @@ func (s *SQLiteStore) SaveRoadmap(ctx context.Context, r roadmap.Record, expecte
 			return errors.New("stale_revision: roadmap changed")
 		}
 		if old.Purpose != r.Purpose || old.ParentID != r.ParentID || old.RepositoryTree != r.RepositoryTree ||
-			old.CodeCommit != "" && old.CodeCommit != r.CodeCommit || !reflect.DeepEqual(old.Materials, r.Materials) {
+			old.CodeCommit != "" && old.CodeCommit != r.CodeCommit || !reflect.DeepEqual(old.Materials, r.Materials) || !reflect.DeepEqual(old.PlanningMaterials, r.PlanningMaterials) {
 			return errors.New("immutable roadmap generation context changed")
+		}
+		if len(r.Generations) < len(old.Generations) {
+			return errors.New("generation history removed")
+		}
+		for i, g := range old.Generations {
+			n := r.Generations[i]
+			stopChanged := g.StopRequest != nil && !reflect.DeepEqual(g.StopRequest, n.StopRequest)
+			stopRetried := g.StopState == "rejected" && n.StopState == "unknown" && n.StopRequest != nil && g.StopRequest != nil && n.StopRequest.RequestID != g.StopRequest.RequestID
+			if stopChanged && !stopRetried || g.Projection != nil && (n.Projection == nil || n.Projection.Revision < g.Projection.Revision) {
+				return errors.New("document execution observation or stop binding changed")
+			}
+			if g.ID != n.ID || g.Key != n.Key || !g.CreatedAt.Equal(n.CreatedAt) || g.RetryRequest != n.RetryRequest || !reflect.DeepEqual(g.Request, n.Request) || g.RunID != "" && g.RunID != n.RunID || g.InputDigest != "" && g.InputDigest != n.InputDigest || g.Submission == "started" && n.Submission != "started" || len(g.Result) > 0 && !bytes.Equal(g.Result, n.Result) || g.Document != nil && !reflect.DeepEqual(g.Document, n.Document) {
+				return errors.New("immutable document execution changed")
+			}
 		}
 		stopChanged := old.StopRequest != nil && !reflect.DeepEqual(old.StopRequest, r.StopRequest)
 		stopRetried := old.StopState == "rejected" && r.StopState == "unknown" && r.StopRequest != nil && old.StopRequest != nil && r.StopRequest.RequestID != old.StopRequest.RequestID
@@ -125,7 +146,13 @@ func (s *SQLiteStore) SaveRoadmap(ctx context.Context, r roadmap.Record, expecte
 	if r.Publication != nil {
 		publicationRequest = r.Publication.RequestID
 	}
-	for _, id := range []string{r.RequestID, r.ConfirmationRequest, r.StopID, r.AdmissionRequest, publicationRequest} {
+	requestIDs := []string{r.RequestID, r.ConfirmationRequest, r.StopID, r.AdmissionRequest, publicationRequest}
+	for _, g := range r.Generations {
+		if g.RetryRequest != "" {
+			requestIDs = append(requestIDs, g.RetryRequest)
+		}
+	}
+	for _, id := range requestIDs {
 		if id == "" {
 			continue
 		}
@@ -140,6 +167,9 @@ func (s *SQLiteStore) SaveRoadmap(ctx context.Context, r roadmap.Record, expecte
 		if bound != r.ID {
 			return errors.New("roadmap request conflict")
 		}
+	}
+	if err := indexRoadmapReading(ctx, tx, r); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

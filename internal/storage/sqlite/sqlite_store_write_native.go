@@ -15,8 +15,8 @@ import (
 )
 
 func (t *sqliteTx) PutProjectTaskAuthority(v taskmodel.ProjectTaskAuthority) error {
-	if v.ProjectIdentity == "" || v.Authority != "native" || v.AuthorityVersion == 0 || v.DispatchMode != "manual" || !v.DispatchPaused || v.Repository == "" || v.Remote == "" || v.Branch == "" {
-		return errors.New("native project authority requires identity, target, version and initial manual/paused dispatch")
+	if v.ProjectIdentity == "" || v.Authority != "native" || v.AuthorityVersion == 0 || v.DispatchMode != "manual" || v.Repository == "" || v.Remote == "" || v.Branch == "" {
+		return errors.New("native project authority requires identity, target, version and initial manual dispatch")
 	}
 	if v.CreatedAt.IsZero() {
 		v.CreatedAt = now()
@@ -24,7 +24,7 @@ func (t *sqliteTx) PutProjectTaskAuthority(v taskmodel.ProjectTaskAuthority) err
 	if v.UpdatedAt.IsZero() {
 		v.UpdatedAt = v.CreatedAt
 	}
-	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO project_task_authorities(project_identity,authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_identity) DO UPDATE SET updated_at=excluded.updated_at WHERE project_task_authorities.authority=excluded.authority AND project_task_authorities.authority_version=excluded.authority_version AND project_task_authorities.graph_revision=excluded.graph_revision AND project_task_authorities.repository=excluded.repository AND project_task_authorities.remote=excluded.remote AND project_task_authorities.branch=excluded.branch AND project_task_authorities.dispatch_mode=excluded.dispatch_mode AND project_task_authorities.dispatch_paused=excluded.dispatch_paused`, v.ProjectIdentity, v.Authority, v.AuthorityVersion, v.GraphRevision, v.Repository, v.Remote, v.Branch, v.DispatchMode, boolInt(v.DispatchPaused), v.CreatedAt.UTC().Format(time.RFC3339Nano), v.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO project_task_authorities(project_identity,authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_identity) DO UPDATE SET updated_at=excluded.updated_at WHERE project_task_authorities.authority=excluded.authority AND project_task_authorities.authority_version=excluded.authority_version AND project_task_authorities.graph_revision=excluded.graph_revision AND project_task_authorities.repository=excluded.repository AND project_task_authorities.remote=excluded.remote AND project_task_authorities.branch=excluded.branch AND project_task_authorities.dispatch_mode=excluded.dispatch_mode`, v.ProjectIdentity, v.Authority, v.AuthorityVersion, v.GraphRevision, v.Repository, v.Remote, v.Branch, v.DispatchMode, v.CreatedAt.UTC().Format(time.RFC3339Nano), v.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	return requireIdentityWrite(result, err, "authority_mismatch: native project authority is immutable without a compare-and-swap")
 }
 
@@ -33,14 +33,12 @@ func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v taskmodel.ProjectTaskAuthorit
 		return nativeErr("authority_mismatch", "project authority update requires a valid next version and dispatch mode")
 	}
 	var old taskmodel.ProjectTaskAuthority
-	var paused int
 	var created, updated string
-	err := t.tx.QueryRowContext(t.ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&old.Authority, &old.AuthorityVersion, &old.GraphRevision, &old.Repository, &old.Remote, &old.Branch, &old.DispatchMode, &paused, &created, &updated)
+	err := t.tx.QueryRowContext(t.ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&old.Authority, &old.AuthorityVersion, &old.GraphRevision, &old.Repository, &old.Remote, &old.Branch, &old.DispatchMode, &created, &updated)
 	if err != nil {
 		return requiredRecordError(err, "authority_mismatch", "native project authority was not found")
 	}
 	old.ProjectIdentity = v.ProjectIdentity
-	old.DispatchPaused = paused != 0
 	old.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	old.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 	if old.AuthorityVersion != expectedVersion {
@@ -52,7 +50,7 @@ func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v taskmodel.ProjectTaskAuthorit
 	if v.UpdatedAt.IsZero() {
 		v.UpdatedAt = now()
 	}
-	result, err := t.tx.ExecContext(t.ctx, `UPDATE project_task_authorities SET authority_version=?,dispatch_mode=?,dispatch_paused=?,updated_at=? WHERE project_identity=? AND authority_version=? AND graph_revision=?`, v.AuthorityVersion, v.DispatchMode, boolInt(v.DispatchPaused), v.UpdatedAt.UTC().Format(time.RFC3339Nano), v.ProjectIdentity, expectedVersion, v.GraphRevision)
+	result, err := t.tx.ExecContext(t.ctx, `UPDATE project_task_authorities SET authority_version=?,dispatch_mode=?,updated_at=? WHERE project_identity=? AND authority_version=? AND graph_revision=?`, v.AuthorityVersion, v.DispatchMode, v.UpdatedAt.UTC().Format(time.RFC3339Nano), v.ProjectIdentity, expectedVersion, v.GraphRevision)
 	return requireIdentityWrite(result, err, "stale_version: project authority changed during compare-and-swap")
 }
 

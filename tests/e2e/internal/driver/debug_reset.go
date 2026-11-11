@@ -235,7 +235,7 @@ func (d *debugRelease) resetState(check bool, proof runnerclient.StoppedVerifica
 			return err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE project_task_authorities SET graph_revision=graph_revision+1,dispatch_mode='manual',dispatch_paused=0,updated_at=? WHERE project_identity=?", stamp, project); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE project_task_authorities SET graph_revision=graph_revision+1,dispatch_mode='manual',updated_at=? WHERE project_identity=?", stamp, project); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE database_state SET revision=revision+1 WHERE singleton=1"); err != nil {

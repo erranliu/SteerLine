@@ -1,6 +1,6 @@
 # SteerLine Web
 
-本机浏览器客户端，使用独立 Web 程序和共享 Go 后端的应用 API。[Spec](../SteerlineFlow/spec/web-project-switch.spec.md) · [Plan](../SteerlineFlow/plans/web-project-switch.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-project-switch.md)。项目添加、远程 Web 和 SSE 尚未实现；远端 worker 能力不等于远程 Web 访问。客户端与服务的职责唯一维护在[代码架构](../docs/architecture/current-code-architecture.md#客户端与服务边界)。
+本机浏览器客户端，使用独立 Web 程序和共享 Go 后端的应用 API。[Spec](../SteerlineFlow/spec/web-project-switch.spec.md) · [Plan](../SteerlineFlow/plans/web-project-switch.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-project-switch.md)。项目添加和 SSE 尚未实现。Web 仅供本机访问，远端 Orca 执行由 SteerRunner 管理。客户端与服务的职责唯一维护在[代码架构](../docs/architecture/current-code-architecture.md#客户端与服务边界)。
 
 ## 工程结构与技术栈
 
@@ -30,7 +30,7 @@ $env:STEERLINE_HOME = '<所选 home>'
 
 安装目录双击 `start.bat`（等价 `steerline start`），短协调器依次启动并核验同 home 的共享后端和 Web，然后委托本 home 的 Web `open` 授权打开浏览器。重复启动复用实例；`--no-open` 适合自动化。`steerline status --json` 展示宿主、Web、项目和最近停机结果，`stop.bat` / `steerline stop` 正常停止两者并核验各项目收尾。
 
-后端低层入口为 `steerline serve`，自动冻结并装载 `etc/*.json`，所有项目在同一 PID 内分别拥有数据库、actor、实例和锁。配置修改在下次宿主启动生效。Web 可通过 `steerline-web stop`、`serve`、`open` 独立重启，保持项目与 worker 活动轮次。
+后端低层入口为 `steerline serve`，自动冻结并装载 `etc/*.json`，所有项目在同一 PID 内分别拥有数据库、actor、实例和锁。配置修改在下次宿主启动生效。Web 可通过 `steerline-web stop`、`serve`、`open` 独立重启，项目服务和原 Runner Run 继续运行。
 
 Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742"}`；缺文件时采用该默认值并在启动时保存。稳定端口冲突明确失败。项目配置的 `web_address` 和旧 `steerline web -config` 已删除，旧配置需要显式移除该字段，不自动迁移。
 
@@ -45,6 +45,10 @@ Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的
 业务命令禁止通用自动重试，完整原信封保存失败零发送；仅按协议对明确允许的请求补交，不能借 Query 重试或组件重挂载重做未知动作。原生凭证不存浏览器；Agent/文档正文按不可信内容渲染，不执行原始 HTML。输入区保留中文 IME 组词、换行与显式提交的区别。
 
 ## 查询与缓存
+
+项目导航“活动中心”和顶部抽屉“打开独立页”进入独立阅读页。默认只读取活动摘要与最近可读预览；点击“查看已记录交互”才读索引，点击“展开正文/继续读取正文”才读取该条的一段。工具和内部事件不进入阅读索引。已记录内容存在缺口时明确提示，不承诺完整原生会话；原问题处理和执行操作仍回到原详情页。
+
+独立页 history 与已加载后续页不周期重取；进行中只刷新有界首屏摘要。展开的交互只做轻量变化提示，刷新/翻页均显式进行；收起、隐藏和切换取消相应查询。正文引用不可变，显式分段读取复用缓存，不因全局失效、窗口聚焦或活动终态自动遍历正文。
 
 服务读取统一使用 `src/shared/api/queries.ts` 的 TanStack Query options，按 home/项目/原生实例及输出身份隔离。连接核验后后台预取当前项目的执行方案和任务列表首屏；DAG/执行页共享任务列表，已有缓存先展示，后台刷新保留内容。任务列表和执行方案的在途读取可跨页面复用，项目/实例切换仍取消原 Workspace 的读取。
 

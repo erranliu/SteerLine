@@ -96,7 +96,7 @@ CLI 走应用服务与原项目用例，浏览器维护动作走原 `/commands`�
 
 生成结果只供审阅。查询返回目标 diff/review_digest；显式 `tests apply` 或 Web 应用按输出、当前 HEAD/分支、实际完整输入和目标原字节重算，先持久单文件意图，最后原子替换。取消/应用串行，丢回执与重启只核实，未取消且原条件成立时可显式继续原应用；原 generate 重放不写文件或重发模型。条件变化后需要重新审阅，适用输出可复用，无须新模型调用。Plan 链接由作者维护，用户正常提交/合入后核对远端材料；正式启动采用同一最新 commit 的引用和测试。
 
-接受不等于执行成功；结果成功和资源结算分别展示。未知提交、停止、迟到接受及重启沿[生命周期规则](../../docs/product-design/worker-lifecycle.md)处理：只查原请求，零自动重发、零自动 resume；停止义务必须覆盖未绑定/迟到 Run。新生成对象纳入 home 共享 Runner 的停服/重置结算，不因其没有 Candidate 而漏掉。无 Task 领取、开发候选、DAG 或 TaskDelivery 副作用。
+接受不等于执行成功；结果成功和资源结算分别展示。未知提交、停止、迟到接受及重启沿[生命周期规则](../../docs/product-design/runner-lifecycle.md)处理：只查原请求，零自动重发、零自动 resume；停止义务必须覆盖未绑定/迟到 Run。新生成对象纳入 home 共享 Runner 的停服/重置结算，不因其没有 Candidate 而漏掉。无 Task 领取、开发候选、DAG 或 TaskDelivery 副作用。
 
 ## 5. 测试结果与版本绑定
 

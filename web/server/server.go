@@ -339,9 +339,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		s.billingConfig(w, r, session)
 		return
 	}
-	if (r.URL.Path == "/api/web/usage-collection" || r.URL.Path=="/api/web/usage-collection/status") && r.Method == "GET" && r.URL.RawQuery == "" {
+	if (r.URL.Path == "/api/web/usage-collection" || r.URL.Path == "/api/web/usage-collection/status") && r.Method == "GET" && r.URL.RawQuery == "" {
 		var result cfg.UsageCollection
-		if err := s.options.Client.Get(r.Context(), strings.TrimPrefix(r.URL.Path,"/api/web"), &result); err != nil {
+		if err := s.options.Client.Get(r.Context(), strings.TrimPrefix(r.URL.Path, "/api/web"), &result); err != nil {
 			backendError(w, err)
 		} else {
 			writeJSON(w, 200, result)
@@ -478,5 +478,5 @@ func spaPath(route string) bool {
 		return true
 	}
 	parts := strings.Split(strings.Trim(route, "/"), "/")
-	return len(parts) == 3 && parts[0] == "projects" && len(parts[1]) == 64 && (parts[2] == "refactoring" || parts[2] == "roadmaps" || parts[2] == "tests" || parts[2] == "dag" || parts[2] == "runs" || parts[2] == "settings" || parts[2] == "environment") || route == "/projects"
+	return len(parts) == 3 && parts[0] == "projects" && len(parts[1]) == 64 && (parts[2] == "refactoring" || parts[2] == "roadmaps" || parts[2] == "tests" || parts[2] == "dag" || parts[2] == "runs" || parts[2] == "settings" || parts[2] == "environment" || parts[2] == "activities") || route == "/projects"
 }

@@ -6,7 +6,7 @@
 
 - `TickPR` 在 scheduler 串行调用中进入 `Deliver`，平台读取发生在 `s.mu` 内。普通观察和派发要等同一调用返回。现有 stop 通知可取消当前 `RunWork`，异步结果入场仍需按原通知顺序处理，不能靠两个 channel 同时就绪时的选择顺序。[调度](../../../internal/execution/scheduler/loop.go)、[候选 actor](../../../internal/taskrunner/actor.go)、[交付入口](../../../internal/taskrunner/service.go)
 - 普通同快照观察会随变化后的 Run 投影或事件提交推进候选 revision。原交付在读取证据和入事务时都要求候选 revision 相等。查询移出 actor 后，连续观察可能使每次平台结果失效。自动交付因此需要按原绑定及业务资格重核，图和任务版本及原提交事务保持。[候选观察](../../../internal/runnerbridge/bridge.go)、[证据验证](../../../internal/storage/ports/runner_pr.go)、[SQLite 交付](../../../internal/storage/sqlite/runner_result.go)
-- 原用户 stop 是候选参与退出，是否另有 Runner 原生停止义务由原流程决定。后台查询结果既不取得控制授权，也不改变原回执。[候选撤回事务](../../../internal/storage/sqlite/runner_stop.go)、[生命周期](../../../docs/product-design/worker-lifecycle.md)
+- 原用户 stop 是候选参与退出，是否另有 Runner 原生停止义务由原流程决定。后台查询结果既不取得控制授权，也不改变原回执。[候选撤回事务](../../../internal/storage/sqlite/runner_stop.go)、[生命周期](../../../docs/product-design/runner-lifecycle.md)
 
 ## 验收安排
 

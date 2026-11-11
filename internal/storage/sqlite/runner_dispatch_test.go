@@ -10,8 +10,7 @@ import (
 func TestRunnerDispatchReceiptAndAuthorityCommitTogether(t *testing.T) {
 	ctx := context.Background()
 	s, project, _ := nativeAuditStore(t)
-	paused := false
-	in := ports.RunnerDispatch{Project: project, RequestID: "runner-dispatch", ExpectedAuthorityVersion: 1, Paused: &paused, RequestedBy: "operator"}
+	in := ports.RunnerDispatch{Project: project, RequestID: "runner-dispatch", ExpectedAuthorityVersion: 1, Mode: "auto", RequestedBy: "operator"}
 	_, err := s.db.ExecContext(ctx, `CREATE TRIGGER fail_runner_dispatch BEFORE UPDATE ON commands WHEN NEW.kind='runner_dispatch' BEGIN SELECT RAISE(ABORT,'receipt fault'); END`)
 	require(t, err)
 	if _, err := s.SetRunnerDispatch(ctx, in); err == nil {
@@ -19,7 +18,7 @@ func TestRunnerDispatchReceiptAndAuthorityCommitTogether(t *testing.T) {
 	}
 	authority, err := s.NativeAuthority(ctx, project)
 	require(t, err)
-	if authority.AuthorityVersion != 1 || !authority.DispatchPaused {
+	if authority.AuthorityVersion != 1 || authority.DispatchMode != "manual" {
 		t.Fatal("authority escaped rollback")
 	}
 	if _, found, err := s.LookupCommand(ctx, project, in.RequestID); err != nil || found {
@@ -31,11 +30,20 @@ func TestRunnerDispatchReceiptAndAuthorityCommitTogether(t *testing.T) {
 	require(t, err)
 	second, err := s.SetRunnerDispatch(ctx, in)
 	require(t, err)
-	if first.AuthorityVersion != 2 || first.DispatchPaused || second.AuthorityVersion != 2 {
+	if first.AuthorityVersion != 2 || first.DispatchMode != "auto" || second.AuthorityVersion != 2 || second.DispatchMode != "auto" {
 		t.Fatal("dispatch replay changed authority")
 	}
-	paused = true
+	in.Mode = "manual"
 	if _, err := s.SetRunnerDispatch(ctx, in); err == nil {
 		t.Fatal("changed original intent reused receipt")
+	}
+	in.RequestID = "runner-dispatch-off"
+	in.ExpectedAuthorityVersion = first.AuthorityVersion
+	disabled, err := s.SetRunnerDispatch(ctx, in)
+	require(t, err)
+	authority, err = s.NativeAuthority(ctx, project)
+	require(t, err)
+	if disabled.AuthorityVersion != 3 || authority.AuthorityVersion != 3 || authority.DispatchMode != "manual" {
+		t.Fatal("turning automatic dispatch off did not persist manual mode")
 	}
 }

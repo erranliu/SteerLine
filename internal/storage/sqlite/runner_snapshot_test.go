@@ -20,10 +20,6 @@ import (
 func TestRunnerApplicationSnapshotSharesTransactionAcrossWriterCommit(t *testing.T) {
 	ctx := context.Background()
 	writer, project, tasks := nativeAuditStore(t)
-	require(t, writer.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, project)
-		return err
-	}))
 	graph, err := writer.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	contract, err := writer.TaskContract(ctx, project, tasks[0])
@@ -70,7 +66,7 @@ func TestRunnerApplicationSnapshotSharesTransactionAcrossWriterCommit(t *testing
 			return err
 		}
 		authority.AuthorityVersion++
-		authority.DispatchPaused = true
+		authority.DispatchMode = "auto"
 		return writer.transactSQLite(ctx, func(tx *sqliteTx) error {
 			return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 		})

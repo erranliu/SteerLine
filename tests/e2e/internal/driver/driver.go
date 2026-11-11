@@ -156,7 +156,7 @@ func MainControl(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *action != "resume_dispatch" && *action != "start_task" && *action != "start_candidate" {
+	if *action != "start_task" && *action != "start_candidate" {
 		return fmt.Errorf("unsupported E2E control action")
 	}
 	if *expectedStatus != "applied" && !(*action == "start_task" && (*expectedStatus == "rejected" || *expectedStatus == "failed" || *expectedStatus == "indeterminate")) {

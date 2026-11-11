@@ -1,6 +1,10 @@
 # 当前 Spec 与 Plan
 
-重构与维护最小闭环（2026-11-10，需求已确认、待实施）：[Spec](refactoring-maintenance.spec.md) · [Plan](../plans/refactoring-maintenance.plan.md) · [已登记回归选择](../plans/refactoring-maintenance.tests.json) · [专属验收规划](../testing/acceptance/refactoring-maintenance.md)。接入已合入的 Runner #141；SteerAgent 只读生成提示词，新 execute 沿最新来源复用同一 worktree，默认谨慎/1轮，预算耗尽自动交付，费用按已覆盖参考口径披露；本期只编写材料，不启动实现或 roadmap。新维护 controlled/live 场景在实施时补登记并纳入最终测试选择。
+重构与维护最小闭环（2026-11-11，已实现，隔离真实联验通过）。[Spec](refactoring-maintenance.spec.md) · [Plan](../plans/refactoring-maintenance.plan.md) · [测试选择](../plans/refactoring-maintenance.tests.json) · [验收记录](../testing/acceptance/refactoring-maintenance.md)
+
+Roadmap 按任务并行生成（2026-11-10，已实现并通过自动验证）：[Spec](roadmap-per-task-generation.spec.md) · [Plan](../plans/roadmap-per-task-generation.plan.md) · [测试安排](../plans/roadmap-per-task-generation.tests.json) · [专属验收](../testing/acceptance/roadmap-per-task-generation.md)。确认前补齐整批任务与协作契约，确认后每任务独立 Run/session，复用共享额度并行生成，失败项单独重生成，程序汇总后整批审阅发布；由当前聊天直接实现，测试及独立审核见专属验收，不启动 roadmap。
+
+活动中心独立阅读页（2026-11-10，已实现，必要验证及独立代码审核修复完成）：[Spec](activity-reading-page.spec.md) · [Plan](../plans/activity-reading-page.plan.md) · [测试选择](../plans/activity-reading-page.tests.json) · [专属验收记录](../testing/acceptance/activity-reading-page.md)。当前项目活动双栏阅读、最近可读快照及历史交互按需索引/正文读取；明确公开来源、采样缺口与只读边界，效率与解耦优先，未部署、不启动 roadmap，人工体验待安排。
 
 SteerAgent 分类收敛（2026-11-10，分类收敛已实施、本期验收完成）：[Spec](steer-agent-classification.spec.md) · [Plan](../plans/steer-agent-classification.plan.md) · [测试选择](../plans/steer-agent-classification.tests.json) · [审计与专属验收](../testing/acceptance/steer-agent-classification.md)。仅收敛分类、命名、配置归属及现有接线，不扩展智能能力或 Runner 协议，不启动 roadmap。
 
@@ -114,7 +118,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 已交付规格归档
 
-控制台主界面、四批产品精简和迁出前 Worker 三层重构已交付，其 Spec/Plan 与原版本验收由[已交付归档](../archive/spec/completed/README.md#2026-10-21-补充归档)承接。三层重构经 PR #313 合入，执行实现随后迁至独立 Runner；长期流程规则继续维护于 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)。已退役的 TUI 和迁出前本机 Orca 方案不再列作当前实施或补验入口；后续本机 Orca 配置范围见[执行配置](web-execution-config.spec.md)。
+控制台主界面、四批产品精简和迁出前 Worker 三层重构已交付，其 Spec/Plan 与原版本验收由[已交付归档](../archive/spec/completed/README.md#2026-10-21-补充归档)承接。三层重构经 PR #313 合入，执行实现随后迁至独立 Runner；长期流程规则继续维护于 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)。已退役的 TUI 和迁出前本机 Orca 方案不再列作当前实施或补验入口；后续本机 Orca 配置范围见[执行配置](web-execution-config.spec.md)。
 
 ## 旧 Orca 编排身份残留清理（普通开发规格）
 
@@ -126,7 +130,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 会话与恢复精简历史
 
-第四批产品精简已由 PR #243 合入；[Spec / Plan](../archive/spec/completed/README.md#2026-10-21-补充归档)及[原版本验收](../testing/acceptance/archive/completed/product-simplification-04-conversation-recovery.md)已归档。后续恢复规则以 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)和[服务换代恢复](service-generation-recovery.spec.md)为准。
+第四批产品精简已由 PR #243 合入；[Spec / Plan](../archive/spec/completed/README.md#2026-10-21-补充归档)及[原版本验收](../testing/acceptance/archive/completed/product-simplification-04-conversation-recovery.md)已归档。后续恢复规则以 [Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)和[服务换代恢复](service-generation-recovery.spec.md)为准。
 
 ## 停机对账修复
 
@@ -175,7 +179,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 共同约束
 
-- [执行架构](execution-architecture.spec.md)：当前持续 worker、单写者、身份、反馈与真实交付边界。
+- [执行架构](execution-architecture.spec.md)：当前候选与 Runner Run 的身份、单写者、反馈与真实交付边界。
 - [原生任务](native-task-constraints.md)：固定契约、DAG、唯一权威和受控命令。
 - [第一阶段](phase1-delivery-constraints.md)：本机候选、安装/调试隔离与单安装版组合验收交接。
 - [第二阶段](phase2-constraints.md)：原 TUI/HTTP/Go 边界历史；公共 API 部分继续有效。

@@ -90,7 +90,7 @@ func (c Controls) Handle(ctx context.Context, req api.ControlRequest, instance s
 			}
 		}
 	}
-	if found && (req.Action == "set_dispatch_mode" || req.Action == "pause_dispatch" || req.Action == "resume_dispatch") {
+	if found && req.Action == "set_dispatch_mode" {
 		if saved, present, err := c.Store.LookupCommand(ctx, c.Tasks.Project, "runner-dispatch-"+req.RequestID); err != nil {
 			return receipt, err
 		} else if present && saved.Status == "accepted" {
@@ -235,14 +235,8 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 			receipt.RunRevision = candidate.Revision
 		}
 		return err
-	case "set_dispatch_mode", "pause_dispatch", "resume_dispatch":
-		update := ports.RunnerDispatch{Project: c.Tasks.Project, RequestID: "runner-dispatch-" + req.RequestID, ExpectedAuthorityVersion: req.ExpectedControlRevision, RequestedBy: req.RequestedBy}
-		if req.Action == "set_dispatch_mode" {
-			update.Mode = &payload.Mode
-		} else {
-			paused := req.Action == "pause_dispatch"
-			update.Paused = &paused
-		}
+	case "set_dispatch_mode":
+		update := ports.RunnerDispatch{Project: c.Tasks.Project, RequestID: "runner-dispatch-" + req.RequestID, ExpectedAuthorityVersion: req.ExpectedControlRevision, Mode: payload.Mode, RequestedBy: req.RequestedBy}
 		authority, err := c.Store.SetRunnerDispatch(ctx, update)
 		if err == nil {
 			receipt.ControlRevision = authority.AuthorityVersion

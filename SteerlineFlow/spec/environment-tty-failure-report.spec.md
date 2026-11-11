@@ -1,6 +1,6 @@
 # Spec：TTY前置失败的项目报告收尾
 
-用户授权修改并实测；沿用[发布验收规格](environment-publication-scope.spec.md)和[worker生命周期](../../docs/product-design/worker-lifecycle.md)，不改Runner、生产状态机或安装环境。[Plan](../plans/environment-tty-failure-report.plan.md)。
+用户授权修改并实测；沿用[发布验收规格](environment-publication-scope.spec.md)和[Runner 调用生命周期](../../docs/product-design/runner-lifecycle.md)，不改Runner、生产状态机或安装环境。[Plan](../plans/environment-tty-failure-report.plan.md)。
 
 TTY是被测环境能力。原exec_command TTY入口明确未启动，或纯TTY最小探针已结束且明确失败时，terminal.tty=failed。Agent不得换封装重跑检测；若已有工具仍可用，只能调用同一版本化项目脚本的tty-failure入口记录原错误。该入口不执行任何环境探测、测试、认证或PR操作。超时、启动受理未知、prepare已开始且可能仍有生产者/测试进程时不得使用此入口，保留未知并走原停止；全部工具不可用时保持原报告未完成，不手写兜底。
 

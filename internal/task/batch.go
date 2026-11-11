@@ -214,7 +214,7 @@ func (c Commands) createTaskBatch(ctx context.Context, batch taskmodel.TaskBatch
 		if _, e = tx.AppendEvent(Event{ProjectIdentity: c.Input.Project, ExternalSource: "native-task-command", ExternalID: requestID, Type: "task.batch.created", ReceivedAt: createdAt, Payload: body}); e != nil {
 			return e
 		}
-		receipt = taskmodel.TaskBatchReceipt{RequestID: requestID, BatchID: batchID, TaskIDs: mapping, GraphRevision: graphRevision, PayloadDigest: payloadDigest, Status: "accepted", DispatchNote: "Task creation does not start work. If dispatch is already auto and unpaused, normal polling may consider these tasks."}
+		receipt = taskmodel.TaskBatchReceipt{RequestID: requestID, BatchID: batchID, TaskIDs: mapping, GraphRevision: graphRevision, PayloadDigest: payloadDigest, Status: "accepted", DispatchNote: "Task creation does not start work. When automatic dispatch is enabled, normal polling may consider these tasks."}
 		command.Result, _ = json.Marshal(receipt)
 		command.Status = "accepted"
 		if e = tx.UpdateCommand(command); e != nil {

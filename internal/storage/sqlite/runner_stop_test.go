@@ -22,10 +22,6 @@ func candidateStopFixture(t *testing.T) (*SQLiteStore, string, func(string, bool
 	t.Helper()
 	ctx := context.Background()
 	s, project, tasks := nativeAuditStore(t)
-	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, project)
-		return err
-	}))
 	return s, project, func(id string, extra bool) runnerbridge.Candidate {
 		t.Helper()
 		graph, err := s.TaskGraphSnapshot(ctx, project)
@@ -56,8 +52,8 @@ func TestRunnerCandidateStopAtomicityAndReplay(t *testing.T) {
 	require(t, s.SaveCandidate(ctx, first, 1, nil))
 	before, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
-	// Dispatch mode/pause cannot restrict withdrawal, and rollback cannot release a slot.
-	_, err = s.db.Exec(`UPDATE project_task_authorities SET dispatch_mode='auto',dispatch_paused=1; CREATE TRIGGER fail_withdrawal BEFORE UPDATE ON runner_candidates BEGIN SELECT RAISE(ABORT,'withdrawal fault'); END`)
+	// Dispatch mode cannot restrict withdrawal, and rollback cannot release a slot.
+	_, err = s.db.Exec(`UPDATE project_task_authorities SET dispatch_mode='auto'; CREATE TRIGGER fail_withdrawal BEFORE UPDATE ON runner_candidates BEGIN SELECT RAISE(ABORT,'withdrawal fault'); END`)
 	require(t, err)
 	if _, err := s.StopRunnerCandidate(ctx, project, first.ID, first.Revision, "stop-first", "operator"); err == nil {
 		t.Fatal("injected withdrawal failure ignored")
@@ -92,7 +88,7 @@ func TestRunnerCandidateStopAtomicityAndReplay(t *testing.T) {
 	if digestValue(before.Tasks) != digestValue(after.Tasks) || before.Authority.GraphRevision != after.Authority.GraphRevision || len(after.Deliveries) != 0 {
 		t.Fatal("candidate withdrawal changed Task/DAG/delivery")
 	}
-	_, err = s.db.Exec(`UPDATE project_task_authorities SET dispatch_mode='manual',dispatch_paused=0`)
+	_, err = s.db.Exec(`UPDATE project_task_authorities SET dispatch_mode='manual'`)
 	require(t, err)
 	next := reserve("sixth", true)
 	if next.Number != 6 || next.BaseRevision != stopped.BaseRevision {
@@ -261,7 +257,7 @@ func TestCandidateStopReliabilityObservationChanges(t *testing.T) {
 	if current.Revision != first.Revision+1 || !current.Withdrawal.Matches(req.RequestID, observed, "operator") || current.Diagnostic != "new observation" {
 		t.Fatal("stop lost latest facts or original intent", current)
 	}
-	req.Action = "pause_dispatch"
+	req.Action = "set_dispatch_mode"
 	if code, err := taskrunner.ValidateControlRequest(req, "instance", project, graph.Authority.AuthorityVersion+10, now); err == nil || code != "stale_revision" {
 		t.Fatal("other controls lost strict revision", code, err)
 	}

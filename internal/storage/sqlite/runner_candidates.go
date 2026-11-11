@@ -128,7 +128,7 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 				return err
 			}
 		}
-		return nil
+		return indexCandidateReading(ctx, tx.tx, old, c, events)
 	})
 }
 
@@ -236,9 +236,6 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		}
 		if graph.Authority.AuthorityVersion != work.Authority.AuthorityVersion || graph.Authority.GraphRevision != work.Authority.GraphRevision {
 			return nativeErr("stale_version", "task graph changed before reservation")
-		}
-		if graph.Authority.DispatchPaused {
-			return nativeErr("dispatch_paused", "dispatch is paused")
 		}
 		if c.MaterialDigest != "" {
 			if err := tx.verifyProjectMaterials(c.Project, c.BaseRevision, graph.Tasks); err != nil {
@@ -381,6 +378,9 @@ func (tx *sqliteTx) requestRunnerTaskStops(project, taskID string) error {
 		}
 		result, err := tx.tx.ExecContext(tx.ctx, `UPDATE runner_candidates SET revision=?,payload=? WHERE project_identity=? AND candidate_id=? AND revision=?`, c.Revision, body, project, c.ID, c.Revision-1)
 		if err := requireIdentityWrite(result, err, "stale_version: terminal candidate changed"); err != nil {
+			return err
+		}
+		if err := indexCandidateReading(tx.ctx, tx.tx, runnerstate.Candidate{}, c, nil); err != nil {
 			return err
 		}
 	}

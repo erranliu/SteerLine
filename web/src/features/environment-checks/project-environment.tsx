@@ -193,6 +193,25 @@ function EnvironmentWorkspace() {
     refetchInterval: visible && historyOpen ? 3000 : false,
   });
   const [materialsOpen, setMaterialsOpen] = useState(false);
+  const [copyingPrompt, setCopyingPrompt] = useState(false);
+  const [promptFeedback, setPromptFeedback] = useState<{
+    text: string;
+    failed: boolean;
+  }>();
+  const copyRepairPrompt = async () => {
+    const prompt = options.repairPrompt;
+    if (!prompt || copyingPrompt) return;
+    setCopyingPrompt(true);
+    setPromptFeedback(undefined);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setPromptFeedback({ text: "已复制修正环境提示词", failed: false });
+    } catch {
+      setPromptFeedback({ text: prompt, failed: true });
+    } finally {
+      setCopyingPrompt(false);
+    }
+  };
   const materialQuery = useQuery({
     queryKey: [...scope, "materials", environmentKey],
     enabled: online && !!environmentKey && materialsOpen,
@@ -315,10 +334,27 @@ function EnvironmentWorkspace() {
     <div className="settings-page environment-page">
       <div className="environment-header">
         <h1>项目运行环境</h1>
-        <Button variant="ghost" onClick={() => void refresh()}>
-          刷新环境
-        </Button>
+        <div className="actions">
+          <Button
+            variant="ghost"
+            disabled={!options.repairPrompt || copyingPrompt}
+            onClick={() => void copyRepairPrompt()}
+          >
+            复制修正环境提示词
+          </Button>
+          <Button variant="ghost" onClick={() => void refresh()}>
+            刷新环境
+          </Button>
+        </div>
       </div>
+      {promptFeedback &&
+        (promptFeedback.failed ? (
+          <div role="alert">
+            复制失败，请手动复制：<pre>{promptFeedback.text}</pre>
+          </div>
+        ) : (
+          <p role="status">{promptFeedback.text}</p>
+        ))}
       <p className="muted">查看所有环境的就绪情况，展开详情进行检测和准备。</p>
       {task && (
         <Link to={`/projects/${identity.project_id}/runs?${returnParams}`}>

@@ -109,7 +109,7 @@ func openNativeTaskProject(ctx context.Context, c *Config, owned, writable bool)
 	if err != nil {
 		return nil, err
 	}
-	authority := taskmodel.ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: target, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	authority := taskmodel.ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: target, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if err = writer.InitializeProject(ctx, authority); err != nil {
 		_ = writer.Close()
 		return nil, err

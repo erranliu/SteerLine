@@ -4,7 +4,7 @@
 
 ## 1. 输入与结构约束
 
-源码调查基线 `7617cddc7efac5716c8c38bb63a0157a100acac0`；开工前固定实际源码、Spec/Plan SHA并复核后续差异。遵循[编写规范](../../SteerlineProjectGuideDoc/spec-plan-guidelines.md)、[测试指南](../testing.md)、[路径约定](../paths.md)、[生命周期](../../docs/product-design/worker-lifecycle.md)及[原环境适配规范](../spec/project-environment-adaptation.spec.md)。
+源码调查基线 `7617cddc7efac5716c8c38bb63a0157a100acac0`；开工前固定实际源码、Spec/Plan SHA并复核后续差异。遵循[编写规范](../../SteerlineProjectGuideDoc/spec-plan-guidelines.md)、[测试指南](../testing.md)、[路径约定](../paths.md)、[生命周期](../../docs/product-design/runner-lifecycle.md)及[原环境适配规范](../spec/project-environment-adaptation.spec.md)。
 
 整合目标固定如下，实施中不能用新增并行路径代替原入口改造：
 

@@ -1,6 +1,6 @@
 # SteerRunner 接入与运行
 
-SteerLine 通过独立 Runner EXE 的公开 `steerrunner-cli/v1` 使用模型、原生 Agent 和执行工作流。Task、依赖、候选参与及唯一交付由 SteerLine 管理；工作区、会话、逐轮输入和执行资源由 Runner 管理。长期职责见[项目流程](../product-design/project-workflow.md)，异常及恢复见[Worker 生命周期](../product-design/worker-lifecycle.md)。
+SteerLine 通过独立 Runner EXE 的公开 `steerrunner-cli/v1` 使用模型、原生 Agent 和执行工作流。Task、依赖、候选参与及唯一交付由 SteerLine 管理；工作区、会话、逐轮输入和执行资源由 Runner 管理。长期职责见[项目流程](../product-design/project-workflow.md)，异常及恢复见[Runner 调用生命周期](../product-design/runner-lifecycle.md)。
 
 [SteerAgent](../product-design/steer-agent.md) 维护 SteerLine 的智能工作能力分类及协作边界。业务类型不与 Runner workflow 一一对应，分类不新增执行权限；本页继续维护实际接口与构建要求。
 

@@ -18,10 +18,12 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestRoadmapPublicationAndAdmissionWithRealGit(t *testing.T) {
+	t.Run("six-task-retry", func(t *testing.T) { roadmapPromotionChainWithDependencies(t, false, false, false, false, true) })
 	t.Run("draft-dependencies", func(t *testing.T) { roadmapPromotionChain(t, false) })
 	t.Run("mixed-formal-dependencies", func(t *testing.T) { roadmapPromotionChainWithDependencies(t, false, false, true) })
 	t.Run("planned-tests", func(t *testing.T) {
@@ -190,6 +192,11 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if len(planned) > 0 && planned[0] {
 		port.service.Runner.(*promotionRunner).futureTests = true
 	}
+	sixTasks := len(planned) > 1 && planned[1]
+	if sixTasks {
+		f := port.service.Runner.(*promotionRunner)
+		f.sixTasks, f.holdDocuments = true, true
+	}
 	seedCount := 0
 	if formal {
 		// A real pre-existing Task in this project's SQLite DAG, without copying
@@ -221,6 +228,11 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	}
 	var code string
 	sourceBody := "# Arithmetic roadmap\nT1: Add a pure Sum(a,b int) int function in package logic; Sum(2,3)=5. Scope is only integer arithmetic and unit tests.\nT2: Add Difference(a,b int) int implemented using Sum(a,-b); Difference(5,2)=3. Depends on T1. Do not implement the functions during planning."
+	if sixTasks {
+		for i := 3; i <= 6; i++ {
+			sourceBody += fmt.Sprintf("\nT%d: Add arithmetic function %d. Depends on T1.", i, i)
+		}
+	}
 	if formal {
 		sourceBody = strings.ReplaceAll(sourceBody, "\nT2:", " Depends on formal task #0.\nT2:") + " Also depends on formal task #0."
 	}
@@ -288,6 +300,9 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
 	}
 	expectedTasks, expectedEdges := 2, 1
+	if sixTasks {
+		expectedTasks, expectedEdges = 6, 5
+	}
 	if formal {
 		expectedEdges = 3
 		if len(parsed.Analysis.Tasks) != 2 || parsed.Analysis.Tasks[0].ExistingID != "" ||
@@ -336,6 +351,53 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	require(t, e)
 	if confirmation.ID != parent.ID || document.ID != r.ID {
 		t.Fatal("confirmation and generation request bindings collided", confirmation.ID, document.ID)
+	}
+	if sixTasks {
+		r, e = port.service.Observe(ctx, r.ID)
+		require(t, e)
+		f := port.service.Runner.(*promotionRunner)
+		active := 0
+		for _, g := range r.Generations {
+			if g.RunID != "" {
+				active++
+				if f.runs[g.RunID].Status != "running" {
+					t.Fatal("not simultaneously running")
+				}
+			}
+		}
+		if active != 5 {
+			t.Fatalf("want five in-flight, got %d", active)
+		}
+		failedKey := ""
+		for _, g := range r.Generations {
+			if g.RunID != "" {
+				run := f.runs[g.RunID]
+				run.Status, run.StopStatus = "completed", "stopped"
+				run.Revision++
+				if failedKey == "" {
+					failedKey = g.Key
+					run.Status = "failed"
+					run.ContentResult = &runnercontract.ContentResult{Status: "failed", Diagnostic: "invalid_json: invalid character after top-level value"}
+				}
+				f.runs[g.RunID] = run
+			}
+		}
+		for i := 0; i < 2; i++ {
+			r, e = port.service.Observe(ctx, r.ID)
+			require(t, e)
+		}
+		f.holdDocuments = false
+		r = promotionAction(t, port, "roadmap_retry_documents", r.ID, strings.Repeat("e", 32), r.Revision, map[string]string{"local_key": failedKey})
+		if len(r.Generations) != 7 {
+			t.Fatal("retry added more than one task")
+		}
+		for id, run := range f.runs {
+			if run.Status == "running" {
+				run.Status, run.StopStatus = "completed", "stopped"
+				run.Revision++
+				f.runs[id] = run
+			}
+		}
 	}
 	r = awaitPromotion(t, port, r, "documents-review")
 	assertRoadmapActivityState(t, store, c.Identity(), r.ID, "succeeded", true, "current")

@@ -43,6 +43,7 @@ type Config struct {
 	runtimeHost                   *host.Config
 	runtimeGenerations            *runnerbinding.ContentQueue
 	runtimeRunner                 *runnerclient.Client
+	runtimeMessages               *messageObserver
 	runtimeCatalog                *runnerclient.Catalog
 	runtimeNative                 *runnerclient.ConfigurationSnapshot
 	runtimeMaintenance            *projectMaintenance

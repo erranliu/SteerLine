@@ -37,14 +37,26 @@ func validateDatabaseSchema(ctx context.Context, db schemaQuery) error {
 	return validateDatabaseDefinitions(ctx, db, domainSchemaVersion, append(append([]string{}, taskServiceSchema...), nativeTaskSchema...))
 }
 
-func validateDatabaseDefinitions(ctx context.Context, db schemaQuery, acceptedVersion int, definitions []string) error {
+func readDatabaseSchemaVersion(ctx context.Context, db schemaQuery) (int, error) {
 	var version int
 	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&version); err != nil {
-		return schemaFailure(err, "existing SQLite database has an unknown schema; preserve it for manual recovery")
+		return 0, schemaFailure(err, "existing SQLite database has an unknown schema; preserve it for manual recovery")
+	}
+	return version, nil
+}
+
+func validateDatabaseDefinitions(ctx context.Context, db schemaQuery, acceptedVersion int, definitions []string) error {
+	version, err := readDatabaseSchemaVersion(ctx, db)
+	if err != nil {
+		return err
 	}
 	if version != acceptedVersion {
 		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; only schema %d is accepted", version, acceptedVersion))
 	}
+	return validateDatabaseLayout(ctx, db, definitions)
+}
+
+func validateDatabaseLayout(ctx context.Context, db schemaQuery, definitions []string) error {
 	expected := map[string]string{}
 	for _, stmt := range definitions {
 		fields := strings.Fields(stmt)

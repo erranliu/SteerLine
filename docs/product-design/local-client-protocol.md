@@ -18,6 +18,10 @@
 | `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务 |
 | `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
 | `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
+| `/activities/{activity_id}` | 精确活动摘要；仍只读本地事实和有界消息预览 |
+| `/activities/{activity_id}/interactions` | 显式读取已记录交互一页，默认 50、最多 200、1 MiB；游标绑定项目/实例/活动/原成员范围与读取版本，变化失效后显式刷新 |
+| `/activities/{activity_id}/changes` | 原持久 revision 与读取索引版本组成的轻量标记，无交互或正文；不推进分页 |
+| `/activities/{activity_id}/body` | 按 item、sha256、offset 显式读取该条原正文一段，最多 256 KiB；原正文上限 16 MiB，原归属/摘要/UTF-8 校验及应用级有界内存复用 |
 | `/runs/{run_id}` | 精确候选、参与/提交状态、Runner 观察、PR 与交付 |
 | `/runs/{run_id}/activity`、`/last-message`、`/usage` | 原执行的活动、最近消息和用量 |
 | `/runs/{run_id}/conversation`、`/final`、`/body` | 公开会话事件、final 和原正文分段 |
@@ -33,7 +37,7 @@
 
 final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取，单页最多 256 KiB，核对原 Attempt、revision、SHA-256 和 UTF-8 offset。来源规则见[公开会话结果](execution-observability.md#公开结果来源)，不回退原生日志。
 
-候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](worker-lifecycle.md)。
+候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](runner-lifecycle.md)。
 
 准备等待沿原候选 `runner_delivery.execution_wait` 返回完整 `steerrunner-execution-wait/v1` 对象或 null，activity 的 `kind=execution_wait` 保留 `meta.execution_wait`。只展示，不新增计时命令；读取异常保留最后已知值并标待核实。字段及验证范围见[等待 Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)。
 
@@ -49,9 +53,10 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 | `answer_decision` | decision ID / version；`{run_id,decision_id,option_id,note,answers,expected_run_revision,source_attempt_id,expected_recovery_version}`，核对当前问题及原执行身份 |
 | `discard_task` | task ID / version；`{reason}`，原因不能为空 |
 | `set_dispatch_mode` | dispatch / control revision；`{"mode":"manual"}` 或 `{"mode":"auto"}` |
-| `pause_dispatch`、`resume_dispatch` | dispatch / control revision；`{}` |
 | `open_terminal`、`recheck_environment` | run ID / blocker version，control revision；`{target:{run_id,execution_id,attempt_id,turn_id,blocker_id,version}}`，只作用于原 blocker |
 | `open_native_session` | run ID / 0；原 `NativeSessionTarget` 的 run/Execution/Attempt/session/generation。只打开原查看器，无新业务轮次 |
+
+新项目默认关闭自动派发（`manual`），可手动启动符合资格的任务。开启后（`auto`），服务轮询并派发符合资格的任务。关闭开关只停止后续自动派发。
 
 以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning、人工验收和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
 
