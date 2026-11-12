@@ -5,10 +5,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 type cancellingSubmit struct {
@@ -151,5 +153,38 @@ func TestEnvironmentFailedSubmissionBoundaryRemainsPending(t *testing.T) {
 	observe(t, s)
 	if remote.submits != 1 || read(t, s, r.ID).Rounds[0].Submission != "accepted" {
 		t.Fatal("unsent intent did not dispatch on a fresh observation")
+	}
+}
+
+func TestEnvironmentLostSubmissionReplySettlesDurableRejection(t *testing.T) {
+	s, remote, _, now := setup(t)
+	r := start(t, s)
+	remote.submitFailure = &runnerclient.Failure{Code: "request_outcome_unknown", Message: "submit response was lost", Unknown: true}
+	if err := s.Observe(ctx); err == nil {
+		t.Fatal("missing unknown submission")
+	}
+	a := read(t, s, r.ID).Rounds[0]
+	*now = a.Deadline.Add(time.Second)
+	remote.inspectCommand = &runnercontract.Command{RequestID: a.Request.RequestID, Command: "submit", CommandID: "original-command", ReceiptStatus: "pending", ActionStatus: "preparing"}
+	observe(t, s)
+	saved := read(t, s, r.ID)
+	if saved.Settled() || saved.Rounds[0].RunID != "" || saved.Diagnostic == "" {
+		t.Fatal("preparing command was not reported as unresolved", saved)
+	}
+
+	remote.inspectCommand.ReceiptStatus, remote.inspectCommand.ActionStatus = "rejected", "rejected"
+	remote.inspectCommand.Error = &runnercontract.CommandError{Code: "environment_unavailable", Message: "repository preparation failed"}
+	remote.inspectCommand.RequestID = "foreign"
+	if err := s.Observe(ctx); err == nil || read(t, s, r.ID).Settled() {
+		t.Fatal("foreign rejection settled the original")
+	}
+	remote.inspectCommand.RequestID = a.Request.RequestID
+	observe(t, s)
+	saved = read(t, s, r.ID)
+	if !saved.Settled() || saved.State != "failed" || saved.Rounds[0].Submission != "rejected" ||
+		saved.Rounds[0].RunID != "" || remote.submits != 1 || remote.stops != 0 ||
+		!strings.Contains(saved.DiagnosticText(), remote.inspectCommand.Error.Error()) ||
+		saved.Rounds[0].SubmissionDiagnostic != remote.submitFailure.Error() {
+		t.Fatal("durable rejection did not settle with the original diagnostic", saved.DiagnosticText(), saved.Rounds[0])
 	}
 }

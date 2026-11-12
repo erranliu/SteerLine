@@ -76,15 +76,20 @@ func prepareEnvironmentStopsWith(ctx context.Context, c Config, store env.Store,
 			}
 			view, cold, err := inspect(ctx, selector, id)
 			var failure *runnerclient.Failure
-			if err != nil {
-				if cold && selector == "request-id" && errors.As(err, &failure) && failure.Code == "request_not_found" {
-					// Absence under the original writer lease proves this submit never ran.
-					a.Submission = "cancelled"
-					a.Settled = true
-					r.State = "cancelled"
-					changed = true
-					continue
+			command := view.Command
+			if selector == "request-id" && submitNotAccepted(view, cold, id, err) {
+				// Only a durable rejection or absence of an accepting writer can settle this cancellation.
+				a.Submission = "cancelled"
+				a.Settled = true
+				if command != nil && command.SubmitRejected() {
+					a.Diagnostic = command.Error.Error()
+					r.Diagnostic, r.ObservationDiagnostic = a.Diagnostic, ""
 				}
+				r.State = "cancelled"
+				changed = true
+				continue
+			}
+			if err != nil {
 				return nil, err
 			}
 			run := view.Run

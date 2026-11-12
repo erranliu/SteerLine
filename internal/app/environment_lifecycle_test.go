@@ -17,7 +17,7 @@ import (
 )
 
 func TestProjectEnvironmentSameBuildStartupStops(t *testing.T) {
-	for _, scenario := range []string{"new-stop", "original-stop", "absent-stale-stop", "absent-current-stop", "unknown-submit", "cold-unaccepted-submit", "warm-unaccepted-submit", "foreign-input", "foreign-correlation", "foreign-build", "foreign-stop", "already-stopped", "closed-pending", "closed-rejected-stop"} {
+	for _, scenario := range []string{"new-stop", "original-stop", "absent-stale-stop", "absent-current-stop", "unknown-submit", "cold-unaccepted-submit", "warm-unaccepted-submit", "cold-preparing-submit", "warm-preparing-submit", "warm-rejected-submit", "foreign-input", "foreign-correlation", "foreign-build", "foreign-stop", "already-stopped", "closed-pending", "closed-rejected-stop"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()
 			store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
@@ -82,6 +82,12 @@ func TestProjectEnvironmentSameBuildStartupStops(t *testing.T) {
 					if strings.Contains(scenario, "unaccepted") {
 						return missing()
 					}
+					if strings.Contains(scenario, "preparing") {
+						return runnerclient.Inspection{Command: &runnerclient.Command{RequestID: id, Command: "submit", ReceiptStatus: "pending", ActionStatus: "preparing"}}, strings.HasPrefix(scenario, "cold-"), nil
+					}
+					if scenario == "warm-rejected-submit" {
+						return runnerclient.Inspection{Command: &runnerclient.Command{RequestID: id, Command: "submit", ReceiptStatus: "rejected", ActionStatus: "rejected", Error: &runnercontract.CommandError{Code: "invalid_state", Message: "preparation interrupted"}}}, false, nil
+					}
 					return runnerclient.Inspection{Run: &run, Command: &runnerclient.Command{RequestID: id, Command: "submit", RunID: &run.RunID}}, true, nil
 				}
 				if scenario == "original-stop" || scenario == "foreign-stop" {
@@ -95,7 +101,7 @@ func TestProjectEnvironmentSameBuildStartupStops(t *testing.T) {
 			}
 			c := Config{identity: r.Project}
 			stops, err := prepareEnvironmentStopsWith(ctx, c, store, build, query)
-			bad := strings.HasPrefix(scenario, "foreign") || scenario == "warm-unaccepted-submit"
+			bad := strings.HasPrefix(scenario, "foreign") || scenario == "warm-unaccepted-submit" || scenario == "warm-preparing-submit"
 			if bad {
 				if err == nil {
 					t.Fatal("unverified original accepted")
@@ -108,7 +114,7 @@ func TestProjectEnvironmentSameBuildStartupStops(t *testing.T) {
 			require(t, err)
 			saved, err := store.Environment(ctx, r.Project, r.ID)
 			require(t, err)
-			if scenario == "cold-unaccepted-submit" {
+			if scenario == "cold-unaccepted-submit" || scenario == "cold-preparing-submit" || scenario == "warm-rejected-submit" {
 				if len(stops) != 0 || saved.State != "cancelled" || !saved.Rounds[0].Settled {
 					t.Fatal(saved)
 				}

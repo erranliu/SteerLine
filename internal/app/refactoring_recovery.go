@@ -40,10 +40,9 @@ func prepareRefactoringStops(ctx context.Context, c *Config, store *sqlite.SQLit
 			}
 			view, cold, err := inspectOriginalBeforeStart(ctx, *cli, r.Frozen.Runner.StateDir, o.RunID, o.InputDigest, o.Request)
 			if err != nil {
-				var failure *runnerclient.Failure
-				if cold && o.RunID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
+				if o.RunID == "" && submitNotAccepted(view, cold, o.Request.RequestID, err) {
 					o.State = "rejected"
-					o.Feedback = "冷态核实原请求不存在，未重发"
+					o.Feedback = "已核实 Runner 未受理原请求，未重发"
 					continue
 				}
 				return nil, err

@@ -62,8 +62,7 @@ func prepareAdvisoryStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 		content := suggestionbridge.Content(r)
 		view, cold, e := inspectOriginalBeforeStart(ctx, *cli, content.StateDir, content.RunID, content.InputDigest, content.Request)
 		if e != nil {
-			var failure *runnerclient.Failure
-			if cold && r.RunID == "" && errors.As(e, &failure) && failure.Code == "request_not_found" {
+			if r.RunID == "" && submitNotAccepted(view, cold, content.Request.RequestID, e) {
 				r.State, r.Submission, r.Settled = "failed", "rejected", true
 				if r.Cancelled {
 					r.State = "cancelled"
@@ -71,7 +70,7 @@ func prepareAdvisoryStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 				now := time.Now().UTC()
 				r.FinishedAt = &now
 				r.ObservedAt = now
-				r.Diagnostic = "Runner 冷态确认原生成请求不存在，未重新提交"
+				r.Diagnostic = "Runner 已确认未受理原生成请求，未重新提交"
 				if r, e = saveAdvisoryRecovery(ctx, store, r); e != nil {
 					return nil, e
 				}

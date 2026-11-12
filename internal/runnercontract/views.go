@@ -177,13 +177,36 @@ type RemainingIssue struct {
 }
 
 type Command struct {
-	CommandID     string  `json:"command_id"`
-	RequestID     string  `json:"request_id"`
-	RunID         *string `json:"run_id"`
-	Command       string  `json:"command"`
-	ReceiptStatus string  `json:"receipt_status"`
-	ActionStatus  string  `json:"action_status"`
+	CommandID     string        `json:"command_id"`
+	RequestID     string        `json:"request_id"`
+	RunID         *string       `json:"run_id"`
+	Command       string        `json:"command"`
+	ReceiptStatus string        `json:"receipt_status"`
+	ActionStatus  string        `json:"action_status"`
+	Error         *CommandError `json:"error,omitempty"`
 }
+
+type CommandError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e CommandError) Error() string {
+	return e.Code + ": " + e.Message
+}
+
+func (c Command) IsSubmitAdmission(id string) bool {
+	return c.RequestID == id && c.Command == "submit" && c.RunID == nil
+}
+
+func (c Command) SubmitPreparing() bool {
+	return c.ReceiptStatus == "pending" && c.ActionStatus == "preparing" && c.Error == nil
+}
+
+func (c Command) SubmitRejected() bool {
+	return c.ReceiptStatus == "rejected" && c.ActionStatus == "rejected" && c.Error != nil && c.Error.Code != "" && c.Error.Message != ""
+}
+
 type Inspection struct {
 	Command *Command `json:"command"`
 	Run     *Run     `json:"run"`
