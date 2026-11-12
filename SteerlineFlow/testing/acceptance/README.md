@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+活动中心统一对话阅读（2026-11-12，已实现，未部署）。[实现及真实检测验证](activity-conversations.md)
+
 任务派发设定与任务执行导航（2026-11-12）。[验收记录](task-dispatch-navigation.md)
 
 候选答复投递和等待状态（2026-11-12）。[修复、提示词正文差异与验证](candidate-answer-delivery.md)

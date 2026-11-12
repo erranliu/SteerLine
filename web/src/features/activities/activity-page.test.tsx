@@ -59,11 +59,17 @@ function setup(
   path = "/projects/project/activities",
   terminal = false,
   bound = false,
+  source: Activity["source"] = activity.source,
 ) {
   const current: Activity = {
     ...activity,
+    source,
     state: terminal ? "succeeded" : activity.state,
-    execution_ref: bound ? { run_id: "run", attempt_id: "attempt" } : undefined,
+    execution_ref: bound
+      ? source === "environment_detection"
+        ? { run_id: "run-2", attempt_id: "attempt-2" }
+        : { run_id: "run", attempt_id: "attempt" }
+      : undefined,
   };
   const api = new Api(identity, "csrf", "home");
   const calls: string[] = [];
@@ -84,14 +90,57 @@ function setup(
         next_cursor: "next",
         sampled_at: "2026-11-10T00:00:00Z",
       };
-    if (path.startsWith("/activities/a/conversation")) {
+    if (path === "/activities/a/conversation") {
+      return {
+        activity_id: "a",
+        targets: bound
+          ? [
+              {
+                id: "target-1",
+                label:
+                  source === "environment_detection"
+                    ? "检测轮次 1"
+                    : "候选执行",
+                run_id: "run",
+                attempt_id: "attempt",
+                state: "available",
+              },
+              ...(source === "environment_detection"
+                ? [
+                    {
+                      id: "target-2",
+                      label: "检测轮次 2",
+                      run_id: "run-2",
+                      attempt_id: "attempt-2",
+                      state: "available",
+                    },
+                  ]
+                : []),
+            ]
+          : [],
+        ...(source === "baseline_check"
+          ? {
+              diagnostic: "本次主分支检查未产生模型会话。",
+              operation: {
+                label: "检查主分支",
+                request_id: "baseline",
+                status: "applied",
+                diagnostic: "分支已同步",
+              },
+            }
+          : {}),
+      };
+    }
+    if (path.startsWith("/activities/a/conversation?")) {
+      const second = path.includes("session=target-2");
       const older = path.includes("cursor=before");
       const body = path.includes("cursor=body");
       return {
         activity_id: "a",
-        run_id: "run",
-        attempt_id: "attempt",
-        session_id: "session",
+        target_id: second ? "target-2" : "target-1",
+        run_id: second ? "run-2" : "run",
+        attempt_id: second ? "attempt-2" : "attempt",
+        session_id: second ? "session-2" : "session",
         generation: "generation",
         partial: older,
         next_cursor: older || body ? undefined : "before",
@@ -104,7 +153,9 @@ function setup(
               ? "最新的助手消息完整正文"
               : older
                 ? "更早的助手消息"
-                : "最新的助手消息",
+                : second
+                  ? "第二轮助手消息"
+                  : "最新的助手消息",
             truncated: !older && !body,
             body_cursor: !older && !body ? "body" : undefined,
           },
@@ -161,6 +212,10 @@ function setup(
   );
   return { calls, client, submit, api, ...rendered };
 }
+async function openConversation() {
+  fireEvent.click(await screen.findByRole("button", { name: "查看对话" }));
+}
+
 const indexReads = (calls: string[]) =>
   calls.filter((p) => p.includes("/interactions?"));
 const bodyReads = (calls: string[]) =>
@@ -225,6 +280,7 @@ it("loads only summary until explicit expansion and reads one index page and bod
   await screen.findByRole("heading", { name: "活动一" });
   expect(indexReads(calls)).toHaveLength(0);
   expect(bodyReads(calls)).toHaveLength(0);
+  await openConversation();
   fireEvent.click(screen.getByRole("button", { name: "查看已记录交互" }));
   await screen.findByText("已核实的最终回复");
   expect(indexReads(calls)).toHaveLength(1);
@@ -266,6 +322,7 @@ it("keeps a terminal deep link collapsed and does not refetch loaded history pag
 
 it("checks only a lightweight change marker and leaves all further index pages explicit", async () => {
   const { calls, client } = setup("/projects/project/activities?activity=a");
+  await openConversation();
   fireEvent.click(
     await screen.findByRole("button", { name: "查看已记录交互" }),
   );
@@ -295,6 +352,7 @@ it("checks only a lightweight change marker and leaves all further index pages e
 
 it("cancels the selected interaction request when it is collapsed", async () => {
   const { api } = setup("/projects/project/activities?activity=a");
+  await openConversation();
   await screen.findByRole("button", { name: "查看已记录交互" });
   let signal: AbortSignal | undefined;
   const read = vi.mocked(api.get).getMockImplementation()!;
@@ -327,6 +385,7 @@ it("rejects a body segment whose identity or byte progress differs from its orig
 
 it("preserves loaded interaction pages when a refresh is cancelled by collapsing", async () => {
   const { api, client } = setup("/projects/project/activities?activity=a");
+  await openConversation();
   fireEvent.click(
     await screen.findByRole("button", { name: "查看已记录交互" }),
   );
@@ -369,6 +428,7 @@ it("retries a failed next body segment explicitly while keeping the first segmen
     }
     return read(path, s);
   });
+  await openConversation();
   fireEvent.click(
     await screen.findByRole("button", { name: "查看已记录交互" }),
   );
@@ -408,12 +468,12 @@ it("opens candidate conversation on demand and prepends earlier pages in native 
     true,
   );
   const expand = await screen.findByRole("button", { name: "查看对话" });
-  expect(calls.filter((path) => path.includes("/conversation"))).toHaveLength(
+  expect(calls.filter((path) => path.includes("/conversation?"))).toHaveLength(
     0,
   );
   fireEvent.click(expand);
   await screen.findByText("最新的助手消息");
-  expect(calls.filter((path) => path.includes("/conversation"))).toHaveLength(
+  expect(calls.filter((path) => path.includes("/conversation?"))).toHaveLength(
     1,
   );
   fireEvent.click(screen.getByRole("button", { name: "加载更早消息" }));
@@ -423,10 +483,67 @@ it("opens candidate conversation on demand and prepends earlier pages in native 
     Array.from(panel.querySelectorAll("article p"), (el) => el.textContent),
   ).toEqual(["更早的助手消息", "最新的助手消息"]);
   expect(screen.getByText("原会话仅有部分历史可读。")).toBeVisible();
-  expect(calls.filter((path) => path.includes("/conversation"))).toHaveLength(
+  expect(calls.filter((path) => path.includes("/conversation?"))).toHaveLength(
     2,
   );
   fireEvent.click(screen.getByRole("button", { name: "展开消息正文" }));
   await screen.findByText("最新的助手消息完整正文");
   expect(calls.filter((path) => path.includes("cursor=body"))).toHaveLength(1);
+});
+
+it("selects the exact environment round and reads other rounds independently", async () => {
+  const { calls } = setup(
+    "/projects/project/activities?activity=a",
+    true,
+    true,
+    "environment_detection",
+  );
+  await openConversation();
+  await screen.findByText("第二轮助手消息");
+  const selector = screen.getByRole("combobox", { name: "执行会话" });
+  expect(selector).toHaveValue("target-2");
+  expect(calls.filter((path) => path.includes("/conversation?"))).toEqual([
+    "/activities/a/conversation?session=target-2",
+  ]);
+  fireEvent.change(selector, { target: { value: "target-1" } });
+  await screen.findByText("最新的助手消息");
+  expect(screen.queryByText("第二轮助手消息")).not.toBeInTheDocument();
+  expect(indexReads(calls)).toHaveLength(0);
+});
+
+it("shows the original check result from the same entry without reading native history", async () => {
+  const { calls } = setup(
+    "/projects/project/activities?activity=a",
+    true,
+    false,
+    "baseline_check",
+  );
+  await openConversation();
+  await screen.findByText("本次主分支检查未产生模型会话。");
+  expect(screen.getByText("原请求 baseline")).toBeVisible();
+  expect(screen.getByText("分支已同步")).toBeVisible();
+  expect(calls.filter((path) => path.includes("/conversation"))).toEqual([
+    "/activities/a/conversation",
+  ]);
+});
+
+it("keeps recorded interactions available when the original adapter rejects native history", async () => {
+  const { api, calls } = setup(
+    "/projects/project/activities?activity=a",
+    true,
+    true,
+    "environment_detection",
+  );
+  const read = vi.mocked(api.get).getMockImplementation()!;
+  vi.mocked(api.get).mockImplementation((path, signal) =>
+    path.includes("/conversation?")
+      ? Promise.reject(new Error("原执行适配器没有公开原会话历史"))
+      : read(path, signal),
+  );
+  await openConversation();
+  await screen.findByText(/原执行适配器没有公开原会话历史/);
+  expect(indexReads(calls)).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "查看已记录交互" }));
+  expect(await screen.findByText("已核实的最终回复")).toBeVisible();
+  expect(indexReads(calls)).toHaveLength(1);
 });

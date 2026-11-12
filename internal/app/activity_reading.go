@@ -9,10 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 func (p *runtimeProjectPort) readActivity(ctx context.Context, route string, values url.Values) (any, error) {
@@ -24,7 +26,7 @@ func (p *runtimeProjectPort) readActivity(ctx context.Context, route string, val
 		return bad("invalid activity route")
 	}
 	if len(parts) == 2 && parts[1] == "conversation" {
-		return p.readCandidateConversation(ctx, parts[0], values)
+		return p.readActivityConversation(ctx, parts[0], values)
 	}
 	allowed := map[string]bool{}
 	if len(parts) == 2 {
@@ -66,7 +68,7 @@ func (p *runtimeProjectPort) readActivity(ctx context.Context, route string, val
 		switch parts[1] {
 		case "changes":
 			var version string
-			version, err = service.Version(ctx, parts[0])
+			version, err = retryActivityReading(ctx, func() (string, error) { return service.Version(ctx, parts[0]) })
 			result = struct {
 				Version string `json:"version"`
 			}{version}
@@ -79,7 +81,9 @@ func (p *runtimeProjectPort) readActivity(ctx context.Context, route string, val
 				}
 			}
 			if err == nil {
-				result, err = service.Page(ctx, parts[0], values.Get("cursor"), limit)
+				result, err = retryActivityReading(ctx, func() (api.ReadingPage, error) {
+					return service.Page(ctx, parts[0], values.Get("cursor"), limit)
+				})
 			}
 		case "body":
 			offset := 0
@@ -87,15 +91,38 @@ func (p *runtimeProjectPort) readActivity(ctx context.Context, route string, val
 				offset, err = strconv.Atoi(values.Get("offset"))
 			}
 			if err == nil {
-				result, err = service.Body(ctx, parts[0], values.Get("item"), values.Get("sha256"), offset)
+				result, err = retryActivityReading(ctx, func() (api.ReadingBody, error) {
+					return service.Body(ctx, parts[0], values.Get("item"), values.Get("sha256"), offset)
+				})
 			}
 		}
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, &httpclient.ClientError{Status: 404, Code: "activity_not_found", Reason: "activity or recorded content not found"}
 	}
+	if sqlite.IsLocked(err) || errors.Is(err, context.DeadlineExceeded) {
+		return nil, &httpclient.ClientError{Status: 503, Code: "reading_unavailable", Reason: "活动交互暂不可读，请重试"}
+	}
 	if err != nil {
 		return bad(err.Error())
 	}
 	return result, nil
+}
+
+func retryActivityReading[T any](ctx context.Context, read func() (T, error)) (T, error) {
+	value, err := read()
+	for _, delay := range []time.Duration{25 * time.Millisecond, 50 * time.Millisecond} {
+		if !sqlite.IsLocked(err) {
+			break
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return value, ctx.Err()
+		case <-timer.C:
+		}
+		value, err = read()
+	}
+	return value, err
 }

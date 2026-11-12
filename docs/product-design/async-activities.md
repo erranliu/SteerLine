@@ -9,6 +9,7 @@
 | 任务候选 | `task_candidate` | 候选参与、对应 Run 的执行与收尾、交付和测试进度 |
 | Roadmap | `roadmap` | 草稿解析、文档生成、发布和正式入图 |
 | 对话续作提示词建议 | `main_agent_advisory` | 针对原对话生成后续提示词建议的状态和结果 |
+| 重构与维护 | `refactoring` | 维护行动的实施、审查、发布和收尾 |
 
 ## 职责和状态
 
@@ -22,7 +23,7 @@
 
 ## API 与持久事实
 
-`storage/ports.AsyncActivityReader` 提供中性来源事实与有界读取。SQLite 按来源查询记录及其关联，产品 query 将注册的五个来源映射为活动并由 `MatchesAsyncActivity` 判定最终匹配项。SQL 负责预筛，项目读取路由通过该只读接口获取结果。
+`storage/ports.AsyncActivityReader` 提供中性来源事实与有界读取。SQLite 按来源查询记录及其关联，产品 query 将注册的六个来源映射为活动并由 `MatchesAsyncActivity` 判定最终匹配项。SQL 负责预筛，项目读取路由通过该只读接口获取结果。
 
 观察使用最多 2 个连接的独立 mode=ro/query_only 池，失败不回退业务连接，随原 store 关闭；每来源并行采样的总 context 预算为 1 秒，包含连接等待/SQL/解码投影检查。仍共享文件/WAL/CPU，不声称物理资源隔离。
 
@@ -42,7 +43,9 @@
 
 已记录交互只投影原持久用户输入、部分已保存问题上下文、verified final 及领域生成结果。缺原 Attempt/turn 的输入标为“轮次未记录”，不以当前 Projection 补绑；工具和内部事件不进入阅读索引。最近可读样本仅为最佳努力观察，tool/null 不替换原 assistant 文本或时间，不采集完整聊天档案。业务执行与原生会话仍由原 owner/Runner 管理。契约和实际验证见[独立页 Spec](../../SteerlineFlow/spec/activity-reading-page.spec.md)及[专属验收](../../SteerlineFlow/testing/acceptance/activity-reading-page.md)。
 
-任务候选可在独立页点击“查看对话”，按当前候选的原 Run、Attempt、Session 和 generation 向 Runner 读取一页原生消息。首屏从最近一页开始，手动加载更早的消息并按原顺序排列。长消息按条展开并按段读取。工具、内部事件和系统组装的任务指令不显示为对话。当前公开读取支持 Orca 结构化会话。原会话暂不可读时可重试，过往 Attempt 或原生缺失的内容用部分历史提示，仍可通过“查看已记录交互”阅读原持久事实。列表、摘要和普通轮询不读取原生历史。
+六类活动在独立页使用统一的“查看对话”。打开面板时，`GET /activities/{activityID}/conversation` 从原业务记录读取会话目标。候选使用有绑定的执行，环境检测按轮次，Roadmap 按解析或各文档生成，续作建议使用建议生成的执行，重构按原操作。主分支检查显示原请求和结果。Roadmap 发布和入图显示原操作结果，生成会话保留独立名称。
+
+选中会话时，同一路由携带目标 ID 读取最近一页。目标 ID 绑定原业务记录中的 Run、Attempt、Session 和 generation，服务端在每次分页和正文读取前重新核验。更早的消息和长正文均按需分段读取。Runner 的原生历史接口支持 Orca 结构化会话，以及支持公开条目分页的本地 Codex app-server。读取需要当前 Runner 服务的完整绑定及活动原有的状态目录，兼容构建升级后仍以原 Run、Attempt、Session 和 generation 校验归属。已变更的原生会话或未保存的轮次可能只有本地已记录内容。面板保留“查看已记录交互”，原生读取错误和部分历史有明确状态。活动列表、摘要、普通轮询以及会话目标列表读取均不调用 Runner。
 
 项目顶部入口零活动也显示，分别表达正式计数、临时提交和未知结果。桌面抽屉宽度至多 440px，覆盖右侧而不推挤业务布局；原页面其余部分仍可交互。640px 及以下为全宽模态，遮罩、背景 inert、滚动锁与焦点限制同步启用。关闭/Escape 返回入口，成功导航后移交页面焦点；导航保护取消时保留抽屉。
 

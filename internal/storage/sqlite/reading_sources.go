@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	refactoring "github.com/erranliu/SteerLine/internal/refactoring/model"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 )
@@ -112,6 +113,45 @@ func indexAdvisoryReading(ctx context.Context, tx readingWriter, project, id str
 		f.source = "task_candidate"
 		f.sourceID = r.Source.CandidateID
 		if err := putReadingField(ctx, tx, project, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func indexRefactoringReading(ctx context.Context, tx readingWriter, r refactoring.Record) error {
+	base := readingField{source: "refactoring", sourceID: r.ID, origin: "refactoring", originID: r.ID}
+	for i, op := range r.Operations {
+		field := base
+		field.group = fmt.Sprintf("操作 %d", i+1)
+		field.run = op.RunID
+		if op.Run != nil && op.Run.Final != nil && op.Run.Final.Verified {
+			final := op.Run.Final
+			field.id = op.ID + ":final"
+			field.field = fmt.Sprintf("$.operations[%d].run.final.text", i)
+			field.role, field.kind, field.text = "assistant", "verified_final", final.Text
+			field.attempt, field.session, field.turn = final.AttemptID, final.SessionID, final.TurnID
+			if err := putReadingField(ctx, tx, r.Project, field); err != nil {
+				return err
+			}
+		}
+		if op.Result != nil {
+			field.id = op.ID + ":summary"
+			field.field = fmt.Sprintf("$.operations[%d].result.summary", i)
+			field.role, field.kind, field.text = "assistant", "generated_result", op.Result.Summary
+			field.attempt, field.session, field.turn = "", "", ""
+			if err := putReadingField(ctx, tx, r.Project, field); err != nil {
+				return err
+			}
+		}
+	}
+	for i, answer := range r.Answers {
+		field := base
+		field.id = "answer:" + answer.QuestionID
+		field.field = fmt.Sprintf("$.answers[%d].text", i)
+		field.role, field.kind, field.text = "user", "answer", answer.Text
+		field.state = "saved"
+		if err := putReadingField(ctx, tx, r.Project, field); err != nil {
 			return err
 		}
 	}

@@ -199,6 +199,7 @@ test("independent activity page reads conversation and bodies only on demand", a
   ).toBeVisible();
   expect(requests.indexes).toBe(0);
   expect(requests.bodies).toBe(0);
+  await reader.getByRole("button", { name: "查看对话", exact: true }).click();
   const firstIndex = page.waitForResponse(
     (r) => r.url().includes("/interactions?") && r.request().method() === "GET",
   );
