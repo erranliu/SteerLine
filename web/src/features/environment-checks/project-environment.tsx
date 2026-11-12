@@ -118,6 +118,7 @@ function EnvironmentWorkspace() {
   };
   const [historyFilter, setHistoryFilter] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [materialsOpen, setMaterialsOpen] = useState(false);
   const environments = options.data?.environments ?? [];
   const historyKey = environments.some(
     (e) => e.environment_key === historyFilter,
@@ -163,7 +164,7 @@ function EnvironmentWorkspace() {
   };
   const materialQuery = useQuery({
     queryKey: [...scope, "materials", materialKey],
-    enabled: online && !!materialKey,
+    enabled: materialsOpen && online && !!materialKey,
     queryFn: ({ signal }) =>
       api.get<{ document?: string; diagnostic?: string }>(
         `/environment/materials?environment_key=${encodeURIComponent(materialKey!)}`,
@@ -222,7 +223,8 @@ function EnvironmentWorkspace() {
     ];
     if (hasRemote) queries.push(machines.refetch());
     if (historyOpen) queries.push(history.refetch());
-    if (online && materialKey) queries.push(materialQuery.refetch());
+    if (materialsOpen && online && materialKey)
+      queries.push(materialQuery.refetch());
     await Promise.allSettled(queries);
   };
   const command = async (
@@ -373,11 +375,11 @@ function EnvironmentWorkspace() {
         </section>
       )}
       {materialKey && (
-        <section
-          className="environment-materials"
-          aria-labelledby="environment-materials-title"
+        <details
+          open={materialsOpen}
+          onToggle={(event) => setMaterialsOpen(event.currentTarget.open)}
         >
-          <h2 id="environment-materials-title">准备要求</h2>
+          <summary>准备要求</summary>
           {materialQuery.isError ? (
             <p role="alert">准备要求读取失败，请刷新重试。</p>
           ) : materialQuery.isPending && online ? (
@@ -393,7 +395,7 @@ function EnvironmentWorkspace() {
                 "项目尚未提供准备要求，请联系项目维护者完善检测入口。"}
             </pre>
           )}
-        </section>
+        </details>
       )}
       <details
         open={historyOpen}

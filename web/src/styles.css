@@ -1530,7 +1530,7 @@ textarea {
 .environment-table p { margin-top: 0; }
 .environment-overview-reason { white-space: pre-line; }
 .environment-table .muted { margin-top: 5px; }
-.environment-materials, .environment-page > details, #requested-environment-activity { max-width: 800px; }
+.environment-page > details, #requested-environment-activity { max-width: 800px; }
 @media (max-width: 900px) {
   .environment-table, .environment-table tbody { display: block; }
   .environment-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
