@@ -109,7 +109,7 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		read         func() ([]byte, error)
 	}{
 		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
-		{"maintenance", "8f696fc61d85c6bbc444f98b43f2ef46371518430d7ebab632c3c23bb8390ba1", MaintenanceRules},
+		{"maintenance", "3216610f7879af8c8b94f8bf6bc93c1a83187eaa494a6eb284147fdf1f12b04f", MaintenanceRules},
 		{"main-agent", "3a7a447bbe7527bf4c1c46867f9180cab32bc3b61359a92d9db9784172c38189", MainAgentRules},
 		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
 		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},

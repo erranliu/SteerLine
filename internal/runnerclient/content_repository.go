@@ -40,6 +40,13 @@ func (c *Catalog) FileMaterialGenerationUnavailable() string {
 	if reason := c.RepositoryGenerationUnavailable(); reason != "" {
 		return reason
 	}
+	return c.fileMaterialGenerationUnavailable()
+}
+
+func (c *Catalog) fileMaterialGenerationUnavailable() string {
+	if c == nil || c.generate == nil || c.Capabilities.Generate == nil || c.Capabilities.Generate.Workflow != "generate/1" {
+		return "所选 Runner 未公布 generate/1 能力"
+	}
 	f := c.Capabilities.Generate.FileMaterials
 	if f == nil || f.Contract != "frozen_private_files/v1" || f.InputProperty != "generate.materials" || f.Kind != "file" ||
 		f.Manifest != "run.materials/content_result.file_materials" || f.MaxFiles < 1 || f.MaxBytes < 1 {
