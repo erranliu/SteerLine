@@ -115,7 +115,6 @@ export function RunUsage({ run }: { run: Candidate }) {
     refetchInterval: (q) =>
       q.state.error ? 5000 : usagePollInterval(q.state.data),
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false,
   });
   useEffect(() => {
     const changed = () => {

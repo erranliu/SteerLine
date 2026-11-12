@@ -257,7 +257,8 @@ function ActivityDetail({ id, onBack }: { id: string; onBack: () => void }) {
     retry: false,
     refetchInterval: (query) =>
       enabled && query.state.data && !ended(query.state.data) ? 2000 : false,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: (query) =>
+      query.state.data && ended(query.state.data) ? false : "always",
     refetchOnReconnect: false,
   });
   const activity = summary.data;
