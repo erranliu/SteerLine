@@ -13,7 +13,7 @@ import { WorkspaceContext } from "../../app/context";
 import { Api } from "../../shared/api/client";
 import { identity, testClient } from "../../test/workspace";
 import { ActivityPage } from "./activity-page";
-import type { Activity } from "./model";
+import type { Activity, ActivityPage as ActivityListPage } from "./model";
 import { readBody, type ReadingItem } from "./reading-api";
 
 const clients: ReturnType<typeof testClient>[] = [];
@@ -165,6 +165,59 @@ const indexReads = (calls: string[]) =>
   calls.filter((p) => p.includes("/interactions?"));
 const bodyReads = (calls: string[]) =>
   calls.filter((p) => p.includes("/body?"));
+
+it("keeps the pagination snapshot when a background refresh races with loading the next page", async () => {
+  const { api, client, submit } = setup();
+  await screen.findByRole("button", { name: /活动一/ });
+  const scope = ["home", "project", "instance"];
+  const headKey = [...scope, "async-activities", "head", "ongoing"];
+  const initial = client.getQueryData<ActivityListPage>(headKey)!;
+  let completePage!: (page: ActivityListPage) => void;
+  const nextPage = new Promise<ActivityListPage>((resolve) => {
+    completePage = resolve;
+  });
+  let head = { ...initial, sampled_at: "2026-11-11T00:00:00Z" };
+  vi.mocked(api.get).mockImplementation(async (path) =>
+    path.includes("cursor=") ? nextPage : head,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "加载更多活动" }));
+  await act(() => client.refetchQueries({ queryKey: headKey, exact: true }));
+  expect(
+    screen.queryByText("有更新，刷新后读取新快照。"),
+  ).not.toBeInTheDocument();
+  head = {
+    ...head,
+    items: [{ ...activity, title: "活动一已更新" }],
+    counts: { ...head.counts, ongoing: 3 },
+    next_cursor: "new-boundary",
+  };
+  await act(() => client.refetchQueries({ queryKey: headKey, exact: true }));
+  expect(screen.queryByText("活动一已更新")).not.toBeInTheDocument();
+  completePage({
+    ...initial,
+    items: [
+      { ...activity, title: "重复活动旧记录" },
+      { ...activity, activity_id: "b", title: "第二页活动" },
+    ],
+    next_cursor: "third",
+  });
+  await screen.findByText("第二页活动");
+  expect(screen.getByText("活动一")).toBeVisible();
+  expect(screen.queryByText("重复活动旧记录")).not.toBeInTheDocument();
+  expect(screen.getByText("有更新，刷新后读取新快照。")).toBeVisible();
+  expect(screen.getByRole("button", { name: "加载更多活动" })).toBeDisabled();
+  expect(
+    client.getQueryData<ActivityListPage>([...scope, "activity-counts"])?.counts
+      .ongoing,
+  ).toBe(3);
+  fireEvent.click(screen.getByRole("button", { name: "刷新活动列表" }));
+  await screen.findByText("活动一已更新");
+  expect(screen.queryByText("第二页活动")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("有更新，刷新后读取新快照。"),
+  ).not.toBeInTheDocument();
+  expect(submit).not.toHaveBeenCalled();
+});
 
 it("loads only summary until explicit expansion and reads one index page and body segment per action", async () => {
   const { calls, submit } = setup();

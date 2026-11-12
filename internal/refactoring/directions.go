@@ -21,6 +21,8 @@ const customDirectionsDir = "etc/refactoring-directions"
 
 var builtInDirections = []string{"simplify", "cleanup", "boundaries", "readability", "docs-tests"}
 
+var ErrDirectionChanged = errors.New("重构提示词已更新，请刷新并查看最新正文后重新启动")
+
 type DirectionCatalogue struct {
 	Directions  []model.Direction `json:"directions"`
 	Diagnostics []string          `json:"diagnostics,omitempty"`
@@ -103,7 +105,7 @@ func ResolveDirection(home, id, revision string) (model.Direction, error) {
 		return direction, fmt.Errorf("无法使用所选重构方向，请刷新后重试：%w", err)
 	}
 	if direction.Revision != revision {
-		return model.Direction{}, errors.New("重构提示词已更新，请刷新并查看最新正文后重新启动")
+		return model.Direction{}, ErrDirectionChanged
 	}
 	return direction, nil
 }

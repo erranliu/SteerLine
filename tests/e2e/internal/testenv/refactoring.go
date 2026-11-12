@@ -54,7 +54,7 @@ func RefactoringMaintenance(s *Scenario) {
 	staleRequest := httpcontract.CommandEnvelope{RequestID: ref.ID(), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "refactoring_start", TargetID: identity.RepositoryIdentity, ExpectedVersion: 1, Payload: body}
 	var rejected httpcontract.CommandResponse
 	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &rejected))
-	if rejected.Status != "rejected" || rejected.Diagnostic != "重构提示词已更新，请刷新并查看最新正文后重新启动" {
+	if rejected.Status != "rejected" || rejected.Code != "refactoring_direction_changed" || rejected.Diagnostic != "重构提示词已更新，请刷新并查看最新正文后重新启动" {
 		s.t.Fatal("stale preview did not reject before launch", rejected)
 	}
 	readiness := func(want string) {

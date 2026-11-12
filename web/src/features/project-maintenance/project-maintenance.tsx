@@ -180,7 +180,8 @@ export function ProjectMaintenance() {
     }
   }
   const v = view.data;
-  const ready = online && view.isSuccess && v?.readiness.status === "ready";
+  const verified = online && view.isSuccess;
+  const ready = verified && v?.readiness.status === "ready";
   const l = v?.local;
   const localLabel = !l
     ? "正在读取本地版本"
@@ -228,11 +229,11 @@ export function ProjectMaintenance() {
       className="settings-panel maintenance-panel"
     >
       <button onClick={() => setOpen(!open)} aria-expanded={open}>
-        项目维护 · {ready ? "已就绪" : "未就绪"}
+        项目维护 · {ready ? "已就绪" : verified ? "未就绪" : "未就绪（待核实）"}
       </button>
       <span className="muted">
         {v?.readiness
-          ? ` · ${localLabel} · 测试安排 ${v.readiness.ready}/${v.readiness.total} 就绪${v.readiness.waiting ? ` · ${v.readiness.waiting} 项等待前置测试` : ""}`
+          ? ` · ${verified ? "" : "上次结果："}${localLabel} · 测试安排 ${v.readiness.ready}/${v.readiness.total} 就绪${v.readiness.waiting ? ` · ${v.readiness.waiting} 项等待前置测试` : ""}`
           : " · 状态待核实"}
       </span>
       {(open ||

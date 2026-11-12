@@ -342,6 +342,9 @@ function EnvironmentWorkspace() {
           aria-label="指定检测详情"
         >
           <h2>指定检测结果</h2>
+          {requestedRecord.isRefetchError && (
+            <p role="alert">指定检测刷新失败，显示上次结果。</p>
+          )}
           {requestedRecord.data?.id === requestedActivity ? (
             <>
               <DetectionID

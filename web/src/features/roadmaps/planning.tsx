@@ -406,6 +406,13 @@ export default function RoadmapPlanning() {
               <div className="planning-content">
                 <section aria-label="规划对话">
                   <h3>规划对话</h3>
+                  {history.isError && (
+                    <p className="notice amber" role="status">
+                      {history.data
+                        ? "对话历史刷新失败，显示上次结果。"
+                        : "对话历史读取失败。"}
+                    </p>
+                  )}
                   <div className="planning-history">
                     {[
                       ...(history.data?.entries || []),
