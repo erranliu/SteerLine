@@ -127,7 +127,6 @@ export function RefactoringMaintenance() {
     queryFn: ({ signal }) =>
       api.get<DirectionCatalogue>("/refactoring/directions", signal),
     enabled: online,
-    refetchOnWindowFocus: false,
   });
   const detail = useQuery({
     queryKey: [...key, selected],

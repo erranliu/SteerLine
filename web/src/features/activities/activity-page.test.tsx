@@ -11,12 +11,13 @@ import { QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { WorkspaceContext } from "../../app/context";
 import { Api } from "../../shared/api/client";
-import { identity, testClient } from "../../test/workspace";
+import { createWebQueryClient } from "../../shared/query-client";
+import { identity } from "../../test/workspace";
 import { ActivityPage } from "./activity-page";
 import type { Activity, ActivityPage as ActivityListPage } from "./model";
 import { readBody, type ReadingItem } from "./reading-api";
 
-const clients: ReturnType<typeof testClient>[] = [];
+const clients: ReturnType<typeof createWebQueryClient>[] = [];
 afterEach(() => {
   cleanup();
   clients.splice(0).forEach((c) => c.clear());
@@ -73,7 +74,7 @@ function setup(
   };
   const api = new Api(identity, "csrf", "home");
   const calls: string[] = [];
-  const client = testClient();
+  const client = createWebQueryClient();
   clients.push(client);
   vi.spyOn(api, "get").mockImplementation(async (path) => {
     calls.push(path);
@@ -246,7 +247,11 @@ it("keeps the pagination snapshot when a background refresh races with loading t
     counts: { ...head.counts, ongoing: 3 },
     next_cursor: "new-boundary",
   };
-  await act(() => client.refetchQueries({ queryKey: headKey, exact: true }));
+  await act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  expect(client.getQueryData(headKey)).toEqual(head);
   expect(screen.queryByText("活动一已更新")).not.toBeInTheDocument();
   completePage({
     ...initial,

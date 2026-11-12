@@ -59,7 +59,7 @@ export function useActivityList(
     queryFn: ({ signal }: { signal: AbortSignal }) => read("", signal),
     staleTime: 1000,
     retry: false as const,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: filter === "history" ? false : ("always" as const),
     refetchOnReconnect: false,
     refetchOnMount: false,
   };

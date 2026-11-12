@@ -3,9 +3,14 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 import { testClient } from "../test/workspace";
+import { createWebQueryClient } from "./query-client";
 import { useQueryVisibility } from "./query-visibility";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 it("gates visibility and cancels only its query on hiding, disable and unmount", async () => {
   const visibility = vi
@@ -62,4 +67,59 @@ it("gates visibility and cancels only its query on hiding, disable and unmount",
   expect(client.getQueryState(["other"])?.fetchStatus).toBe("fetching");
   client.clear();
   await unrelated;
+});
+
+it("pauses background polling and refreshes active queries on return before the next interval", async () => {
+  vi.useFakeTimers();
+  const visibility = vi
+    .spyOn(document, "visibilityState", "get")
+    .mockReturnValue("visible");
+  const show = (state: DocumentVisibilityState) =>
+    act(() => {
+      visibility.mockReturnValue(state);
+      document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+    });
+  const client = createWebQueryClient();
+  const read = vi.fn(async () => "current");
+  const readGated = vi.fn(async () => "gated");
+  const readSnapshot = vi.fn(async () => "snapshot");
+  const readInactive = vi.fn(async () => "inactive");
+  await client.prefetchQuery({ queryKey: ["inactive"], queryFn: readInactive });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  renderHook(
+    () => {
+      useQuery({ queryKey: ["current"], queryFn: read, refetchInterval: 5000 });
+      const key = ["gated"];
+      const enabled = useQueryVisibility(true, key);
+      useQuery({
+        queryKey: key,
+        queryFn: readGated,
+        enabled,
+        staleTime: 60000,
+        refetchInterval: 5000,
+      });
+      useQuery({
+        queryKey: ["snapshot"],
+        queryFn: readSnapshot,
+        refetchOnWindowFocus: false,
+      });
+    },
+    { wrapper },
+  );
+  await act(() => vi.advanceTimersByTimeAsync(0));
+  show("hidden");
+  await act(() => vi.advanceTimersByTimeAsync(15000));
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(readGated).toHaveBeenCalledTimes(1);
+
+  show("visible");
+  await act(() => vi.advanceTimersByTimeAsync(0));
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(readGated).toHaveBeenCalledTimes(2);
+  expect(readSnapshot).toHaveBeenCalledTimes(1);
+  expect(readInactive).toHaveBeenCalledTimes(1);
+  cleanup();
+  client.clear();
 });

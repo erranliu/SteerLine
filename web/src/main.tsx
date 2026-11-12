@@ -1,17 +1,13 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { authorize } from "./shared/api/client";
+import { createWebQueryClient } from "./shared/query-client";
 import { App } from "./app/app";
 import "./styles.css";
 const root = createRoot(document.getElementById("root")!);
-const queries = new QueryClient({
-  defaultOptions: {
-    queries: { retry: false, refetchOnWindowFocus: false, staleTime: 1000 },
-    mutations: { retry: false },
-  },
-});
+const queries = createWebQueryClient();
 root.render(
   <div className="opening">
     <span className="brand-symbol">◆</span>

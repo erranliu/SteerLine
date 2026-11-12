@@ -116,7 +116,6 @@ function Interactions({ activity }: { activity: Activity }) {
     enabled: changeActive,
     retry: false,
     refetchInterval: changeActive ? 5000 : false,
-    refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
   const firstVersion = first?.version;
