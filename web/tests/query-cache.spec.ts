@@ -104,14 +104,18 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
       timeout: 180000,
     });
     await expect(page.locator(".graph-task")).toHaveCount(2);
-    await expect(page.getByText("任务派发设定", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "任务自动派发：关闭" }),
+    ).toBeVisible();
     await expect.poll(() => held).toBe(true);
     // The list page attaches to the original, still pending bootstrap request.
     await page.getByRole("link", { name: "任务执行" }).click();
     await expect(
       page.getByRole("heading", { name: "任务执行", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("任务派发设定", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "任务自动派发：关闭" }),
+    ).toBeVisible();
     expect(count(projectA, "tasks")).toBe(1);
     releaseTasks!();
     releaseTasks = undefined;
@@ -124,7 +128,9 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     console.log("web.query-cache: pending bootstrap shared by both pages");
 
     await page.getByRole("link", { name: "配置", exact: true }).click();
-    await expect(page.getByText("任务派发设定", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("region", { name: "任务自动派发" }),
+    ).toBeVisible();
     const presentationCount = count(projectA, "presentation");
     await page.waitForTimeout(1100); // Make the dynamic task page stale, with no observer polling it.
     held = false;

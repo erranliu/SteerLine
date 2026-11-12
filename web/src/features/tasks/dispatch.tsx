@@ -1,30 +1,80 @@
-import { NavLink } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   environmentLink,
+  type EnvironmentOptions,
   useEnvironmentReadiness,
 } from "../environment-checks/use-readiness";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { useProjectReadiness } from "../project-maintenance/use-readiness";
+
+const dispatchSettingsId = "task-dispatch";
+
+function defaultProfile(options?: EnvironmentOptions) {
+  return options?.profiles?.find(
+    (profile) => profile.id === options.default_profile_id,
+  );
+}
+
+export function DispatchStatus() {
+  const { identity, online, snapshot } = useWorkspace();
+  const preparation = useEnvironmentReadiness();
+  const mode = snapshot?.connection.snapshot.page?.control.dispatch_mode;
+  let status = "待核实";
+  if (online && mode === "manual") status = "关闭";
+  if (online && mode === "auto") {
+    status = defaultProfile(preparation.data)?.name || "默认执行方案待核实";
+  }
+  const label = `任务自动派发：${status}`;
+  return (
+    <Link
+      className="dispatch-status"
+      title={label}
+      to={`/projects/${identity.project_id}/settings#${dispatchSettingsId}`}
+    >
+      {label}
+    </Link>
+  );
+}
+
 export function Dispatch() {
+  const panel = useRef<HTMLElement>(null);
+  const location = useLocation();
+  useEffect(() => {
+    if (location.hash !== `#${dispatchSettingsId}`) return;
+    panel.current?.focus({ preventScroll: true });
+    panel.current?.scrollIntoView?.({ block: "start" });
+  }, [location.hash, location.key]);
+
+  return (
+    <section
+      className="settings-panel"
+      id={dispatchSettingsId}
+      aria-labelledby={`${dispatchSettingsId}-title`}
+      ref={panel}
+      tabIndex={-1}
+    >
+      <h2 id={`${dispatchSettingsId}-title`}>任务自动派发</h2>
+      <DispatchControls />
+    </section>
+  );
+}
+
+function DispatchControls() {
   const { online, snapshot, send, busy, identity } = useWorkspace();
   const preparation = useEnvironmentReadiness();
   const project = useProjectReadiness();
-  const selected = preparation.data?.profiles?.find(
-    (p) => p.id === preparation.data?.default_profile_id,
-  );
+  const selected = defaultProfile(preparation.data);
   const unverified =
     !preparation.verified || !selected || selected.stage === "unverified";
   const page = snapshot?.connection.snapshot.page;
-  if (!page) return null;
+  if (!page) return <p className="muted">任务自动派发状态待核实</p>;
   const { control } = page;
   const automatic = control.dispatch_mode === "auto";
   const caps = page.service.capabilities ?? [];
   return (
-    <div className="dispatch-bar">
-      <div>
-        <strong>任务派发设定</strong>
-      </div>
+    <>
       <div className="actions">
         <Button
           role="switch"
@@ -84,6 +134,6 @@ export function Dispatch() {
           {control.blockers.map((b) => b.Reason).join("；")}
         </p>
       )}
-    </div>
+    </>
   );
 }

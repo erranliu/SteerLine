@@ -20,7 +20,7 @@ import type { Identity, BrowserSession } from "../shared/api/types";
 import { WorkspaceContext } from "./context";
 import { Button } from "../shared/ui/button";
 import { ProjectMaintenance } from "../features/project-maintenance/project-maintenance";
-import { Dispatch } from "../features/tasks/dispatch";
+import { DispatchStatus } from "../features/tasks/dispatch";
 import { requiresAnswer } from "../features/runs/state";
 import { SettingsPage } from "../features/settings/settings";
 import { Operations } from "./operations";
@@ -145,6 +145,7 @@ export function Workspace({
           }
           switcher={switcher}
           questions={counts.questions}
+          dispatchStatus={<DispatchStatus />}
           footer={undefined}
           connection={
             <div className="connection">
@@ -250,21 +251,11 @@ export function Workspace({
               />
               <Route
                 path={"/projects/" + identity.project_id + "/dag"}
-                element={
-                  <>
-                    <Dispatch />
-                    <Dag />
-                  </>
-                }
+                element={<Dag />}
               />
               <Route
                 path={"/projects/" + identity.project_id + "/runs"}
-                element={
-                  <>
-                    <Dispatch />
-                    <Runs />
-                  </>
-                }
+                element={<Runs />}
               />
               <Route
                 path={"/projects/" + identity.project_id + "/settings"}

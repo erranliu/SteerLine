@@ -181,7 +181,7 @@ nav a.active,
   flex-direction: column;
 }
 .topbar {
-  height: 62px;
+  min-height: 62px;
   border-bottom: 1px solid #27372e;
   display: flex;
   align-items: center;
@@ -1316,31 +1316,6 @@ textarea {
     padding: 18px;
   }
 }
-.dispatch-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 22px;
-  padding: 12px 14px;
-  border: 1px solid #2d4434;
-  background: #17291d;
-  border-radius: 6px;
-}
-.dispatch-bar > div:first-child {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.dispatch-bar strong {
-  font-size: 11px;
-  font-weight: 500;
-}
-.dispatch-bar > p {
-  width: 100%;
-}
-
 .graph-canvas .react-flow__controls-button {
   background: #1e3024;
   color: #bcd8c7;
@@ -1508,6 +1483,15 @@ textarea {
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+.dispatch-status {
+  display: block;
+  max-width: min(240px, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
 }
 .configuration-panels {
   display: grid;

@@ -22,6 +22,7 @@ export function AppShell({
   questions = 0,
   returnTo,
   activities,
+  dispatchStatus,
 }: {
   projectId?: string;
   projectName?: string;
@@ -32,6 +33,7 @@ export function AppShell({
   questions?: number;
   returnTo?: string;
   activities?: ReactNode;
+  dispatchStatus?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
@@ -166,6 +168,7 @@ export function AppShell({
                 {returnTo === "/projects" ? "选择项目" : "返回项目"}
               </NavLink>
             )}
+            {dispatchStatus}
             {activities}
             {connection}
           </div>
