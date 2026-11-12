@@ -427,10 +427,10 @@ func generationSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, P
 		return append([]byte(nil), body...), nil
 	}, Store: store, Runner: runner, Source: func(context.Context, string) (model.Source, error) { return source, nil }, Graph: func(context.Context) ([]model.Existing, error) {
 		return []model.Existing{{ID: "8", Title: "调度", Predecessors: []string{}}}, nil
-	}, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+	}, Prepare: func(context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		return runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only","model":"test-model"}`)}, catalog, nil
 	}}
-	return s, store, runner, ParseInput{RequestID: strings.Repeat("a", 32), Path: source.Path, Digest: source.Digest, Profile: "local"}
+	return s, store, runner, ParseInput{RequestID: strings.Repeat("a", 32), Path: source.Path, Digest: source.Digest}
 }
 
 func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
@@ -452,8 +452,8 @@ func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
 				s.ReadCommitted = func(context.Context, string, string) ([]byte, error) { return nil, os.ErrPermission }
 			case "missing-capability":
 				prepare := s.Prepare
-				s.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-					execution, catalog, err := prepare(ctx, id)
+				s.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+					execution, catalog, err := prepare(ctx)
 					catalog.Capabilities.Generate.FileMaterials = nil
 					return execution, catalog, err
 				}

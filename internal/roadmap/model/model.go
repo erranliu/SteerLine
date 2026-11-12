@@ -112,7 +112,7 @@ type Record struct {
 	Source              Source                    `json:"source"`
 	Existing            []Existing                `json:"existing"`
 	GraphDigest         string                    `json:"graph_digest"`
-	Profile             string                    `json:"profile"`
+	Profile             string                    `json:"profile,omitempty"`
 	CreatedAt           time.Time                 `json:"created_at"`
 	State               string                    `json:"state"`
 	Diagnostic          string                    `json:"diagnostic,omitempty"`

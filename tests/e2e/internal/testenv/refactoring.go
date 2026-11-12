@@ -8,18 +8,33 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 
 func RefactoringMaintenance(s *Scenario) {
 	const profile = "controlled"
+	const agentModel, runnerModel = "fixture-steer-agent", "fixture-runner"
 	p := s.NewProject("refactoring")
+	configPath := filepath.Join(p.Home, "execution.json")
+	configBytes, e := os.ReadFile(configPath)
+	s.Must(e)
+	var executionConfig executionconfig.File[executionconfig.Pin]
+	s.Must(executionconfig.Decode(configBytes, &executionConfig))
+	executionConfig.SteerAgent = &executionconfig.SteerAgent{Model: agentModel, ReasoningEffort: "medium"}
+	var runnerSettings map[string]string
+	s.Must(json.Unmarshal(executionConfig.Profiles[0].Execution.Settings, &runnerSettings))
+	runnerSettings["model"], runnerSettings["reasoning_effort"] = runnerModel, "high"
+	executionConfig.Profiles[0].Execution.Settings, e = json.Marshal(runnerSettings)
+	s.Must(e)
+	s.Must(controlled.Write(configPath, executionConfig))
 	p.PrepareControlledEnvironment(profile)
 	p.CreateTasks()
 	project, e := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
@@ -189,7 +204,18 @@ func RefactoringMaintenance(s *Scenario) {
 		if !ok {
 			s.t.Fatal("missing Runner operation", o.RunID)
 		}
+		var submitted struct{ Execution runnercontract.ExecutionInput }
+		s.Must(json.Unmarshal([]byte(fixture.Bodies[strings.TrimPrefix(o.RunID, "run-")]), &submitted))
+		var settings struct {
+			Model           string `json:"model"`
+			ReasoningEffort string `json:"reasoning_effort"`
+			AccessMode      string `json:"access_mode"`
+		}
+		s.Must(json.Unmarshal(submitted.Execution.Settings, &settings))
 		if run.Workflow.ID == "generate" {
+			if settings.Model != agentModel || settings.ReasoningEffort != "medium" || settings.AccessMode != "read_only" {
+				s.t.Fatalf("decision %s used the wrong execution settings: %+v", o.RunID, settings)
+			}
 			if !runnerbinding.SamePath(run.Execution.Workspace, p.Repo) || run.RepositorySource != nil {
 				s.t.Fatalf("decision %s did not use the original project directory: %q", o.RunID, run.Execution.Workspace)
 			}
@@ -209,6 +235,9 @@ func RefactoringMaintenance(s *Scenario) {
 		}
 		if run.Workflow.ID != "execute" {
 			continue
+		}
+		if settings.Model != runnerModel || settings.ReasoningEffort != "high" || settings.AccessMode != "full_access" {
+			s.t.Fatalf("write %s used the wrong execution settings: %+v", o.RunID, settings)
 		}
 		writes++
 		r := &run

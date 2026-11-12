@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 	suggestionbridge "github.com/erranliu/SteerLine/internal/steeragentbridge/suggestion"
@@ -27,20 +25,7 @@ func newContinuationSuggestionPort(c Config, store *sqlite.SQLiteStore, cli runn
 	c = bindNativeConfiguration(c, cli)
 	p := &continuationSuggestionPort{config: c, store: store}
 	p.service = &suggestionbridge.Service{Project: c.Identity(), Store: store, Build: p.context, Runner: cli, RunnerBuild: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
-	p.service.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		settings, err := executionconfig.ContinuationSuggestionSettings(c.RunnerExecution.ContinuationSuggestion)
-		if err != nil {
-			return runnercontract.ExecutionInput{}, nil, err
-		}
-		resolved, err := c.runtimeNative.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{Operation: "compose", BaseExecution: executionconfig.ContinuationSuggestionBase(c.RunnerExecution.Profiles), Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Selection: &runnercontract.ExecutionSelection{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex", Model: &settings.Model, ReasoningEffort: &settings.ReasoningEffort, AccessMode: "read_only"}})
-		if err != nil {
-			return runnercontract.ExecutionInput{}, nil, err
-		}
-		if resolved.Execution == nil {
-			return runnercontract.ExecutionInput{}, nil, errors.New("Runner 未返回对话续作 · 提示词建议 执行配置")
-		}
-		return *resolved.Execution, c.runtimeNative.Catalog, nil
-	}
+	p.service.Prepare = c.prepareSteerAgentGeneration
 	return p
 }
 

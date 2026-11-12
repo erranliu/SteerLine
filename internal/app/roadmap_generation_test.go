@@ -249,7 +249,7 @@ func configurePromotionGeneration(t *testing.T, port *roadmapPort, live bool) {
 	port.config.runtimeCatalog = catalog
 	port.service = &roadmapservice.Service{Project: port.config.Identity(), Repository: port.config.Repository, Store: port.store, Runner: runner, Build: build, Queue: runnerbinding.NewContentQueue(5),
 		Source: port.source, Graph: port.graph, PrepareDocuments: port.documentContext, ReadCommitted: port.config.runtimeMaintenance.read,
-		Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+		Prepare: func(context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 			return execution, catalog, nil
 		}}
 }

@@ -1,3 +1,4 @@
+import type { SteerAgentConfig } from "../../shared/api/execution-configs";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
@@ -87,7 +88,6 @@ export default function RoadmapPlanning() {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState("");
   const [goal, setGoal] = useState("");
-  const [profile, setProfile] = useState("");
   const [message, setMessage] = useState("");
   const [answer, setAnswer] = useState<{
     question: string;
@@ -116,7 +116,8 @@ export default function RoadmapPlanning() {
       api.get<{
         tasks: Planning[];
         available: boolean;
-        profiles: { id: string; name: string }[];
+        steer_agent: SteerAgentConfig;
+        unavailable_reason?: string;
       }>(route),
     enabled: online,
     refetchInterval: online ? 2500 : false,
@@ -267,7 +268,7 @@ export default function RoadmapPlanning() {
         </div>
       )}
       {list.data && !list.data.available && (
-        <p role="status">当前 Runner 缺少可写原生会话与 worktree 写入能力。</p>
+        <p role="status">{list.data.unavailable_reason}</p>
       )}
       <div className="planning-layout">
         <nav aria-label="规划任务">
@@ -300,7 +301,6 @@ export default function RoadmapPlanning() {
                     title,
                     file,
                     goal,
-                    profile: profile || list.data?.profiles[0]?.id || "",
                   },
                   true,
                 );
@@ -331,20 +331,13 @@ export default function RoadmapPlanning() {
                   onChange={(event) => setGoal(event.target.value)}
                 />
               </label>
-              <label>
-                本机 Codex 方案
-                <select
-                  value={profile || list.data?.profiles[0]?.id || ""}
-                  onChange={(event) => setProfile(event.target.value)}
-                >
-                  {(list.data?.profiles || []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button disabled={sending || !list.data?.profiles.length}>
+              {list.data?.steer_agent && (
+                <p>
+                  SteerAgent：{list.data.steer_agent.model} /{" "}
+                  {list.data.steer_agent.reasoning_effort}
+                </p>
+              )}
+              <button disabled={sending || !list.data?.available}>
                 开始规划
               </button>
             </form>

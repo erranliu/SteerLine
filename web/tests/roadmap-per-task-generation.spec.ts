@@ -122,7 +122,7 @@ test("per-task generation displays identities, retries only one task and stops t
     },
     sources: [source],
     records: [record],
-    profiles: [{ id: "local", name: "本机" }],
+    steer_agent: { model: "gpt-6.1-sol", reasoning_effort: "high" },
     documents_available: true,
     documents_reason: "",
   };

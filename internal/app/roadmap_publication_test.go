@@ -282,7 +282,7 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if crlf && (source.Modified || source.Body == sourceBody || source.Digest != roadmap.Digest([]byte(source.Body))) {
 		t.Fatal("checkout line endings changed the source state or raw snapshot", source)
 	}
-	parsed := promotionAction(t, port, "roadmap_parse", source.ID, strings.Repeat("a", 32), 1, roadmapservice.ParseInput{RequestID: strings.Repeat("a", 32), Path: sourcePath, Digest: source.Digest, Profile: "fixture"})
+	parsed := promotionAction(t, port, "roadmap_parse", source.ID, strings.Repeat("a", 32), 1, roadmapservice.ParseInput{RequestID: strings.Repeat("a", 32), Path: sourcePath, Digest: source.Digest})
 	parsed = awaitPromotion(t, port, parsed, "review")
 	assertRoadmapActivityState(t, store, c.Identity(), parsed.ID, "succeeded", true, "current")
 	if live && !actualProject {

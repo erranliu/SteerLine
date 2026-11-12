@@ -54,7 +54,7 @@ test.afterAll(async () => {
   );
 });
 
-test("continuation suggestion settings preserve drafts and unrelated configuration", async ({
+test("SteerAgent settings preserve drafts and unrelated configuration", async ({
   page,
 }, info) => {
   let snapshot = structuredClone(configSnapshot);
@@ -135,45 +135,39 @@ test("continuation suggestion settings preserve drafts and unrelated configurati
   });
   await page.goto(origin + "/settings");
   await expect(
-    page.getByRole("heading", { name: "对话续作 · 提示词建议", exact: true }),
+    page.getByRole("heading", { name: "SteerAgent", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("当前设置：gpt-6.1-sol / high")).toBeVisible();
   await page.getByRole("button", { name: "读取本地 Codex 模型" }).click();
-  await page
-    .getByLabel("对话续作 · 提示词建议 模型")
-    .selectOption("browser-chosen");
-  await page
-    .getByLabel("对话续作 · 提示词建议 思考强度")
-    .selectOption("medium");
+  await page.getByLabel("SteerAgent 模型").selectOption("browser-chosen");
+  await page.getByLabel("SteerAgent 思考强度").selectOption("medium");
   page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
-  await expect(page.getByLabel("对话续作 · 提示词建议 模型")).toHaveValue(
+  await expect(page.getByLabel("SteerAgent 模型")).toHaveValue(
     "browser-chosen",
   );
   const save = page.getByRole("button", {
-    name: "保存对话续作 · 提示词建议 设置",
+    name: "保存SteerAgent 设置",
   });
   await save.click();
   await expect(page.getByText(/fixture conflict/)).toBeVisible();
-  await expect(page.getByLabel("对话续作 · 提示词建议 思考强度")).toHaveValue(
-    "medium",
-  );
+  await expect(page.getByLabel("SteerAgent 思考强度")).toHaveValue("medium");
   expect(writes).toHaveLength(1);
-  expect(snapshot.config.continuation_suggestion).toBeUndefined();
+  expect(snapshot.config.steer_agent).toBeUndefined();
   rejectSave = false;
   await save.click();
   await expect(
-    page.getByText("对话续作 · 提示词建议 设置已保存，重启 SteerLine 后生效。"),
+    page.getByText("SteerAgent 设置已保存，重启 SteerLine 后生效。"),
   ).toBeVisible();
   expect(writes).toHaveLength(2);
-  expect(snapshot.config.continuation_suggestion).toEqual({
+  expect(snapshot.config.steer_agent).toEqual({
     model: "browser-chosen",
     reasoning_effort: "medium",
   });
   for (const width of [900, 375]) {
     await page.setViewportSize({ width, height: 1000 });
     const panel = page.getByRole("region", {
-      name: "对话续作 · 提示词建议 设置",
+      name: "SteerAgent 设置",
     });
     await expect(panel).toBeVisible();
     expect(

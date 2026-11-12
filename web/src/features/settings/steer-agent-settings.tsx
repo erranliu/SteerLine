@@ -9,7 +9,7 @@ import {
 import { Button } from "../../shared/ui/button";
 import type { GenerationSettingsProps } from "./generation-settings";
 
-export function ContinuationSuggestionSettings({
+export function SteerAgentSettings({
   home,
   csrf,
   loadedDigest,
@@ -33,7 +33,7 @@ export function ContinuationSuggestionSettings({
   const [message, setMessage] = useState("");
   const base = draft?.base ?? query.data;
   const value = draft ??
-    base?.config.continuation_suggestion ?? {
+    base?.config.steer_agent ?? {
       model: "gpt-6.1-sol",
       reasoning_effort: "high",
     };
@@ -74,7 +74,7 @@ export function ContinuationSuggestionSettings({
         api,
         {
           ...base.config,
-          continuation_suggestion: {
+          steer_agent: {
             model: draft.model,
             reasoning_effort: draft.reasoning_effort,
           },
@@ -86,7 +86,7 @@ export function ContinuationSuggestionSettings({
         queryKey: [home, "execution-config-status"],
       });
       setDraft(undefined);
-      setMessage("对话续作 · 提示词建议 设置已保存，重启 SteerLine 后生效。");
+      setMessage("SteerAgent 设置已保存，重启 SteerLine 后生效。");
     } catch (e) {
       setMessage(String(e));
     } finally {
@@ -98,11 +98,10 @@ export function ContinuationSuggestionSettings({
     catalog?.state === "ready" &&
     !!model?.efforts.some((e) => e.value === value.reasoning_effort);
   return (
-    <section className="settings-panel" aria-label="对话续作 · 提示词建议 设置">
-      <h2>对话续作 · 提示词建议</h2>
+    <section className="settings-panel" aria-label="SteerAgent 设置">
+      <h2>SteerAgent</h2>
       <p className="muted">
-        所有项目共享 · Runner generate · 本地 Codex
-        只读生成提示词建议。重启后生效。
+        所有项目的 SteerAgent 模式共享本地 Codex 模型和思考强度。重启后生效。
       </p>
       {query.error && <p role="alert">{String(query.error)}</p>}
       <p>
@@ -118,7 +117,7 @@ export function ContinuationSuggestionSettings({
       <label>
         模型
         <select
-          aria-label="对话续作 · 提示词建议 模型"
+          aria-label="SteerAgent 模型"
           value={value.model}
           disabled={working || !base?.writable || catalog?.state !== "ready"}
           onChange={(e) =>
@@ -145,7 +144,7 @@ export function ContinuationSuggestionSettings({
       <label>
         思考强度
         <select
-          aria-label="对话续作 · 提示词建议 思考强度"
+          aria-label="SteerAgent 思考强度"
           value={value.reasoning_effort}
           disabled={working || !base?.writable || !model}
           onChange={(e) =>
@@ -175,14 +174,14 @@ export function ContinuationSuggestionSettings({
           disabled={!draft || !valid || working || !base?.writable}
           onClick={() => void save()}
         >
-          保存对话续作 · 提示词建议 设置
+          保存SteerAgent 设置
         </Button>
         <Button
           variant="outline"
           disabled={!draft || working}
           onClick={() => setDraft(undefined)}
         >
-          取消对话续作 · 提示词建议 修改
+          取消SteerAgent 修改
         </Button>
       </div>
       {applicationConnected &&

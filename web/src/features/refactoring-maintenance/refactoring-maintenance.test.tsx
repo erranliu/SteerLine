@@ -157,7 +157,7 @@ it("blocks clicking, Enter and form submission until the selected environment is
   const start = screen.getByRole("button", { name: "开始维护" });
   await screen.findByText(reason, { exact: false });
   expect(screen.getByText(/项目基线已就绪 · main/)).toBeInTheDocument();
-  expect(screen.getByLabelText("执行配置")).toHaveValue("local");
+  expect(screen.getByLabelText("Runner 执行配置")).toHaveValue("local");
   expect(
     screen.getByRole("link", { name: "打开项目运行环境" }),
   ).toHaveAttribute(
@@ -172,11 +172,11 @@ it("blocks clicking, Enter and form submission until the selected environment is
   fireEvent.submit(start.closest("form")!);
   expect(submit).not.toHaveBeenCalled();
 
-  fireEvent.change(screen.getByLabelText("执行配置"), {
+  fireEvent.change(screen.getByLabelText("Runner 执行配置"), {
     target: { value: "second" },
   });
   await waitFor(() => expect(start).toBeEnabled());
-  fireEvent.change(screen.getByLabelText("执行配置"), {
+  fireEvent.change(screen.getByLabelText("Runner 执行配置"), {
     target: { value: "local" },
   });
   expect(start).toBeDisabled();
@@ -243,7 +243,7 @@ it("waits for readiness on first entry and on switching back to a cached ready p
   complete(ready);
   await waitFor(() => expect(start).toBeEnabled());
 
-  const profile = screen.getByLabelText("执行配置");
+  const profile = screen.getByLabelText("Runner 执行配置");
   fireEvent.change(profile, { target: { value: "second" } });
   await waitFor(() => expect(start).toBeEnabled());
   readiness.mockReturnValueOnce(new Promise(() => {}));

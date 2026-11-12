@@ -116,9 +116,8 @@ try {
     try {$taskPort=$probe.LocalEndpoint.Port} finally {$probe.Stop()}
     Write-TaskJSON 'manifest.json' @{schema='roadmap-browser-live/v1';root=$taskRoot;repository=$taskRemote;base_branch=$taskBase;base_commit=$taskBaseCommit;web_address=('127.0.0.1:'+$taskPort);source_commit=$taskSHA;source_dirty=$taskDirty}
     Write-TaskJSON 'home\web.json' @{version=1;address=('127.0.0.1:'+$taskPort)}
-    $taskSettings=@{executable=$taskCodex;model='gpt-6.1-sol';reasoning_effort='low'}
-    if ($Planning) { $taskSettings.access_mode='full_access' }
-    Write-TaskJSON 'home\execution.json' @{version=3;max_generate_concurrency=2;runner=@{executable=$taskRunner;version=$taskVersion.version;sha256=$taskRunnerSHA};default_execution_profile='roadmap-live';execution_profiles=@(@{id='roadmap-live';name='Roadmap live';execution=@{adapter='codex-app-server';target=@{kind='local'};settings=$taskSettings};workflow=@{id='development';version=2}})}
+    $taskSettings=@{executable=$taskCodex;access_mode='full_access'}
+    Write-TaskJSON 'home\execution.json' @{version=3;max_generate_concurrency=2;steer_agent=@{model='gpt-6.1-sol';reasoning_effort='low'};runner=@{executable=$taskRunner;version=$taskVersion.version;sha256=$taskRunnerSHA};default_execution_profile='roadmap-live';execution_profiles=@(@{id='roadmap-live';name='Roadmap live';execution=@{adapter='codex-app-server';target=@{kind='local'};settings=$taskSettings};workflow=@{id='development';version=2}})}
     $query=Get-Content -LiteralPath (Join-Path $taskSource 'debug-template\home\config-source\SteerlineTest.live.json') -Raw -Encoding utf8|ConvertFrom-Json
     $query.repository=$taskProject;$query.branch=$taskBase
     $query|Add-Member -NotePropertyName shutdown_grace -NotePropertyValue '45s' -Force

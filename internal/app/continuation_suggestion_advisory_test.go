@@ -90,7 +90,7 @@ func TestContinuationSuggestionConfigurationFreezesAtPreparation(t *testing.T) {
 	catalog, err := runnerclient.CompileCatalog(caps)
 	require(t, err)
 	c.runtimeNative = &runnerclient.ConfigurationSnapshot{Catalog: catalog, Query: nativefixture.ExecutionConfigurationFixture}
-	c.RunnerExecution.ContinuationSuggestion = &executionconfig.ContinuationSuggestion{Model: "model-before", ReasoningEffort: "high"}
+	c.RunnerExecution.SteerAgent = &executionconfig.SteerAgent{Model: "model-before", ReasoningEffort: "high"}
 	profiles, _ := json.Marshal(c.RunnerExecution.Profiles)
 	db := filepath.Join(t.TempDir(), "advisory.db")
 	store, err := sqlite.OpenSQLiteStore(db)
@@ -118,7 +118,7 @@ func TestContinuationSuggestionConfigurationFreezesAtPreparation(t *testing.T) {
 	originalRequest, _ := json.Marshal(original.RunnerRequest)
 	// Saving a new configuration does not replace an already loaded host snapshot.
 	saved := c.RunnerExecution
-	saved.ContinuationSuggestion = &executionconfig.ContinuationSuggestion{Model: "model-after", ReasoningEffort: "medium"}
+	saved.SteerAgent = &executionconfig.SteerAgent{Model: "model-after", ReasoningEffort: "medium"}
 	configFile := filepath.Join(t.TempDir(), "execution.json")
 	encoded, _ := json.Marshal(saved)
 	require(t, os.WriteFile(configFile, encoded, 0600))
