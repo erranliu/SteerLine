@@ -242,20 +242,17 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 				return err
 			}
 		}
-		if !candidate && (c.Explicit && graph.Authority.DispatchMode != "manual" || !c.Explicit && graph.Authority.DispatchMode != "auto") {
-			return nativeErr("wrong_mode", "dispatch mode differs from the original start")
+		if blocked := taskmodel.StartDispatchError(graph.Authority.DispatchMode, c.Explicit, candidate); blocked != nil {
+			return blocked
 		}
-		if candidate && !c.Explicit {
-			return nativeErr("wrong_mode", "new candidates require an explicit start")
-		}
-		var active, number int
-		if err := tx.tx.QueryRowContext(ctx, `SELECT coalesce(sum(CASE WHEN json_extract(payload,'$.participation')='active' AND coalesce(json_extract(payload,'$.material_digest'),'')=? THEN 1 ELSE 0 END),0),coalesce(max(json_extract(payload,'$.number')),0) FROM runner_candidates WHERE project_identity=? AND task_id=?`, c.MaterialDigest, c.Project, c.TaskID).Scan(&active, &number); err != nil {
+		facts, err := readCandidateStartFacts(ctx, tx.tx, c.Project, c.TaskID, c.MaterialDigest)
+		if err != nil {
 			return err
 		}
-		if active >= 5 {
-			return nativeErr("candidate_limit_reached", "当前材料版本已有五个参与候选")
+		if blocked := taskmodel.CandidateStartError(candidate, facts.active, facts.merged); blocked != nil {
+			return blocked
 		}
-		if err := freezeNumber(number + 1); err != nil {
+		if err := freezeNumber(facts.lastNumber + 1); err != nil {
 			return err
 		}
 		if !c.Explicit {
@@ -329,6 +326,23 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		return nil
 	}
 	return err
+}
+
+type candidateStartFacts struct {
+	active, lastNumber int
+	merged             bool
+}
+
+func readCandidateStartFacts(ctx context.Context, tx *sql.Tx, project, task, material string) (candidateStartFacts, error) {
+	var facts candidateStartFacts
+	err := tx.QueryRowContext(ctx, `
+		SELECT count(CASE WHEN json_extract(payload,'$.participation')='active'
+			AND coalesce(json_extract(payload,'$.material_digest'),'')=? THEN 1 END),
+			coalesce(max(json_extract(payload,'$.number')),0),
+			count(CASE WHEN json_extract(payload,'$.projection.pr.state')='merged' THEN 1 END)>0
+		FROM runner_candidates WHERE project_identity=? AND task_id=?`, material, project, task).
+		Scan(&facts.active, &facts.lastNumber, &facts.merged)
+	return facts, err
 }
 
 // requestRunnerTaskStops runs inside the task's terminal transaction. A late

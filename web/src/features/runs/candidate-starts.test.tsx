@@ -20,6 +20,7 @@ import type {
   Profile,
   Receipt,
   StoredRequest,
+  TaskPage,
 } from "../../shared/api/types";
 import {
   identity,
@@ -34,12 +35,20 @@ afterEach(cleanup);
 function setup(existing = false, requests: StoredRequest[] = []) {
   const api = new Api(identity, "csrf");
   const client = testClient();
-  const taskPage = {
+  let materialStatus = "ready";
+  const taskPage = (): TaskPage => ({
     ...tasks,
     tasks: [
       {
         ...tasks.tasks[0],
         status: existing ? "in_progress" : "open",
+        start_eligibility: {
+          ...tasks.tasks[0].start_eligibility!,
+          action: existing ? "start_candidate" : "start_task",
+          blockers: materialStatus === "ready"
+            ? []
+            : [{ code: "project_not_ready", diagnostic: "项目未就绪" }],
+        },
         workflow_runs: existing
           ? [
               {
@@ -54,7 +63,7 @@ function setup(existing = false, requests: StoredRequest[] = []) {
           : null,
       },
     ],
-  };
+  });
   const presentation = {
     presentation: {
       default_profile_id: "one",
@@ -71,8 +80,8 @@ function setup(existing = false, requests: StoredRequest[] = []) {
     },
   };
   const options = projectQueries(api);
-  client.setQueryData(options.task("1").queryKey, taskPage);
-  client.setQueryData(options.tasks().queryKey, taskPage);
+  client.setQueryData(options.task("1").queryKey, taskPage());
+  client.setQueryData(options.tasks().queryKey, taskPage());
   client.setQueryData(options.presentation().queryKey, presentation);
   client.setQueryData(options.projectReadiness().queryKey, {
     status: "ready",
@@ -81,7 +90,6 @@ function setup(existing = false, requests: StoredRequest[] = []) {
     ready: 1,
     blockers: [],
   });
-  let materialStatus = "ready";
   vi.spyOn(api, "get").mockImplementation(
     async (path) =>
       (path === "/environment/options"
@@ -122,7 +130,7 @@ function setup(existing = false, requests: StoredRequest[] = []) {
                 ? { run_id: "execution", attempt_id: "attempt", message: null }
                 : path.endsWith("/tests")
                   ? { status: "missing" }
-                  : taskPage) as never,
+                  : taskPage()) as never,
   );
   const calls: { envelope: Envelope; resolve: (value: Receipt) => void }[] = [];
   const submit = vi.fn(
@@ -188,6 +196,7 @@ function setup(existing = false, requests: StoredRequest[] = []) {
     confirm,
     setMaterials(status: string) {
       materialStatus = status;
+      client.setQueryData(options.task("1").queryKey, taskPage());
       client.setQueryData(options.projectReadiness().queryKey, {
         status: status === "ready" ? "ready" : "not_ready",
         commit: "base",
@@ -199,7 +208,7 @@ function setup(existing = false, requests: StoredRequest[] = []) {
   };
 }
 
-it("immediately selects each new card and lets an unclaimed task reserve five confirmations while its first response is delayed", async () => {
+it("immediately selects each new card and queues confirmations while the first response is delayed", async () => {
   const { confirm, submit, client } = setup();
   await confirm(true);
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
@@ -214,7 +223,7 @@ it("immediately selects each new card and lets an unclaimed task reserve five co
     expect(cards[count - 1]).toHaveTextContent("等待首次启动确认");
   }
   expect(submit).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole("button", { name: "新增并行候选" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "新增并行候选" })).toBeEnabled();
   expect(
     screen.queryByRole("button", { name: "近期活动" }),
   ).not.toBeInTheDocument();

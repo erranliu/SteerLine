@@ -15,7 +15,7 @@
 | 路径 | 用途 |
 | --- | --- |
 | `/identity` | 项目/实例、进程、ready、能力、诊断及认证后的原锁路径 |
-| `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务 |
+| `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务。在线任务详情还提供显式启动资格 |
 | `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
 | `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
 | `/activities/{activity_id}` | 精确活动摘要；仍只读本地事实和有界消息预览 |
@@ -36,6 +36,8 @@
 
 分页保留原身份、revision、筛选条件和 cursor，失效后刷新原查询，不拼接不同快照。activity 的近期查询 `recent=true` 不混用流式 cursor。conversation 空 attempt 读取原 Execution 的完整历史，指定历史 attempt 则核对正式投影归属；recovery/decision-eligibility 必须绑定当前 Execution/Attempt。
 
+在线 `GET /tasks/{task_id}` 的 `start_eligibility` 返回当前显式动作、任务级 `blockers` 和按执行方案索引的 `profile_blockers`。阻断包含 `code` 与 `diagnostic`，方案值为 null 时表示当前观察未发现该方案的阻断。Web 使用同页的任务、图和派发版本提交原动作。候选上限按当前材料摘要计算，预留事务重新核对参与候选、任务、图、材料及环境资格。
+
 final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取，单页最多 256 KiB，核对原 Attempt、revision、SHA-256 和 UTF-8 offset。来源规则见[公开会话结果](execution-observability.md#公开结果来源)，不回退原生日志。
 
 候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](runner-lifecycle.md)。
@@ -48,7 +50,7 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 
 | action | 目标、版本与 payload |
 | --- | --- |
-| `start_task` | task ID / task version，control revision；`{execution_profile_id}` |
+| `start_task` | task ID / task version，control revision，Web 同时提交已观察的 graph revision；`{execution_profile_id}` |
 | `start_candidate` | task ID / task version，graph/control revision；`{execution_profile_id}` |
 | `stop_candidate`、`resolve_pr_conflict` | candidate ID / candidate version，control revision、graph revision 必须为 0；`{task_id}`。前者退出参与，后者沿原冲突处理入口 |
 | `answer_decision` | decision ID / version；`{run_id,decision_id,option_id,note,answers,expected_run_revision,source_attempt_id,expected_recovery_version}`，核对当前问题及原执行身份 |
@@ -57,7 +59,7 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 | `open_terminal`、`recheck_environment` | run ID / blocker version，control revision；`{target:{run_id,execution_id,attempt_id,turn_id,blocker_id,version}}`，只作用于原 blocker |
 | `open_native_session` | run ID / 0；原 `NativeSessionTarget` 的 run/Execution/Attempt/session/generation。只打开原查看器，无新业务轮次 |
 
-新项目默认关闭自动派发（`manual`），可手动启动符合资格的任务。开启后（`auto`），服务轮询并派发符合资格的任务。关闭开关只停止后续自动派发。
+新项目默认关闭自动派发（`manual`），可手动启动符合资格的任务。开启后（`auto`），服务轮询并派发符合资格的任务。进行中的任务在两种派发模式下均可显式新增合格候选。关闭开关只停止后续自动派发。
 
 以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning、人工验收和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
 

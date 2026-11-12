@@ -15,6 +15,10 @@ import { useCandidateStarts } from "./use-candidate-starts";
 afterEach(cleanup);
 const profile = { id: "one", name: "方案一" } as Profile;
 const task = tasks.tasks[0];
+const candidateEligibility = {
+  ...task.start_eligibility!,
+  action: "start_candidate" as const,
+};
 const receipt = (
   envelope: Envelope,
   status: Receipt["status"] = "applied",
@@ -52,18 +56,17 @@ function setup() {
   return { api, calls, submit, ...hook };
 }
 
-it("shows five confirmations immediately, waits only for the original claim, and sends each subsequent candidate once at the claimed version", async () => {
+it("waits for the original claim and sends each eligible confirmation once at the claimed version", async () => {
   const { result, api, calls, submit } = setup();
   const ids: (string | undefined)[] = [];
   act(() => {
     for (let i = 0; i < 6; i++)
       ids.push(
-        result.current.start(task, { ...profile, id: `profile-${i}` }, 1, 3),
+        result.current.start(task, profile, 1, 3),
       );
   });
-  expect(result.current.items).toHaveLength(5);
-  expect(ids[5]).toBeUndefined();
-  expect(new Set(ids.slice(0, 5)).size).toBe(5);
+  expect(result.current.items).toHaveLength(6);
+  expect(new Set(ids).size).toBe(6);
   expect(result.current.items[0].status).toBe("正在提交");
   expect(
     result.current.items
@@ -77,6 +80,7 @@ it("shows five confirmations immediately, waits only for the original claim, and
     tasks: [
       {
         ...task,
+        start_eligibility: candidateEligibility,
         status: "in_progress",
         version: 2,
         workflow_runs: [
@@ -96,7 +100,7 @@ it("shows five confirmations immediately, waits only for the original claim, and
   await act(async () => {
     first.response.resolve(receipt(first.envelope));
   });
-  await waitFor(() => expect(submit).toHaveBeenCalledTimes(5));
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(6));
   expect(
     calls
       .slice(1)
@@ -109,21 +113,23 @@ it("shows five confirmations immediately, waits only for the original claim, and
       ]),
   ).toEqual(
     ids
-      .slice(1, 5)
-      .map((id, i) => [id, "start_candidate", 2, 1, `profile-${i + 1}`]),
+      .slice(1)
+      .map((id) => [id, "start_candidate", 2, 1, profile.id]),
   );
   expect(first.envelope).toMatchObject({
     action: "start_task",
     expected_version: 1,
+    expected_graph_revision: 1,
+    expected_control_revision: 3,
   });
   // An unrelated render while later POSTs are delayed must not submit twice.
   await act(async () => {
     calls[4].response.resolve(receipt(calls[4].envelope));
   });
-  expect(submit).toHaveBeenCalledTimes(5);
+  expect(submit).toHaveBeenCalledTimes(6);
 });
 
-it.each(["version", "graph", "identity", "runs"])(
+it.each(["version", "graph", "control", "identity", "runs", "blocked"])(
   "does not send waiting confirmations when the claimed %s differs",
   async (change) => {
     const { result, api, calls, submit } = setup();
@@ -133,11 +139,18 @@ it.each(["version", "graph", "identity", "runs"])(
     });
     vi.spyOn(api, "get").mockResolvedValue({
       ...tasks,
+      authority_version: change === "control" ? 4 : 3,
       graph_revision: change === "graph" ? 2 : 1,
       tasks: [
         {
           ...task,
           status: "in_progress",
+          start_eligibility: {
+            ...candidateEligibility,
+            blockers: change === "blocked"
+              ? [{ code: "candidate_limit_reached", diagnostic: "当前材料版本已有五个参与候选" }]
+              : [],
+          },
           version: change === "version" ? 3 : 2,
           workflow_runs:
             change === "runs"
@@ -224,7 +237,7 @@ it("restores journal cards without submitting and drops only unsent in-memory wa
 
 it("allows independent additions while another addition is unresolved", async () => {
   const { result, calls, submit } = setup();
-  const running = { ...task, status: "in_progress", version: 2 };
+  const running = { ...task, status: "in_progress", version: 2, start_eligibility: candidateEligibility };
   act(() => {
     result.current.start(running, profile, 1, 3);
     result.current.start(running, profile, 1, 3);
@@ -240,7 +253,7 @@ it("allows independent additions while another addition is unresolved", async ()
   expect(result.current.items[0].status).toBe("正在提交");
 });
 
-it("scopes restored start cards and the five-candidate limit to the current service instance", () => {
+it("scopes restored start cards to the current service instance", () => {
   const { result, rerender, api, submit } = setup();
   const old = new Api({ ...identity, instance_id: "previous" }, "csrf");
   const requests: StoredRequest[] = Array.from({ length: 18 }, (_, index) => {
@@ -266,15 +279,14 @@ it("scopes restored start cards and the five-candidate limit to the current serv
     { id: envelope.request_id, status: "正在提交", participating: true },
   ]);
   expect(submit).not.toHaveBeenCalled();
-  const running = { ...task, status: "in_progress", version: 2 };
+  const running = { ...task, status: "in_progress", version: 2, start_eligibility: candidateEligibility };
   const ids: (string | undefined)[] = [];
   act(() => {
     for (let i = 0; i < 5; i++)
       ids.push(result.current.start(running, profile, 1, 3));
   });
-  expect(ids.slice(0, 4).every(Boolean)).toBe(true);
-  expect(ids[4]).toBeUndefined();
-  expect(result.current.items).toHaveLength(5);
-  expect(submit).toHaveBeenCalledTimes(4);
+  expect(ids.every(Boolean)).toBe(true);
+  expect(result.current.items).toHaveLength(6);
+  expect(submit).toHaveBeenCalledTimes(5);
   expect(requests).toEqual(original);
 });

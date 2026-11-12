@@ -69,6 +69,13 @@ export interface CandidateStarts {
   ) => string | undefined;
 }
 
+function startDiagnostic(task: Task, profileID: string): string | undefined {
+  const eligibility = task.start_eligibility;
+  const profile = eligibility?.profile_blockers[profileID];
+  return eligibility?.blockers[0]?.diagnostic ??
+    (profile === undefined ? "任务启动资格待核实" : profile?.diagnostic);
+}
+
 // Only the initial claim needs ordering. Sent commands keep their immutable
 // journal envelopes; this hook never retries or changes an already sent start.
 export function useCandidateStarts(
@@ -106,9 +113,7 @@ export function useCandidateStarts(
         { execution_profile_id: entry.profile.id },
         {
           expected_control_revision: entry.controlRevision,
-          ...(candidate
-            ? { expected_graph_revision: entry.graphRevision }
-            : {}),
+          expected_graph_revision: entry.graphRevision,
         },
       ),
       request_id: entry.id,
@@ -182,7 +187,8 @@ export function useCandidateStarts(
           );
           if (
             !task ||
-            task.status !== "in_progress" ||
+            task.start_eligibility?.action !== "start_candidate" ||
+            page.authority_version !== entry.controlRevision ||
             task.version !== entry.first!.expected_version + 1 ||
             page.graph_revision !== entry.graphRevision ||
             !task.workflow_runs?.some(
@@ -191,6 +197,8 @@ export function useCandidateStarts(
           ) {
             throw new Error("任务或依赖已变化，请核对后重新选择方案");
           }
+          const blocked = startDiagnostic(task, entry.profile.id);
+          if (blocked) throw new Error(blocked);
           await send(entry, task, true);
         } catch (error) {
           update(entry.id, { error: String(error), unsent: true });
@@ -253,38 +261,10 @@ export function useCandidateStarts(
   return {
     items,
     start(task, profile, graphRevision, controlRevision) {
-      if (
-        !online ||
-        task.delivery ||
-        !["open", "in_progress"].includes(task.status)
-      )
-        return;
-      const workflowRuns = task.workflow_runs ?? [];
-      const known = new Set(workflowRuns.map((run) => run.workflow_run_id));
-      const active = new Set(
-        workflowRuns
-          .filter((run) => run.participation === "active")
-          .map((run) => run.workflow_run_id),
-      );
-      for (const item of items)
-        if (
-          item.taskID === task.task_id &&
-          item.participating &&
-          !known.has(item.id)
-        )
-          active.add(item.id);
-      // Include confirmations from this event before React has rendered them.
-      for (const entry of current.current.entries)
-        if (
-          entry.task.task_id === task.task_id &&
-          !known.has(entry.id) &&
-          !entry.unsent &&
-          receiptFor(entry)?.status !== "rejected"
-        )
-          active.add(entry.id);
-      if (active.size >= 5) return;
+      if (!online || startDiagnostic(task, profile.id)) return;
+      const action = task.start_eligibility!.action;
       const first =
-        task.status === "open"
+        action === "start_task"
           ? current.current.entries.find(
               (entry) =>
                 entry.task.task_id === task.task_id &&
@@ -313,7 +293,7 @@ export function useCandidateStarts(
       };
       current.current.entries = [...current.current.entries, entry];
       setLocal(current.current.entries);
-      if (!first) void send(entry, task, task.status === "in_progress");
+      if (!first) void send(entry, task, action === "start_candidate");
       return entry.id;
     },
   };

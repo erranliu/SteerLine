@@ -15,22 +15,25 @@ type NativeTaskCapabilities struct {
 
 type NativeTaskDetail struct {
 	taskmodel.TaskRecord
-	ProjectID         string                           `json:"project_id"`
-	Priority          int                              `json:"priority"`
-	Contract          taskmodel.TaskContract           `json:"contract"`
-	Candidates        []runnerstate.Candidate          `json:"candidates"`
-	Delivery          *taskmodel.TaskDeliveryRecord    `json:"delivery,omitempty"`
-	Predecessors      []taskmodel.TaskDependencyStatus `json:"predecessors"`
-	Successors        []string                         `json:"successors"`
-	DependencyReady   bool                             `json:"dependency_ready"`
-	UnmetPredecessors []taskmodel.TaskDependencyStatus `json:"unmet_predecessors"`
-	StartupBlockers   []string                         `json:"startup_blockers"`
+	ProjectID                 string                           `json:"project_id"`
+	Priority                  int                              `json:"priority"`
+	Contract                  taskmodel.TaskContract           `json:"contract"`
+	Candidates                []runnerstate.Candidate          `json:"candidates"`
+	Delivery                  *taskmodel.TaskDeliveryRecord    `json:"delivery,omitempty"`
+	Predecessors              []taskmodel.TaskDependencyStatus `json:"predecessors"`
+	Successors                []string                         `json:"successors"`
+	DependencyReady           bool                             `json:"dependency_ready"`
+	UnmetPredecessors         []taskmodel.TaskDependencyStatus `json:"unmet_predecessors"`
+	StartupBlockers           []string                         `json:"startup_blockers"`
+	CurrentMaterialCandidates int                              `json:"-"`
+	ObservedMergedCandidate   bool                             `json:"-"`
 }
 
 type NativeTaskPage struct {
 	Protocol         string                 `json:"protocol"`
 	ProjectID        string                 `json:"project_id"`
 	AuthorityVersion uint64                 `json:"authority_version"`
+	DispatchMode     string                 `json:"-"`
 	GraphRevision    uint64                 `json:"graph_revision"`
 	DatabaseRevision uint64                 `json:"database_revision"`
 	DatabaseID       string                 `json:"database_id"`

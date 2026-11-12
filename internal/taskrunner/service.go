@@ -110,18 +110,9 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if profileID == "" {
 		profileID = s.DefaultProfile
 	}
-	profile, ok := s.Profiles[profileID]
-	if !ok {
-		return runnerbridge.Candidate{}, failure("profile_not_found", "selected Runner profile is unavailable")
-	}
-	if profile.UnavailableReason != "" {
-		return runnerbridge.Candidate{}, failure("unsupported_capability", profile.UnavailableReason)
-	}
-	if profile.Input.Workflow.ID == "" || profile.Input.Workflow.Version <= 0 {
-		return runnerbridge.Candidate{}, failure("invalid_profile", "execution preset must select a published workflow explicitly")
-	}
-	if profile.Input.Workflow.ID == "generate" || profile.Input.Workflow.ID == "conversation" {
-		return runnerbridge.Candidate{}, failure("invalid_profile", "content workflows cannot execute a development task")
+	profile, err := s.startProfile(profileID)
+	if err != nil {
+		return runnerbridge.Candidate{}, err
 	}
 	if err := s.checkExecution(ctx, profileID, true); err != nil {
 		return runnerbridge.Candidate{}, err
@@ -250,6 +241,22 @@ func (s *Service) checkExecution(ctx context.Context, profile string, refresh bo
 		return failure("environment_not_ready", "项目环境准备门禁不可用")
 	}
 	return s.CheckExecution(ctx, profile, refresh)
+}
+
+func (s *Service) startProfile(id string) (Profile, error) {
+	profile, ok := s.Profiles[id]
+	switch {
+	case !ok:
+		return profile, failure("profile_not_found", "所选执行方案不可用")
+	case profile.UnavailableReason != "":
+		return profile, failure("unsupported_capability", profile.UnavailableReason)
+	case profile.Input.Workflow.ID == "" || profile.Input.Workflow.Version <= 0:
+		return profile, failure("invalid_profile", "执行方案须指定已发布的工作流")
+	case profile.Input.Workflow.ID == "generate" || profile.Input.Workflow.ID == "conversation":
+		return profile, failure("invalid_profile", "内容工作流不能执行开发任务")
+	default:
+		return profile, nil
+	}
 }
 
 func (s *Service) Dispatch(ctx context.Context) error {
