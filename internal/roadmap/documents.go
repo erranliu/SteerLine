@@ -70,7 +70,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	if !source.SameContent(r.Source) || model.GraphDigest(graph) != r.GraphDigest {
 		return r, errors.New("来源或已有图材料变化，请重新解析确认")
 	}
-	execution, catalog, err := s.Prepare(ctx, r.Profile)
+	execution, catalog, err := s.Prepare(ctx)
 	if err != nil {
 		return r, err
 	}
@@ -88,7 +88,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		return r, err
 	}
 	r = model.Record{ID: request, RequestID: request, Purpose: "documents", ParentID: parent, Project: s.Project, Revision: 1,
-		Source: r.Source, Existing: r.Existing, GraphDigest: r.GraphDigest, Profile: r.Profile, CreatedAt: time.Now().UTC(),
+		Source: r.Source, Existing: r.Existing, GraphDigest: r.GraphDigest, CreatedAt: time.Now().UTC(),
 		State: "queued", Runner: s.Build, Analysis: r.Analysis, ConfirmedDigest: r.ConfirmedDigest,
 		CodeCommit: fixed.Commit, RepositoryTree: fixed.Tree, Materials: fixed.Materials, Documents: []model.Documents{}, Mapping: r.Mapping, PlanningMaterials: r.PlanningMaterials}
 	err = validateProviders(r)

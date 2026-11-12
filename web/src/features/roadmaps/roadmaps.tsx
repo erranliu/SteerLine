@@ -1,3 +1,4 @@
+import type { SteerAgentConfig } from "../../shared/api/execution-configs";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
@@ -133,7 +134,7 @@ export type RoadmapView = {
   preparation: Preparation;
   sources: RoadmapSource[];
   records: RoadmapRecord[];
-  profiles: { id: string; name: string }[];
+  steer_agent: SteerAgentConfig;
   documents_available: boolean;
   documents_reason: string;
 };
@@ -147,8 +148,7 @@ export function Roadmaps() {
     useWorkspace();
   const feedback = useActivityFeedback();
   const [params, setParams] = useSearchParams();
-  const [profile, setProfile] = useState(""),
-    [error, setError] = useState("");
+  const [error, setError] = useState("");
   const [documentKey, setDocumentKey] = useState(""),
     [kind, setKind] = useState<"spec" | "plan" | "tests" | "acceptance">(
       "spec",
@@ -388,7 +388,6 @@ export function Roadmaps() {
     action("roadmap_parse", source.data.id, 1, {
       path: source.data.path,
       source_digest: source.data.digest,
-      profile: profile || value?.profiles[0]?.id || "",
     });
   const hasPending = history.some((r) =>
     contentPending(r.id === current?.id ? current : r),
@@ -402,7 +401,7 @@ export function Roadmaps() {
     !!source.data.diagnostic ||
     hasPending ||
     publicationPending ||
-    !value?.profiles.length ||
+    !value?.documents_available ||
     !value?.preparation.ready;
   const generateDisabled =
     locked ||
@@ -965,22 +964,11 @@ export function Roadmaps() {
           </details>
           <details>
             <summary>重新解析与生成方案</summary>
-            <label>
-              内容生成方案
-              <select
-                value={profile || value?.profiles[0]?.id || ""}
-                onChange={(e) => setProfile(e.target.value)}
-                disabled={viewingHistory}
-              >
-                {value?.profiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {!value?.profiles.length && (
-              <p>需要合格的本机 Codex 内容生成方案，请先在配置中设置。</p>
+            {value?.steer_agent && (
+              <p>
+                SteerAgent：{value.steer_agent.model} /{" "}
+                {value.steer_agent.reasoning_effort}
+              </p>
             )}
             <p>
               重新解析会开始新一轮规划，已有记录保留。正式编号仅在入图时分配。

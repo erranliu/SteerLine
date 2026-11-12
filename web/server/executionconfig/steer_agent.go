@@ -9,7 +9,7 @@ import (
 
 // Native model discovery runs before the write lock; Save subsequently rechecks
 // the exact saved digest and deployment pin before publishing the configuration.
-func (s *Store) validateContinuationSuggestionEdit(ctx context.Context, raw []byte) error {
+func (s *Store) validateSteerAgentEdit(ctx context.Context, raw []byte) error {
 	var edit EditRequest
 	if err := cfg.Decode(raw, &edit); err != nil {
 		return err
@@ -18,26 +18,26 @@ func (s *Store) validateContinuationSuggestionEdit(ctx context.Context, raw []by
 	if err != nil {
 		return err
 	}
-	if sameValue(current.ContinuationSuggestion, edit.Config.ContinuationSuggestion) {
+	if sameValue(current.SteerAgent, edit.Config.SteerAgent) {
 		return nil
 	}
-	settings, err := cfg.ContinuationSuggestionSettings(edit.Config.ContinuationSuggestion)
+	settings, err := cfg.SteerAgentSettings(edit.Config.SteerAgent)
 	if err != nil {
-		return failure(400, "invalid_main_agent", err.Error())
+		return failure(400, "invalid_steer_agent", err.Error())
 	}
-	result, err := s.QueryNativeCatalog(ctx, current.Runner, runnercontract.NativeCatalogRequest{Kind: "models", Adapter: "codex-app-server", Target: &runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex", Execution: cfg.ContinuationSuggestionBase(current.Profiles)})
+	result, err := s.QueryNativeCatalog(ctx, current.Runner, runnercontract.NativeCatalogRequest{Kind: "models", Adapter: "codex-app-server", Target: &runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex", Execution: cfg.SteerAgentBase(current.Profiles)})
 	if err != nil {
 		return err
 	}
-	return validateContinuationSuggestionModel(settings, result)
+	return validateSteerAgentModel(settings, result)
 }
 
-func validateContinuationSuggestionModel(settings cfg.ContinuationSuggestion, result runnercontract.NativeCatalogResult) error {
+func validateSteerAgentModel(settings cfg.SteerAgent, result runnercontract.NativeCatalogResult) error {
 	// context_unverified is part of the directory contract: metadata does not
 	// prove login, permission or execution readiness. Source identity is already
 	// checked by QueryNativeCatalog; it must not disable every model edit.
 	if result.State != "ready" || !result.Complete || result.Models == nil {
-		return failure(422, "main_agent_models_unavailable", "本地 Codex 模型目录尚未核实，请刷新后再保存")
+		return failure(422, "steer_agent_models_unavailable", "本地 Codex 模型目录尚未核实，请刷新后再保存")
 	}
 	for _, model := range *result.Models {
 		if model.ID == settings.Model {
@@ -48,5 +48,5 @@ func validateContinuationSuggestionModel(settings cfg.ContinuationSuggestion, re
 			}
 		}
 	}
-	return failure(400, "invalid_main_agent", "所选对话续作 · 提示词建议 模型或思考强度不在当前本地 Codex 目录中")
+	return failure(400, "invalid_steer_agent", "所选 SteerAgent 模型或思考强度不在当前本地 Codex 目录中")
 }

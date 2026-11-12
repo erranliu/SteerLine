@@ -168,15 +168,25 @@ func TestRoadmapPerTaskConcurrencyAndRetry(t *testing.T) {
 		t.Fatal("released slot did not dispatch sixth task")
 	}
 	failedKey := ""
+	var failedInput runnercontract.GenerateRunInput
 	for _, g := range r.Generations {
 		if g.ID != first.ID {
 			failedKey = g.Key
+			if err := json.Unmarshal(g.Request.Input, &failedInput); err != nil {
+				t.Fatal(err)
+			}
 			finishGeneration(t, s, f, r, g, true)
 			break
 		}
 	}
 	r = observeBatch(t, s, r.ID)
 	// A settled failure can be retried while siblings remain running.
+	prepare := s.Prepare
+	s.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+		execution, catalog, err := prepare(ctx)
+		execution.Settings = json.RawMessage(`{"access_mode":"read_only","model":"new-steer-agent","reasoning_effort":"medium"}`)
+		return execution, catalog, err
+	}
 	retryID := strings.Repeat("e", 32)
 	r, e = s.RetryDocuments(ctx, r.ID, failedKey, retryID, r.Revision)
 	if e != nil {
@@ -184,6 +194,14 @@ func TestRoadmapPerTaskConcurrencyAndRetry(t *testing.T) {
 	}
 	if len(r.Generations) != 7 {
 		t.Fatal("retry did not append one execution")
+	}
+	var retriedInput runnercontract.GenerateRunInput
+	if err := json.Unmarshal(r.Generations[6].Request.Input, &retriedInput); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(retriedInput.Execution.Settings), "new-steer-agent") ||
+		!reflect.DeepEqual(retriedInput.Generate, failedInput.Generate) {
+		t.Fatal("retry did not use the current settings with the original generation materials")
 	}
 	replay, e := s.RetryDocuments(ctx, r.ID, failedKey, retryID, r.Revision)
 	if e != nil || len(replay.Generations) != 7 {

@@ -1,3 +1,4 @@
+import type { SteerAgentConfig } from "../../shared/api/execution-configs";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
@@ -64,6 +65,7 @@ type Index = {
   records: MaintenanceRecord[];
   profiles: { id: string; name: string }[];
   default_profile: string;
+  steer_agent: SteerAgentConfig;
 };
 type StartReadiness = {
   branch: string;
@@ -347,8 +349,14 @@ export function RefactoringMaintenance() {
             </div>
           )}
           <div className="refactoring-fields refactoring-configuration">
+            {index.data?.steer_agent && (
+              <p>
+                SteerAgent 只读决策：{index.data.steer_agent.model} /{" "}
+                {index.data.steer_agent.reasoning_effort}
+              </p>
+            )}
             <label>
-              执行配置
+              Runner 执行配置
               <select
                 required
                 value={profile}
@@ -357,7 +365,7 @@ export function RefactoringMaintenance() {
                   setStartError("");
                 }}
               >
-                <option value="">选择执行配置</option>
+                <option value="">选择 Runner 执行配置</option>
                 {index.data?.profiles.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name || p.id}
@@ -526,7 +534,7 @@ export function RefactoringMaintenance() {
                 aggressive: "激进决策",
               }[current.input.strategy]
             }{" "}
-            · 执行配置：{current.input.profile}
+            · Runner 执行配置：{current.input.profile}
           </p>
           <p>
             预算：

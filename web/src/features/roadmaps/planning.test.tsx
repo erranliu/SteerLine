@@ -48,7 +48,7 @@ test("reviews selected files and hands the stable link to the published source",
     return {
       available: true,
       tasks: [task],
-      profiles: [{ id: "codex", name: "Codex" }],
+      steer_agent: { model: "gpt-6.1-sol", reasoning_effort: "high" },
     };
   });
   workspace.api.envelope.mockImplementation(
@@ -134,7 +134,11 @@ test("submits all fields against the original native question", async () => {
     }
     return url.endsWith("/question-task")
       ? task
-      : { available: true, tasks: [task], profiles: [] };
+      : {
+          available: true,
+          tasks: [task],
+          steer_agent: { model: "gpt-6.1-sol", reasoning_effort: "high" },
+        };
   });
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },

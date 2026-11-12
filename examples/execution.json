@@ -1,7 +1,7 @@
 {
   "version": 3,
   "max_generate_concurrency": 5,
-  "continuation_suggestion": {
+  "steer_agent": {
     "model": "gpt-6.1-sol",
     "reasoning_effort": "high"
   },

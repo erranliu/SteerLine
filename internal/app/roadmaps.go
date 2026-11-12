@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -63,17 +63,7 @@ func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source
 	p.service.Graph = p.graph
-	p.service.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		profile, e := c.RunnerExecution.Profile(id, "")
-		if e != nil {
-			return runnercontract.ExecutionInput{}, nil, e
-		}
-		resolved, e := c.deriveProfile(ctx, profile, "generate", "read_only")
-		if e != nil || resolved.Execution == nil {
-			return runnercontract.ExecutionInput{}, nil, e
-		}
-		return *resolved.Execution, c.runtimeNative.Catalog, nil
-	}
+	p.service.Prepare = c.prepareSteerAgentGeneration
 	p.service.PrepareDocuments = p.documentContext
 	p.service.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
 		reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
@@ -238,20 +228,24 @@ func (p *roadmapPort) read(ctx context.Context, route string, values url.Values)
 	for _, r := range records {
 		publicRecords = append(publicRecords, publicRoadmap(r))
 	}
-	profiles := []map[string]string{}
-	for _, profile := range p.config.RunnerExecution.Profiles {
-		if _, e := p.config.deriveProfile(ctx, profile, "generate", "read_only"); e == nil {
-			profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
+	agent, err := executionconfig.SteerAgentSettings(p.config.RunnerExecution.SteerAgent)
+	if err != nil {
+		return nil, err
+	}
+	reason := p.config.runtimeCatalog.FileMaterialGenerationUnavailable()
+	if reason == "" {
+		if _, _, err = p.config.prepareSteerAgentGeneration(ctx); err != nil {
+			reason = err.Error()
 		}
 	}
 	return struct {
-		Sources            []roadmap.Source      `json:"sources"`
-		Records            []publicRoadmapRecord `json:"records"`
-		Profiles           []map[string]string   `json:"profiles"`
-		DocumentsAvailable bool                  `json:"documents_available"`
-		DocumentsReason    string                `json:"documents_reason"`
-		Preparation        roadmapPreparation    `json:"preparation"`
-	}{sources, publicRecords, profiles, p.config.runtimeCatalog.FileMaterialGenerationUnavailable() == "", p.config.runtimeCatalog.FileMaterialGenerationUnavailable(), p.preparation(ctx)}, nil
+		Sources            []roadmap.Source           `json:"sources"`
+		Records            []publicRoadmapRecord      `json:"records"`
+		SteerAgent         executionconfig.SteerAgent `json:"steer_agent"`
+		DocumentsAvailable bool                       `json:"documents_available"`
+		DocumentsReason    string                     `json:"documents_reason"`
+		Preparation        roadmapPreparation         `json:"preparation"`
+	}{sources, publicRecords, agent, reason == "", reason, p.preparation(ctx)}, nil
 }
 func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
 	out := maintenanceResponse(in)

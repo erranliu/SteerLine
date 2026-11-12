@@ -30,8 +30,10 @@ export interface Profile {
     [key: string]: unknown;
   };
 }
+export type SteerAgentConfig = { model: string; reasoning_effort: string };
+
 export interface ExecutionConfig {
-  continuation_suggestion?: { model: string; reasoning_effort: string } | null;
+  steer_agent?: SteerAgentConfig | null;
   developer?: { skip_environment_readiness?: boolean };
   version: number;
   runner: { executable: string; version: string; sha256: string };

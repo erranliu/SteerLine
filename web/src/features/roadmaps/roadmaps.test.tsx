@@ -102,7 +102,7 @@ function setup(
     },
     sources: [{ ...source, body: "" }],
     records: [record],
-    profiles: [{ id: "local", name: "本机 Codex" }],
+    steer_agent: { model: "gpt-6.1-sol", reasoning_effort: "high" },
     documents_available: true,
     documents_reason: "",
   };
@@ -652,7 +652,6 @@ it("submits an explicit Runner parse with original request identity and no forma
   expect(envelope.payload).toEqual({
     path: source.path,
     source_digest: source.digest,
-    profile: "local",
     request_id: envelope.request_id,
   });
   expect(JSON.stringify(envelope)).not.toContain("task_id");

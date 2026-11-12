@@ -14,7 +14,7 @@ type RunnerExecutionConfig executionconfig.File[runnerclient.Selection]
 type RunnerProfile = executionconfig.Profile
 
 func (g RunnerExecutionConfig) Validate() error {
-	if _, err := executionconfig.ContinuationSuggestionSettings(g.ContinuationSuggestion); err != nil {
+	if _, err := executionconfig.SteerAgentSettings(g.SteerAgent); err != nil {
 		return err
 	}
 	if err := g.Developer.Validate(); err != nil {

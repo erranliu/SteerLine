@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	roadmaps "github.com/erranliu/SteerLine/internal/roadmap"
@@ -89,14 +90,17 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 				list = append(list, view)
 			}
 		}
-		profiles := []map[string]string{}
-		workflow := runnercontract.Workflow{ID: "conversation", Version: 2}
-		for _, profile := range p.config.RunnerExecution.Profiles {
-			if p.config.runtimeCatalog.SupportsManagedConversation() && profile.Execution.Adapter == "codex-app-server" && profile.Execution.Target.Kind == "local" && p.config.runtimeCatalog.ValidateConfiguration(profile.Execution, workflow) == nil {
-				profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
-			}
+		agent, err := executionconfig.SteerAgentSettings(p.config.RunnerExecution.SteerAgent)
+		if err != nil {
+			return nil, err
 		}
-		return map[string]any{"tasks": list, "profiles": profiles, "available": p.config.runtimeCatalog.SupportsManagedConversation()}, nil
+		var reason string
+		if !p.config.runtimeCatalog.SupportsManagedConversation() {
+			reason = "固定 Runner 缺少 conversation/2 与 worktree 租约"
+		} else if _, err := p.config.runtimeCatalog.ConfigurationCapability("compose"); err != nil {
+			reason = err.Error()
+		}
+		return map[string]any{"tasks": list, "steer_agent": agent, "available": reason == "", "unavailable_reason": reason}, nil
 	}
 	id, tail, _ := strings.Cut(strings.TrimPrefix(route, planningRoute+"/"), "/")
 	if !roadmap.IDPattern.MatchString(id) {
@@ -341,10 +345,9 @@ func planControl(op *roadmap.PlanningOperation, command string, revision uint64,
 
 func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelope) (roadmap.PlanningTask, error) {
 	var input struct {
-		Title   string `json:"title"`
-		Goal    string `json:"goal"`
-		File    string `json:"file"`
-		Profile string `json:"profile"`
+		Title string `json:"title"`
+		Goal  string `json:"goal"`
+		File  string `json:"file"`
 	}
 	if err := decodeStrictJSON(in.Payload, &input); err != nil {
 		return roadmap.PlanningTask{}, err
@@ -358,14 +361,10 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 	if !p.config.runtimeCatalog.SupportsManagedConversation() {
 		return roadmap.PlanningTask{}, errors.New("固定 Runner 缺少 conversation/2 与 worktree 租约")
 	}
-	profile, err := p.config.RunnerExecution.Profile(input.Profile, "")
-	if err != nil {
-		return roadmap.PlanningTask{}, err
-	}
+	p.config.runtimeNative.RefreshFailures()
 	workflow := runnercontract.Workflow{ID: "conversation", Version: 2}
-	// #146 publishes the managed conversation schema but does not support
-	// deriving an execution profile for it. Validate the selected profile as-is.
-	if err = p.config.runtimeCatalog.ValidateConfiguration(profile.Execution, workflow); err != nil {
+	execution, err := p.config.resolveSteerAgentExecution(ctx, workflow, "full_access")
+	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
 	obs, err := p.config.runtimeMaintenance.check(ctx)
@@ -402,7 +401,7 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
-	request := runnercontract.ConversationRunInput{Title: input.Title, Correlation: map[string]string{"steerline_planning": id}, Workflow: workflow, Execution: profile.Execution,
+	request := runnercontract.ConversationRunInput{Title: input.Title, Correlation: map[string]string{"steerline_planning": id}, Workflow: workflow, Execution: execution,
 		Repository:   runnercontract.Repository{URL: strings.TrimSpace(string(remote)), LocalPath: p.config.Repository, Remote: p.config.Remote, BaseBranch: p.config.Branch, BaseRevision: obs.Commit},
 		Conversation: runnercontract.ConversationInput{Instruction: instruction, Materials: []runnercontract.Document{}}}
 	if err = p.config.runtimeCatalog.ValidateManagedConversation(request); err != nil {

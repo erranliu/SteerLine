@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configSnapshot } from "../../test/execution-config";
-import { ContinuationSuggestionSettings } from "./continuation-suggestion-settings";
+import { SteerAgentSettings } from "./steer-agent-settings";
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -56,11 +56,7 @@ it("uses the explicit local Codex model catalogue and preserves unrelated settin
   });
   render(
     <QueryClientProvider client={client}>
-      <ContinuationSuggestionSettings
-        home="isolated"
-        csrf="csrf"
-        applicationConnected
-      />
+      <SteerAgentSettings home="isolated" csrf="csrf" applicationConnected />
     </QueryClientProvider>,
   );
   await screen.findByRole("button", { name: "读取本地 Codex 模型" });
@@ -72,28 +68,24 @@ it("uses the explicit local Codex model catalogue and preserves unrelated settin
   expect(screen.getByText("当前设置：gpt-6.1-sol / high")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "读取本地 Codex 模型" }));
   await screen.findByRole("option", { name: "Chosen model" });
-  fireEvent.change(screen.getByLabelText("对话续作 · 提示词建议 模型"), {
+  fireEvent.change(screen.getByLabelText("SteerAgent 模型"), {
     target: { value: "chosen" },
   });
-  fireEvent.change(screen.getByLabelText("对话续作 · 提示词建议 思考强度"), {
+  fireEvent.change(screen.getByLabelText("SteerAgent 思考强度"), {
     target: { value: "medium" },
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: "保存对话续作 · 提示词建议 设置" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "保存SteerAgent 设置" }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0]).toMatchObject({
     config: {
       ...configSnapshot.config,
-      continuation_suggestion: { model: "chosen", reasoning_effort: "medium" },
+      steer_agent: { model: "chosen", reasoning_effort: "medium" },
     },
     saved_digest: configSnapshot.saved_digest,
     profile_edits: [],
   });
   expect(
-    await screen.findByText(
-      "对话续作 · 提示词建议 设置已保存，重启 SteerLine 后生效。",
-    ),
+    await screen.findByText("SteerAgent 设置已保存，重启 SteerLine 后生效。"),
   ).toBeVisible();
   client.clear();
 });

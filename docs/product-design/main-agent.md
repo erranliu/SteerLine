@@ -2,7 +2,7 @@
 
 状态：已随 [PR #478](https://github.com/erranliu/SteerLine/pull/478) 合并，接入现有 Runner generate/1，本地 Codex 只读生成；未部署。正式契约见[Spec](../../SteerlineFlow/spec/main-agent-advisory.spec.md)、[Plan](../../SteerlineFlow/plans/main-agent-advisory.plan.md)，实际验证与未验项见[验收](../../SteerlineFlow/testing/acceptance/main-agent-advisory.md)。用户已明确放宽此前严格零工具要求，并选择直接接入开发候选的明确待答问题。
 
-按 [SteerAgent 长期分类](steer-agent.md)，本文能力归对话续作中的建议生成。当前模块已按建议产物重归，专用设置为平铺 continuation_suggestion；实际分类收敛范围及验证见[分类 Spec](../../SteerlineFlow/spec/steer-agent-classification.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/steer-agent-classification.md)。advisory-v1、原路由/命令/活动来源及提示资产名称保留，不代表具备其他类型能力。
+按 [SteerAgent 长期分类](steer-agent.md)，本文能力归对话续作中的建议生成。模型和思考强度使用全局 [SteerAgent 配置](execution-configuration.md#调用方设置与环境边界)。实际分类收敛范围及验证见[分类 Spec](../../SteerlineFlow/spec/steer-agent-classification.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/steer-agent-classification.md)。advisory-v1、原路由/命令/活动来源及提示资产名称保留，不代表具备其他类型能力。
 
 ## 模块和执行边界
 

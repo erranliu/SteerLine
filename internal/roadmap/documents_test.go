@@ -65,8 +65,8 @@ func documentPlanningSetup(t *testing.T, confirmed bool) (*Service, *memoryRoadm
 		}
 	}
 	prepare := s.Prepare
-	s.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		exec, cat, e := prepare(ctx, id)
+	s.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+		exec, cat, e := prepare(ctx)
 		return exec, repositoryCatalog(t, cat), e
 	}
 	s.Repository = t.TempDir()
@@ -387,8 +387,8 @@ func TestRoadmapDocumentsDoNotSubmitWithoutCapabilityOrGuidelines(t *testing.T) 
 				}
 			} else {
 				prepare := s.Prepare
-				s.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-					exec, cat, err := prepare(ctx, id)
+				s.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+					exec, cat, err := prepare(ctx)
 					cat.Capabilities.Generate = nil
 					return exec, cat, err
 				}

@@ -42,7 +42,7 @@ type Service struct {
 	Queue               Queue
 	Source              func(context.Context, string) (model.Source, error)
 	Graph               func(context.Context) ([]model.Existing, error)
-	Prepare             func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error)
+	Prepare             func(context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error)
 	PrepareDocuments    func(context.Context, model.Record) (model.DocumentContext, error)
 	ReadCommitted       func(context.Context, string, string) ([]byte, error)
 	Admit               func(context.Context) error
@@ -53,7 +53,6 @@ type ParseInput struct {
 	RequestID string `json:"request_id"`
 	Path      string `json:"path"`
 	Digest    string `json:"source_digest"`
-	Profile   string `json:"profile"`
 }
 
 func Token() string {
@@ -85,11 +84,11 @@ func (s *Service) track(r model.Record) {
 func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !model.IDPattern.MatchString(in.RequestID) || !model.SourcePath(in.Path) || len(in.Digest) != 64 || in.Profile == "" {
-		return model.Record{}, errors.New("解析需要原请求号、Markdown 路径/摘要和本机内容生成方案")
+	if !model.IDPattern.MatchString(in.RequestID) || !model.SourcePath(in.Path) || len(in.Digest) != 64 {
+		return model.Record{}, errors.New("解析需要原请求号及 Markdown 路径和摘要")
 	}
 	if old, e := s.Store.Roadmap(ctx, s.Project, in.RequestID); e == nil {
-		if old.Source.Path != in.Path || old.Source.Digest != in.Digest || old.Profile != in.Profile {
+		if old.Source.Path != in.Path || old.Source.Digest != in.Digest {
 			return old, errors.New("request_conflict: original parse input differs")
 		}
 		return old, nil
@@ -134,7 +133,7 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
 	if len(body)+len(source.Body)+len(mappingBody) > model.MaxBytes {
 		return model.Record{}, errors.New("Markdown 和已有任务材料超过生成上限，不能截断解析")
 	}
-	execution, catalog, e := s.Prepare(ctx, in.Profile)
+	execution, catalog, e := s.Prepare(ctx)
 	if e != nil {
 		return model.Record{}, e
 	}
@@ -174,7 +173,7 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
 	if e != nil {
 		return model.Record{}, e
 	}
-	r := model.Record{ID: in.RequestID, RequestID: in.RequestID, Project: s.Project, Revision: 1, Source: source, Existing: graph, GraphDigest: model.GraphDigest(graph), Profile: in.Profile, CreatedAt: time.Now().UTC(), State: "queued", Runner: s.Build, Submission: "pending", CodeCommit: source.Head, Materials: materials, PlanningMaterials: materials, Documents: []model.Documents{}, Mapping: mapping, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}}
+	r := model.Record{ID: in.RequestID, RequestID: in.RequestID, Project: s.Project, Revision: 1, Source: source, Existing: graph, GraphDigest: model.GraphDigest(graph), CreatedAt: time.Now().UTC(), State: "queued", Runner: s.Build, Submission: "pending", CodeCommit: source.Head, Materials: materials, PlanningMaterials: materials, Documents: []model.Documents{}, Mapping: mapping, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}}
 	if e = s.Store.SaveRoadmap(ctx, r, 0); e != nil {
 		return r, e
 	}

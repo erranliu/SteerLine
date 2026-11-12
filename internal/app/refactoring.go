@@ -12,6 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/billing"
 	"github.com/erranliu/SteerLine/internal/billingconfig"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/refactoring"
@@ -75,14 +76,11 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 		}
 		return out, e
 	}
-	read, e := c.deriveProfile(ctx, profile, "generate", "read_only")
-	if e != nil || read.Execution == nil {
-		if e == nil {
-			e = errors.New("只读执行配置缺失")
-		}
+	read, _, e := c.prepareSteerAgentGeneration(ctx)
+	if e != nil {
 		return out, e
 	}
-	if e = c.runtimeNative.Catalog.ValidateMaintenance(*write.Execution, *read.Execution); e != nil {
+	if e = c.runtimeNative.Catalog.ValidateMaintenance(*write.Execution, read); e != nil {
 		return out, e
 	}
 	if c.environmentPolicy.RequireReadiness() {
@@ -128,7 +126,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	if e != nil {
 		return out, e
 	}
-	out = ref.Frozen{Direction: direction, Repository: runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}, Write: *write.Execution, Read: *read.Execution, Runner: cli.BuildPin(), Rules: string(rules)}
+	out = ref.Frozen{Direction: direction, Repository: runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}, Write: *write.Execution, Read: read, Runner: cli.BuildPin(), Rules: string(rules)}
 	out.Publication = map[string]string{"provider": c.PR.Kind, "base_url": c.PR.BaseURL, "repository": c.PR.Repository, "base_branch": c.Branch, "token_env": c.PR.TokenEnv}
 	settings, priceErr := (billingconfig.Store{Home: HomeDir()}).Read()
 	if priceErr == nil {
@@ -138,18 +136,19 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 		}
 	}
 	if in.Budget.Dollars != "" {
-		var selected struct {
-			Model string `json:"model"`
-		}
-		_ = json.Unmarshal(write.Execution.Settings, &selected)
-		if out.Pricing == nil || !cli.RunUsageSupported || !cli.ConfiguredUsageSupported || selected.Model == "" {
+		if out.Pricing == nil || !cli.RunUsageSupported || !cli.ConfiguredUsageSupported {
 			return out, errors.New("美元预算需要明确模型、有效价表和Runner用量采集")
 		}
 		if out.Pricing.Currency != "USD" {
 			return out, errors.New("美元预算需要USD价表")
 		}
 		for _, execution := range []runnercontract.ExecutionInput{out.Write, out.Read} {
-			_ = json.Unmarshal(execution.Settings, &selected)
+			var selected struct {
+				Model string `json:"model"`
+			}
+			if err := json.Unmarshal(execution.Settings, &selected); err != nil || selected.Model == "" {
+				return out, errors.New("美元预算需要明确 SteerAgent 和 Runner 的模型")
+			}
 			one, zero := int64(1), int64(0)
 			estimate, err := billing.Calculate(billing.Usage{RunID: "preflight", Scope: "main_session", Revision: 1, Status: "available", Finalized: true, CoverageComplete: true, PriceAt: time.Now().UTC(), Records: []billing.Record{{ID: "preflight", Model: selected.Model, Tokens: billing.Tokens{InputUncached: &one, CacheRead: &zero, CacheWrite: &zero, Output: &one}}}}, *out.Pricing)
 			if err != nil || estimate.Total == nil {
@@ -350,7 +349,11 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 				profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
 			}
 		}
-		return map[string]any{"records": views, "profiles": profiles, "default_profile": p.config.RunnerExecution.DefaultProfile}, nil
+		agent, err := executionconfig.SteerAgentSettings(p.config.RunnerExecution.SteerAgent)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"records": views, "profiles": profiles, "default_profile": p.config.RunnerExecution.DefaultProfile, "steer_agent": agent}, nil
 	}
 	id := strings.TrimPrefix(route, "/refactoring/")
 	if !ref.ValidID(id) {
