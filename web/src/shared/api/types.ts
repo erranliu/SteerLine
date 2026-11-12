@@ -63,6 +63,16 @@ export interface Presentation {
     runner?: { executable: string };
   };
 }
+export interface TaskStartBlocker {
+  code: string;
+  diagnostic: string;
+}
+export interface TaskStartEligibility {
+  action: "start_task" | "start_candidate";
+  blockers: TaskStartBlocker[];
+  profile_blockers: Record<string, TaskStartBlocker | null>;
+  environment_readiness_required: boolean;
+}
 export interface Task {
   task_id: string;
   title: string;
@@ -71,6 +81,7 @@ export interface Task {
   spec_path: string;
   dependency_ready: boolean;
   startup_blockers: string[];
+  start_eligibility?: TaskStartEligibility;
   predecessors: {
     task_id: string;
     delivered: boolean;
@@ -93,6 +104,7 @@ export interface Task {
 }
 export interface TaskPage {
   tasks: Task[];
+  authority_version?: number;
   next_cursor?: string;
   has_more: boolean;
   graph_revision: number;

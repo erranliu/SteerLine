@@ -61,7 +61,7 @@ func openServiceProjectClientWithCommands(ctx context.Context, config Config, se
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
-				return &clientReader{Service: query.NewService(store, bound.Identity()), ConversationService: query.NewConversationService(store, bound.Identity()), store: store, project: bound.Identity(), config: bound, executableTypes: append([]string(nil), bound.ExecutableTypes...), freshness: projectReadFreshness(bound), borrowed: true}, nil
+				return &clientReader{Service: query.NewService(store, bound.Identity()), ConversationService: query.NewConversationService(store, bound.Identity()), store: store, project: bound.Identity(), config: bound, executableTypes: append([]string(nil), bound.ExecutableTypes...), freshness: projectReadFreshness(bound), borrowed: true, startActor: service}, nil
 			}
 		}
 		if commands != nil {
@@ -167,7 +167,8 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 }
 
 type clientReader struct {
-	borrowed bool
+	borrowed   bool
+	startActor *taskrunner.Actor
 
 	query.Service
 	query.ConversationService
@@ -261,7 +262,11 @@ func (r *clientReader) ShowTask(ctx context.Context, id string) (productapi.Task
 	if err != nil {
 		return productapi.TaskPage{}, productReadError(err)
 	}
-	return query.TaskPage(page), nil
+	view := query.TaskPage(page)
+	if r.startActor != nil {
+		view.Tasks[0].StartEligibility = r.taskStartEligibility(ctx, page.DispatchMode, page.Tasks[0])
+	}
+	return view, nil
 }
 func (r *clientReader) ListTasks(ctx context.Context, cursor string, limit int) (productapi.TaskPage, error) {
 	page, err := r.Service.ListNativeTasks(ctx, cursor, limit)

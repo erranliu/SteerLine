@@ -383,17 +383,32 @@ type DeliverySummary struct {
 }
 type TaskDetail struct {
 	TaskSummary
-	StopPending       []string            `json:"stop_pending,omitempty"`
-	ProjectID         string              `json:"project_id"`
-	Priority          int                 `json:"priority"`
-	SpecPath          string              `json:"spec_path"`
-	WorkflowRuns      []WorkflowSummary   `json:"workflow_runs"`
-	Delivery          *DeliverySummary    `json:"delivery,omitempty"`
-	Predecessors      []DependencySummary `json:"predecessors"`
-	Successors        []string            `json:"successors"`
-	DependencyReady   bool                `json:"dependency_ready"`
-	UnmetPredecessors []DependencySummary `json:"unmet_predecessors"`
-	StartupBlockers   []string            `json:"startup_blockers"`
+	StopPending       []string              `json:"stop_pending,omitempty"`
+	ProjectID         string                `json:"project_id"`
+	Priority          int                   `json:"priority"`
+	SpecPath          string                `json:"spec_path"`
+	WorkflowRuns      []WorkflowSummary     `json:"workflow_runs"`
+	Delivery          *DeliverySummary      `json:"delivery,omitempty"`
+	Predecessors      []DependencySummary   `json:"predecessors"`
+	Successors        []string              `json:"successors"`
+	DependencyReady   bool                  `json:"dependency_ready"`
+	UnmetPredecessors []DependencySummary   `json:"unmet_predecessors"`
+	StartupBlockers   []string              `json:"startup_blockers"`
+	StartEligibility  *TaskStartEligibility `json:"start_eligibility,omitempty"`
+}
+
+type TaskStartBlocker struct {
+	Code       string `json:"code"`
+	Diagnostic string `json:"diagnostic"`
+}
+
+// TaskStartEligibility describes the explicit start action at the sampled
+// task, graph and authority revisions in TaskPage. Submission revalidates it.
+type TaskStartEligibility struct {
+	Action                       string                       `json:"action"`
+	Blockers                     []TaskStartBlocker           `json:"blockers"`
+	ProfileBlockers              map[string]*TaskStartBlocker `json:"profile_blockers"`
+	EnvironmentReadinessRequired bool                         `json:"environment_readiness_required"`
 }
 type TaskCapabilities struct {
 	DependencyReadiness string `json:"dependency_readiness"`

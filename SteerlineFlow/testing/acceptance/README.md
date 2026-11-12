@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+任务启动与新增候选资格收敛（2026-11-12）。[实现与验收](task-start-eligibility.md)
+
 Web UI 恢复可见时刷新（2026-11-12）。[验收记录](web-foreground-refresh.md)
 
 项目运行环境准备要求默认折叠（2026-11-12）。[验收记录](project-environment-preparation-fold.md)
