@@ -162,10 +162,20 @@ test("Roadmap planning uses the original Codex conversation and hands off the me
   stage("Original native session resolved the real Git conflict");
 
   await page.getByRole("button", { name: "审阅文件差异" }).click();
-  const extra = page
-    .locator("details")
-    .filter({ hasText: "planning-conflict.txt" });
-  await extra.getByText("planning-conflict.txt", { exact: true }).click();
+  await expect
+    .poll(
+      async () => {
+        const current = await task();
+        return !current.busy && current.can_rebase && !!current.review?.digest;
+      },
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  const summary = page
+    .locator("summary")
+    .filter({ hasText: /^planning-conflict\.txt$/ });
+  const extra = page.locator("details").filter({ has: summary });
+  await summary.click();
   await extra.getByRole("checkbox", { name: "纳入 PR" }).check();
   await page.getByRole("button", { name: "确认并创建 PR" }).click();
   await expect
