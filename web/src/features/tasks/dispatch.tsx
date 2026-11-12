@@ -107,9 +107,9 @@ function DispatchControls() {
           {project.text}
           {project.diagnostic && `：${project.diagnostic}`} ·{" "}
           <NavLink
-            to={`/projects/${identity.project_id}/dag?maintenance=preparation`}
+            to={`/projects/${identity.project_id}/status`}
           >
-            前往项目维护
+            前往项目状态
           </NavLink>
         </p>
       )}

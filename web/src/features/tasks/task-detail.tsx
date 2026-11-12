@@ -219,9 +219,9 @@ export function TaskDetail({
             )}
             {!project.ready && (
               <Link
-                to={`/projects/${api.identity.project_id}/dag?maintenance=preparation&task=${encodeURIComponent(id)}`}
+                to={`/projects/${api.identity.project_id}/status?task=${encodeURIComponent(id)}`}
               >
-                前往项目维护 <ArrowUpRight size={13} />
+                前往项目状态 <ArrowUpRight size={13} />
               </Link>
             )}
           </div>

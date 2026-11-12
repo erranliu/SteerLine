@@ -38,8 +38,8 @@ test("runtime.project-maintenance: Git test arrangements, independent candidates
    return receipt.status==="rejected"?"rejected: "+receipt.diagnostic:receipt.status;
   },{timeout:60000}).toBe("applied");
  };
- const section=page.getByRole("region",{name:"项目维护"});
- await section.getByRole("button",{name:/项目维护/}).click();
+ await page.getByRole("navigation",{name:"主导航"}).getByRole("link",{name:"项目状态"}).click();
+ const section=page.getByRole("region",{name:"项目状态"});
  await section.getByRole("button",{name:"检查更新",exact:true}).click();
  const ready=async()=>{
   await expect.poll(async()=>{const v=await get("/maintenance");return v.tasks.find((t:any)=>t.task_id==="1")?.status},{timeout:90000}).toBe("ready");

@@ -18,7 +18,7 @@ export function TaskMaterials({ id }: { id: string }) {
       {open && (
         <div>
           <p className="muted">
-            在项目维护准备最新文档与测试安排；已有候选仍执行各自绑定的版本。
+            在「项目状态」检查更新，读取最新文档与测试安排。已有候选仍执行各自绑定的版本。
           </p>
           {q.data && !q.data.commit && (
             <p className="muted">

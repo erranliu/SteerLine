@@ -247,8 +247,6 @@ export function RefactoringMaintenance() {
   else if (!environmentReady && !environmentBypassed)
     startBlocker = "所选运行环境尚未就绪";
   else if (!(dollars || minutes || rounds)) startBlocker = "请至少设置一项预算";
-  const maintenanceParams = new URLSearchParams(params);
-  maintenanceParams.set("maintenance", "preparation");
   return (
     <div className="refactoring-page">
       <header className="page-heading">
@@ -436,13 +434,13 @@ export function RefactoringMaintenance() {
                 ? `项目基线待核实 · 上次结果：${lastQualification.project.status === "ready" ? "已就绪" : "未就绪"}`
                 : "项目基线待核实"}
             {!!qualification?.project.blockers.length &&
-              " · " + qualification.project.blockers.join("；")}
+              " · " + qualification.project.blockers.map((blocker) => blocker.diagnostic).join("；")}
             {!projectReady && (
               <>
                 {" "}
                 ·{" "}
-                <Link to={{ search: "?" + maintenanceParams }}>
-                  打开项目维护
+                <Link to={`/projects/${identity.project_id}/status`}>
+                  打开项目状态
                 </Link>
               </>
             )}

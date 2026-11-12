@@ -103,7 +103,7 @@ func (a taskDocuments) readPinnedFiles(ctx context.Context, commit string, names
 		name := string(parts[1])
 		meta := strings.Fields(string(parts[0]))
 		if len(meta) != 3 || meta[1] != "blob" || (meta[0] != "100644" && meta[0] != "100755") {
-			return nil, &nonRegularCommittedFileError{taskDocumentError("pinned path must be a regular file, not a link or directory: " + name)}
+			return nil, &nonRegularCommittedFileError{taskDocumentError("pinned path must be a regular file, not a link or directory: " + name), name}
 		}
 		objects[name] = meta[2]
 	}
@@ -114,7 +114,7 @@ func (a taskDocuments) readPinnedFiles(ctx context.Context, commit string, names
 			if allowMissing {
 				continue
 			}
-			return nil, &missingCommittedFileError{fmt.Errorf("pinned path missing %s: %w", name, os.ErrNotExist)}
+			return nil, &missingCommittedFileError{fmt.Errorf("pinned path missing %s: %w", name, os.ErrNotExist), name}
 		}
 		input.WriteString(objects[name] + "\n")
 		available = append(available, name)
@@ -159,12 +159,18 @@ func taskPayloadDigest(body []byte) string {
 
 func (a taskDocuments) RepositoryTarget(ctx context.Context) (string, error) { return a.target(ctx) }
 
-type nonRegularCommittedFileError struct{ error }
+type nonRegularCommittedFileError struct {
+	error
+	path string
+}
 
 func (e *nonRegularCommittedFileError) Unwrap() error { return e.error }
 
 // Only an absent path in a successfully read Git tree proves material deletion.
 // A missing executable or working directory is a read failure, not revocation.
-type missingCommittedFileError struct{ error }
+type missingCommittedFileError struct {
+	error
+	path string
+}
 
 func (e *missingCommittedFileError) Unwrap() error { return e.error }

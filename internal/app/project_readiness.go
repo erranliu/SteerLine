@@ -58,25 +58,42 @@ func (m *projectMaintenance) readinessState(ctx context.Context) (maintenanceSta
 	}
 	state.Local = m.localBaseline(ctx)
 	state.Readiness = pm.MaterialsReadiness(state.Observation.Commit, state.Materials)
-	blockers := []string{}
-	if state.Observation.Commit == "" {
-		blockers = append(blockers, "远端尚未检查")
-	} else if state.Observation.Diagnostic != "" {
-		blockers = append(blockers, "远端检查失败："+state.Observation.Diagnostic)
+	var blockers []pm.Blocker
+	add := func(category pm.BlockerCategory, code pm.BlockerCode, diagnostic string) {
+		blockers = append(blockers, pm.Blocker{Category: category, Code: code, Diagnostic: diagnostic, TargetBranch: m.config.Branch})
 	}
-	if state.Local.Status != "synced" || state.Local.Reason != "" || state.Local.Commit != state.Observation.Commit {
-		reason := state.Local.Reason
-		if reason == "" {
-			reason = "本地尚未与目标分支同步"
+	remoteVerified := state.Observation.Commit != "" && state.Observation.Diagnostic == ""
+	if state.Observation.Diagnostic != "" {
+		add(pm.Remote, pm.RemoteCheckFailed, "远端检查失败："+state.Observation.Diagnostic)
+	} else if state.Observation.Commit == "" {
+		add(pm.Remote, pm.RemoteUnchecked, "远端尚未检查")
+	}
+	local := state.Local
+	if local.ReasonCode == pm.RemoteHistoryRewritten {
+		add(pm.Remote, local.ReasonCode, local.Reason)
+	} else if local.ReasonCode != "" {
+		add(pm.Worktree, local.ReasonCode, local.Reason)
+	}
+	if remoteVerified && local.Branch == m.config.Branch {
+		switch local.Status {
+		case "behind":
+			add(pm.Worktree, pm.LocalBehindRemote, "本地尚未与目标分支同步")
+		case "ahead":
+			add(pm.Worktree, pm.LocalAheadRemote, "本地存在未发布提交，请人工处理后重新检查")
+		case "diverged":
+			add(pm.Worktree, pm.LocalDiverged, "本地与目标分支已分叉，请人工处理后重新检查")
 		}
-		blockers = append(blockers, reason)
 	}
 	// A concurrent observation cannot turn an older projection into permission.
 	if current := m.current(); current.Commit != state.Observation.Commit || current.Diagnostic != state.Observation.Diagnostic || current.Rewritten != state.Observation.Rewritten {
-		blockers = append(blockers, "远端观察已变化，请重新核实")
+		add(pm.Remote, pm.RemoteObservationChanged, "远端观察已变化，请重新核实")
 	}
-	state.Readiness.Blockers = append(blockers, state.Readiness.Blockers...)
-	if len(state.Readiness.Blockers) > 0 {
+	// Keep the baseline gate even when a read raced an observation or checkout.
+	if len(blockers) == 0 && (local.Status != "synced" || local.Reason != "" || local.Commit != state.Observation.Commit) {
+		add(pm.Worktree, pm.WorktreeUnverified, "本地基线待核实")
+	}
+	if len(blockers) > 0 {
+		state.Readiness.Blockers = append(blockers, state.Readiness.Blockers...)
 		state.Readiness.Status = "not_ready"
 	}
 	return state, nil
@@ -91,7 +108,7 @@ func requireProjectReadiness(readiness pm.Readiness) error {
 	if readiness.Status == "ready" {
 		return nil
 	}
-	return &taskmodel.Error{Code: "project_not_ready", Message: "项目未就绪：" + strings.Join(readiness.Blockers, "；") + "。请前往项目维护处理"}
+	return &taskmodel.Error{Code: "project_not_ready", Message: "项目未就绪：" + readiness.Diagnostic() + "。请前往项目状态处理"}
 }
 
 func (m *projectMaintenance) reserveReadyExecution(ctx context.Context, commit string, save func() error) error {

@@ -23,6 +23,7 @@ export function AppShell({
   returnTo,
   activities,
   dispatchStatus,
+  projectStatus,
 }: {
   projectId?: string;
   projectName?: string;
@@ -34,6 +35,7 @@ export function AppShell({
   returnTo?: string;
   activities?: ReactNode;
   dispatchStatus?: ReactNode;
+  projectStatus?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
@@ -46,6 +48,7 @@ export function AppShell({
         dag: "任务 DAG",
         runs: "任务执行",
         tests: "测试管理",
+        status: "项目状态",
         settings: "配置",
         environment: "项目运行环境",
         refactoring: "重构与维护",
@@ -101,6 +104,12 @@ export function AppShell({
               >
                 <Command size={17} />
                 <span>项目运行环境</span>
+              </NavLink>
+              <NavLink
+                to={`/projects/${projectId}/status`}
+              >
+                <GitBranch size={17} />
+                <span>项目状态</span>
               </NavLink>
               <NavLink
                 aria-label="测试管理"
@@ -168,6 +177,7 @@ export function AppShell({
                 {returnTo === "/projects" ? "选择项目" : "返回项目"}
               </NavLink>
             )}
+            {projectStatus}
             {dispatchStatus}
             {activities}
             {connection}

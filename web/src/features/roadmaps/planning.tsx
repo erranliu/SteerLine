@@ -373,7 +373,7 @@ export default function RoadmapPlanning() {
               </header>
               {task.diagnostic && <p role="status">{task.diagnostic}</p>}
               {task.status === "merged_pending_sync" && (
-                <Link to={project + "/settings"}>前往项目维护</Link>
+                <Link to={project + "/status"}>前往项目状态</Link>
               )}
               {task.conflict && (
                 <section aria-label="Rebase 冲突">

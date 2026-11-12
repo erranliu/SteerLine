@@ -42,7 +42,7 @@ it("gates automatic dispatch on the shared project verdict and keeps ready stabl
     ...ready,
     status: "not_ready",
     ready: 1,
-    blockers: ["任务 #99 的材料与测试安排未就绪"],
+    blockers: [{ category: "task_material", code: "task_material_unprepared", diagnostic: "任务 #99 的材料与测试安排未就绪" }],
   });
   const send = vi.fn().mockResolvedValue(true);
   mountFeature(<Dispatch />, api, client, true, { send });
@@ -72,7 +72,7 @@ it("gates automatic dispatch on the shared project verdict and keeps ready stabl
     resolve({
       ...ready,
       status: "not_ready",
-      blockers: ["本地尚未与目标分支同步"],
+      blockers: [{ category: "worktree", code: "local_behind_remote", diagnostic: "本地尚未与目标分支同步" }],
     });
     await refresh;
   });

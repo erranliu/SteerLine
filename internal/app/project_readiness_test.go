@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -46,7 +47,9 @@ func TestProjectReadinessGatesAllUnfinishedTasksAndNewCandidates(t *testing.T) {
 			Readiness pm.Readiness `json:"readiness"`
 		}
 		require(t, json.Unmarshal(raw, &maintenance))
-		if (readiness.Status == "ready") != ready || maintenance.Readiness.Status != readiness.Status {
+		if readiness.Blockers == nil || maintenance.Readiness.Blockers == nil ||
+			(readiness.Status == "ready") != ready || maintenance.Readiness.Status != readiness.Status ||
+			!slices.Equal(maintenance.Readiness.Blockers, readiness.Blockers) {
 			t.Fatalf("maintenance and admission disagree: %+v %+v", readiness, maintenance.Readiness)
 		}
 		for _, candidate := range []bool{false, true} {
@@ -113,12 +116,17 @@ func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(
 	reserved := 0
 	save := func() error { reserved++; return nil }
 	require(t, m.reserveReadyExecution(ctx, commit, save))
-	checkBlocked := func() {
+	checkBlocked := func(codes ...pm.BlockerCode) {
 		t.Helper()
 		readiness, err := m.projectReadiness(ctx)
 		require(t, err)
 		if readiness.Status != "not_ready" || len(readiness.Blockers) == 0 {
 			t.Fatal(readiness)
+		}
+		for _, code := range codes {
+			if !slices.ContainsFunc(readiness.Blockers, func(blocker pm.Blocker) bool { return blocker.Code == code }) {
+				t.Fatalf("missing %s in %+v", code, readiness.Blockers)
+			}
 		}
 		if err := m.reserveReadyExecution(ctx, commit, save); err == nil || reserved != 1 {
 			t.Fatal("changed project admitted a reservation", err, reserved)
@@ -126,15 +134,15 @@ func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(
 	}
 	dirty := filepath.Join(m.config.Repository, "untracked.txt")
 	require(t, os.WriteFile(dirty, []byte("work"), 0600))
-	checkBlocked()
+	checkBlocked(pm.WorktreeDirty)
 	require(t, os.Remove(dirty))
 	pmGit(t, m.config.Repository, "checkout", "--detach", commit)
-	checkBlocked()
+	checkBlocked(pm.DetachedHEAD)
 	pmGit(t, m.config.Repository, "checkout", "-b", "different")
-	checkBlocked()
+	checkBlocked(pm.WrongBranch)
 	pmGit(t, m.config.Repository, "checkout", "main")
 	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "ahead")
-	checkBlocked()
+	checkBlocked(pm.LocalAheadRemote)
 	pmGit(t, m.config.Repository, "push", "origin", "main")
 	newCommit := pmGit(t, m.config.Repository, "rev-parse", "HEAD")
 	pmGit(t, m.config.Repository, "checkout", "--detach", commit)
@@ -142,7 +150,9 @@ func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(
 	pmGit(t, m.config.Repository, "checkout", "main")
 	_, err = m.check(ctx)
 	require(t, err)
-	checkBlocked()
+	require(t, os.WriteFile(dirty, []byte("work"), 0600))
+	checkBlocked(pm.WorktreeDirty, pm.LocalBehindRemote)
+	require(t, os.Remove(dirty))
 	pmGit(t, m.config.Repository, "merge", "--ff-only", newCommit)
 	// Unchanged Git arrangements remain ready after the baseline advances.
 	require(t, m.refresh(ctx))
@@ -152,12 +162,12 @@ func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(
 		t.Fatal(ready)
 	}
 	m.observation.Diagnostic = "remote unavailable"
-	checkBlocked()
+	checkBlocked(pm.RemoteCheckFailed)
 	m.observation.Diagnostic = ""
 	material := store.materials["101"]
 	material.Status = "failed"
 	store.materials["101"] = material
-	checkBlocked()
+	checkBlocked(pm.TaskMaterialInvalid)
 }
 
 func TestMaintenanceCandidateAdmissionNeverGeneratesMaterials(t *testing.T) {
@@ -172,5 +182,14 @@ func TestMaintenanceCandidateAdmissionNeverGeneratesMaterials(t *testing.T) {
 	var rejected *taskmodel.Error
 	if !errors.As(err, &rejected) || rejected.Code != "project_not_ready" || store.materials["101"].Status != "invalid" {
 		t.Fatal(err, store.materials)
+	}
+	readiness, err := m.projectReadiness(context.Background())
+	require(t, err)
+	want := pm.Blocker{Category: pm.TestPlan, Code: pm.TestPlanMissing, TaskID: "101", Path: "task.tests.json"}
+	if !slices.ContainsFunc(readiness.Blockers, func(blocker pm.Blocker) bool {
+		blocker.Diagnostic = ""
+		return blocker == want
+	}) {
+		t.Fatalf("missing committed arrangement reason: %+v", readiness.Blockers)
 	}
 }

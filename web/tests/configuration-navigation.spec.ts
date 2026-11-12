@@ -10,7 +10,7 @@ const projectReadiness: ProjectReadiness = {
   commit: "",
   total: 0,
   ready: 0,
-  blockers: ["fixture project not prepared"],
+  blockers: [{ category: "task_material", code: "task_material_unprepared", diagnostic: "fixture project not prepared" }],
 };
 
 test.setTimeout(120000);
