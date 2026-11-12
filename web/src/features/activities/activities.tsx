@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Activity as ActivityIcon, X, AlertCircle } from "lucide-react";
 import { useWorkspace } from "../../app/context";
@@ -119,7 +119,7 @@ export function Activities({
       identity.instance_id,
       "activity-counts",
     ],
-    enabled: false,
+    queryFn: skipToken,
   });
   // Request associations change independently of the paginated list. A new
   // journal request must not discard pages already loaded in the drawer.
@@ -175,7 +175,8 @@ export function Activities({
         .filter((a) => failed.has(a.source))
         .map((a) => [a.activity_id, a]),
     );
-    for (const p of pages) for (const a of p.items) items.set(a.activity_id, a);
+    for (const p of [...pages].reverse())
+      for (const a of p.items) items.set(a.activity_id, a);
     const result = [...items.values()];
     saved.current[queriedFilter] = result;
     return result;
@@ -213,10 +214,12 @@ export function Activities({
         : a.activity_id.localeCompare(b.activity_id);
     });
   const items = filter === "recent" ? ordered.slice(0, 50) : ordered;
+  const observation = query.latest ?? page;
   const faults = [
     ...new Set([
-      ...(page?.sources.filter((s) => s.diagnostic).map((s) => s.diagnostic) ||
-        []),
+      ...(observation?.sources
+        .filter((s) => s.diagnostic)
+        .map((s) => s.diagnostic) || []),
       ...(associationQuery.data?.diagnostics || []),
     ]),
   ];
@@ -225,8 +228,10 @@ export function Activities({
     query.isError ||
     associationQuery.isError ||
     !!faults.length ||
-    !page?.counts_known;
-  const countPage = readingPage ? sharedCounts.data || page : page;
+    !observation?.counts_known;
+  const countPage = readingPage
+    ? sharedCounts.data || observation
+    : observation;
   const countUnavailable = readingPage
     ? !!countPage?.sources.some((source) => source.diagnostic)
     : query.isError || !!faults.length;
@@ -237,7 +242,7 @@ export function Activities({
   const pending = provisional.filter((a) => !ended(a)).length;
 
   useEffect(() => {
-    if (visible && online && !readingPage) void query.refetch().catch(() => {});
+    if (visible && online && !readingPage) void query.refreshObservation();
   }, [visible, online, readingPage]); // refetch only the read observation on visibility return
   useEffect(() => {
     if (!destination.current) return;
@@ -432,10 +437,13 @@ export function Activities({
                   ? "连接或查询中断，保留上次已知状态"
                   : faults.length
                     ? "部分来源不可用，保留上次已知状态"
-                    : !page?.counts_known && page
+                    : !observation?.counts_known && observation
                       ? "部分结果 · 数量待核实"
                       : "当前项目所有已接入活动"}
               </div>
+              {query.hasUpdates && (
+                <p role="status">有更新，刷新后读取新快照。</p>
+              )}
               {faults.length > 0 && (
                 <details className="activity-source-errors">
                   <summary>查看来源诊断</summary>
@@ -597,7 +605,9 @@ export function Activities({
                 ))}
                 {query.hasNextPage && (
                   <Button
-                    disabled={query.isFetchingNextPage}
+                    disabled={
+                      !online || query.isFetchingNextPage || query.hasUpdates
+                    }
                     onClick={() => void query.fetchNextPage()}
                   >
                     {query.isFetchingNextPage ? "正在加载…" : "加载更多"}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQueries } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import type { Envelope, Receipt } from "../../shared/api/types";
 import { usePageVisible } from "../../shared/query-visibility";
@@ -48,9 +48,12 @@ export function EnvironmentOverview({
   name,
   preferred,
   startState,
+  recordScope,
   ...controls
 }: OverviewProps) {
   const { verified } = controls;
+  const { api, online } = useWorkspace();
+  const visible = usePageVisible();
   const [order, setOrder] = useState<string[] | null>(null);
   useEffect(() => {
     if (order === null && verified && environments.length)
@@ -69,17 +72,50 @@ export function EnvironmentOverview({
     };
     return index(a) - index(b);
   });
-  const submissions = new Map(rows.map((e) => [e, startState(e)]));
-  const ready = environments.filter(
-    (e) =>
-      e.status === "ready" &&
-      e.stage === "ready" &&
-      !submissions.get(e)?.confirming,
+  const activeRecords = new Map(
+    rows.flatMap((e) => (e.activity_id ? [[e.activity_id, e] as const] : [])),
+  );
+  const activityIDs = [...activeRecords.keys()];
+  const activities = useQueries({
+    queries: activityIDs.map((id) =>
+      queryOptions({
+        queryKey: [...recordScope, id],
+        queryFn: ({ signal }) =>
+          api.get<DetectionRecord>(
+            "/environment/" + encodeURIComponent(id),
+            signal,
+          ),
+        enabled: online,
+        retry: false,
+        refetchInterval: (query) =>
+          visible &&
+          online &&
+          (!activeRecords.get(id)?.activity_settled ||
+            query.state.data?.settled === false)
+            ? 3000
+            : false,
+      }),
+    ),
+  });
+  const byID = new Map(activityIDs.map((id, index) => [id, activities[index]]));
+  const observedRows = rows.map((environment) => {
+    const submission = startState(environment);
+    const activity = byID.get(environment.activity_id ?? "");
+    const stage = submission.confirming
+      ? "verifying"
+      : verified && !activity?.isError
+        ? environment.stage
+        : "unverified";
+    return { environment, submission, activity, stage };
+  });
+  const ready = observedRows.filter(({ stage }) => stage === "ready").length;
+  const running = observedRows.filter(
+    ({ stage }) => stage === "verifying",
   ).length;
-  const running = environments.filter(
-    (e) => e.stage === "verifying" || submissions.get(e)?.confirming,
+  const unverified = observedRows.filter(
+    ({ stage }) => stage === "unverified",
   ).length;
-  const attention = environments.length - ready - running;
+  const attention = environments.length - ready - running - unverified;
   return (
     <section aria-label="全部运行环境" className="environment-overview">
       <div className="environment-totals" role="status">
@@ -93,6 +129,7 @@ export function EnvironmentOverview({
             </span>
             <span>检测中 {running}</span>
             <span>需要处理 {attention}</span>
+            {unverified > 0 && <span>待核实 {unverified}</span>}
           </>
         ) : (
           <span>共 {environments.length} 个环境 · 当前状态待核实</span>
@@ -110,19 +147,23 @@ export function EnvironmentOverview({
           </tr>
         </thead>
         <tbody>
-          {rows.map((e) => (
-            <EnvironmentRow
-              {...controls}
-              key={e.environment_key || e.profiles[0]?.id}
-              environment={e}
-              name={name(e)}
-              linked={
-                !!linkedEnvironment && e.environment_key === linkedEnvironment
-              }
-              preferred={preferred(e.environment_key)}
-              submission={submissions.get(e)!}
-            />
-          ))}
+          {observedRows.map(
+            ({ environment: e, submission, activity, stage }) => (
+              <EnvironmentRow
+                {...controls}
+                key={e.environment_key || e.profiles[0]?.id}
+                environment={e}
+                name={name(e)}
+                linked={
+                  !!linkedEnvironment && e.environment_key === linkedEnvironment
+                }
+                preferred={preferred(e.environment_key)}
+                submission={submission}
+                activity={activity}
+                stage={stage}
+              />
+            ),
+          )}
         </tbody>
       </table>
     </section>
@@ -131,18 +172,15 @@ export function EnvironmentOverview({
 
 type RowProps = Pick<
   OverviewProps,
-  | "verified"
-  | "defaultProfile"
-  | "onProfileChange"
-  | "submitting"
-  | "recordScope"
-  | "command"
+  "verified" | "defaultProfile" | "onProfileChange" | "submitting" | "command"
 > & {
   environment: Environment;
   name: string;
   linked: boolean;
   preferred?: string;
   submission: DetectionSubmission;
+  activity?: { data?: DetectionRecord; isError: boolean };
+  stage: string;
 };
 
 function EnvironmentRow({
@@ -155,35 +193,18 @@ function EnvironmentRow({
   defaultProfile,
   onProfileChange,
   submitting,
-  recordScope,
+  activity,
+  stage,
   command,
 }: RowProps) {
-  const { api, identity, online } = useWorkspace();
-  const visible = usePageVisible();
+  const { identity, online } = useWorkspace();
   const { activity_id: activityID, environment_key: key, profiles } = e;
-  const activity = useQuery({
-    queryKey: [...recordScope, activityID],
-    queryFn: ({ signal }) =>
-      api.get<DetectionRecord>(
-        "/environment/" + encodeURIComponent(activityID!),
-        signal,
-      ),
-    enabled: online && !!activityID,
-    retry: false,
-    refetchInterval: (query) =>
-      visible &&
-      online &&
-      activityID &&
-      (!e.activity_settled || query.state.data?.settled === false)
-        ? 3000
-        : false,
-  });
-  const current = activity.data?.id === activityID ? activity.data : undefined;
+  const record = activity?.data;
+  const current = record?.id === activityID ? record : undefined;
   const unsettled =
     e.stage === "verifying" ||
     (!!activityID && (!e.activity_settled || current?.settled === false));
   const { confirming, sending, accepted, request, receipt } = submission;
-  const stage = verified && !activity.isError ? e.stage : "unverified";
   const label = confirming
     ? "正在确认启动"
     : environmentStage[stage] || environmentStage.unverified;
@@ -201,10 +222,7 @@ function EnvironmentRow({
     >
       <th scope="row">{name}</th>
       <td>
-        <span
-          className="environment-status"
-          data-stage={confirming ? "verifying" : stage}
-        >
+        <span className="environment-status" data-stage={stage}>
           {label}
         </span>
         {!confirming && current?.created_at && (
@@ -222,7 +240,7 @@ function EnvironmentRow({
             ? "正在核实原请求，请勿重复提交。"
             : !verified
               ? `上次状态：${environmentStage[e.stage] || "待核实"}`
-              : activity.isError
+              : activity?.isError
                 ? "检测状态查询失败，请刷新重试。"
                 : e.stage === "ready"
                   ? "当前准备要求已通过"
@@ -285,7 +303,7 @@ function EnvironmentRow({
             disabled={
               !online ||
               submitting ||
-              activity.isError ||
+              activity?.isError ||
               !current ||
               current.settled
             }

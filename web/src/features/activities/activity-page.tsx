@@ -110,11 +110,14 @@ export function ActivityPage() {
   }, [selected]);
   const visible = usePageVisible();
   const list = useActivityList(api, filter, online && visible, 2000);
-  const items = [
-    ...new Map(
-      list.data?.pages.flatMap((p) => p.items).map((a) => [a.activity_id, a]),
-    ).values(),
-  ];
+  const activities = new Map<string, Activity>();
+  for (const page of list.data?.pages ?? []) {
+    for (const item of page.items) {
+      if (!activities.has(item.activity_id))
+        activities.set(item.activity_id, item);
+    }
+  }
+  const items = [...activities.values()];
   const first = list.data?.pages[0];
   const setSelection = (id: string) =>
     setParams((current) => {
@@ -165,13 +168,15 @@ export function ActivityPage() {
         >
           刷新活动列表
         </Button>
-        {(list.error || first?.sources.some((s) => !s.complete)) && (
+        {(list.error ||
+          (list.latest ?? first)?.sources.some((s) => !s.complete)) && (
           <p className="notice amber">
             活动信息不完整，保留上次已知内容。
             {String(list.error || "部分来源未能确认")}
           </p>
         )}
         {!online && <p className="muted">服务离线 · 已暂停刷新</p>}
+        {list.hasUpdates && <p role="status">有更新，刷新后读取新快照。</p>}
         {!items.length && (
           <p className="muted">
             {list.isPending && online
@@ -218,7 +223,7 @@ export function ActivityPage() {
         </div>
         {list.hasNextPage && (
           <Button
-            disabled={!online || list.isFetchingNextPage}
+            disabled={!online || list.isFetchingNextPage || list.hasUpdates}
             onClick={() => void list.fetchNextPage()}
           >
             加载更多活动

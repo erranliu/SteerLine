@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import {
+  replaceEqualDeep,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -99,16 +100,29 @@ export function useActivityList(
   useEffect(() => {
     if (!head.data) return;
     client.setQueryData([...scope, "activity-counts"], head.data);
-    client.setQueryData<InfiniteData<ActivityPage, string>>(
-      JSON.parse(keyText),
-      (old) =>
-        old
-          ? { ...old, pages: [head.data!, ...old.pages.slice(1)] }
-          : { pages: [head.data!], pageParams: [""] },
+    const listKey = JSON.parse(keyText);
+    // Keep the cursor and its first page together during and after pagination.
+    const fetchStatus = client.getQueryState(listKey)?.fetchStatus;
+    if (fetchStatus && fetchStatus !== "idle") return;
+    client.setQueryData<InfiniteData<ActivityPage, string>>(listKey, (old) =>
+      old && (old.pages.length > 1 || old.pages[0] === head.data)
+        ? undefined
+        : { pages: [head.data!], pageParams: [""] },
     );
-  }, [head.data, client, keyText, filter]);
+  }, [head.data, client, keyText, filter, pages.isFetchingNextPage]);
+  const first = pages.data?.pages[0];
+  const latest = head.data;
+  const hasUpdates =
+    (pages.data?.pages.length ?? 0) > 1 &&
+    !!first &&
+    !!latest &&
+    !head.isError &&
+    (first.next_cursor !== latest.next_cursor ||
+      first.has_more !== latest.has_more ||
+      replaceEqualDeep(first.items, latest.items) !== first.items);
   const refresh = async () => {
     const first = await client.fetchQuery({ ...headOptions, staleTime: 0 });
+    await client.cancelQueries({ queryKey: key, exact: true });
     client.setQueryData(key, { pages: [first], pageParams: [""] });
     return first;
   };
@@ -117,6 +131,9 @@ export function useActivityList(
     error: head.error || pages.error,
     isError: head.isError || pages.isError,
     isFetching: head.isFetching || pages.isFetching,
+    latest,
+    hasUpdates,
+    refreshObservation: () => head.refetch({ cancelRefetch: false }),
     refetch: refresh,
   };
 }

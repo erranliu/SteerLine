@@ -62,6 +62,13 @@ const ready = {
   project: { status: "ready", commit: "b".repeat(40), blockers: [] },
   environment: "ready",
 };
+const indexKey = [
+  "home",
+  identity.project_id,
+  identity.instance_id,
+  "refactoring",
+];
+const localReadinessKey = [...indexKey, "readiness", "local"];
 function setup(
   records: MaintenanceRecord[] = [],
   readiness = vi.fn(async (_path: string) => ready),
@@ -91,7 +98,7 @@ function setup(
   }));
   const client = testClient();
   mountFeature(<RefactoringMaintenance />, api, client, true, { submit });
-  return { submit, client };
+  return { api, submit, client };
 }
 it("defaults to cautious and one round, submits the original project identity", async () => {
   const { submit } = setup();
@@ -190,6 +197,61 @@ it("blocks clicking, Enter and form submission until the selected environment is
   fireEvent.submit(start.closest("form")!);
   expect(submit.mock.calls[0][0].payload.profile).toBe("local");
 });
+it("keeps start enabled during a readiness refresh until the result becomes not ready", async () => {
+  const readiness = vi.fn(async (_path: string) => ready);
+  const { client } = setup([], readiness);
+  const start = screen.getByRole("button", { name: "开始维护" });
+  await waitFor(() => expect(start).toBeEnabled());
+
+  const reason = "环境检测资格已撤销";
+  let complete!: (result: typeof ready & { reason: string }) => void;
+  readiness.mockReturnValueOnce(
+    new Promise((resolve) => {
+      complete = resolve;
+    }),
+  );
+  act(() => {
+    void client.invalidateQueries({ queryKey: localReadinessKey });
+  });
+  expect(client.getQueryState(localReadinessKey)?.fetchStatus).toBe("fetching");
+  fireEvent.change(screen.getByLabelText("重构方向"), {
+    target: { value: custom.id },
+  });
+  expect(screen.getByLabelText("方向提示词")).toHaveTextContent("收拢共享夹具");
+  expect(start).toBeEnabled();
+
+  complete({ ...ready, environment: "not_ready", reason });
+  await screen.findByText(reason, { exact: false });
+  expect(start).toBeDisabled();
+});
+it("waits for readiness on first entry and on switching back to a cached ready profile", async () => {
+  let complete!: (result: typeof ready) => void;
+  const pending = new Promise<typeof ready>((resolve) => {
+    complete = resolve;
+  });
+  const readiness = vi.fn(async (path: string) =>
+    path.endsWith("profile=local") ? pending : ready,
+  );
+  const { client } = setup([], readiness);
+  const start = screen.getByRole("button", { name: "开始维护" });
+  await waitFor(() =>
+    expect(readiness).toHaveBeenCalledWith(
+      "/refactoring/readiness?profile=local",
+    ),
+  );
+  expect(start).toBeDisabled();
+  complete(ready);
+  await waitFor(() => expect(start).toBeEnabled());
+
+  const profile = screen.getByLabelText("执行配置");
+  fireEvent.change(profile, { target: { value: "second" } });
+  await waitFor(() => expect(start).toBeEnabled());
+  readiness.mockReturnValueOnce(new Promise(() => {}));
+  fireEvent.change(profile, { target: { value: "local" } });
+  expect(client.getQueryData(localReadinessKey)).toEqual(ready);
+  expect(client.getQueryState(localReadinessKey)?.fetchStatus).toBe("fetching");
+  expect(start).toBeDisabled();
+});
 it("blocks a previously ready profile when its latest query fails", async () => {
   const readiness = vi.fn(async (_path: string) => ready);
   const { submit, client } = setup([], readiness);
@@ -241,6 +303,77 @@ it("refreshes the selected qualification after a rejected start and keeps the fo
   await screen.findByText(/环境检测资格已撤销/);
   expect(start).toBeDisabled();
   expect(screen.getByLabelText("补充要求")).toHaveValue("检查共享夹具");
+});
+it("keeps the preview usable during a catalogue refresh, then waits for a newer version if start is rejected", async () => {
+  const { api, client, submit } = setup();
+  const start = screen.getByRole("button", { name: "开始维护" });
+  await waitFor(() => expect(start).toBeEnabled());
+  const read = vi.mocked(api.get).getMockImplementation()!;
+  let complete!: (value: { directions: (typeof builtIn)[] }) => void;
+  const refreshing = new Promise<{ directions: (typeof builtIn)[] }>(
+    (resolve) => {
+      complete = resolve;
+    },
+  );
+  vi.mocked(api.get).mockImplementation((path, signal) =>
+    path === "/refactoring/directions" ? refreshing : read(path, signal),
+  );
+  const catalogueKey = [...indexKey, "directions"];
+  act(() => {
+    void client.invalidateQueries({ queryKey: catalogueKey });
+  });
+  expect(client.getQueryState(catalogueKey)?.fetchStatus).toBe("fetching");
+  fireEvent.change(screen.getByLabelText("补充要求"), {
+    target: { value: "保留这段要求" },
+  });
+  expect(start).toBeEnabled();
+  submit.mockImplementationOnce(async (envelope) => ({
+    ...envelope,
+    status: "rejected",
+    code: "refactoring_direction_changed",
+    diagnostic: "方向提示词已更新",
+    sampled_at: "now",
+  }));
+  fireEvent.click(start);
+  expect(submit.mock.calls[0][0].payload.direction_revision).toBe(
+    builtIn.revision,
+  );
+  await screen.findByText("请等待新版方向提示词，查看后再开始维护");
+  expect(start).toBeDisabled();
+  expect(screen.getByLabelText("补充要求")).toHaveValue("保留这段要求");
+
+  const updated = {
+    ...builtIn,
+    revision: "d".repeat(64),
+    prompt: "新版方向正文",
+  };
+  complete({ directions: [updated, custom] });
+  await waitFor(() => expect(start).toBeEnabled());
+  expect(screen.getByLabelText("方向提示词")).toHaveTextContent(updated.prompt);
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "上次提交结果：方向提示词已更新",
+  );
+  fireEvent.click(start);
+  expect(submit.mock.calls[1][0].payload.direction_revision).toBe(
+    updated.revision,
+  );
+});
+it("explains why a failed maintenance index refresh prevents a start", async () => {
+  const { api, client, submit } = setup();
+  const start = screen.getByRole("button", { name: "开始维护" });
+  await waitFor(() => expect(start).toBeEnabled());
+  const read = vi.mocked(api.get).getMockImplementation()!;
+  vi.mocked(api.get).mockImplementation(async (path, signal) => {
+    if (path === "/refactoring") throw new Error("暂时无法读取列表");
+    return read(path, signal);
+  });
+  await act(() => client.refetchQueries({ queryKey: indexKey, exact: true }));
+  await screen.findByText("暂时无法确认是否已有维护行动");
+  expect(start).toHaveAccessibleDescription("暂时无法确认是否已有维护行动");
+  expect(start).toBeDisabled();
+  expect(screen.getByText("所选运行环境已就绪")).toBeVisible();
+  fireEvent.submit(start.closest("form")!);
+  expect(submit).not.toHaveBeenCalled();
 });
 it("shows coverage exclusions and answers the original question without another chat", async () => {
   const { submit } = setup([record]);

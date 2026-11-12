@@ -793,6 +793,61 @@ it("marks every cached row unverified after a read failure instead of retaining 
   ).toBeVisible();
 });
 
+it("counts a failed detection detail as unverified and restores the total after recovery", async () => {
+  const detectionID = "a".repeat(32);
+  const { api, client } = fixture(
+    true,
+    undefined,
+    false,
+    "/projects/project/environment?activity=" + detectionID,
+    false,
+    false,
+    (options) => {
+      Object.assign(options.environments[0], {
+        stage: "ready",
+        status: "ready",
+      });
+    },
+  );
+  await screen.findByRole("heading", { name: "指定检测结果" });
+  await waitFor(() =>
+    expect(within(overview()).getByRole("status")).toHaveTextContent(
+      "1/1 已就绪",
+    ),
+  );
+  const key = optionsKey.slice(0, -1);
+  const read = vi.mocked(api.get).getMockImplementation()!;
+  vi.mocked(api.get).mockImplementation(async (path, signal) => {
+    if (path === "/environment/" + detectionID) throw new Error("offline");
+    return read(path, signal);
+  });
+  const refetchDetection = () =>
+    client.refetchQueries({
+      predicate: ({ queryKey }) =>
+        queryKey.at(-1) === detectionID && queryKey[3] === key[3],
+    });
+  await act(refetchDetection);
+  await screen.findByText("指定检测刷新失败，显示上次结果。");
+  expect(within(overview()).getByRole("status")).toHaveTextContent(
+    "0/1 已就绪检测中 0需要处理 0待核实 1",
+  );
+  expect(within(remoteRow()).getByText("待核实")).toBeVisible();
+  expect(
+    within(remoteRow()).getByRole("button", { name: "重新检测" }),
+  ).toBeDisabled();
+
+  vi.mocked(api.get).mockImplementation(read);
+  await act(refetchDetection);
+  await waitFor(() =>
+    expect(within(overview()).getByRole("status")).toHaveTextContent(
+      "1/1 已就绪",
+    ),
+  );
+  expect(
+    screen.queryByText("指定检测刷新失败，显示上次结果。"),
+  ).not.toBeInTheDocument();
+});
+
 it("shows disabled readiness enforcement separately from actual qualification", async () => {
   fixture(true, undefined, false, "", false, false, (options) => {
     multipleEnvironments(options);

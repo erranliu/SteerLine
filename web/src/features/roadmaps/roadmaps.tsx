@@ -291,14 +291,9 @@ export function Roadmaps() {
   )?.response;
   const actionLabel = (name: string, original: string) =>
     sending.some((e) => e.action === name) ? titles[name] : original;
-  const locked =
-    !!flowReason ||
-    !online ||
-    viewingHistory ||
-    !!detail.error ||
-    !!currentDetail.error ||
-    !!list.error ||
-    !!source.error;
+  const readError =
+    list.error || source.error || detail.error || currentDetail.error;
+  const locked = !!flowReason || !online || viewingHistory || !!readError;
   const progress = roadmapProgress(current);
   const currentStale =
     !!currentDetail.data &&
@@ -471,16 +466,17 @@ export function Roadmaps() {
           刷新 Markdown 与观察
         </button>
       </header>
-      {(error ||
-        list.error ||
-        source.error ||
-        detail.error ||
-        currentDetail.error) && (
+      {error && (
         <p className="notice amber" role="alert">
-          {error ||
-            String(
-              list.error || source.error || detail.error || currentDetail.error,
-            )}
+          {error}
+        </p>
+      )}
+      {readError && (
+        <p className="notice amber" role="alert">
+          {value
+            ? "Roadmap 刷新失败，保留已读取的内容。相关操作暂不可提交。"
+            : "Roadmap 读取失败。"}
+          {String(readError)}
         </p>
       )}
       {!online && (
@@ -905,7 +901,7 @@ export function Roadmaps() {
               {s.diagnostic && <span>{s.diagnostic}</span>}
             </button>
           ))}
-          {!list.isFetching && !value?.sources.length && (
+          {value?.sources.length === 0 && (
             <p>drafts 目录下暂无 Markdown 草稿。</p>
           )}
         </aside>

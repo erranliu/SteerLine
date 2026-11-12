@@ -33,6 +33,8 @@ import {
 function workspaceRead(api: Api, path: string): unknown {
   if (path.startsWith("/environment/options"))
     return { profiles: [], environments: [], generators: [] };
+  if (path.startsWith("/environment/materials?"))
+    return { document: "# 项目运行环境" };
   if (path === "/snapshot") return makeSnapshot(api);
   if (path === "/presentation")
     return { presentation: { profiles: [], default_profile_id: "" } };
@@ -203,18 +205,22 @@ it("preloads only after connection verification, shares presentation in StrictMo
     get.mock.calls.filter(([path]) => path.startsWith("/tasks?")),
   ).toHaveLength(1);
   expect(
-    get.mock.calls.every(
-      ([path]) =>
-        path === "/snapshot" ||
-        path === "/presentation" ||
-        path === "/tasks?limit=100&cursor=" ||
-        path === "/maintenance" ||
-        path === "/maintenance/readiness" ||
-        path === "/environment/options" ||
-        path === "/environment/options?configuration=true" ||
-        path.startsWith("/activities?"),
-    ),
-  ).toBe(true);
+    get.mock.calls
+      .map(([path]) => path)
+      .filter(
+        (path) =>
+          !(
+            path === "/snapshot" ||
+            path === "/presentation" ||
+            path === "/tasks?limit=100&cursor=" ||
+            path === "/maintenance" ||
+            path === "/maintenance/readiness" ||
+            path === "/environment/options" ||
+            path === "/environment/options?configuration=true" ||
+            path.startsWith("/activities?")
+          ),
+      ),
+  ).toEqual([]);
   client.clear();
 });
 

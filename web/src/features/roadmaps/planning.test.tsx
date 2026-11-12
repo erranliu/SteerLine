@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -125,13 +126,16 @@ test("submits all fields against the original native question", async () => {
       ],
     },
   };
-  workspace.api.get.mockImplementation(async (url: string) =>
-    url.endsWith("/history")
-      ? { entries: [] }
-      : url.endsWith("/question-task")
-        ? task
-        : { available: true, tasks: [task], profiles: [] },
-  );
+  let historyFailed = false;
+  workspace.api.get.mockImplementation(async (url: string) => {
+    if (url.endsWith("/history")) {
+      if (historyFailed) throw new Error("history unavailable");
+      return { entries: [{ role: "user", text: "上次规划意见" }] };
+    }
+    return url.endsWith("/question-task")
+      ? task
+      : { available: true, tasks: [task], profiles: [] };
+  });
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -147,6 +151,7 @@ test("submits all fields against the original native question", async () => {
     </QueryClientProvider>,
   );
   await screen.findByText("执行顺序");
+  await screen.findByText("上次规划意见");
   const submit = screen.getByRole("button", { name: "提交回答" });
   expect(submit).toBeDisabled();
   fireEvent.change(screen.getByLabelText("执行顺序"), {
@@ -155,6 +160,23 @@ test("submits all fields against the original native question", async () => {
   fireEvent.change(screen.getByLabelText("理由"), {
     target: { value: "明确依赖" },
   });
+  historyFailed = true;
+  await act(() =>
+    client.refetchQueries({
+      queryKey: [
+        "test",
+        "project",
+        "instance",
+        "/roadmap-planning",
+        "question-task",
+        "history",
+      ],
+    }),
+  );
+  await screen.findByText("对话历史刷新失败，显示上次结果。");
+  expect(screen.getByText("上次规划意见")).toBeVisible();
+  expect(screen.getByLabelText("理由")).toHaveValue("明确依赖");
+  expect(submit).toBeEnabled();
   fireEvent.click(submit);
   await waitFor(() =>
     expect(workspace.submit).toHaveBeenCalledWith({

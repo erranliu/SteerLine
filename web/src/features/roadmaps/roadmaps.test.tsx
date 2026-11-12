@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -20,7 +21,12 @@ import {
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
 import type { Envelope, StoredRequest } from "../../shared/api/types";
-import { Roadmaps, type RoadmapRecord, type RoadmapView } from "./roadmaps";
+import {
+  Roadmaps,
+  roadmapQueryKey,
+  type RoadmapRecord,
+  type RoadmapView,
+} from "./roadmaps";
 
 // Layout and real canvas interactions are covered by the production-build browser test.
 vi.mock("@xyflow/react", () => ({
@@ -105,7 +111,7 @@ function setup(
     .spyOn(api, "get")
     .mockImplementation(async (route) =>
       route === "/roadmaps"
-        ? view
+        ? structuredClone(view)
         : route.includes("/sources/")
           ? route.endsWith(source.id)
             ? source
@@ -156,6 +162,40 @@ function setup(
   );
   return { api, get, submit, source, record, view, client };
 }
+
+it("keeps a verified empty draft list visible during refresh and labels a failed refresh", async () => {
+  const { api, get, client } = setup("review", true, [], (view) => {
+    view.sources = [];
+    view.records = [];
+  });
+  const empty = await screen.findByText("drafts 目录下暂无 Markdown 草稿。");
+  const read = get.getMockImplementation()!;
+  let fail!: (error: Error) => void;
+  const refreshing = new Promise<never>((_, reject) => {
+    fail = reject;
+  });
+  get.mockImplementation((path, signal) =>
+    path === "/roadmaps" ? refreshing : read(path, signal),
+  );
+  const queryKey = roadmapQueryKey(
+    api.home,
+    identity.project_id,
+    identity.instance_id,
+  );
+  act(() => {
+    void client.refetchQueries({
+      queryKey,
+      exact: true,
+    });
+  });
+  expect(client.getQueryState(queryKey)?.fetchStatus).toBe("fetching");
+  expect(empty).toBeVisible();
+  fail(new Error("草稿暂时无法读取"));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Roadmap 刷新失败，保留已读取的内容。",
+  );
+  expect(empty).toBeVisible();
+});
 
 it("keeps static initialization blocked until the acknowledged material state is read", async () => {
   const { submit, view } = setup(
@@ -760,14 +800,13 @@ it("shows official IDs only from the admitted mapping and keeps local origin", a
 });
 
 it("shows fixed preparation failures and submits explicit initialization without parsing", async () => {
-  const { view, submit } = setup();
-  view.preparation = {
-    commit: "d".repeat(40),
-    ready: false,
-    local_ready: false,
-    branch: "main",
-    files: [{ path: "SteerlineFlow/Roadmap/parse-rules.md", ready: false }],
-  };
+  const { submit } = setup("review", true, [], (view) => {
+    Object.assign(view.preparation, {
+      ready: false,
+      local_ready: false,
+      files: [{ path: "SteerlineFlow/Roadmap/parse-rules.md", ready: false }],
+    });
+  });
   expect(
     await screen.findByRole("heading", { name: "先准备项目静态材料" }),
   ).toBeVisible();
@@ -788,14 +827,9 @@ it("shows fixed preparation failures and submits explicit initialization without
   );
 });
 it("keeps local-only preparation blocked until published and prevents needless regeneration", async () => {
-  const { view, submit } = setup();
-  view.preparation = {
-    commit: "d".repeat(40),
-    ready: false,
-    local_ready: true,
-    branch: "main",
-    files: [],
-  };
+  const { submit } = setup("review", true, [], (view) => {
+    view.preparation.ready = false;
+  });
   expect(
     await screen.findByText(/材料已在工作树中，请提交并合入 main/),
   ).toBeVisible();
@@ -819,14 +853,10 @@ it.each([
       ),
       created_at: new Date().toISOString(),
     };
-    const { view } = setup("review", true, [request]);
-    view.preparation = {
-      commit: "d".repeat(40),
-      ready: false,
-      local_ready: false,
-      branch: "main",
-      files: [],
-    };
+    setup("review", true, [request], (view) => {
+      view.preparation.ready = false;
+      view.preparation.local_ready = false;
+    });
     const button = await screen.findByRole("button", {
       name: "初始化静态材料",
     });
