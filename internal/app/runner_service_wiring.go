@@ -143,7 +143,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		if err := (appConfigVerifier{project: config.projectPath, global: config.executionPath, digest: config.configDigest}).VerifyCurrentConfig(); err != nil {
 			return err
 		}
-		if err := a.check(ctx, target, "", false); err != nil {
+		if err := a.check(ctx, target, ""); err != nil {
 			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 		}
 
