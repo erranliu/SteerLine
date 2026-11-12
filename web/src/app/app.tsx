@@ -7,7 +7,7 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { FolderOpen, RefreshCw } from "lucide-react";
+import { FolderOpen, Plus, RefreshCw } from "lucide-react";
 import {
   Activities,
   initialActivityUI,
@@ -33,6 +33,7 @@ import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
 import { ActivityFeedbackProvider } from "../features/activities/feedback/feedback";
 import { useCandidateStarts } from "./use-candidate-starts";
+import { AddProject } from "../features/project-registration/add-project";
 const Roadmaps = lazy(() =>
   import("../features/roadmaps/roadmaps").then((module) => ({
     default: module.Roadmaps,
@@ -231,7 +232,11 @@ export function Workspace({
               />
               <Route
                 path={"/projects/" + identity.project_id + "/roadmap-planning"}
-                element={<RoadmapPlanning key={api.home + identity.project_id + identity.instance_id} />}
+                element={
+                  <RoadmapPlanning
+                    key={api.home + identity.project_id + identity.instance_id}
+                  />
+                }
               />
               <Route
                 path={"/projects/" + identity.project_id + "/environment"}
@@ -398,11 +403,24 @@ export function App({ initial }: { initial: BrowserSession }) {
           ))}
         </select>
       </div>
+      {sessionValid &&
+        (projects.length > 0 || route.pathname.startsWith("/settings")) && (
+          <NavLink
+            className="button button-ghost project-add-link"
+            aria-label="添加已初始化项目"
+            title="添加已初始化项目"
+            to="/projects/add"
+          >
+            <Plus size={16} aria-hidden="true" />
+            <span>添加已初始化项目</span>
+          </NavLink>
+        )}
     </div>
   );
   if (
     route.pathname === "/settings/execution-configs" ||
-    route.pathname === "/settings"
+    route.pathname === "/settings" ||
+    route.pathname === "/projects/add"
   )
     return (
       <AppShell
@@ -423,7 +441,10 @@ export function App({ initial }: { initial: BrowserSession }) {
             </span>
           </div>
         }
-        footer="所有项目共享执行方案与生成并发设置"
+        footer={
+          route.pathname !== "/projects/add" &&
+          "所有项目共享执行方案与生成并发设置"
+        }
       >
         {route.pathname === "/settings/execution-configs" ? (
           <ExecutionConfigs
@@ -432,6 +453,13 @@ export function App({ initial }: { initial: BrowserSession }) {
             csrf={session.data.csrf_token}
             loadedDigest={catalog.data?.loaded_execution_digest}
             applicationConnected={sessionValid && !catalog.isError}
+          />
+        ) : route.pathname === "/projects/add" ? (
+          <AddProject
+            key={home}
+            csrf={session.data.csrf_token}
+            enabled={sessionValid}
+            projects={projects}
           />
         ) : (
           <SettingsPage
@@ -497,8 +525,15 @@ export function App({ initial }: { initial: BrowserSession }) {
                 : "正在核验项目连接…")
             : "项目不可访问，请重新选择"}
         </p>
+      ) : projects.length ? (
+        <p>请选择当前项目</p>
       ) : (
-        <p>{projects.length ? "请选择当前项目" : "尚无已配置项目"}</p>
+        <>
+          <p>尚无已配置项目</p>
+          <NavLink className="button" to="/projects/add">
+            添加已初始化项目
+          </NavLink>
+        </>
       )}
       {selected?.diagnostic && <p role="alert">{selected.diagnostic}</p>}
       {catalog.error && <p role="alert">{String(catalog.error)}</p>}

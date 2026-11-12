@@ -96,7 +96,8 @@ export function useApplicationProjects(initial: BrowserSession) {
   );
   const global =
     location.pathname === "/settings" ||
-    location.pathname.startsWith("/settings/");
+    location.pathname.startsWith("/settings/") ||
+    location.pathname === "/projects/add";
   const id = match?.[1] ?? (global ? (returnTo.split("/")[2] ?? "") : "");
   const page = match?.[2] ?? "dag";
   const selected = projects.find((p) => p.project_id === id && !p.conflict);

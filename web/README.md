@@ -36,6 +36,8 @@ Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742
 
 当前项目使用 `/projects/{project_id}/dag`、`/runs`、`/settings` 深链接。切换器显示仓库位置、状态和诊断，可搜索；每标签页的选择独立。最近选择可共享，不能抢改已打开的标签页。配置目录来自 `<home>/etc/*.json`，坏配置保留诊断，同 common-dir 多配置拒绝路由；列表查询不初始化业务数据库；初始化属于持锁的项目装载流程。
 
+项目切换器和零项目页面的「添加已初始化项目」打开 `/projects/add`。按[项目接入指南](../SteerlineProjectGuideDoc/README.md)准备仓库后，填写仓库路径、remote、目标分支和 PR 目标。服务只读核验远端目标提交及本地 Git 对象，确认时重新核验，再保存到当前 home 的 `etc/`。保存后通过 `steerline restart` 或安装目录的 `restart.bat` 生效。新项目从手动派发模式开始。
+
 ## 认证与恢复
 
 `open -print-url` 仅供受控浏览器自动化，原生 launcher 从当前用户私有 discovery 申请一次性 60 秒票据。票据在 fragment，页面兑换前移除；48 小时会话绑定 home/Web 实例，HttpOnly/SameSite Strict、精确 Origin/Host、CSRF 和生产 CSP 保留。应用与项目 Bearer 不进入浏览器。

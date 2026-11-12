@@ -309,6 +309,66 @@ afterEach(() => {
   setJournalHome("");
 });
 
+it("opens project registration from the zero-project page and confirms only after checking", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  const requests: Array<Record<string, string>> = [];
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [url, options] = args;
+    if (url === "/api/v2/application/projects")
+      return Response.json({ projects: [] });
+    if (url === "/api/v2/application/projects/registration") {
+      const input = JSON.parse(String(options?.body));
+      requests.push(input);
+      return Response.json({
+        repository: "C:/Projects/new",
+        commit: "c".repeat(40),
+        config_id: "new.json",
+        project_id: a,
+        ...(input.confirmation
+          ? { saved: true }
+          : { saved: false, confirmation: "checked" }),
+      });
+    }
+    return original(...args);
+  });
+  mount("/projects");
+  expect(await screen.findByText("尚无已配置项目")).toBeVisible();
+  fireEvent.click(screen.getByRole("link", { name: "添加已初始化项目" }));
+  expect(
+    await screen.findByRole("heading", { name: "添加已初始化项目" }),
+  ).toBeVisible();
+  for (const [label, value] of [
+    ["项目名称", "new"],
+    ["服务机器上的仓库路径", "C:/Projects/new"],
+    ["Git remote", "origin"],
+    ["目标分支", "main"],
+    ["PR 服务地址", "https://git.example.com"],
+    ["PR 仓库", "owner/new"],
+  ]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  expect(screen.queryByRole("button", { name: "确认添加" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "核验目标分支" }));
+  const confirm = await screen.findByRole("button", { name: "确认添加" });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].confirmation).toBeUndefined();
+  fireEvent.click(confirm);
+  expect(await screen.findByText("已保存，待重启生效")).toBeVisible();
+  expect(requests[1].confirmation).toBe("checked");
+});
+
+it("opens project registration from the project switcher", async () => {
+  mock();
+  mount("/projects/" + a + "/dag");
+  const entry = await screen.findByRole("link", { name: "添加已初始化项目" });
+  expect(entry.closest(".project-selector")).not.toBeNull();
+  fireEvent.click(entry);
+  expect(
+    await screen.findByRole("heading", { name: "添加已初始化项目" }),
+  ).toBeVisible();
+});
+
 it("recognizes a direct maintenance action route", async () => {
   mock();
   const original = vi.mocked(fetch).getMockImplementation()!;

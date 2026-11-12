@@ -1,6 +1,6 @@
 # SteerLine 项目开发流程
 
-本目录维护 SteerLine 自身的开发流程材料，按[受管理项目规范](../SteerlineProjectGuideDoc/project-standards.md)组织。SteerLine 的介绍和工作方式见[认识 SteerLine](../SteerlineProjectGuideDoc/README.md)，产品设计与架构见[产品文档](../docs/README.md)。
+本目录维护 SteerLine 自身的开发流程材料，按[受管理项目规范](../SteerlineProjectGuideDoc/project-standards.md)组织。新项目的初始化步骤见[项目接入指南](../SteerlineProjectGuideDoc/README.md)，产品设计与架构见[产品文档](../docs/README.md)。
 
 | 内容 | 入口与职责 |
 | --- | --- |

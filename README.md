@@ -108,7 +108,7 @@ SteerLine 将文档作为开发流程的工作依据。不同层次回答不同�
 
 | 阅读目的 | 入口 |
 | --- | --- |
-| 了解项目规范与开发方法 | [认识 SteerLine](SteerlineProjectGuideDoc/README.md) · [受管理项目规范](SteerlineProjectGuideDoc/project-standards.md) |
+| 准备项目接入 SteerLine | [项目接入指南](SteerlineProjectGuideDoc/README.md) · [受管理项目规范](SteerlineProjectGuideDoc/project-standards.md) |
 | 了解本仓库的规划与开发流程 | [流程入口](SteerlineFlow/README.md) · [RoadmapGuide](SteerlineFlow/Roadmap/RoadmapGuide.md) · [正式执行清单](SteerlineFlow/Roadmap/execution-map.md) |
 | 查找测试方法与实际验收结果 | [测试指南](SteerlineFlow/testing.md) · [验收记录](SteerlineFlow/testing/acceptance/README.md) |
 | 从源码构建、启动和调试 | [Web 构建与启动](web/README.md) · [安装部署](docs/integration/install-deploy.md) · [独立调试](docs/runtime-install-debug.md) |

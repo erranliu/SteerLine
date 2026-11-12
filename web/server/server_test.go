@@ -23,12 +23,13 @@ import (
 )
 
 type fakeClient struct {
-	identity    httpcontract.Identity
-	appIdentity contract.Identity
-	calls       int
-	route       string
-	envelope    httpcontract.CommandEnvelope
-	getError    error
+	identity     httpcontract.Identity
+	appIdentity  contract.Identity
+	calls        int
+	route        string
+	envelope     httpcontract.CommandEnvelope
+	registration contract.ProjectRegistration
+	getError     error
 }
 
 func (c *fakeClient) Identity() contract.Identity { return c.appIdentity }
@@ -45,9 +46,33 @@ func (c *fakeClient) Get(_ context.Context, route string, target any) error {
 func (c *fakeClient) Post(_ context.Context, route string, body, target any) error {
 	c.calls++
 	c.route = route
+	if route == contract.ProjectRegistrationPath {
+		c.registration = body.(contract.ProjectRegistration)
+		return json.Unmarshal([]byte(`{"commit":"checked","saved":true}`), target)
+	}
 	c.envelope = body.(httpcontract.CommandEnvelope)
 	data, _ := json.Marshal(httpcontract.CommandResponse{RequestID: c.envelope.RequestID, ProjectID: c.envelope.ProjectID, InstanceID: c.envelope.InstanceID, Action: c.envelope.Action, TargetID: c.envelope.TargetID, ExpectedVersion: c.envelope.ExpectedVersion, Original: &c.envelope, Status: "accepted"})
 	return json.Unmarshal(data, target)
+}
+
+func TestWebProjectRegistrationRequiresSessionAndCSRF(t *testing.T) {
+	s, client := fixture(t)
+	route := "/api/v2/application" + contract.ProjectRegistrationPath
+	body := `{"name":"project","confirmation":"checked"}`
+	if w := request(s, "POST", route, body, nil, ""); w.Code != 401 {
+		t.Fatal(w.Code)
+	}
+	cookie, csrf := login(t, s)
+	if w := request(s, "POST", route, body, cookie, ""); w.Code != 403 || client.calls != 0 {
+		t.Fatal(w.Code, client.calls)
+	}
+	if w := request(s, "POST", route, body, cookie, csrf); w.Code != 200 || client.calls != 1 ||
+		client.route != contract.ProjectRegistrationPath || client.registration.Confirmation != "checked" {
+		t.Fatal(w.Code, w.Body.String(), client.registration)
+	}
+	if w := request(s, "GET", "/projects/add", "", nil, ""); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
 }
 func (c *fakeClient) Close() error { return nil }
 func freeAddress(t *testing.T) string {
