@@ -23,6 +23,9 @@ func (p *runtimeProjectPort) readActivity(ctx context.Context, route string, val
 	if len(parts) > 2 || parts[0] == "" {
 		return bad("invalid activity route")
 	}
+	if len(parts) == 2 && parts[1] == "conversation" {
+		return p.readCandidateConversation(ctx, parts[0], values)
+	}
 	allowed := map[string]bool{}
 	if len(parts) == 2 {
 		switch parts[1] {

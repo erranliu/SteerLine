@@ -55,8 +55,16 @@ const longItem: ReadingItem = {
   bytes: 300000,
   sha256: "a".repeat(64),
 };
-function setup(path = "/projects/project/activities", terminal = false) {
-  const current = terminal ? { ...activity, state: "succeeded" } : activity;
+function setup(
+  path = "/projects/project/activities",
+  terminal = false,
+  bound = false,
+) {
+  const current: Activity = {
+    ...activity,
+    state: terminal ? "succeeded" : activity.state,
+    execution_ref: bound ? { run_id: "run", attempt_id: "attempt" } : undefined,
+  };
   const api = new Api(identity, "csrf", "home");
   const calls: string[] = [];
   const client = testClient();
@@ -76,6 +84,33 @@ function setup(path = "/projects/project/activities", terminal = false) {
         next_cursor: "next",
         sampled_at: "2026-11-10T00:00:00Z",
       };
+    if (path.startsWith("/activities/a/conversation")) {
+      const older = path.includes("cursor=before");
+      const body = path.includes("cursor=body");
+      return {
+        activity_id: "a",
+        run_id: "run",
+        attempt_id: "attempt",
+        session_id: "session",
+        generation: "generation",
+        partial: older,
+        next_cursor: older || body ? undefined : "before",
+        body_offset: body ? 0 : undefined,
+        messages: [
+          {
+            id: older ? "earlier" : "latest",
+            role: "assistant",
+            text: body
+              ? "最新的助手消息完整正文"
+              : older
+                ? "更早的助手消息"
+                : "最新的助手消息",
+            truncated: !older && !body,
+            body_cursor: !older && !body ? "body" : undefined,
+          },
+        ],
+      };
+    }
     if (path.endsWith("/changes")) return { version: "2" };
     if (path.includes("/interactions?"))
       return {
@@ -311,4 +346,34 @@ it("moves narrow-screen focus to details and restores the selected card and scro
   fireEvent.click(back);
   expect(card).toHaveFocus();
   expect(scroll).toHaveBeenLastCalledWith({ top: 900 });
+});
+
+it("opens candidate conversation on demand and prepends earlier pages in native order", async () => {
+  const { calls } = setup(
+    "/projects/project/activities?activity=a",
+    false,
+    true,
+  );
+  const expand = await screen.findByRole("button", { name: "查看对话" });
+  expect(calls.filter((path) => path.includes("/conversation"))).toHaveLength(
+    0,
+  );
+  fireEvent.click(expand);
+  await screen.findByText("最新的助手消息");
+  expect(calls.filter((path) => path.includes("/conversation"))).toHaveLength(
+    1,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "加载更早消息" }));
+  await screen.findByText("更早的助手消息");
+  const panel = screen.getByRole("region", { name: "原会话对话" });
+  expect(
+    Array.from(panel.querySelectorAll("article p"), (el) => el.textContent),
+  ).toEqual(["更早的助手消息", "最新的助手消息"]);
+  expect(screen.getByText("原会话仅有部分历史可读。")).toBeVisible();
+  expect(calls.filter((path) => path.includes("/conversation"))).toHaveLength(
+    2,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "展开消息正文" }));
+  await screen.findByText("最新的助手消息完整正文");
+  expect(calls.filter((path) => path.includes("cursor=body"))).toHaveLength(1);
 });
