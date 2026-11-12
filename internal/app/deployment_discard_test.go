@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
@@ -184,7 +185,8 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 }
 
 func testDiscardOfflineFlow(t *testing.T) {
-	for _, fault := range []string{"original", "schema46", "schema44", "schema44-missing-shutdown", "schema44-wrong-host", "schema44-invalid-definition", "schema44-unbound-roadmap", "unsupported-schema", "future-schema", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown"} {
+	for _, fault := range []string{"original", "schema46", "schema44", "schema44-missing-shutdown", "schema44-wrong-host", "schema44-invalid-definition", "schema44-unbound-roadmap", "unsupported-schema", "future-schema", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown",
+		"environment-missing", "environment-preparing", "environment-rejected", "environment-accepted", "environment-foreign", "environment-outside-inventory", "environment-unavailable"} {
 		t.Run(fault, func(t *testing.T) { testDiscardOfflineConfiguration(t, fault) })
 	}
 }
@@ -288,6 +290,9 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 		execDiscardFixtureSQL(t, c, `INSERT INTO roadmaps(project_identity,roadmap_id,revision,payload) VALUES(?,?,?,?)`,
 			r.Project, r.ID, r.Revision, mustJSON(roadmap.StoreValue(r)))
 	}
+	if strings.HasPrefix(fault, "environment-") {
+		seedDiscardUnknownEnvironment(t, c, *cp.Service.RunnerBuild, fault)
+	}
 	originalDB, err := os.ReadFile(filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
 	result, err := prepareApplicationDiscard(ctx, exe, strings.Repeat("c", 32), func() error {
@@ -298,13 +303,17 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	})
 	blocked := fault == "changed-during-preparation" || fault == "changed-runner" || strings.HasPrefix(fault, "interrupted-") ||
 		fault == "corrupt-shutdown" || fault == "stale-shutdown" || fault == "schema44-wrong-host" ||
-		fault == "schema44-invalid-definition" || fault == "schema44-unbound-roadmap" || fault == "unsupported-schema" || fault == "future-schema"
+		fault == "schema44-invalid-definition" || fault == "schema44-unbound-roadmap" || fault == "unsupported-schema" || fault == "future-schema" ||
+		fault == "environment-foreign" || fault == "environment-outside-inventory" || fault == "environment-unavailable"
 	if blocked {
 		if err == nil {
 			t.Fatal("discard accepted changed ownership or concurrent configuration", fault)
 		}
 		if fault == "schema44-unbound-roadmap" && !strings.Contains(err.Error(), "original generation resource settlement unverified") {
 			t.Fatal("discard did not check the original document batch binding", err)
+		}
+		if strings.HasPrefix(fault, "environment-") && !strings.Contains(err.Error(), "activity "+strings.Repeat("a", 32)+" round 1") {
+			t.Fatal("discard did not identify the unverified environment round", err)
 		}
 		if _, err := os.Stat(filepath.Join(c.RunDir, "steerline.db")); err != nil {
 			t.Fatal("blocked discard moved original state", err)
@@ -347,6 +356,48 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	// The normal upgrade verifier now sees a genuinely fresh namespace.
 	_, err = VerifyRunnerUpgrade(ctx, HomeDir(), exe, taskPayloadDigest(body))
 	require(t, err)
+}
+
+func seedDiscardUnknownEnvironment(t *testing.T, c Config, pin runnercontract.BuildPin, scenario string) {
+	t.Helper()
+	const requestID = "original-environment-submit"
+	record := envmodel.Record{FormatVersion: 1, ID: strings.Repeat("a", 32), Project: c.Identity(), Revision: 1,
+		Kind: "adaptation", Build: pin, Rounds: []envmodel.Round{{Number: 1, Submission: "unknown", Request: runnercontract.Request{RequestID: requestID}}}}
+	execDiscardFixtureSQL(t, c, `INSERT INTO project_environments(project_identity,activity_id,revision,payload) VALUES(?,?,?,?)`,
+		record.Project, record.ID, record.Revision, mustJSON(record))
+
+	command := &runnercontract.Command{Command: "submit", RequestID: requestID}
+	var receipt any = runnerclient.Inspection{Command: command}
+	inspections := map[string]any{}
+	switch scenario {
+	case "environment-missing":
+		receipt = map[string]string{"fixture_error": "request_not_found"}
+	case "environment-unavailable":
+		receipt = map[string]string{"fixture_error": "service_unavailable"}
+	case "environment-preparing":
+		command.ReceiptStatus, command.ActionStatus = "pending", "preparing"
+	case "environment-rejected":
+		command.ReceiptStatus, command.ActionStatus = "rejected", "rejected"
+		command.Error = &runnercontract.CommandError{Code: "submit_rejected", Message: "fixture rejection"}
+	default:
+		run := &runnercontract.Run{RunID: "original-environment-run", Revision: 1, InputDigest: "original-input",
+			Status: "completed", StopStatus: "stopped", Correlation: map[string]string{
+				"steerline_project": record.Project, "environment_activity": record.ID, "environment_round": "1",
+			}}
+		if scenario == "environment-foreign" {
+			run.Correlation["environment_round"] = "2"
+		}
+		command.ReceiptStatus, command.ActionStatus, command.RunID = "accepted", "completed", &run.RunID
+		receipt = runnerclient.Inspection{Command: command, Run: run}
+		if scenario != "environment-outside-inventory" {
+			inspections[run.RunID] = runnerclient.Inspection{Run: run}
+			inventory := map[string]any{"runs": map[string]any{run.RunID: run}}
+			require(t, os.WriteFile(filepath.Join(pin.StateDir, "caller-fixture.json"), mustJSON(inventory), 0600))
+		}
+	}
+	inspections[requestID] = receipt
+	require(t, os.WriteFile(filepath.Join(pin.StateDir, "idle-run-fixture.json"), []byte(`{}`), 0600))
+	require(t, os.WriteFile(filepath.Join(pin.StateDir, "idle-inspections-fixture.json"), mustJSON(inspections), 0600))
 }
 
 // Schema 45 added three observation tables and their indexes.

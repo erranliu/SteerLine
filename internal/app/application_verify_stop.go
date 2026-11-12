@@ -227,16 +227,16 @@ func recheckableShutdown(r contract.Shutdown, id contract.Identity) error {
 }
 
 func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin) (ProjectStopVerification, error) {
-	return verifyProjectOfflineMode(ctx, c, p, id, runnerProof, restartPin, false)
+	return verifyProjectOfflineMode(ctx, c, p, id, runnerProof, restartPin, nil, false)
 }
 
 // Discard preparation already holds the repository lock for the complete swap.
-func verifyDiscardProject(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, proof runnerclient.StoppedVerification, interrupted bool) (ProjectStopVerification, error) {
-	return verifyProjectOfflineMode(ctx, c, p, id, proof, nil, interrupted, true)
+func verifyDiscardProject(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, proof runnerclient.StoppedVerification, original runnerclient.Client, interrupted bool) (ProjectStopVerification, error) {
+	return verifyProjectOfflineMode(ctx, c, p, id, proof, nil, &original, interrupted)
 }
 
-func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, interrupted bool, discardMode ...bool) (ProjectStopVerification, error) {
-	discard := len(discardMode) == 1 && discardMode[0]
+func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, discardRunner *runnerclient.Client, interrupted bool) (ProjectStopVerification, error) {
+	discard := discardRunner != nil
 	proof := ProjectStopVerification{ConfigID: p.ConfigID, ProjectID: p.ProjectID, InstanceID: p.InstanceID}
 	open := OpenNativeTaskReader
 	if discard {
@@ -357,6 +357,16 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 				if canonicalPath(r.Build.StateDir) != canonicalPath(runnerProof.StateDir) {
 					return proof, errors.New("environment Runner namespace differs")
 				}
+				if discard && a.Submission == "unknown" && a.RunID == "" {
+					run, err := inspectDiscardEnvironmentSubmit(ctx, *discardRunner, r, a)
+					if err != nil {
+						return proof, fmt.Errorf("environment activity %s round %d: %w", r.ID, a.Number, err)
+					}
+					if run == nil {
+						continue
+					}
+					a.RunID, a.InputDigest = run.RunID, run.InputDigest
+				}
 				found := false
 				for _, run := range runnerProof.Runs {
 					if run.RunID == a.RunID && a.RunID != "" && a.InputDigest != "" && run.InputDigest == a.InputDigest && run.ResourcesSettled {
@@ -364,7 +374,7 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 					}
 				}
 				if !found {
-					return proof, errors.New("original environment resource settlement unverified")
+					return proof, fmt.Errorf("original environment resource settlement unverified for activity %s round %d (Run %q)", r.ID, a.Number, a.RunID)
 				}
 				if r.Kind == "adaptation" && !r.Settled() && !discard {
 					return proof, errors.New("environment report/PR settlement unverified; preserve original records")
