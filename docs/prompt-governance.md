@@ -12,6 +12,8 @@ Runner 正文、用户覆盖/原回答、测试安排、规范、schema、报告
 
 ## 修改与本地检查
 
+Roadmap 规划的 `conversation/2` 通过应用管理的固定普通文件交付完整规划规则。规则资产来自 `internal/prompts/materials/roadmap-planning.md`，按原请求保存路径和摘要。短指令引用该文件，原请求已受理时沿原身份对账，首次发送前核验文件与摘要。冲突消息由同包固定短模板提供。[Roadmap 规划验收](../SteerlineFlow/testing/acceptance/roadmap-planning-workspace.md)
+
 重构与维护使用独立正式文件通道：`maintenance-decision.md` 只引用 Runner 的 `maintenance/rules.md`、`maintenance/context.json` 两个冻结 file 材料。决策的 read_only directory 是原项目目录，维护成果通过 Runner 公开证据进入上下文。消费时核对材料、目录和原生 Final 来源。`maintenance-execute.md` 引用 `STEERLINE_RESULT_FILE` 的完整初始化内容，规则、原生成提示词与少量事实在该正式文件中传递，Runner 原子写回结果，停止封存后消费。只读核心不能写项目；不复用 advisory 的完整文本例外。固定资产缺失失败，原请求保存完整字节；执行交接不重复携带所有历史 Run 原文。
 
 公共维护规则由 `materials/maintenance.md` 提供。内置重构方向由 [独立 Markdown 资产](../internal/prompts/materials/refactoring-directions/)提供，按固定提示词治理。自定义方向由[安装实例](integration/install-deploy.md#自定义重构方向)提供。启动时校验预览版本，将选中的原文冻结到行动记录。只读决策文件上下文通过 `direction_prompt` 携带该正文，执行阶段使用决策生成的实施指令。

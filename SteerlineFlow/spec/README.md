@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+Roadmap 规划分页与原生会话（2026-11-11，已实现，真实浏览器链通过）。[Spec](roadmap-planning.spec.md) · [Plan](../plans/roadmap-planning.plan.md) · [测试选择](../plans/roadmap-planning.tests.json) · [专属验收](../testing/acceptance/roadmap-planning-workspace.md)。基于 Runner `conversation/2` 和 worktree 写入租约，规划任务在原会话内持续改稿，SteerLine 负责 Rebase、冲突核验及审阅后发布。回归和人工体验状态见验收记录。
+
 重构与维护最小闭环（2026-11-11，已实现，隔离真实联验通过）。[Spec](refactoring-maintenance.spec.md) · [Plan](../plans/refactoring-maintenance.plan.md) · [测试选择](../plans/refactoring-maintenance.tests.json) · [验收记录](../testing/acceptance/refactoring-maintenance.md)
 
 Roadmap 按任务并行生成（2026-11-10，已实现并通过自动验证）：[Spec](roadmap-per-task-generation.spec.md) · [Plan](../plans/roadmap-per-task-generation.plan.md) · [测试安排](../plans/roadmap-per-task-generation.tests.json) · [专属验收](../testing/acceptance/roadmap-per-task-generation.md)。确认前补齐整批任务与协作契约，确认后每任务独立 Run/session，复用共享额度并行生成，失败项单独重生成，程序汇总后整批审阅发布；由当前聊天直接实现，测试及独立审核见专属验收，不启动 roadmap。

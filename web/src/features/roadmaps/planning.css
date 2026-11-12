@@ -1,0 +1,78 @@
+.planning-page {
+  display: grid;
+  gap: 16px;
+}
+.planning-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.planning-header h1,
+.planning-header h2 {
+  margin: 0;
+  margin-right: auto;
+}
+.planning-layout {
+  display: grid;
+  grid-template-columns: minmax(130px, 220px) minmax(0, 1fr);
+  gap: 20px;
+}
+.planning-layout nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.planning-layout nav a {
+  padding: 8px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.planning-layout nav small {
+  display: block;
+}
+.planning-layout main {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+}
+.planning-layout form,
+.planning-layout label {
+  display: grid;
+  gap: 6px;
+}
+.planning-layout form {
+  max-width: 600px;
+}
+.planning-layout textarea {
+  min-height: 90px;
+}
+.planning-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.planning-content pre,
+.planning-markdown,
+.planning-history p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.planning-history,
+.planning-markdown,
+.planning-content pre {
+  max-height: 420px;
+  overflow: auto;
+}
+.planning-markdown strong {
+  display: block;
+  margin: 0.7em 0 0.3em;
+}
+@media (max-width: 760px) {
+  .planning-content,
+  .planning-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

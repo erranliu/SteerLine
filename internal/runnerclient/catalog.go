@@ -27,6 +27,13 @@ type RecoveryCapability struct {
 }
 
 type Capabilities struct {
+	WorkspaceWrite *struct {
+		Workflow        string `json:"workflow"`
+		Acquire         string `json:"acquire"`
+		Release         string `json:"release"`
+		RunProperty     string `json:"run_property"`
+		SurvivesRestart bool   `json:"survives_service_restart"`
+	} `json:"workspace_write,omitempty"`
 	WorktreeReuse *struct {
 		InputProperty      string `json:"input_property"`
 		Workflow           string `json:"workflow"`
@@ -77,18 +84,20 @@ type Capabilities struct {
 		PublicationReportStep string   `json:"publication_report_step"`
 	} `json:"workflow"`
 	ConfigurationSchemas struct {
-		Version          int                        `json:"version"`
-		Adapters         map[string]json.RawMessage `json:"adapters"`
-		Providers        map[string]json.RawMessage `json:"providers"`
-		Workflow         json.RawMessage            `json:"workflow"`
-		RunConfiguration json.RawMessage            `json:"run_configuration"`
-		GenerateInput    json.RawMessage            `json:"generate_input"`
+		Version                  int                        `json:"version"`
+		Adapters                 map[string]json.RawMessage `json:"adapters"`
+		Providers                map[string]json.RawMessage `json:"providers"`
+		Workflow                 json.RawMessage            `json:"workflow"`
+		RunConfiguration         json.RawMessage            `json:"run_configuration"`
+		GenerateInput            json.RawMessage            `json:"generate_input"`
+		ManagedConversationInput json.RawMessage            `json:"managed_conversation_input"`
 	} `json:"configuration_schemas"`
 }
 type Catalog struct {
 	executionWaitSchema     *jsonschema.Schema
 	executionWaitError      error
 	generate                *jsonschema.Schema
+	conversation            *jsonschema.Schema
 	Capabilities            Capabilities
 	adapters, providers     map[string]*jsonschema.Schema
 	workflow, configuration *jsonschema.Schema
@@ -160,6 +169,7 @@ func compileCatalog(caps Capabilities) (*Catalog, error) {
 		{caps.ConfigurationSchemas.Workflow, &result.workflow, "workflow"},
 		{caps.ConfigurationSchemas.RunConfiguration, &result.configuration, "run-configuration"},
 		{caps.ConfigurationSchemas.GenerateInput, &result.generate, "generate-input"},
+		{caps.ConfigurationSchemas.ManagedConversationInput, &result.conversation, "managed-conversation-input"},
 	} {
 		if len(entry.raw) == 0 {
 			continue

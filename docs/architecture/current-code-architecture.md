@@ -40,7 +40,7 @@ flowchart TB
 
 Web 拥有浏览器认证、项目选择、草稿、原信封和查询缓存；Go 产品用例拥有业务资格和状态提交。应用与项目 Bearer 留在本机服务侧，浏览器使用绑定 home/Web 实例的会话。离线显示最后观察并禁写，实例变化重新核验；旧请求不自动改投新实例或候选。认证与工程操作归 [Web README](../../web/README.md)，具体路径、回执与补交资格归[本机协议](../product-design/local-client-protocol.md)。
 
-当前采用查询刷新与受控轮询，尚未提供 SSE、远程 Web 访问或复杂规划工作台。重构与维护已接入最小分页和后台行动，独立维护[自身边界](refactoring-maintenance.md)，不改变 Task/DAG 交付。
+当前采用查询刷新与受控轮询。Roadmap 规划分页已通过本机 Runner 原生多轮会话接入独立 worktree。SSE、远程 Web 访问和持续维护工作台仍属后续范围。[Roadmap 规划 Spec](../../SteerlineFlow/spec/roadmap-planning.spec.md) 重构与维护已接入最小分页和后台行动，独立维护[自身边界](refactoring-maintenance.md)，不改变 Task/DAG 交付。
 
 ## 模块与资源归属
 

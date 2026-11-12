@@ -1,6 +1,8 @@
 # Roadmap 读取、解析与入图
 
-当前 Web 读取 SteerlineFlow/Roadmap/drafts/ 下普通 UTF-8 Markdown，提供解析、确认任务依赖并生成文档、审阅、发布与正式入图。草稿由外部维护，产品不改写原文或要求手写 JSON；完整项目添加仍是[后续方案](project-onboarding.md)。
+当前 Web 读取 SteerlineFlow/Roadmap/drafts/ 下普通 UTF-8 Markdown，提供解析、确认任务依赖并生成文档、审阅、发布与正式入图。草稿可以在 SteerLine 外维护，也可通过「Roadmap 规划」在独立 worktree 改稿并审阅发布。规划 PR 合入且项目工作树能读取对应来源后，从稳定链接进入本流程。[Roadmap 规划 Spec](../../SteerlineFlow/spec/roadmap-planning.spec.md)
+
+完整项目添加仍是[后续方案](project-onboarding.md)。
 
 ## 材料与解析
 

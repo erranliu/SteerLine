@@ -74,7 +74,7 @@ func (b *bounded) Write(value []byte) (int, error) {
 }
 func mutation(command string) bool {
 	switch command {
-	case "submit", "reply", "resume", "message", "stop", "service stop":
+	case "submit", "reply", "resume", "message", "stop", "close", "workspace acquire", "workspace release", "service stop":
 		return true
 	}
 	return false
@@ -105,7 +105,9 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 	switch command {
 	case "service start", "service status", "service stop", "service verify-stopped":
 		argv = append(argv, "service", command[len("service "):])
-	case "result-file", "progress-file", "version", "capabilities", "submit", "inspect", "observe", "history", "last-message", "open-native-session", "events", "reply", "resume", "message", "stop", "run-usage", "run-usage-events", "workspace-git":
+	case "workspace acquire", "workspace release":
+		argv = append(argv, "workspace", command[len("workspace "):])
+	case "result-file", "progress-file", "version", "capabilities", "submit", "inspect", "observe", "history", "last-message", "open-native-session", "events", "reply", "resume", "message", "stop", "close", "run-usage", "run-usage-events", "workspace-git":
 		argv = append(argv, command)
 	default:
 		return Response{}, &Failure{Code: "invalid_arguments", Message: "Unsupported Runner CLI command", Exit: 2}
@@ -269,6 +271,8 @@ func exitCode(code string) int {
 	case "request_conflict", "request_not_found", "command_not_found", "run_not_found", "check_not_found", "stale_instance", "directory_conflict", "stale_revision", "invalid_state", "stale_question", "resume_required", "operation_unverified", "answer_pending", "repository_conflict":
 		return 5
 	case "artifact_not_found", "artifact_changed", "artifact_integrity_failed", "workspace_source_unknown":
+		return 5
+	case "workspace_not_idle", "workspace_write_held", "workspace_write_lease_mismatch", "workspace_identity_conflict", "session_closed":
 		return 5
 	case "request_outcome_unknown":
 		return 6

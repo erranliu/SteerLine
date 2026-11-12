@@ -37,6 +37,7 @@ const Roadmaps = lazy(() =>
     default: module.Roadmaps,
   })),
 );
+const RoadmapPlanning = lazy(() => import("../features/roadmaps/planning"));
 const RefactoringMaintenance = lazy(() =>
   import("../features/refactoring-maintenance/refactoring-maintenance").then(
     (module) => ({ default: module.RefactoringMaintenance }),
@@ -231,6 +232,10 @@ export function Workspace({
                     key={api.home + identity.project_id + identity.instance_id}
                   />
                 }
+              />
+              <Route
+                path={"/projects/" + identity.project_id + "/roadmap-planning"}
+                element={<RoadmapPlanning key={api.home + identity.project_id + identity.instance_id} />}
               />
               <Route
                 path={"/projects/" + identity.project_id + "/environment"}

@@ -92,6 +92,7 @@ type Operation struct {
 }
 
 type Run struct {
+	WorkspaceWrite         *WorkspaceWrite   `json:"workspace_write,omitempty"`
 	ReuseWorktreeFromRunID string            `json:"reuse_worktree_from_run_id,omitempty"`
 	WorkspaceOriginRunID   string            `json:"workspace_origin_run_id,omitempty"`
 	WorkspaceIdentity      string            `json:"workspace_identity,omitempty"`

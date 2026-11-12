@@ -147,11 +147,15 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 	if err != nil {
 		return nil, err
 	}
+	planningStops, err := preparePlanningStops(ctx, c, store, cli)
+	if err != nil {
+		return nil, err
+	}
 	advisoryStops, err := prepareAdvisoryStops(ctx, c, store, cli)
 	if err != nil {
 		return nil, err
 	}
-	generationStops := append(append(roadmapStops, environmentStops...), advisoryStops...)
+	generationStops := append(append(append(roadmapStops, planningStops...), environmentStops...), advisoryStops...)
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {
 		return nil, err

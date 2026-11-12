@@ -25,13 +25,26 @@ import (
 )
 
 func (p *runtimeProjectPort) SubmitRoadmap(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
+	if strings.HasPrefix(in.Action, planningAction) {
+		port := p.config.runtimeRoadmaps
+		if port == nil || port.planning == nil || !p.Server.Identity(ctx).Ready {
+			return maintenanceResponse(in), projectStoppingError()
+		}
+		return port.planning.command(ctx, in)
+	}
 	return p.roadmapCommand(ctx, in)
 }
 func (p *runtimeProjectPort) RoadmapReceipt(ctx context.Context, id string) (*httpcontract.CommandResponse, error) {
+	if port := p.config.runtimeRoadmaps; port != nil && port.planning != nil {
+		if receipt, err := port.planning.receipt(ctx, id); receipt != nil || err != nil {
+			return receipt, err
+		}
+	}
 	return p.roadmapReceipt(ctx, id)
 }
 
 type roadmapPort struct {
+	planning         *planningPort
 	config           Config
 	store            *sqlite.SQLiteStore
 	service          *roadmapservice.Service
@@ -46,6 +59,7 @@ type roadmapPort struct {
 func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *roadmapPort {
 	c = bindNativeConfiguration(c, cli)
 	p := &roadmapPort{config: c, store: store}
+	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit}
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source
 	p.service.Graph = p.graph

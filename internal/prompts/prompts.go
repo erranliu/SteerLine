@@ -42,8 +42,18 @@ func TestingRules() ([]byte, error)         { return files.ReadFile("materials/t
 func RoadmapParseRules() ([]byte, error)    { return files.ReadFile("materials/roadmap-parse.md") }
 func RoadmapDocumentRules() ([]byte, error) { return files.ReadFile("materials/roadmap-documents.md") }
 func RoadmapSpecGuide() ([]byte, error)     { return files.ReadFile("materials/roadmap-spec-guide.md") }
-func MainAgentRules() ([]byte, error)       { return files.ReadFile("materials/main-agent.md") }
-func MaintenanceRules() ([]byte, error)     { return files.ReadFile("materials/maintenance.md") }
+func RoadmapPlanningRules() ([]byte, error) { return files.ReadFile("materials/roadmap-planning.md") }
+func RoadmapPlanning(rules, draft, goal string) (string, error) {
+	if rules == "" || draft == "" || strings.TrimSpace(goal) == "" {
+		return "", errors.New("fixed planning rules, draft path and user goal are required")
+	}
+	return render("roadmap-planning", struct{ Rules, Draft, Goal string }{rules, draft, goal})
+}
+func RoadmapPlanningConflict(decision string) (string, error) {
+	return render("roadmap-planning-conflict", struct{ Decision string }{decision})
+}
+func MainAgentRules() ([]byte, error)   { return files.ReadFile("materials/main-agent.md") }
+func MaintenanceRules() ([]byte, error) { return files.ReadFile("materials/maintenance.md") }
 func MaintenanceDirection(id string) ([]byte, error) {
 	return files.ReadFile("materials/refactoring-directions/" + id + ".md")
 }
