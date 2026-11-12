@@ -38,7 +38,7 @@ Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742
 
 ## 认证与恢复
 
-`open -print-url` 仅供受控浏览器自动化，原生 launcher 从当前用户私有 discovery 申请一次性 60 秒票据。票据在 fragment，页面兑换前移除；12 小时会话绑定 home/Web 实例，HttpOnly/SameSite Strict、精确 Origin/Host、CSRF 和生产 CSP 保留。应用与项目 Bearer 不进入浏览器。
+`open -print-url` 仅供受控浏览器自动化，原生 launcher 从当前用户私有 discovery 申请一次性 60 秒票据。票据在 fragment，页面兑换前移除；48 小时会话绑定 home/Web 实例，HttpOnly/SameSite Strict、精确 Origin/Host、CSRF 和生产 CSP 保留。应用与项目 Bearer 不进入浏览器。
 
 Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的新实例，再恢复只读连接。草稿与完整原请求存 IndexedDB，按 home/项目/实例及执行身份隔离；切换取消旧查询、资格检查和未发送回调。已发送命令只按原 ID 查询；原实例变化后仍可读取旧回执，但不把旧信封补交到新实例。离线只保留当前标签页已有缓存并禁写。
 
