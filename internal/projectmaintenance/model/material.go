@@ -16,5 +16,6 @@ type Material struct {
 	TestPlan     json.RawMessage           `json:"test_plan,omitempty"`
 	Status       string                    `json:"status"`
 	Diagnostic   string                    `json:"diagnostic,omitempty"`
+	Failure      *Blocker                  `json:"failure,omitempty"`
 	MissingTests []string                  `json:"missing_tests,omitempty"`
 }

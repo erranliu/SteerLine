@@ -1,10 +1,19 @@
+export type ProjectBlocker = {
+  category: "remote" | "worktree" | "task_material" | "test_plan";
+  code: string;
+  diagnostic: string;
+  task_id?: string;
+  path?: string;
+  target_branch?: string;
+};
+
 export type ProjectReadiness = {
   waiting?: number;
   status: "ready" | "not_ready";
   commit: string;
   total: number;
   ready: number;
-  blockers: string[];
+  blockers: ProjectBlocker[];
 };
 
 export type Materials = {

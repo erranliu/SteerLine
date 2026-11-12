@@ -31,7 +31,13 @@ function setup(
       commit: sha,
       total: 1,
       ready: 1,
-      blockers: ["本地尚未与目标分支同步"],
+      blockers: [
+        {
+          category: "worktree",
+          code: "local_behind_remote",
+          diagnostic: "本地尚未与目标分支同步",
+        },
+      ],
     },
     observation: { commit: sha, last_success: "2026-10-21T01:00:00Z" },
     remote_name: "origin/main",
@@ -69,7 +75,7 @@ function setup(
         ...view.remote,
         prs: ["https://github.com/example/repo/pull/9"],
       } as never;
-    return view as never;
+    return { ...view } as never;
   });
   const submit = vi
     .spyOn(api, "submit")
@@ -90,30 +96,19 @@ it("opens project maintenance when arriving through the task link without prepar
   const { submit } = setup(
     {},
     true,
-    "/projects/" +
-      identity.project_id +
-      "/dag?maintenance=preparation&task=101",
+    "/projects/" + identity.project_id + "/status?task=101",
   );
   fireEvent.click(screen.getByRole("link", { name: "任务维护入口" }));
   expect(
     await screen.findByRole("heading", { name: "Git 任务材料与测试安排" }),
   ).toBeVisible();
-  expect(screen.getByRole("button", { name: /项目维护/ })).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  fireEvent.click(screen.getByRole("link", { name: "任务维护入口" }));
-  expect(screen.getByRole("button", { name: /项目维护/ })).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
+  expect(await screen.findByText("SteerlineFlow/plans/task.tests.json")).toBeVisible();
+  expect(document.getElementById("project-status-task-101")).toBeVisible();
   expect(submit).not.toHaveBeenCalled();
 });
 
 it("PMS shows remote/local meaning and only the update workflow", async () => {
   const { get, submit } = setup();
-  fireEvent.click(await screen.findByRole("button", { name: /项目维护/ }));
   expect(await screen.findByText(/远端基线 · origin\/main/)).toBeVisible();
   expect(
     screen.getByRole("heading", { name: /本地基线.*落后 2/ }),
@@ -135,6 +130,32 @@ it("PMS shows remote/local meaning and only the update workflow", async () => {
 });
 it("PMS displays why update needs manual handling and disables unsafe update", async () => {
   setup({
+    readiness: {
+      status: "not_ready",
+      commit: "base",
+      total: 1,
+      ready: 1,
+      blockers: [
+        {
+          category: "worktree",
+          code: "wrong_branch",
+          diagnostic: "当前分支与目标不同，请人工处理",
+        },
+        {
+          category: "test_plan",
+          code: "test_plan_missing",
+          task_id: "101",
+          path: "missing.tests.json",
+          diagnostic: "缺少已提交的测试安排",
+        },
+        {
+          category: "task_material",
+          code: "task_material_unprepared",
+          task_id: "102",
+          diagnostic: "任务 102 材料未准备",
+        },
+      ],
+    },
     local: {
       commit: "b".repeat(40),
       branch: "feature",
@@ -145,17 +166,21 @@ it("PMS displays why update needs manual handling and disables unsafe update", a
       reason: "本地存在独有提交，请人工处理",
     },
   });
-  fireEvent.click(await screen.findByRole("button", { name: /项目维护/ }));
   expect(
     await screen.findByRole("heading", { name: /本地基线.*已分叉 · 领先 3/ }),
   ).toBeVisible();
   expect(screen.getByText(/请人工处理/)).toBeVisible();
+  expect(screen.getByText("缺少已提交的测试安排")).toBeVisible();
+  expect(screen.getByText("任务 102 材料未准备")).toBeVisible();
+  expect(
+    screen.getByRole("link", { name: "查看任务 #101 材料" }),
+  ).toHaveAttribute("href", "#project-status-task-101");
   expect(screen.getByRole("button", { name: "更新本地" })).toBeDisabled();
 });
 it("PMS lets users browse log and real associated PR without mutation", async () => {
   const { submit } = setup();
-  fireEvent.click(await screen.findByRole("button", { name: /项目维护/ }));
-  fireEvent.click(screen.getByRole("button", { name: "查看提交日志" }));
+  fireEvent.click(await screen.findByRole("button", { name: "查看提交日志" }));
+  await screen.findByText(/Update Plan/);
   await screen.findByRole("region", { name: "提交日志" });
   fireEvent.click(
     screen.getAllByRole("button", { name: "提交详情 / 关联 PR" })[0],
@@ -169,7 +194,6 @@ it("PMS lets users browse log and real associated PR without mutation", async ()
 });
 it("PMS offline view retains facts and does not submit or check automatically", async () => {
   const { get, submit } = setup({}, false);
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
   expect(screen.getByRole("button", { name: "检查更新" })).toBeDisabled();
   expect(screen.getByText(/离线/)).toBeVisible();
   expect(get).not.toHaveBeenCalled();
@@ -187,23 +211,25 @@ it("keeps a binary project status and follows the server verdict instead of indi
       blockers: [],
     },
   });
-  const toggle = await screen.findByRole("button", {
-    name: "项目维护 · 已就绪",
-  });
-  expect(toggle).toHaveAttribute("aria-expanded", "false");
   expect(
-    screen.getByText(/测试安排 1\/2 就绪.*1 项等待前置测试/),
+    await screen.findByText(/测试安排 1\/2 就绪.*1 项等待前置测试/),
   ).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "未就绪原因" })).toBeNull();
   expect(api.submit).not.toHaveBeenCalled();
   view.readiness = {
     ...view.readiness,
     status: "not_ready",
-    blockers: ["任务 #99 的材料与测试安排未就绪"],
+    blockers: [
+      {
+        category: "task_material",
+        code: "task_material_unprepared",
+        diagnostic: "任务 #99 的材料与测试安排未就绪",
+      },
+    ],
   };
-  fireEvent.click(toggle);
   fireEvent.click(screen.getByRole("button", { name: "检查更新" }));
   expect(
-    await screen.findByRole("button", { name: "项目维护 · 未就绪" }),
+    await screen.findByRole("heading", { name: "未就绪原因" }),
   ).toBeVisible();
   expect(screen.getByText("任务 #99 的材料与测试安排未就绪")).toBeVisible();
 });
@@ -221,9 +247,8 @@ it.each(["unknown test ID", "pinned path missing"])(
         },
       ],
     });
-    fireEvent.click(await screen.findByRole("button", { name: /项目维护/ }));
     expect(
-      screen.getByText("SteerlineFlow/plans/task.tests.json"),
+      await screen.findByText("SteerlineFlow/plans/task.tests.json"),
     ).toBeVisible();
     expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
     expect(
@@ -235,7 +260,7 @@ it.each(["unknown test ID", "pinned path missing"])(
   },
 );
 
-it("retains trusted source check time in a collapsed observation error", async () => {
+it("retains trusted source check time when the latest remote check failed", async () => {
   const { submit } = setup({
     observation: {
       commit: "fixed",
@@ -246,10 +271,6 @@ it("retains trusted source check time in a collapsed observation error", async (
   expect(await screen.findByText(/最近成功检查/)).toHaveAttribute(
     "datetime",
     "2026-11-10T01:02:03Z",
-  );
-  expect(screen.getByRole("button", { name: /项目维护/ })).toHaveAttribute(
-    "aria-expanded",
-    "false",
   );
   expect(submit).not.toHaveBeenCalled();
 });

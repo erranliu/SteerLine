@@ -226,7 +226,7 @@ export function activityDestination(project: string, activity: Activity) {
     return `${root}/environment${d.target ? `?profile=${encodeURIComponent(d.target)}` : ""}`;
   if (d.kind === "environment")
     return `${root}/environment?activity=${encodeURIComponent(d.target)}`;
-  return `${root}/dag?maintenance=preparation&request_id=${encodeURIComponent(d.target)}#project-maintenance`;
+  return `${root}/status?request_id=${encodeURIComponent(d.target)}`;
 }
 
 export function requestDestination(e: Envelope, receipt?: Receipt) {
@@ -255,7 +255,7 @@ export function requestDestination(e: Envelope, receipt?: Receipt) {
       : undefined;
   }
   if (e.action.startsWith("maintenance_"))
-    return `${root}/dag?maintenance=preparation&${request}#project-maintenance`;
+    return `${root}/status?${request}`;
   if (["start_task", "start_candidate"].includes(e.action))
     return `${root}/runs?task=${encodeURIComponent(e.target_id)}&run=${encodeURIComponent(e.request_id)}`;
   return undefined;

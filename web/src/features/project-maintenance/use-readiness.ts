@@ -23,13 +23,15 @@ export function useProjectReadiness() {
           ? "项目已就绪"
           : "项目未就绪";
   return {
+    verified,
+    blockers: verified ? (query.data?.blockers ?? []) : [],
     ready,
     text,
     reason: ready ? "" : text,
     diagnostic: query.isError
       ? String(query.error)
       : verified
-        ? query.data?.blockers.join("；")
+        ? query.data?.blockers.map((blocker) => blocker.diagnostic).join("；")
         : undefined,
   };
 }

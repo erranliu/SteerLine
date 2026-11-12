@@ -162,7 +162,7 @@ function setup({
     commit: "base",
     total: 2,
     ready: status === "ready" ? 2 : 1,
-    blockers: status === "ready" ? [] : ["任务 #99 的材料与测试安排未就绪"],
+    blockers: status === "ready" ? [] : [{ category: "task_material", code: "task_material_unprepared", diagnostic: "任务 #99 的材料与测试安排未就绪" }],
   });
   let materials = readiness(materialsStatus);
   let materialsError: Error | undefined;
@@ -302,9 +302,9 @@ it.each([
       ).toBe("success"),
     );
     expect(button).toBeDisabled();
-    expect(screen.getByRole("link", { name: "前往项目维护" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "前往项目状态" })).toHaveAttribute(
       "href",
-      "/projects/candidate-project/dag?maintenance=preparation&task=38",
+      "/projects/candidate-project/status?task=38",
     );
     fireEvent.click(button);
     expect(start).not.toHaveBeenCalled();

@@ -133,6 +133,9 @@ func (m *projectMaintenance) localWorkspace(ctx context.Context) (string, error)
 	}
 	return strings.TrimSpace(string(head)) + "\n" + strings.TrimSpace(string(branch)), nil
 }
+
+var errGitOperationInProgress = errors.New("Git operation in progress")
+
 func (m *projectMaintenance) workspace(ctx context.Context) (string, error) {
 	snapshot, e := m.localWorkspace(ctx)
 	if e != nil {
@@ -141,7 +144,7 @@ func (m *projectMaintenance) workspace(ctx context.Context) (string, error) {
 	// No writes during an active merge or rebase. Git reports state paths, not guesses.
 	for _, state := range []string{"MERGE_HEAD", "REBASE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"} {
 		if _, e := m.git(ctx, "rev-parse", "--verify", state); e == nil {
-			return "", errors.New("Git operation in progress")
+			return "", errGitOperationInProgress
 		}
 	}
 	for _, state := range []string{"rebase-merge", "rebase-apply"} {
@@ -154,7 +157,7 @@ func (m *projectMaintenance) workspace(ctx context.Context) (string, error) {
 			name = filepath.Join(m.config.Repository, name)
 		}
 		if _, err = os.Stat(name); err == nil {
-			return "", errors.New("Git operation in progress")
+			return "", errGitOperationInProgress
 		} else if !os.IsNotExist(err) {
 			return "", err
 		}

@@ -1485,6 +1485,41 @@ textarea {
   flex-wrap: wrap;
   min-width: 0;
 }
+.project-readiness-status {
+  position: relative;
+  min-width: 0;
+  font-size: 12px;
+}
+.project-readiness-status summary {
+  padding: 6px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: #f0cb84;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.project-readiness-status summary.ready { color: #99e6c5; }
+.project-readiness-status nav {
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-start: 0;
+  z-index: 12;
+  min-width: 128px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #16271f;
+}
+.project-readiness-status nav a {
+  display: block;
+  padding: 7px 10px;
+  border-radius: 4px;
+}
+.project-readiness-status nav a:hover,
+.project-readiness-status nav a:focus-visible { background: #284438; }
+.project-status-reasons { list-style: none; padding: 0; }
+.project-status-reasons li { overflow-wrap: anywhere; white-space: pre-line; }
+.project-status-reasons a { text-decoration: underline; }
 .dispatch-status {
   display: block;
   max-width: min(240px, 100%);

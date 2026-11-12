@@ -36,13 +36,14 @@ type baselineCommit struct {
 	PRDiagnostic string   `json:"pr_diagnostic,omitempty"`
 }
 type localBaseline struct {
-	Commit    string `json:"commit"`
-	Branch    string `json:"branch"`
-	Status    string `json:"status"`
-	Ahead     int    `json:"ahead"`
-	Behind    int    `json:"behind"`
-	CanUpdate bool   `json:"can_update"`
-	Reason    string `json:"reason,omitempty"`
+	Commit     string         `json:"commit"`
+	Branch     string         `json:"branch"`
+	Status     string         `json:"status"`
+	Ahead      int            `json:"ahead"`
+	Behind     int            `json:"behind"`
+	CanUpdate  bool           `json:"can_update"`
+	Reason     string         `json:"reason,omitempty"`
+	ReasonCode pm.BlockerCode `json:"-"`
 }
 
 func (m *projectMaintenance) commitInfo(ctx context.Context, sha string, pr bool) baselineCommit {
@@ -91,13 +92,13 @@ func (m *projectMaintenance) localBaseline(ctx context.Context) localBaseline {
 	result := localBaseline{Status: "unknown"}
 	head, e := m.git(ctx, "rev-parse", "--verify", "HEAD^{commit}")
 	if e != nil {
-		result.Reason = e.Error()
+		result.ReasonCode, result.Reason = pm.WorktreeUnverified, e.Error()
 		return result
 	}
 	result.Commit = strings.TrimSpace(string(head))
 	branch, e := m.git(ctx, "symbolic-ref", "--quiet", "--short", "HEAD")
 	if e != nil {
-		result.Reason = "当前为游离HEAD，请人工切回目标分支 " + m.config.Branch
+		result.ReasonCode, result.Reason = pm.DetachedHEAD, "当前为游离HEAD，请人工切回目标分支 "+m.config.Branch
 		return result
 	}
 	result.Branch = strings.TrimSpace(string(branch))
@@ -108,11 +109,11 @@ func (m *projectMaintenance) localBaseline(ctx context.Context) localBaseline {
 	}
 	raw, e := m.git(ctx, "rev-list", "--left-right", "--count", result.Commit+"..."+o.Commit, "--")
 	if e != nil {
-		result.Reason = e.Error()
+		result.ReasonCode, result.Reason = pm.WorktreeUnverified, e.Error()
 		return result
 	}
 	if _, e = fmt.Sscanf(string(raw), "%d %d", &result.Ahead, &result.Behind); e != nil {
-		result.Reason = e.Error()
+		result.ReasonCode, result.Reason = pm.WorktreeUnverified, e.Error()
 		return result
 	}
 	switch {
@@ -126,24 +127,27 @@ func (m *projectMaintenance) localBaseline(ctx context.Context) localBaseline {
 		result.Status = "behind"
 	}
 	if result.Branch != m.config.Branch {
-		result.Reason = "当前分支 " + result.Branch + " 与目标 " + m.config.Branch + " 不同，请人工处理"
+		result.ReasonCode, result.Reason = pm.WrongBranch, "当前分支 "+result.Branch+" 与目标 "+m.config.Branch+" 不同，请人工处理"
 		return result
 	}
 	if _, e = m.workspace(ctx); e != nil {
-		result.Reason = "Git操作尚未结束：" + e.Error()
+		result.ReasonCode, result.Reason = pm.WorktreeUnverified, e.Error()
+		if errors.Is(e, errGitOperationInProgress) {
+			result.ReasonCode, result.Reason = pm.GitOperationInProgress, "Git 操作尚未结束："+e.Error()
+		}
 		return result
 	}
 	dirty, e := m.git(ctx, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all")
 	if e != nil {
-		result.Reason = e.Error()
+		result.ReasonCode, result.Reason = pm.WorktreeUnverified, e.Error()
 		return result
 	}
 	if len(dirty) > 0 {
-		result.Reason = "工作区有未提交或未跟踪文件，请先人工保存：" + string(dirty)
+		result.ReasonCode, result.Reason = pm.WorktreeDirty, "工作区有未提交或未跟踪文件，请先人工保存："+string(dirty)
 		return result
 	}
 	if o.Rewritten {
-		result.Reason = "远端历史已改写，请人工核对Git历史"
+		result.ReasonCode, result.Reason = pm.RemoteHistoryRewritten, "远端历史已改写，请人工核对 Git 历史"
 		return result
 	}
 	if result.Status == "behind" {

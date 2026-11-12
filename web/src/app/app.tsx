@@ -20,6 +20,7 @@ import type { Identity, BrowserSession } from "../shared/api/types";
 import { WorkspaceContext } from "./context";
 import { Button } from "../shared/ui/button";
 import { ProjectMaintenance } from "../features/project-maintenance/project-maintenance";
+import { ProjectReadinessStatus } from "../features/project-maintenance/project-readiness-status";
 import { DispatchStatus } from "../features/tasks/dispatch";
 import { requiresAnswer } from "../features/runs/state";
 import { SettingsPage } from "../features/settings/settings";
@@ -84,7 +85,6 @@ export function Workspace({
   onRefreshConnection?: () => void;
 }) {
   const environmentPage = useLocation().pathname.endsWith("/environment");
-  const readingPage = useLocation().pathname.endsWith("/activities");
   const { api, identity, snapshot, page, online, diagnostic, refresh } =
     useWorkspaceConnection({
       initial,
@@ -146,6 +146,7 @@ export function Workspace({
           switcher={switcher}
           questions={counts.questions}
           dispatchStatus={<DispatchStatus />}
+          projectStatus={<ProjectReadinessStatus />}
           footer={undefined}
           connection={
             <div className="connection">
@@ -165,11 +166,6 @@ export function Workspace({
             </div>
           }
         >
-          {!environmentPage && !readingPage && (
-            <ProjectMaintenance
-              key={identity.project_id + identity.instance_id}
-            />
-          )}
           {!online && (
             <div className="notice amber" role="status">
               <strong>
@@ -244,6 +240,10 @@ export function Workspace({
                     key={identity.project_id + identity.instance_id}
                   />
                 }
+              />
+              <Route
+                path={`/projects/${identity.project_id}/status`}
+                element={<ProjectMaintenance />}
               />
               <Route
                 path={"/projects/" + identity.project_id + "/tests"}

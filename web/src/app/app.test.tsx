@@ -44,7 +44,7 @@ function workspaceRead(api: Api, path: string): unknown {
       commit: "",
       total: 0,
       ready: 0,
-      blockers: ["远端尚未检查"],
+      blockers: [{ category: "remote", code: "remote_unchecked", diagnostic: "远端尚未检查" }],
     };
   if (path === "/maintenance")
     return {
@@ -53,7 +53,7 @@ function workspaceRead(api: Api, path: string): unknown {
         commit: "",
         total: 0,
         ready: 0,
-        blockers: ["远端尚未检查"],
+        blockers: [{ category: "remote", code: "remote_unchecked", diagnostic: "远端尚未检查" }],
       },
       observation: { commit: "" },
       tasks: [],
@@ -195,7 +195,8 @@ it("preloads only after connection verification, shares presentation in StrictMo
         makeSnapshot(api),
       );
     });
-  expect(screen.getByRole("button", { name: /项目维护/ })).toBeVisible();
+  expect(await screen.findByText("项目未就绪 · 远端尚未检查")).toBeVisible();
+  expect(get.mock.calls.some(([path]) => path === "/maintenance")).toBe(false);
   vi.useFakeTimers();
   await act(() => vi.advanceTimersByTimeAsync(21000));
   expect(

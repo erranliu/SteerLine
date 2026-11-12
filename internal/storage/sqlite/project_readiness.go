@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -33,7 +32,7 @@ func (tx *sqliteTx) verifyProjectMaterials(project, commit string, tasks []taskm
 	}
 	readiness := pm.MaterialsReadiness(commit, materials)
 	if readiness.Status != "ready" {
-		return nativeErr("project_not_ready", "项目未就绪："+strings.Join(readiness.Blockers, "；"))
+		return nativeErr("project_not_ready", "项目未就绪："+readiness.Diagnostic())
 	}
 	return nil
 }

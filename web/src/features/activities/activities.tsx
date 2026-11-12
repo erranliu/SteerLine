@@ -519,7 +519,7 @@ export function Activities({
                           {a.phase} ·{" "}
                           {a.diagnostic || a.summary || "以上为本批次结果"}
                         </p>
-                        <small>原项目维护区域展示当前批次</small>
+                        <small>项目状态页展示当前批次</small>
                         <Button
                           variant="ghost"
                           onClick={() => {
@@ -530,7 +530,7 @@ export function Activities({
                             navigate(destination.current);
                           }}
                         >
-                          前往当前项目维护
+                          前往项目状态
                         </Button>
                       </div>
                     )}
