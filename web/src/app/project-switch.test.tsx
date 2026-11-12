@@ -58,6 +58,16 @@ function mock() {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
+      if (url.endsWith("/dispatch")) {
+        return Response.json({
+          mode: url.includes(a) ? "manual" : "auto",
+          revision: 1,
+          state: url.includes(a) ? "closed" : "ready",
+          default_profile_id: "default",
+          default_profile_name: "Codex 标准",
+          environment_readiness_required: true,
+        });
+      }
       if (url.includes("/environment/options")) {
         return Response.json({
           profiles: [{ id: "default", name: "Codex 标准" }],
@@ -240,7 +250,7 @@ it("keeps drawer UI outside keyed Workspace while isolating project and instance
     ),
   );
   expect(
-    await screen.findByRole("link", { name: "任务自动派发：Codex 标准" }),
+    await screen.findByRole("link", { name: "任务自动派发：已开启，可派发" }),
   ).toHaveAttribute("href", `/projects/${b}/settings#task-dispatch`);
   panel = await screen.findByRole("region", { name: /活动中心/ });
   expect(

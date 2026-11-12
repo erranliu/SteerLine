@@ -67,6 +67,19 @@ export interface TaskStartBlocker {
   code: string;
   diagnostic: string;
 }
+export interface DispatchObservation {
+  mode: "manual" | "auto";
+  revision: number;
+  state: "closed" | "waiting" | "ready";
+  default_profile_id: string;
+  default_profile_name: string;
+  environment_readiness_required: boolean;
+  blocker?: {
+    category: "project" | "environment" | "profile" | "tasks" | "execution";
+    code: string;
+    diagnostic: string;
+  };
+}
 export interface TaskStartEligibility {
   action: "start_task" | "start_candidate";
   blockers: TaskStartBlocker[];

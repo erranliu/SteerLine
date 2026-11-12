@@ -17,6 +17,7 @@
 | `/identity` | 项目/实例、进程、ready、能力、诊断及认证后的原锁路径 |
 | `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务。在线任务详情还提供显式启动资格 |
 | `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
+| `/dispatch` | 已保存的派发模式及版本、默认执行方案、当前派发状态和结构化等待原因 |
 | `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
 | `/activities/{activity_id}` | 精确活动摘要；仍只读本地事实和有界消息预览 |
 | `/activities/{activity_id}/interactions` | 显式读取已记录交互一页，默认 50、最多 200、1 MiB；游标绑定项目/实例/活动/原成员范围与读取版本，变化失效后显式刷新 |
@@ -59,7 +60,9 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 | `open_terminal`、`recheck_environment` | run ID / blocker version，control revision；`{target:{run_id,execution_id,attempt_id,turn_id,blocker_id,version}}`，只作用于原 blocker |
 | `open_native_session` | run ID / 0；原 `NativeSessionTarget` 的 run/Execution/Attempt/session/generation。只打开原查看器，无新业务轮次 |
 
-新项目默认关闭自动派发（`manual`），可手动启动符合资格的任务。开启后（`auto`），服务轮询并派发符合资格的任务。进行中的任务在两种派发模式下均可显式新增合格候选。关闭开关只停止后续自动派发。
+新项目默认关闭自动派发（`manual`），可手动启动符合资格的任务。项目或环境准备期间可以开启自动派发（`auto`）。服务在条件满足后按现有轮询派发，候选预留继续核对当前模式与执行资格。进行中的任务在两种派发模式下均可显式新增合格候选。关闭开关只停止后续自动派发。
+
+`GET /dispatch` 按派发模式返回 `closed`，或按当前任务、执行槽位、默认方案及项目和环境观察返回 `waiting` 或 `ready`。等待原因包含 `category`、`code` 和 `diagnostic`。界面按对应派发版本展示状态。这个查询只读取事实，实际派发使用原启动和预留路径。
 
 以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning、人工验收和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
 

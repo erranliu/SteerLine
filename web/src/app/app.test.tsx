@@ -36,6 +36,15 @@ function workspaceRead(api: Api, path: string): unknown {
   if (path.startsWith("/environment/materials?"))
     return { document: "# 项目运行环境" };
   if (path === "/snapshot") return makeSnapshot(api);
+  if (path === "/dispatch")
+    return {
+      mode: "manual",
+      revision: 1,
+      state: "closed",
+      default_profile_id: "default",
+      default_profile_name: "默认方案",
+      environment_readiness_required: true,
+    };
   if (path === "/presentation")
     return { presentation: { profiles: [], default_profile_id: "" } };
   if (path === "/maintenance/readiness")
@@ -212,6 +221,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
         (path) =>
           !(
             path === "/snapshot" ||
+            path === "/dispatch" ||
             path === "/presentation" ||
             path === "/tasks?limit=100&cursor=" ||
             path === "/maintenance" ||
@@ -222,6 +232,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
           ),
       ),
   ).toEqual([]);
+  expect(get.mock.calls.filter(([path]) => path === "/dispatch")).toHaveLength(1);
   client.clear();
 });
 

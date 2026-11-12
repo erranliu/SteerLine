@@ -471,6 +471,12 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if route == "/dispatch" {
+		if len(values) != 0 {
+			return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "dispatch observation does not accept parameters"}
+		}
+		return p.readDispatch(ctx)
+	}
 	if route == "/activities" {
 		return p.readAsyncActivities(ctx, values)
 	}
