@@ -124,6 +124,10 @@ export interface Decision {
     context: string;
     allow_free_text: boolean;
     has_native_questions: boolean;
+    native_questions?: {
+      id: string;
+      options?: { ID: string; Label: string }[];
+    }[];
     options: { ID: string; Label: string; Detail: string }[];
   };
 }

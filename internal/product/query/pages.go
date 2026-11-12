@@ -90,6 +90,13 @@ func DecisionRequest(r model.DecisionRequest) api.DecisionRequest {
 	for _, o := range r.Options {
 		p.Options = append(p.Options, api.DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
 	}
+	for _, q := range r.Questions {
+		question := api.DecisionQuestion{ID: q.ID}
+		for _, o := range q.Options {
+			question.Options = append(question.Options, api.DecisionOption{ID: o.ID, Label: o.Label})
+		}
+		p.NativeQuestions = append(p.NativeQuestions, question)
+	}
 	return p
 }
 

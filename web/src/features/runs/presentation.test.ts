@@ -30,6 +30,26 @@ it("shows the question once while retaining independent diagnostics and deduplic
 });
 it("uses public current steps without inferring topology or parsing messages", () => {
   expect(currentStage(run)).toBe("实施中");
+  const delivery = {
+    available: true,
+    status: "waiting_input",
+    step: "implement.input",
+  } as NonNullable<typeof run.runner_delivery>;
+  expect(currentStage({ ...run, runner_delivery: delivery })).toBe("等待输入");
+  expect(currentStage({ ...run, workflow_status: "waiting_input" })).toBe(
+    "等待输入",
+  );
+  expect(
+    currentStage({
+      ...run,
+      workflow_status: "waiting_input",
+      runner_delivery: {
+        ...delivery,
+        status: "running",
+        step: "implement.execute",
+      },
+    }),
+  ).toBe("实施中");
   expect(stageLabel("audit.code.execute")).toBe("审查中");
   expect(stageLabel("publish.verify")).toBe("发布中");
   expect(stageLabel("new-unrecognized-stage")).toBe("阶段待核实");
