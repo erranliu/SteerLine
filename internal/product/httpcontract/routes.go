@@ -6,7 +6,7 @@ var projectReadRoute = regexp.MustCompile(`^/(refactoring|refactoring/([0-9a-f]{
 
 // AllowedProjectRead is the shared project query allowlist for the application
 // handler and browser proxy. Task mutation/receipt routes remain backend-only.
-var activityReadingRoute = regexp.MustCompile(`^/activities/[A-Za-z0-9_-]{1,1000}(/(interactions|changes|body))?$`)
+var activityReadingRoute = regexp.MustCompile(`^/activities/[A-Za-z0-9_-]{1,1000}(/(interactions|changes|body|conversation))?$`)
 
 func AllowedProjectRead(route string) bool {
 	return projectReadRoute.MatchString(route) || activityReadingRoute.MatchString(route)

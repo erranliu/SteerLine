@@ -18,6 +18,7 @@ import {
   type ActivityListFilter,
 } from "./model";
 import { useActivityList } from "./use-activity-list";
+import { CandidateConversation } from "./candidate-conversation";
 import { CopyExecutionInfo } from "./execution-info";
 import {
   readBody,
@@ -309,6 +310,20 @@ function ActivityDetail({ id, onBack }: { id: string; onBack: () => void }) {
               }}
             />
           </div>
+          {activity.source === "task_candidate" &&
+            activity.execution_ref?.run_id &&
+            activity.execution_ref.attempt_id && (
+              <CandidateConversation
+                key={JSON.stringify([
+                  activity.activity_id,
+                  activity.execution_ref.run_id,
+                  activity.execution_ref.attempt_id,
+                ])}
+                activityID={activity.activity_id}
+                runID={activity.execution_ref.run_id}
+                attemptID={activity.execution_ref.attempt_id}
+              />
+            )}
           <Button aria-expanded={open} onClick={() => setOpen(!open)}>
             {open ? "收起已记录交互" : "查看已记录交互"}
           </Button>
