@@ -84,3 +84,11 @@ Runner #146（`2de536cb`）已合入。自动项的命令、时点和证据要�
 - 真实补验报告位于 `C:\SteerlineDebug\roadmap-planning-6999\test-results\L4\live-merge-34fbc18b`。后端与 Web EXE 的 SHA-256 分别为 `93a9eddc7d978702ebab8b8276fe5aaedf9c50e6a7819897cba674eca5afa9c0` 和 `8c40f6a9db5eb7d61bff4e821130c80f3ddf488e8c279d718e24310441ae184c`。
 - 同一提交的专属受控验收、L1、存储、Runner 客户端、HTTP API、规划和维护代理路由，以及原停止请求定向测试均通过。HTTP API 首轮出现 Windows 文件重命名拒绝访问，独立串行复跑全包通过。证据位于 `C:\SteerlineDebug\roadmap-planning-6999\diagnostics\main-merge-34fbc18b`。其他固定回归保留上节的原受测版本和报告。
 - RPW-M01 人工走查待安排。多任务批次和租约故障恢复以受控测试取证，真实浏览器场景未注入 SteerLine 整体进程崩溃。
+
+## PR #511 审查补验
+
+2026-11-12 合入 `main` `8b906653e62d8c56493358c5970c87d3826080c6`。修复提交 `2fd1c3b3b3c61604887b372609b6d47659fc90c8` 将规划租约纳入离线停机核验，同构建重启仍可对账持有的原租约。残缺的 Rebase 元数据和未核实的 Git 写入会保留租约与现场。PR 合入需核验完整选中快照并成功保存，交接前刷新远端目标。已核实的来源交接与原会话关闭独立结算。
+
+- 定向复现确认残缺的 Rebase 元数据会被误判为完成、部分文件核验会改变草稿预览。修复后专属受控验收及定向停机、显式放弃用例通过，包括原租约恢复、错误停机证明、远端分支丢失合并提交以及 Runner 暂不可用时的本地来源交接。报告根为 `C:\SteerlineDebug\roadmap-planning-6999\diagnostics\pr511-review`。
+- 首次真实复跑在等待文件审阅时触发 15 秒点击超时，资源已清理。验收脚本改为在原审阅租约归还后勾选，提交 `3aefaab6fe8e787cfb21fc8e13d1409a4d2fb3bd` 在 Windows、Edge、Codex CLI 0.166.0、Runner #146 `2de536cb` 下重跑通过。真实两轮改稿、原会话 Git 冲突续作、只发布勾选的两份文件、合并待同步及稳定链接跳转均通过。测试 PR 为 [SteerlineTest #801](https://github.com/erranliu/SteerlineTest/pull/801)，测试资源清理完成，进程和监听均为零。报告根为 `C:\SteerlineDebug\roadmap-planning-6999\test-results\L4\live-review-3aefaab6`。
+- RPW-M01 人工体验仍待安排。真实复跑覆盖一个任务，多任务批次和租约故障使用受控测试取证。
