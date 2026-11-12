@@ -16,6 +16,29 @@ import (
 func unsubmittedEnvironment(a envmodel.Round) bool {
 	return a.RunID == "" && (a.Submission == "pending" || a.Submission == "rejected" || a.Submission == "cancelled")
 }
+
+// Discard verification uses the original request to recover a missing Run
+// binding without replaying the submit or writing to the database being archived.
+func inspectDiscardEnvironmentSubmit(ctx context.Context, cli runnerclient.Client, r envmodel.Record, a envmodel.Round) (*runnerclient.Run, error) {
+	view, cold, err := inspectOriginalBeforeStart(ctx, cli, r.Build.StateDir, "", a.InputDigest, a.Request)
+	if !cold {
+		return nil, errors.Join(errors.New("original environment submit requires offline Runner evidence"), err)
+	}
+	if a.InputDigest == "" && a.Run == nil && submitNotAccepted(view, cold, a.Request.RequestID, err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	run := view.Run
+	if run.Correlation["steerline_project"] != r.Project || run.Correlation["environment_activity"] != r.ID ||
+		run.Correlation["environment_round"] != fmt.Sprint(a.Number) ||
+		a.Run != nil && (a.Run.RunID != run.RunID || a.Run.InputDigest != run.InputDigest || a.Run.Revision > run.Revision) {
+		return nil, errors.New("original environment submit Run binding differs")
+	}
+	return run, nil
+}
+
 func verifyEnvironmentBindings(ctx context.Context, c Config, store env.Store, cli runnerclient.Client) error {
 	rows, e := store.Environments(ctx, c.Identity())
 	if e != nil {

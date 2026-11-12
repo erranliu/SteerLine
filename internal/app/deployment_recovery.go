@@ -208,7 +208,7 @@ func admitDeploymentRecovery(ctx context.Context, candidate string) (*Deployment
 		}
 		expected[key] = true
 		p := contract.ProjectShutdown{ConfigID: entry.view.ConfigID, ProjectID: httpcontract.ProjectID(c.Identity())}
-		if _, err = verifyProjectOfflineMode(ctx, c, p, *b.Identity, runnerclient.StoppedVerification{}, &pin, true); err != nil {
+		if _, err = verifyProjectOfflineMode(ctx, c, p, *b.Identity, runnerclient.StoppedVerification{}, &pin, nil, true); err != nil {
 			return fail(fmt.Errorf("%s: %w", p.ConfigID, err))
 		}
 	}

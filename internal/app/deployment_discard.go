@@ -268,9 +268,10 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	// resource proof. Only report/business completion is waived for discarded work.
 	proof := &ApplicationStopVerification{OriginalHost: *b.Identity, VerifierSHA256: hash, Runner: *journal.Resources, Projects: []ProjectStopVerification{}}
 	for i, c := range configs {
-		project, err := verifyDiscardProject(ctx, c, byConfig[catalog.entries[i].view.ConfigID], *b.Identity, *journal.Resources, interrupted)
+		p := byConfig[catalog.entries[i].view.ConfigID]
+		project, err := verifyDiscardProject(ctx, c, p, *b.Identity, *journal.Resources, original, interrupted)
 		if err != nil {
-			return fail(err)
+			return fail(fmt.Errorf("%s: %w", p.ConfigID, err))
 		}
 		proof.Projects = append(proof.Projects, project)
 	}
