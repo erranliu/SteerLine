@@ -587,7 +587,6 @@ export function ExecutionConfigs({
       <NavigationGuard dirty={dirty || saving} />
       <div className="sl-page-head">
         <div>
-          <div className="sl-eyebrow">EXECUTION PROFILES</div>
           <h1>执行方案配置</h1>
           <p className="sl-caption">根据运行环境选择能力，保存为可复用配置。</p>
         </div>

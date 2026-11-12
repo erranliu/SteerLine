@@ -1,60 +1,5 @@
-.runs-page {
-  --run-surface: #192720;
-  --run-selected: #233b2f;
-  --run-line: #304238;
-  --run-secondary: #a9bdb1;
-  --run-reading-width: 44ic;
-  font-size: 14px;
-}
-
-.runs-page .page-heading {
-  margin-bottom: 16px;
-}
-
-.runs-page .page-heading h1 {
-  font-size: clamp(24px, 2.3vw, 32px);
-  line-height: 1.2;
-  font-weight: 650;
-}
-
 .runs-page .toolbar {
   gap: 12px 20px;
-  padding: 0 0 18px;
-}
-
-.runs-page .muted,
-.runs-page .status {
-  font-size: 12px;
-}
-
-.runs-page .muted {
-  color: var(--run-secondary);
-}
-
-.runs-page .button {
-  min-height: 36px;
-  border-radius: 7px;
-  font-size: 14px;
-}
-
-.runs-page .button-sm {
-  min-height: 32px;
-  font-size: 13px;
-}
-
-.runs-page .button-ghost {
-  color: var(--run-secondary);
-}
-
-.runs-page .execution-filters {
-  gap: 4px;
-  border-radius: 9px;
-}
-
-.runs-page .execution-filters [aria-pressed="true"] {
-  color: var(--color-primary);
-  background: var(--run-selected);
-  border-color: #3c5a49;
 }
 
 .runs-page .candidate-visibility input {
@@ -64,11 +9,6 @@
 .runs-page .runs-layout {
   grid-template-columns: 180px minmax(0, 1fr) 232px;
   gap: 16px;
-}
-
-.runs-page :is(.run-task-list, .execution-panel, .detail-panel) {
-  border-color: var(--run-line);
-  border-radius: 12px;
 }
 
 .runs-page .run-task-list {
@@ -85,23 +25,23 @@
 }
 
 .runs-page .run-task + .run-task:not(.active) {
-  border-top-color: var(--run-line);
+  border-top-color: var(--ui-line);
 }
 
 .runs-page .run-task:hover,
 .runs-page .candidate-card:hover {
-  background: var(--run-surface);
+  background: var(--ui-surface);
 }
 
 .runs-page :is(.run-task, .candidate-card).active {
-  background: var(--run-selected);
+  background: var(--ui-selected);
   border-color: #466652;
   border-inline-start-color: var(--color-primary);
 }
 
 .runs-page .run-task strong {
   margin: 3px 0 8px;
-  font-size: 14px;
+  font-size: var(--ui-body-size);
 }
 
 .runs-page .run-task > div {
@@ -109,16 +49,16 @@
 }
 
 .runs-page :is(.run-task .eyebrow, .run-task-summary, .candidate-match) {
-  font-size: 12px;
+  font-size: var(--ui-meta-size);
   letter-spacing: normal;
 }
 
 .runs-page .run-task .eyebrow {
-  color: var(--run-secondary);
+  color: var(--ui-secondary);
 }
 
 .runs-page .execution-panel {
-  padding: clamp(14px, 2vw, 24px);
+  padding: var(--ui-panel-padding);
   min-width: 0;
 }
 
@@ -126,7 +66,7 @@
   gap: 8px;
   padding: 4px 4px 12px;
   margin: -4px -4px 14px;
-  border-color: var(--run-line);
+  border-color: var(--ui-line);
 }
 
 .runs-page .candidate-strip:empty {
@@ -136,7 +76,7 @@
 .runs-page .candidate-card {
   flex: 0 0 172px;
   padding: 9px 12px;
-  border: 1px solid var(--run-line);
+  border: 1px solid var(--ui-line);
   border-inline-width: 2px 1px;
   border-radius: 8px;
   background: #151f1a;
@@ -144,13 +84,13 @@
 }
 
 .runs-page .candidate-card > span:first-child {
-  color: var(--run-secondary);
-  font-size: 12px;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
 }
 
 .runs-page .candidate-card strong {
   margin: 1px 0 6px;
-  font-size: 14px;
+  font-size: var(--ui-body-size);
 }
 
 .runs-page .execution-statuses .status-running {
@@ -168,9 +108,9 @@
 .runs-page .run-overview {
   gap: 12px 18px;
   padding: clamp(14px, 2vw, 18px);
-  border: 1px solid var(--run-line);
+  border: 1px solid var(--ui-line);
   border-radius: 10px;
-  background: var(--run-surface);
+  background: var(--ui-surface);
   overflow-wrap: anywhere;
 }
 
@@ -181,13 +121,13 @@
 
 .runs-page :is(.run-candidate-meta, .run-stage-label, .run-sampled-at) {
   margin: 0;
-  color: var(--run-secondary);
-  font-size: 12px;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
 }
 
 .runs-page .run-overview h2 {
   margin: 3px 0 0;
-  font-size: clamp(20px, 2vw, 26px);
+  font-size: var(--ui-detail-size);
   line-height: 1.3;
 }
 
@@ -225,11 +165,7 @@
 .runs-page .candidate-actions {
   flex: 1 0 100%;
   padding-top: 10px;
-  border-top: 1px solid var(--run-line);
-}
-
-.runs-page .candidate-actions .button {
-  font-size: 14px;
+  border-top: 1px solid var(--ui-line);
 }
 
 .runs-page .run-overview > .muted {
@@ -318,14 +254,14 @@
 }
 
 .runs-page :is(.context-text, .last-message pre, .activity-item pre, .final-body article pre) {
-  max-inline-size: var(--run-reading-width);
-  font-size: 15px;
+  max-inline-size: var(--ui-reading-width);
+  font-size: var(--ui-reading-size);
   line-height: 1.7;
 }
 
 .runs-page .context-text {
   margin: 6px 0;
-  color: var(--run-secondary);
+  color: var(--ui-secondary);
 }
 
 .runs-page .options {
@@ -345,18 +281,18 @@
   border-radius: 7px;
   cursor: pointer;
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: var(--ui-body-size);
 }
 
 .runs-page .options label:has(input:checked) {
-  background: var(--run-selected);
+  background: var(--ui-selected);
   border-color: #6b9e83;
 }
 
 .runs-page .options small {
   margin-top: 2px;
-  color: var(--run-secondary);
-  font-size: 12px;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
 }
 
 .runs-page .answer-label {
@@ -367,14 +303,14 @@
 .runs-page .answer-panel textarea {
   margin-top: 4px;
   border-radius: 7px;
-  font-size: 15px;
+  font-size: var(--ui-reading-size);
   min-height: 72px;
   line-height: 1.55;
 }
 
 .runs-page .input-footer > span {
-  font-size: 12px;
-  color: var(--run-secondary);
+  font-size: var(--ui-meta-size);
+  color: var(--ui-secondary);
 }
 
 .run-section .last-message {
@@ -382,7 +318,7 @@
   padding: 14px;
   border: 0;
   border-radius: 8px;
-  background: var(--run-surface);
+  background: var(--ui-surface);
 }
 
 .runs-page .last-message-header {
@@ -440,12 +376,12 @@
 
 .runs-page .activity-item time {
   font: inherit;
-  font-size: 12px;
-  color: var(--run-secondary);
+  font-size: var(--ui-meta-size);
+  color: var(--ui-secondary);
 }
 
 .runs-page .activity-item :is(summary, strong) {
-  font-size: 14px;
+  font-size: var(--ui-body-size);
 }
 
 @media (max-width: 1320px) {
@@ -477,6 +413,6 @@
 
   .runs-page .run-task + .run-task:not(.active) {
     border-top-color: transparent;
-    border-inline-start-color: var(--run-line);
+    border-inline-start-color: var(--ui-line);
   }
 }

@@ -147,14 +147,12 @@ export function Dag() {
   return (
     <>
       <div className="page-heading">
-        <div>
-          <h1>任务 DAG</h1>
-        </div>
-        <GitBranch className="heading-icon" size={30} />
+        <h1>任务 DAG</h1>
       </div>
       <div className="toolbar">
         <div className="segmented">
           <Button
+            aria-pressed={view === "graph"}
             variant={view === "graph" ? "default" : "ghost"}
             onClick={() => setView("graph")}
           >
@@ -162,6 +160,7 @@ export function Dag() {
             任务图
           </Button>
           <Button
+            aria-pressed={view === "list"}
             variant={view === "list" ? "default" : "ghost"}
             onClick={() => setView("list")}
           >

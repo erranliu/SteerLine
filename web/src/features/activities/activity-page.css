@@ -1,30 +1,21 @@
 .activity-reading {
-  --reading-surface: #192720;
-  --reading-selected: #233b2f;
-  --reading-line: #304238;
-  --reading-secondary: #a9bdb1;
-  --reading-width: 44ic;
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--ui-gap);
   align-items: start;
   min-width: 0;
-  font-size: 14px;
 }
 
 .reading-heading {
   grid-column: 1 / -1;
-  font-size: clamp(24px, 2.3vw, 32px);
-  line-height: 1.2;
-  font-weight: 650;
 }
 
 .reading-list,
 .reading-detail {
   min-width: 0;
-  border: 1px solid var(--reading-line);
-  border-radius: 12px;
-  background: #141e18;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-panel-radius);
+  background: var(--ui-panel);
   overflow-wrap: anywhere;
 }
 
@@ -33,26 +24,12 @@
 }
 
 .reading-detail {
-  padding: clamp(14px, 2vw, 24px);
+  padding: var(--ui-panel-padding);
 }
 
-.activity-reading .button {
-  min-height: 36px;
-  border-radius: 7px;
-  font-size: 14px;
-}
-
-.activity-reading .button-sm {
-  min-height: 32px;
-  font-size: 13px;
-}
-
-.activity-reading :is(.muted, .button-ghost, small) {
-  color: var(--reading-secondary);
-}
-
-.activity-reading :is(.muted, small) {
-  font-size: 12px;
+.activity-reading small {
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
 }
 
 .reading-list-toolbar,
@@ -75,18 +52,6 @@
   margin-bottom: 8px;
 }
 
-.reading-filters {
-  flex-wrap: wrap;
-  gap: 4px;
-  border-radius: 9px;
-}
-
-.reading-filters [aria-pressed="true"] {
-  color: var(--color-primary);
-  background: var(--reading-selected);
-  border-color: #3c5a49;
-}
-
 .activity-reading .reading-refresh {
   padding-inline: 7px;
 }
@@ -103,13 +68,13 @@
 }
 
 .reading-list-items article + article:not(.reading-active) {
-  border-top-color: var(--reading-line);
+  border-top-color: var(--ui-line);
 }
 
 .reading-list-items article.reading-active {
   border-color: #466652;
   border-inline-start-color: var(--color-primary);
-  background: var(--reading-selected);
+  background: var(--ui-selected);
 }
 
 .reading-select {
@@ -131,11 +96,11 @@
 .reading-phase {
   display: inline-block;
   padding: 2px 8px;
-  border: 1px solid var(--reading-line);
+  border: 1px solid var(--ui-line);
   border-radius: 5px;
-  background: var(--reading-surface);
-  color: var(--reading-secondary);
-  font-size: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
 }
 
 .reading-phase:is([data-state="running"], [data-state="succeeded"]) {
@@ -158,21 +123,21 @@
 
 .reading-overview {
   padding: clamp(14px, 2vw, 18px);
-  border: 1px solid var(--reading-line);
+  border: 1px solid var(--ui-line);
   border-radius: 10px;
-  background: var(--reading-surface);
+  background: var(--ui-surface);
 }
 
 .reading-summary-heading h2 {
   min-width: 0;
-  font-size: clamp(20px, 2vw, 26px);
+  font-size: var(--ui-detail-size);
   line-height: 1.3;
 }
 
 .reading-actions {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid var(--reading-line);
+  border-top: 1px solid var(--ui-line);
 }
 
 .reading-list .reading-message {
@@ -181,8 +146,8 @@
 
 .reading-list .reading-message-heading {
   gap: 3px 8px;
-  color: var(--reading-secondary);
-  font-size: 12px;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
 }
 
 .reading-list .reading-preview {
@@ -194,7 +159,7 @@
   margin: 14px 0;
   padding: 14px;
   border-radius: 8px;
-  background: var(--reading-surface);
+  background: var(--ui-surface);
 }
 
 .reading-preview {
@@ -211,8 +176,8 @@
     .reading-conversation-text,
     .reading-interaction pre
   ) {
-  max-inline-size: var(--reading-width);
-  font-size: 15px;
+  max-inline-size: var(--ui-reading-width);
+  font-size: var(--ui-reading-size);
   line-height: 1.7;
 }
 
@@ -227,7 +192,7 @@
 .reading-interactions {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid var(--reading-line);
+  border-top: 1px solid var(--ui-line);
 }
 
 .reading-interactions > .reading-interactions:first-child {
@@ -250,9 +215,9 @@
 .reading-interaction {
   margin: 10px 0;
   padding: 14px;
-  border: 1px solid var(--reading-line);
+  border: 1px solid var(--ui-line);
   border-radius: 8px;
-  background: var(--reading-surface);
+  background: var(--ui-surface);
 }
 
 .reading-interaction header {

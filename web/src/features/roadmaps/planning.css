@@ -1,6 +1,7 @@
 .planning-page {
   display: grid;
-  gap: 16px;
+  gap: var(--ui-gap);
+  min-width: 0;
 }
 .planning-header {
   display: flex;
@@ -16,27 +17,65 @@
 .planning-layout {
   display: grid;
   grid-template-columns: minmax(130px, 220px) minmax(0, 1fr);
-  gap: 20px;
+  gap: var(--ui-gap);
+  align-items: start;
 }
 .planning-layout nav {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  padding: 8px;
+}
+.planning-layout nav:empty {
+  display: none;
 }
 .planning-layout nav a {
-  padding: 8px;
-  border: 1px solid currentColor;
-  border-radius: 6px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-inline-start-width: 2px;
+  border-radius: 8px;
+  color: var(--color-foreground);
   overflow-wrap: anywhere;
+}
+.planning-layout nav a + a:not([aria-current]) {
+  border-top-color: var(--ui-line);
+}
+.planning-layout nav a[aria-current] {
+  border-color: #466652;
+  border-inline-start-color: var(--color-primary);
+  background: var(--ui-selected);
 }
 .planning-layout nav small {
   display: block;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
 }
-.planning-layout main {
+.planning-layout nav,
+.planning-detail {
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-panel-radius);
+  background: var(--ui-panel);
+}
+.planning-detail {
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: var(--ui-gap);
   min-width: 0;
+  padding: var(--ui-panel-padding);
+  overflow-wrap: anywhere;
+}
+.planning-layout:has(nav:empty) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.planning-page button:not(.button) {
+  min-height: 36px;
+  padding: 6px 11px;
+  border: 1px solid var(--ui-line);
+  border-radius: 7px;
+  background: var(--ui-surface);
+}
+.planning-page button:not(.button):hover:not(:disabled) {
+  background: var(--ui-selected);
 }
 .planning-layout form,
 .planning-layout label {
@@ -69,6 +108,20 @@
 .planning-markdown strong {
   display: block;
   margin: 0.7em 0 0.3em;
+}
+.planning-markdown {
+  max-inline-size: var(--ui-reading-width);
+  font-size: var(--ui-reading-size);
+  line-height: 1.7;
+}
+.planning-content pre {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--ui-surface);
+}
+.planning-detail > :is(details, section) {
+  border-top: 1px solid var(--ui-line);
+  padding-top: 12px;
 }
 @media (max-width: 760px) {
   .planning-content,

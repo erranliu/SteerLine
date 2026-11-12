@@ -67,7 +67,10 @@ export function AppShell({
         <nav aria-label="主导航">
           {projectId ? (
             <>
-              <NavLink to={"/projects/" + projectId + "/roadmap-planning"}>
+              <NavLink
+                aria-label="Roadmap 规划"
+                to={"/projects/" + projectId + "/roadmap-planning"}
+              >
                 <GitBranch size={17} />
                 <span>Roadmap 规划</span>
               </NavLink>
@@ -107,6 +110,7 @@ export function AppShell({
                 <span>项目运行环境</span>
               </NavLink>
               <NavLink
+                aria-label="项目状态"
                 to={`/projects/${projectId}/status`}
               >
                 <GitBranch size={17} />
@@ -128,7 +132,7 @@ export function AppShell({
               </NavLink>
             </>
           ) : (
-            <NavLink to="/projects">
+            <NavLink aria-label="选择项目" to="/projects">
               <GitBranch size={17} />
               <span>选择项目</span>
             </NavLink>
