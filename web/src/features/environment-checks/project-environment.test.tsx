@@ -157,7 +157,6 @@ it("shows environment readiness directly with row actions and execution copying 
   expect(screen.getByText("检测历史").closest("details")).not.toHaveAttribute(
     "open",
   );
-  expect(screen.getByRole("heading", { name: "准备要求" })).toBeVisible();
   expect(api.get).not.toHaveBeenCalledWith("/environment", expect.anything());
   for (const text of [
     remoteMachineID,
@@ -234,7 +233,7 @@ it("copies the full detection ID and supports manual copying when clipboard acce
   expect(screen.getByRole("alert")).toHaveTextContent(record.id);
 });
 
-it("loads preparation requirements directly and excludes protocol metadata", async () => {
+it("loads preparation requirements after expansion and excludes protocol metadata", async () => {
   const { api } = fixture();
   const original = vi.mocked(api.get).getMockImplementation()!;
   vi.mocked(api.get).mockImplementation(async (path, signal) =>
@@ -247,6 +246,13 @@ it("loads preparation requirements directly and excludes protocol metadata", asy
         } as never)
       : original(path, signal),
   );
+  const summary = await screen.findByText("准备要求", { selector: "summary" });
+  expect(summary.closest("details")).not.toHaveAttribute("open");
+  expect(api.get).not.toHaveBeenCalledWith(
+    expect.stringContaining("/environment/materials"),
+    expect.anything(),
+  );
+  fireEvent.click(summary);
   expect(await screen.findByText(/准备 Git 和认证/)).toBeVisible();
   for (const text of ["hidden-key", "hidden-path", "hidden-sha"])
     expect(screen.queryByText(text, { exact: false })).not.toBeInTheDocument();

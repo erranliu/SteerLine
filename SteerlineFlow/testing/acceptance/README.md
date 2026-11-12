@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+项目运行环境准备要求默认折叠（2026-11-12）。[验收记录](project-environment-preparation-fold.md)
+
 活动中心统一对话阅读（2026-11-12，已实现，未部署）。[实现及真实检测验证](activity-conversations.md)
 
 SteerAgent 全局配置（2026-11-12）。[验收记录](steer-agent-configuration.md)

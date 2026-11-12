@@ -564,7 +564,7 @@ test("runtime environments keep row actions, failed observations and task return
   ).toHaveText("alternate · model-high · high");
   await expect(first).toBeFocused();
   await expect(
-    page.getByRole("heading", { name: "准备要求", exact: true }),
+    page.locator("summary").filter({ hasText: /^准备要求$/ }),
   ).toBeVisible();
   await page.reload();
   await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
