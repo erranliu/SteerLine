@@ -276,7 +276,12 @@ func TestWebTicketsAreSingleUseAndExpire(t *testing.T) {
 	if request(s, "POST", "/auth/session", `{"ticket":"expired"}`, nil, "").Code != 403 {
 		t.Fatal("expired ticket accepted")
 	}
+	earliestExpiry := time.Now().Add(48 * time.Hour)
 	cookie, csrf := login(t, s)
+	latestExpiry := time.Now().Add(48 * time.Hour)
+	if expiry := s.sessions[cookie.Value].Expires; expiry.Before(earliestExpiry) || expiry.After(latestExpiry) {
+		t.Fatalf("browser session expires at %v, want 48 hours after login", expiry)
+	}
 	s.sessions[cookie.Value] = session{CSRF: csrf, Expires: time.Now().Add(-time.Second)}
 	if request(s, "GET", "/auth/status", "", cookie, "").Code != 401 {
 		t.Fatal("expired browser session accepted")
