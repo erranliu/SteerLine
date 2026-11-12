@@ -160,3 +160,21 @@ RM-A11 不要求将测试 PR 合入业务主线。专用测试 base、PR 状态�
 | L4 `go.http` | 通过，`L4/27259a70509044b09ab10bb604b6d129/summary.json`。 |
 
 本次复验覆盖组件和受控流程。真实模型联验沿用上文历史记录的受测版本。
+
+## 原项目目录与维护 worktree 的接线
+
+2026-11-11，`merge-h-308-code` 的首轮选题因整个 Git 树超出 Runner 的快照限额而卡在提交。用户确认 SteerAgent 从原项目目录只读调查，Runner 在首次写入时创建 worktree，后续执行复用该 worktree。决策上下文通过 Runner 回传的结果、差异、验证和已核实 Git 事实判断成果。此次验证覆盖应用接线，未增加操作系统目录隔离。
+
+维护请求采用 `generate.directory`，原项目目录为唯一绑定目录。新决策请求只保留所需的 Runner 反馈字段，保留原生问题、封存结果和 Git 事实。另验证 Runner 的 `directory_unavailable` 退出码 4 保留原诊断。
+
+提示词的完整规则从 4905 增至 5161 个 UTF-8 字节。只读和可写短指令文件分别维持 252 和 548 字节。正文改为从原项目目录调查并使用 Runner 回传证据，Runner 的封存结果需说明相关差异、实际验证及影响判断的未提交成果。实际正文差异见证据根 `diagnostics/20261111T105539067Z-runner-contract/maintenance-rules.diff`。独立审核发现的原生问题字段丢失已修复，并以实际决策请求断言复核。固定仓库生成的其他调用方仍核验仓库快照能力。
+
+受测源码为 `b0b5a4913450a0d9345534d73bd69d6b2c179421` 加本次工作树改动。证据根为 `C:\SteerlineDebug\wt-d8f3-maintenance-directory\`。
+
+- 四个 Go owner 包通过，覆盖维护服务、Runner CLI、固定提示词和决策输出。Web 生产构建通过。
+- L1 `l1.minimum` 通过，见 `test-results/L1/20261111T105539067Z/summary.json`。
+- L2 `smoke.delivery` 通过，见 `test-results/L2/20261111T105539067Z/summary.json`。
+- L3 `runtime.refactoring-maintenance` 通过，见 `test-results/L3/20261111T105539067Z/summary.json`。浏览器发起维护，首次及后续只读决策都使用原项目目录，原 worktree 完成多轮执行和冲突续作，更新同一 PR 夹具及报告。
+- L4 `go.runner-result` 通过，见 `test-results/L4/20261111T105539067Z/summary.json`。固定 Runner `c404d6e5` 与同源原生协议夹具核对原项目目录、两份冻结材料、四次执行复用同一 worktree 和未跟踪文件保留。
+
+本次未部署。以上验证使用受控执行或协议夹具，真实模型及远程 worktree 尚未联验。

@@ -285,35 +285,33 @@ func (s *Service) tick(ctx context.Context, r model.Record) error {
 }
 
 type facts struct {
-	CostComplete     bool                         `json:"cost_complete"`
-	CostIssues       []string                     `json:"cost_issues"`
-	Diagnostic       string                       `json:"diagnostic"`
-	Publication      map[string]string            `json:"publication"`
-	ActionID         string                       `json:"action_id"`
-	Mode             string                       `json:"mode"`
-	Direction        string                       `json:"direction"`
-	Strategy         string                       `json:"strategy"`
-	Requirements     string                       `json:"requirements"`
-	Round            int                          `json:"round"`
-	Budget           model.Budget                 `json:"budget"`
-	Finish           bool                         `json:"finish"`
-	Repository       runnercontract.Repository    `json:"repository"`
-	ManagedWorkspace string                       `json:"managed_workspace,omitempty"`
-	ManagedBranch    string                       `json:"managed_branch,omitempty"`
-	WorkspaceGit     *runnercontract.WorkspaceGit `json:"workspace_git,omitempty"`
-	PR               *runnercontract.PRFact       `json:"pr,omitempty"`
-	Answers          []model.Answer               `json:"answers"`
-	Feedback         []map[string]any             `json:"feedback"`
-	ReportCandidate  *model.Result                `json:"report_candidate,omitempty"`
-	Amount           *string                      `json:"amount,omitempty"`
-	AsOf             time.Time                    `json:"as_of"`
+	CostComplete    bool                         `json:"cost_complete"`
+	CostIssues      []string                     `json:"cost_issues"`
+	Diagnostic      string                       `json:"diagnostic"`
+	Publication     map[string]string            `json:"publication"`
+	ActionID        string                       `json:"action_id"`
+	Mode            string                       `json:"mode"`
+	Direction       string                       `json:"direction"`
+	Strategy        string                       `json:"strategy"`
+	Requirements    string                       `json:"requirements"`
+	Round           int                          `json:"round"`
+	Budget          model.Budget                 `json:"budget"`
+	Finish          bool                         `json:"finish"`
+	Repository      runnercontract.Repository    `json:"repository"`
+	ManagedBranch   string                       `json:"managed_branch,omitempty"`
+	WorkspaceGit    *runnercontract.WorkspaceGit `json:"workspace_git,omitempty"`
+	PR              *runnercontract.PRFact       `json:"pr,omitempty"`
+	Answers         []model.Answer               `json:"answers"`
+	Feedback        []map[string]any             `json:"feedback"`
+	ReportCandidate *model.Result                `json:"report_candidate,omitempty"`
+	Amount          *string                      `json:"amount,omitempty"`
+	AsOf            time.Time                    `json:"as_of"`
 }
 
 func (s *Service) facts(r model.Record) facts {
 	v, complete := r.CostTotal()
 	f := facts{ActionID: r.ID, Mode: r.Phase, Direction: r.Input.Direction, Strategy: r.Input.Strategy, Requirements: r.Input.Requirements, Round: r.Round, Budget: r.Input.Budget, Finish: r.FinishRequested, Repository: r.Frozen.Repository, PR: r.PR, Answers: r.Answers, ReportCandidate: r.Candidate, Amount: v, AsOf: s.now(), Feedback: []map[string]any{}}
 	f.Repository.LocalPath = ""
-	f.ManagedWorkspace = r.Workspace
 	f.Publication = r.Frozen.Publication
 	f.Diagnostic = r.Diagnostic
 	f.CostComplete = complete
@@ -327,7 +325,15 @@ func (s *Service) facts(r model.Record) facts {
 			if !o.Cost.Complete && o.Cost.Diagnostic != "" {
 				f.CostIssues = append(f.CostIssues, o.RunID+": "+o.Cost.Diagnostic)
 			}
-			item := map[string]any{"purpose": o.Purpose, "round": o.Round, "state": o.State, "text": o.Feedback, "result": o.Result, "execution": o.Run, "cost": o.Cost}
+			item := map[string]any{"purpose": o.Purpose, "round": o.Round, "state": o.State, "text": o.Feedback, "result": o.Result, "cost": o.Cost}
+			if run := o.Run; run != nil {
+				workflow := runnercontract.Workflow{ID: run.Workflow.ID, Version: run.Workflow.Version}
+				item["execution"] = map[string]any{
+					"run_id": run.RunID, "workflow": workflow, "status": run.Status, "stop_status": run.StopStatus,
+					"summary": run.Summary, "diagnostic": run.Diagnostic, "final": run.Final, "audit": run.Audit,
+					"question": run.Question,
+				}
+			}
 			if o.Purpose == "publish" || o.Purpose == "conflict" {
 				item["report_reference_cost"] = o.ReportCost
 				item["report_as_of"] = o.ReportAsOf
@@ -394,18 +400,14 @@ func (s *Service) prepareOperation(r model.Record) (model.Operation, error) {
 		}
 		o.Prompt = body
 		rules, contextBody := r.Frozen.Rules, string(data)
-		directory := r.Workspace
-		if directory == "" {
-			if r.LatestOwner != "" {
-				return o, errors.New("原执行工作区尚未核实，保留原记录")
-			}
-			directory = r.Frozen.Repository.LocalPath
-		}
-		generate := runnercontract.GenerateInput{Instruction: body, Materials: []runnercontract.Document{{Kind: "file", Path: "maintenance/rules.md", Content: &rules}, {Kind: "file", Path: "maintenance/context.json", Content: &contextBody}}, OutputSchema: decision.Schema()}
-		if r.Workspace == "" {
-			generate.Repository = &runnercontract.GenerateRepository{LocalPath: r.Frozen.Repository.LocalPath, Commit: r.Frozen.Repository.BaseRevision}
-		} else {
-			generate.Directory = &runnercontract.DirectoryAccess{Path: directory, Access: "read_only"}
+		generate := runnercontract.GenerateInput{
+			Directory:   &runnercontract.DirectoryAccess{Path: r.Frozen.Repository.LocalPath, Access: "read_only"},
+			Instruction: body,
+			Materials: []runnercontract.Document{
+				{Kind: "file", Path: "maintenance/rules.md", Content: &rules},
+				{Kind: "file", Path: "maintenance/context.json", Content: &contextBody},
+			},
+			OutputSchema: decision.Schema(),
 		}
 		input = runnercontract.GenerateRunInput{Title: "重构与维护 · " + o.Purpose, Correlation: correlation, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: r.Frozen.Read, Generate: generate}
 	}
@@ -573,7 +575,7 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			if e := runnerclient.VerifyRepositoryFiles(run.RepositorySource, *in.Generate.Repository, nil); e != nil {
 				return e
 			}
-		} else if in.Generate.Directory != nil && !runnerbinding.SamePath(run.Execution.Workspace, in.Generate.Directory.Path) {
+		} else if in.Generate.Directory == nil || run.RepositorySource != nil || !runnerbinding.SamePath(run.Execution.Workspace, in.Generate.Directory.Path) {
 			return errors.New("只读目录来源不匹配")
 		}
 		if run.ContentResult != nil {
@@ -584,6 +586,8 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 				if e := runnerclient.VerifyRepositoryFiles(run.ContentResult.RepositorySource, *in.Generate.Repository, nil); e != nil {
 					return e
 				}
+			} else if run.ContentResult.RepositorySource != nil {
+				return errors.New("只读结果意外关联了仓库快照")
 			}
 			if !reflect.DeepEqual(run.ContentResult.Source, *run.Final) {
 				return errors.New("只读结果与原生Final来源不匹配")

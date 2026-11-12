@@ -428,8 +428,8 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 		}
 		latest = run.RunID
 	}
-	// A read-only generation must observe the original dirty directory and not
-	// acquire its writable holder. Both uploaded file manifests are consumed.
+	// Maintenance decisions use the original project directory while the
+	// writable Run keeps its worktree and untracked changes.
 	decision := `{"kind":"finish","prompt":"","summary":"controlled read-only result","question":""}`
 	if err = os.WriteFile(filepath.Join(nativeState, "content-final"), []byte(decision), 0600); err != nil {
 		t.Fatal(err)
@@ -442,7 +442,10 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	if promptErr != nil {
 		t.Fatal(promptErr)
 	}
-	g := runnercontract.GenerateRunInput{Title: "Maintenance readonly caller fixture", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: *read.Execution, Generate: runnercontract.GenerateInput{Directory: &runnercontract.DirectoryAccess{Path: workspace, Access: "read_only"}, Instruction: readPrompt, OutputSchema: maintenance.Schema(), Materials: []runnercontract.Document{{Kind: "file", Path: "maintenance/rules.md", Content: &rules}, {Kind: "file", Path: "maintenance/context.json", Content: &contextBody}}}}
+	g := runnercontract.GenerateRunInput{Title: "Maintenance readonly caller fixture", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: *read.Execution, Generate: runnercontract.GenerateInput{Directory: &runnercontract.DirectoryAccess{Path: input.Repository.LocalPath, Access: "read_only"}, Instruction: readPrompt, OutputSchema: maintenance.Schema(), Materials: []runnercontract.Document{{Kind: "file", Path: "maintenance/rules.md", Content: &rules}, {Kind: "file", Path: "maintenance/context.json", Content: &contextBody}}}}
+	if err = cat.ValidateGenerate(g); err != nil {
+		t.Fatal(err)
+	}
 	body, _ := json.Marshal(g)
 	receipt, err := c.Submit(ctx, Request{Protocol: Protocol, RequestID: "maintenance-directory", Input: body})
 	if err != nil {
@@ -450,7 +453,7 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	}
 	runs = append(runs, receipt.RunID)
 	run := wait(receipt.RunID, true)
-	if run.Execution.Workspace != workspace || run.ContentResult == nil || run.ContentResult.Status != "succeeded" || run.Final == nil || !run.Final.Verified {
+	if !runnerbinding.SamePath(run.Execution.Workspace, input.Repository.LocalPath) || runnerbinding.SamePath(run.Execution.Workspace, workspace) || run.RepositorySource != nil || run.ContentResult == nil || run.ContentResult.Status != "succeeded" || run.Final == nil || !run.Final.Verified {
 		t.Fatal("read-only directory result unavailable", run)
 	}
 	if err = VerifyFileMaterials(g.Generate.Materials, run.Materials); err != nil {
