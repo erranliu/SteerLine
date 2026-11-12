@@ -57,8 +57,15 @@ const projects = [a, b].map((id) => ({
 function mock() {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string) =>
-      Response.json(
+    vi.fn(async (url: string) => {
+      if (url.includes("/environment/options")) {
+        return Response.json({
+          profiles: [{ id: "default", name: "Codex 标准" }],
+          default_profile_id: "default",
+          environments: [],
+        });
+      }
+      return Response.json(
         url === "/api/web/execution-config"
           ? configSnapshot
           : url.endsWith("/maintenance/readiness")
@@ -105,7 +112,9 @@ function mock() {
                                 runs: [],
                                 control: {
                                   revision: 1,
-                                  dispatch_mode: "manual",
+                                  dispatch_mode: url.includes(a)
+                                    ? "manual"
+                                    : "auto",
                                 },
                               },
                             },
@@ -117,8 +126,8 @@ function mock() {
                             default_profile_id: "",
                           },
                         },
-      ),
-    ),
+      );
+    }),
   );
 }
 
@@ -210,6 +219,9 @@ it("keeps drawer UI outside keyed Workspace while isolating project and instance
     return original(...args);
   });
   const { client } = mount(`/projects/${a}/settings`);
+  expect(
+    await screen.findByRole("link", { name: "任务自动派发：关闭" }),
+  ).toHaveAttribute("href", `/projects/${a}/settings#task-dispatch`);
   fireEvent.click(
     await screen.findByRole(
       "button",
@@ -227,6 +239,9 @@ it("keeps drawer UI outside keyed Workspace while isolating project and instance
       `/projects/${b}/settings`,
     ),
   );
+  expect(
+    await screen.findByRole("link", { name: "任务自动派发：Codex 标准" }),
+  ).toHaveAttribute("href", `/projects/${b}/settings#task-dispatch`);
   panel = await screen.findByRole("region", { name: /活动中心/ });
   expect(
     within(panel).getByRole("button", { name: /^进行中/ }),

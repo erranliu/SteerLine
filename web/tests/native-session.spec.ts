@@ -69,8 +69,8 @@ test("native session: original candidate viewer and replay through product HTTP"
   provider.hold = true;
   writeFileSync(providerPath, JSON.stringify(provider));
   await expect(
-    page.getByRole("switch", { name: "自动派发" }),
-  ).toHaveAttribute("aria-checked", "false");
+    page.getByRole("link", { name: "任务自动派发：关闭" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "任务列表", exact: true }).click();
   await page
     .getByRole("button")

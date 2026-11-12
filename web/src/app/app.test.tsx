@@ -334,11 +334,8 @@ it("runs only one reconciliation round while journal observations refresh and ab
   client.clear();
 });
 
-it("shows task dispatch settings only on the task DAG and task execution routes", async () => {
-  await Promise.all([
-    import("../features/tasks/dag"),
-    import("../features/runs/runs"),
-  ]);
+it("keeps the dispatch link in the project header and opens the switch in settings", async () => {
+  await import("../features/runs/runs");
   const client = testClient();
   const api = new Api(
     { ...fixtureIdentity, project_id: "task-dispatch-routes" },
@@ -349,21 +346,23 @@ it("shows task dispatch settings only on the task DAG and task execution routes"
     async (path) => workspaceRead(api, path) as never,
   );
   mountWorkspace(api, client);
-  await screen.findByText("服务在线", { exact: true });
-  const dispatchTitle = "任务派发设定";
-  expect(screen.queryByText(dispatchTitle)).not.toBeInTheDocument();
+  const header = within(screen.getByRole("banner"));
+  const closed = { name: "任务自动派发：关闭" };
+  expect(await header.findByRole("link", closed)).toBeVisible();
 
   fireEvent.click(screen.getByRole("link", { name: "任务执行" }));
   expect(await screen.findByRole("heading", { name: "任务执行" })).toBeVisible();
-  expect(screen.getByText(dispatchTitle)).toBeVisible();
+  expect(header.getByRole("link", closed)).toBeVisible();
+  expect(screen.queryByRole("switch", { name: "自动派发" })).toBeNull();
 
-  fireEvent.click(screen.getByRole("link", { name: "任务 DAG" }));
-  expect(await screen.findByRole("heading", { name: "任务 DAG" })).toBeVisible();
-  expect(screen.getByText(dispatchTitle)).toBeVisible();
-
-  fireEvent.click(screen.getByRole("link", { name: "配置" }));
-  expect(await screen.findByRole("heading", { name: "配置" })).toBeVisible();
-  expect(screen.queryByText(dispatchTitle)).not.toBeInTheDocument();
+  fireEvent.click(header.getByRole("link", closed));
+  const panel = await screen.findByRole("region", { name: "任务自动派发" });
+  expect(panel).toHaveFocus();
+  expect(within(panel).getByRole("switch", { name: "自动派发" })).toHaveAttribute(
+    "aria-checked",
+    "false",
+  );
+  expect(header.getByRole("link", closed)).toBeVisible();
   client.clear();
 });
 
@@ -393,7 +392,7 @@ it("disables commands when offline even while paused queries retain a successful
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  mountWorkspace(api, client, {}, "runs");
+  mountWorkspace(api, client);
   await waitFor(() =>
     expect(screen.getByText("服务在线", { exact: true })).toBeVisible(),
   );
@@ -405,6 +404,7 @@ it("disables commands when offline even while paused queries retain a successful
     screen.getByText("当前不可提交业务操作", { exact: true }),
   ).toBeVisible();
   expect(screen.getByRole("switch", { name: "自动派发" })).toBeDisabled();
+  expect(screen.getByRole("link", { name: "任务自动派发：待核实" })).toBeVisible();
   expect(
     client.getQueryData([
       "",

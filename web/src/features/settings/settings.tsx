@@ -7,6 +7,7 @@ import { BillingSettings } from "./billing-settings";
 import { ContinuationSuggestionSettings } from "./continuation-suggestion-settings";
 import { UsageSettings } from "./usage-settings";
 import { NavigationGuard } from "../../shared/ui/navigation-guard";
+import { Dispatch } from "../tasks/dispatch";
 import {
   GenerationSettings,
   type GenerationSettingsProps,
@@ -48,6 +49,7 @@ export function SettingsPage({
         </div>
       </div>
       <div className="configuration-panels">
+        {api && <Dispatch />}
         <ContinuationSuggestionSettings
           {...settings}
           onDirtyChange={setContinuationSuggestionDirty}
