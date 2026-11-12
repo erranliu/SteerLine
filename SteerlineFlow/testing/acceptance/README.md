@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+普通任务运行期间重检项目环境（2026-11-11）。[并行实测与准入回归](environment-recheck-with-running-tasks.md)
+
 项目运行环境表内检测（2026-11-11）。[实现与验证](project-environment-inline-checks.md)
 
 任务 DAG 启动反馈（2026-11-11，已实现，未部署）。[验收记录](task-dag-start-feedback.md)

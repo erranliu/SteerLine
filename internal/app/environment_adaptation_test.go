@@ -103,6 +103,7 @@ func mustEnvironmentKey(t *testing.T, e runnercontract.ExecutionInput) string {
 }
 
 func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) {
+	t.Run("running task allows recheck", testEnvironmentRecheckWithRunningTask)
 	p, c, store := environmentFixture(t)
 	ctx := context.Background()
 	fixtureGit(t, c.Repository, "push", "origin", "HEAD:refs/heads/environment-validation")
@@ -144,7 +145,7 @@ func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) 
 	rebuilt := &environmentAdmission{}
 	rebuilt.register(c)
 	rebuilt.mu.Lock()
-	e = rebuilt.check(ctx, executionconfig.Target(prepared.Input.Execution), "", false)
+	e = rebuilt.check(ctx, executionconfig.Target(prepared.Input.Execution), "")
 	rebuilt.mu.Unlock()
 	if e == nil {
 		t.Fatal("restart lost durable occupancy")
@@ -177,6 +178,77 @@ func TestProjectEnvironmentAdmissionAcrossProjectsUsesPublicTarget(t *testing.T)
 	require(t, a.adapt(ctx, executionconfig.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }))
 	if !accepted {
 		t.Fatal("unrelated public target was blocked")
+	}
+}
+
+func testEnvironmentRecheckWithRunningTask(t *testing.T) {
+	p, c, store := environmentFixture(t)
+	ctx := context.Background()
+	const specPath = "SteerlineFlow/spec/task.spec.md"
+	const planPath = "SteerlineFlow/plans/task.plan.md"
+	const spec = "# Task Spec\n\n## Acceptance\n\nTask completes.\n"
+	const plan = "# Task Plan\n"
+	for path, contents := range map[string]string{specPath: spec, planPath: plan} {
+		file := filepath.Join(c.Repository, path)
+		require(t, os.MkdirAll(filepath.Dir(file), 0700))
+		require(t, os.WriteFile(file, []byte(contents), 0600))
+	}
+	commit := commitEnvironmentMaterials(t, c)
+	specRef := taskmodel.FileReference{Path: specPath, Commit: commit, SHA256: taskPayloadDigest([]byte(spec))}
+	contract := taskmodel.TaskContract{
+		ContractID: "recheck-task", Repository: "https://github.com/owner/repo.git", Remote: "origin", Branch: "main",
+		SpecRef: specRef, PlanRef: taskmodel.FileReference{Path: planPath, Commit: commit, SHA256: taskPayloadDigest([]byte(plan))},
+		CommonRefs: []taskmodel.FileReference{}, AcceptanceRefs: []taskmodel.FileReference{specRef},
+	}
+	var err error
+	contract.Digest, err = taskmodel.ContractDigest(contract)
+	require(t, err)
+	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion, ProjectID: c.Identity(),
+		Tasks:        []taskmodel.TaskBatchTask{{LocalKey: "task", TaskID: 1, Type: "task", Title: "Running task", Contract: contract}},
+		Dependencies: []taskmodel.TaskBatchEdge{},
+	}
+	_, err = NewTaskCommands(store, c).CreateTaskBatch(ctx, mustJSON(batch), envmodel.ID(), 1, "fixture")
+	require(t, err)
+	graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
+	require(t, err)
+	previous := seedDetectedEnvironment(t, p, "remote")
+	task := graph.ByID["1"]
+	input := previous.Prepared.Input
+	input.Title = task.Title
+	input.Documents = runnercontract.Documents{Spec: runnercontract.Document{Path: specPath}, Plan: runnercontract.Document{Path: planPath}}
+	input.Publication.BaseBranch = contract.Branch
+	candidate := runnerbridge.Candidate{
+		Project: c.Identity(), TaskID: task.TaskID, ID: envmodel.ID(), Revision: 1,
+		StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", Explicit: true,
+		ProfileID: "remote", ContractDigest: contract.Digest, BaseRevision: commit, Participation: "active", SubmitState: "pending",
+		Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: envmodel.ID(), Input: mustJSON(input)},
+	}
+	work := taskmodel.FixedWork{Record: task, Contract: contract, Authority: graph.TaskGraph().Authority}
+	require(t, runnerTaskService(c, store, runnerclient.Client{}).ReserveExecution(ctx, work, candidate, false))
+	candidate, err = store.Candidate(ctx, c.Identity(), candidate.ID)
+	require(t, err)
+	candidate.Revision++
+	candidate.RunID, candidate.SubmitState = envmodel.ID(), "accepted"
+	candidate.Projection = &runnercontract.Run{RunID: candidate.RunID, Revision: 1, Status: "running"}
+	require(t, store.SaveCandidate(ctx, candidate, 1, nil))
+
+	key := mustEnvironmentKey(t, previous.Execution)
+	start := envmodel.Start{EnvironmentKey: key, Profile: "remote", ExpectedCurrentRevision: 1, TimeoutSeconds: 60}
+	recheck, err := p.service.Start(ctx, envmodel.ID(), mustJSON(start), start)
+	require(t, err)
+	start.ExpectedCurrentRevision++
+	if _, err := p.service.Start(ctx, envmodel.ID(), mustJSON(start), start); err == nil || !strings.Contains(err.Error(), "仍有未核实的环境适配") {
+		t.Fatalf("a second detection on the target was not rejected for occupancy: %v", err)
+	}
+	current, err := store.CurrentEnvironment(ctx, c.Identity(), key)
+	require(t, err)
+	if current.ActivityID != recheck.ID || current.Revision != start.ExpectedCurrentRevision {
+		t.Fatal("the second request replaced the active detection", current)
+	}
+	saved, err := store.Candidate(ctx, c.Identity(), candidate.ID)
+	require(t, err)
+	if saved.Revision != candidate.Revision || saved.RunID != candidate.RunID || saved.StopRequested || saved.Projection == nil || saved.Projection.Status != "running" {
+		t.Fatal("recheck changed the original task execution", saved)
 	}
 }
 
