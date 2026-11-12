@@ -167,12 +167,14 @@ func readingItem(source string, r ports.ReadingRecord) api.ReadingItem {
 		} else {
 			group += " · turn 未记录"
 		}
-	} else if r.Role == "user" && source == "task_candidate" {
+	} else if r.Role == "user" && (source == "task_candidate" || source == "refactoring") {
 		group = "轮次未记录"
 		label += " · 轮次未记录"
 	}
 	if source == "environment_detection" {
 		group = "检测轮次 " + r.Group
+	} else if r.Group != "" {
+		group = r.Group
 	}
 	return api.ReadingItem{ID: r.ID, Role: r.Role, Kind: r.Kind, Label: label, Preview: r.Preview, Bytes: r.Bytes, SHA256: r.SHA256, At: r.At, State: r.State, RunID: r.RunID, AttemptID: r.AttemptID, SessionID: r.SessionID, TurnID: r.TurnID, Group: group}
 }

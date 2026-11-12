@@ -61,7 +61,7 @@ func storageFailure(err error, code string) error {
 	var coded interface{ Code() int }
 	var pathError *os.PathError
 	if errors.As(err, &coded) {
-		if coded.Code()&255 == 5 || coded.Code()&255 == 6 {
+		if isLockCode(coded.Code()) {
 			code = storageports.StorageLocked
 		}
 		return &storageports.StorageError{Code: code, Cause: err}
@@ -70,6 +70,21 @@ func storageFailure(err error, code string) error {
 		return &storageports.StorageError{Code: storageports.StorageIO, Cause: err}
 	}
 	return err
+}
+
+// IsLocked recognizes transient read contention even from paths that return raw driver errors.
+func IsLocked(err error) bool {
+	var storage *storageports.StorageError
+	if errors.As(err, &storage) && storage.Code == storageports.StorageLocked {
+		return true
+	}
+	var coded interface{ Code() int }
+	return errors.As(err, &coded) && isLockCode(coded.Code())
+}
+
+func isLockCode(code int) bool {
+	const busy, locked = 5, 6
+	return code&255 == busy || code&255 == locked
 }
 
 func schemaFailure(err error, message string) error {

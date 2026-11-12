@@ -260,3 +260,7 @@ export function requestDestination(e: Envelope, receipt?: Receipt) {
     return `${root}/runs?task=${encodeURIComponent(e.target_id)}&run=${encodeURIComponent(e.request_id)}`;
   return undefined;
 }
+
+export function formatActivityTime(value?: string) {
+  return value ? new Date(value).toLocaleString("zh-CN") : "时间未记录";
+}

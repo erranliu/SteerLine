@@ -2,64 +2,135 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"net/url"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/query"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnerstate"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
-func (p *runtimeProjectPort) readCandidateConversation(ctx context.Context, activity string, values url.Values) (any, error) {
+type activityConversationTarget struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	RunID     string `json:"run_id,omitempty"`
+	AttemptID string `json:"attempt_id,omitempty"`
+	State     string `json:"state"`
+	stateDir  string
+	binding   runnerclient.NativeSessionTarget
+}
+
+type activityConversations struct {
+	ActivityID string                         `json:"activity_id"`
+	Targets    []activityConversationTarget   `json:"targets"`
+	Diagnostic string                         `json:"diagnostic,omitempty"`
+	Operation  *activityConversationOperation `json:"operation,omitempty"`
+}
+
+type activityConversationOperation struct {
+	Label      string `json:"label"`
+	RequestID  string `json:"request_id"`
+	Status     string `json:"status"`
+	Diagnostic string `json:"diagnostic,omitempty"`
+}
+
+func conversationTarget(key, label, runID string, run *runnercontract.Run, stateDir string) activityConversationTarget {
+	target := activityConversationTarget{Label: label, RunID: runID, stateDir: stateDir, State: "unbound"}
+	if run != nil && run.RunID == runID {
+		e := run.Execution
+		target.AttemptID = e.AttemptID
+		target.binding = runnerclient.NativeSessionTarget{RunID: runID, AttemptID: e.AttemptID, SessionID: e.SessionID, Generation: e.Generation}
+	}
+	b := target.binding
+	if b.RunID != "" && b.AttemptID != "" && b.SessionID != "" && b.Generation != "" {
+		target.State = "available"
+	}
+	hash := sha256.Sum256([]byte(strings.Join([]string{key, runID, b.AttemptID, b.SessionID, b.Generation}, "\x00")))
+	target.ID = hex.EncodeToString(hash[:])
+	return target
+}
+
+func (t activityConversationTarget) state(cli *runnerclient.Client) string {
+	if t.State != "available" {
+		return t.State
+	}
+	// This query can read a retained Run after an approved build replacement in
+	// the original namespace. NativeConversation fences the current instance
+	// and build, and Runner verifies the original execution/session binding.
+	if cli == nil || cli.InstanceID == "" || t.stateDir == "" || !runnerbinding.SamePath(t.stateDir, cli.StateDir) {
+		return "unavailable"
+	}
+	if !slices.Contains(cli.FullBindingCommands, runnerclient.NativeConversationHistory) {
+		return "unsupported"
+	}
+	return "available"
+}
+
+func (p *runtimeProjectPort) readActivityConversation(ctx context.Context, activity string, values url.Values) (any, error) {
 	fail := func(status int, code, reason string) (any, error) {
 		return nil, &httpclient.ClientError{Status: status, Code: code, Reason: reason}
 	}
-	cursor := values.Get("cursor")
-	if len(values) != 0 && (len(values) != 1 || len(values["cursor"]) != 1 || cursor == "" || len(cursor) > 1024) {
-		return fail(400, "invalid_reading_query", "对话分页参数无效")
+	session, cursor := values.Get("session"), values.Get("cursor")
+	for key, entries := range values {
+		if len(entries) != 1 || entries[0] == "" ||
+			(key != "session" && key != "cursor") ||
+			(key == "session" && len(session) != 64) ||
+			(key == "cursor" && (session == "" || len(cursor) > 1024)) {
+			return fail(400, "invalid_reading_query", "对话读取参数无效")
+		}
 	}
 	project := p.config.Identity()
 	source, id, err := query.DecodeActivityID(project, activity)
-	if err != nil || source != "task_candidate" {
-		return fail(404, "activity_not_found", "此活动没有可定位的任务候选对话")
+	if err != nil {
+		return fail(404, "activity_not_found", "找不到原活动")
 	}
-	reader, ok := p.store.(interface {
-		Candidate(context.Context, string, string) (runnerstate.Candidate, error)
-	})
-	if !ok {
-		return fail(503, "reading_unavailable", "候选对话暂不可读")
+	resolve := activityConversationSources[source]
+	if resolve == nil {
+		return fail(503, "reading_unavailable", "活动对话来源暂不可读")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
-	candidate, err := reader.Candidate(ctx, project, id)
+	list, err := resolve(ctx, p.store, project, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return fail(404, "activity_not_found", "找不到原候选")
+		return fail(404, "activity_not_found", "找不到原活动")
 	}
 	if err != nil {
-		return fail(503, "reading_unavailable", "无法核实原候选")
-	}
-	if candidate.Projection == nil || candidate.RunID == "" {
-		return fail(409, "conversation_not_bound", "候选尚未绑定原会话")
-	}
-	execution := candidate.Projection.Execution
-	if execution.AttemptID == "" || execution.SessionID == "" || execution.Generation == "" {
-		return fail(409, "conversation_not_bound", "候选尚未绑定原会话")
+		return fail(503, "reading_unavailable", "无法核实原活动的对话")
 	}
 	cli := p.config.runtimeRunner
-	if cli == nil || cli.InstanceID == "" || candidate.StateDir == "" || !strings.EqualFold(filepath.Clean(cli.StateDir), filepath.Clean(candidate.StateDir)) {
-		return fail(503, "reading_unavailable", "原 Runner 实例暂不可读")
+	if session == "" {
+		list.ActivityID = activity
+		if list.Targets == nil {
+			list.Targets = []activityConversationTarget{}
+		}
+		for i := range list.Targets {
+			list.Targets[i].State = list.Targets[i].state(cli)
+		}
+		return list, nil
 	}
-	if !slices.Contains(cli.FullBindingCommands, runnerclient.NativeConversationHistory) {
+
+	index := slices.IndexFunc(list.Targets, func(t activityConversationTarget) bool { return t.ID == session })
+	if index < 0 {
+		return fail(409, "conversation_changed", "原会话绑定已变化，请刷新对话")
+	}
+	target := list.Targets[index]
+	switch target.state(cli) {
+	case "unbound":
+		return fail(409, "conversation_not_bound", "尚无可核实的原会话绑定")
+	case "unsupported":
 		return fail(501, "conversation_unsupported", "当前 Runner 构建没有公开原会话历史")
+	case "unavailable":
+		return fail(503, "reading_unavailable", "原 Runner 状态目录或当前实例暂不可读")
 	}
-	target := runnerclient.NativeSessionTarget{RunID: candidate.RunID, AttemptID: execution.AttemptID, SessionID: execution.SessionID, Generation: execution.Generation}
-	page, err := cli.NativeConversation(ctx, target, cursor, 25)
+	page, err := cli.NativeConversation(ctx, target.binding, cursor, 25)
 	if err != nil {
 		var failure *runnerclient.Failure
 		if errors.As(err, &failure) {
@@ -74,6 +145,7 @@ func (p *runtimeProjectPort) readCandidateConversation(ctx context.Context, acti
 	}
 	return struct {
 		Activity string `json:"activity_id"`
+		Target   string `json:"target_id"`
 		runnerclient.NativeConversationPage
-	}{activity, page}, nil
+	}{activity, session, page}, nil
 }
