@@ -23,7 +23,7 @@ export function Dispatch() {
   return (
     <div className="dispatch-bar">
       <div>
-        <strong>当前项目派发</strong>
+        <strong>任务派发设定</strong>
       </div>
       <div className="actions">
         <Button

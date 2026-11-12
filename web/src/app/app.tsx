@@ -210,7 +210,6 @@ export function Workspace({
               后才能启动新候选。已有执行保留原参数。
             </div>
           )}
-          {!environmentPage && !readingPage && <Dispatch />}
           <Suspense fallback={<div className="empty">正在加载页面…</div>}>
             <Routes>
               <Route
@@ -251,11 +250,21 @@ export function Workspace({
               />
               <Route
                 path={"/projects/" + identity.project_id + "/dag"}
-                element={<Dag />}
+                element={
+                  <>
+                    <Dispatch />
+                    <Dag />
+                  </>
+                }
               />
               <Route
                 path={"/projects/" + identity.project_id + "/runs"}
-                element={<Runs />}
+                element={
+                  <>
+                    <Dispatch />
+                    <Runs />
+                  </>
+                }
               />
               <Route
                 path={"/projects/" + identity.project_id + "/settings"}

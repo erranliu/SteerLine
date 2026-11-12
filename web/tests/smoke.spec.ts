@@ -395,7 +395,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
     tasksBefore.tasks.find((t: { task_id: string }) => t.task_id === "2")
       .dependency_ready,
   ).toBe(false);
-  await page.getByRole("link", { name: /执行与待处理/ }).click();
+  await page.getByRole("link", { name: "任务执行", exact: true }).click();
   await expect(page.getByText("候选 C1", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "最终回复", exact: true }).click();
   await expect(

@@ -44,16 +44,18 @@ test("explicit submissions give immediate local feedback without a second coordi
   });
   await page.goto(opening);
   const root = new URL(`/projects/${project}`, page.url()).href;
-  await page.goto(root + "/roadmaps");
+  await page.goto(root + "/dag");
   await expect(page.getByRole("switch", { name: "自动派发" })).toHaveAttribute(
     "aria-checked",
     "false",
   );
+  await page.getByRole("link", { name: "Roadmap 草稿", exact: true }).click();
   const parse = page.getByRole("button", {
     name: "Runner generate · 解析任务与依赖",
     exact: true,
   });
   await expect(parse).toBeEnabled();
+  await expect(page.getByText("任务派发设定", { exact: true })).toHaveCount(0);
   // An intentionally stale source produces a real rejection before any native
   // generation; this peer deliberately supplies no generation results.
   const originalDraft = readFileSync(draft, "utf8");

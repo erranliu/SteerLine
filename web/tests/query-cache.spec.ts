@@ -104,16 +104,19 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
       timeout: 180000,
     });
     await expect(page.locator(".graph-task")).toHaveCount(2);
+    await expect(page.getByText("任务派发设定", { exact: true })).toBeVisible();
     await expect.poll(() => held).toBe(true);
     // The list page attaches to the original, still pending bootstrap request.
-    await page.getByRole("link", { name: "执行与待处理" }).click();
+    await page.getByRole("link", { name: "任务执行" }).click();
     await expect(
-      page.getByRole("heading", { name: "执行与待处理", exact: true }),
+      page.getByRole("heading", { name: "任务执行", exact: true }),
     ).toBeVisible();
+    await expect(page.getByText("任务派发设定", { exact: true })).toBeVisible();
     expect(count(projectA, "tasks")).toBe(1);
     releaseTasks!();
     releaseTasks = undefined;
-    await expect(page.locator(".run-task")).toHaveCount(2);
+    await expect(page.locator(".run-task")).toHaveCount(1);
+    await expect(page.locator(".run-task")).toContainText("独立调试任务 A");
     expect(count(projectA, "tasks")).toBe(1);
     expect(count(projectB, "tasks")).toBe(0);
     expect(count(projectB, "presentation")).toBe(0);
@@ -121,14 +124,15 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     console.log("web.query-cache: pending bootstrap shared by both pages");
 
     await page.getByRole("link", { name: "配置", exact: true }).click();
+    await expect(page.getByText("任务派发设定", { exact: true })).toHaveCount(0);
     const presentationCount = count(projectA, "presentation");
     await page.waitForTimeout(1100); // Make the dynamic task page stale, with no observer polling it.
     held = false;
     holdNextTasks = true;
-    await page.getByRole("link", { name: "执行与待处理" }).click();
+    await page.getByRole("link", { name: "任务执行" }).click();
     await expect.poll(() => held).toBe(true);
     // Cached rows are visible before releasing the actual server response.
-    await expect(page.locator(".run-task")).toHaveCount(2);
+    await expect(page.locator(".run-task")).toHaveCount(1);
     facts.cached_rows_before_response = await page.locator(".run-task").count();
     console.log("web.query-cache: cached rows visible before server response");
     releaseTasks!();
