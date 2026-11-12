@@ -216,23 +216,27 @@ func (p *planningPort) adoptPlanningMerge(ctx context.Context, task *plan.Planni
 	if _, err = p.config.runtimeMaintenance.git(ctx, "merge-base", "--is-ancestor", fact.MergeCommit, target.Commit); err != nil {
 		return errors.New("合并提交尚未进入目标分支")
 	}
+	merged := *task
 	for _, change := range version.Changes {
 		mode, body, err := p.treeEntry(ctx, p.config.Repository, fact.MergeCommit, change.Path)
 		if err != nil || mode != change.Mode || !bytes.Equal(body, change.After) {
 			return fmt.Errorf("合并文件与确认版本不一致：%s", change.Path)
 		}
 		if change.Path == task.Path {
-			task.Body = string(body)
+			merged.Body = string(body)
 		}
 	}
-	task.Merged = fact.MergeCommit
-	task.Status = "merged_pending_sync"
-	task.Diagnostic = ""
-	return p.save(ctx, task)
+	merged.Merged = fact.MergeCommit
+	merged.Status = "merged_pending_sync"
+	merged.Diagnostic = ""
+	if err := p.save(ctx, &merged); err != nil {
+		return err
+	}
+	*task = merged
+	return nil
 }
 
 func (p *planningPort) handoffPlanning(ctx context.Context, task *plan.PlanningTask) error {
-	schedulePlanningClose(task)
 	if task.SourceID != "" {
 		return nil
 	}
@@ -251,8 +255,8 @@ func (p *planningPort) handoffPlanning(ctx context.Context, task *plan.PlanningT
 	if _, err = m.git(ctx, "merge-base", "--is-ancestor", task.Merged, source.Head); err != nil {
 		return errors.New("已合并，待同步目标分支")
 	}
-	remote := m.current()
-	if remote.Diagnostic != "" || remote.Commit == "" {
+	remote, err := m.check(ctx)
+	if err != nil || remote.Commit == "" {
 		return errors.New("已合并，目标分支版本待核实")
 	}
 	if _, err = m.git(ctx, "merge-base", "--is-ancestor", source.Head, remote.Commit); err != nil {
@@ -261,6 +265,10 @@ func (p *planningPort) handoffPlanning(ctx context.Context, task *plan.PlanningT
 	current, err := m.git(ctx, "rev-parse", "HEAD")
 	if err != nil || strings.TrimSpace(string(current)) != source.Head {
 		return errors.New("项目工作树已变化，待重新核实")
+	}
+	branch, err = m.git(ctx, "symbolic-ref", "HEAD")
+	if err != nil || strings.TrimSpace(string(branch)) != "refs/heads/"+p.config.Branch {
+		return errors.New("已合并，项目工作树未位于目标分支")
 	}
 	task.SourceID = source.ID
 	task.Status = "handed_off"

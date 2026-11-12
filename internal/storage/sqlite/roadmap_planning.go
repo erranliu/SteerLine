@@ -13,6 +13,15 @@ import (
 var ErrPlanningChanged = errors.New("规划任务已变化，请刷新")
 var ErrPlanningPathOccupied = errors.New("同一路径已有活动规划任务")
 
+// The explicit discard reader can inspect databases created before planning existed.
+func (s *SQLiteStore) PlanningTasksForDiscard(ctx context.Context, project string) ([]roadmap.PlanningTask, error) {
+	version, err := readDatabaseSchemaVersion(ctx, s.db)
+	if err != nil || version < 48 {
+		return nil, err
+	}
+	return s.PlanningTasks(ctx, project)
+}
+
 func (s *SQLiteStore) PlanningTasks(ctx context.Context, project string) ([]roadmap.PlanningTask, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT planning_id,revision,payload FROM roadmap_planning WHERE project_identity=? ORDER BY planning_id", project)
 	if err != nil {

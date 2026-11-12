@@ -88,6 +88,13 @@ func TestRoadmapPlanningRebaseAndConflictContinuation(t *testing.T) {
 	}
 	_, err := port.planningGit(ctx, worker, nil, nil, "rebase", "--continue")
 	require(t, err)
+	admin := pmGit(t, worker, "rev-parse", "--absolute-git-dir")
+	partial := filepath.Join(admin, "rebase-merge")
+	require(t, os.Mkdir(partial, 0700))
+	if err := port.checkPlanningRebase(ctx, &task, target); err == nil || task.Conflict == nil || task.Base == target {
+		t.Fatal("incomplete Rebase metadata was mistaken for a completed Rebase")
+	}
+	require(t, os.Remove(partial))
 	require(t, port.checkPlanningRebase(ctx, &task, target))
 	if task.Conflict != nil || task.Base != target || task.Body != "# Roadmap draft\n" {
 		t.Fatalf("original worktree did not retain the draft: %+v", task)
@@ -113,6 +120,14 @@ func TestRoadmapPlanningRebaseAndConflictContinuation(t *testing.T) {
 	require(t, err)
 	if task.Conflict != nil || task.Base != target || pmGit(t, worker, "show", ":shared.md") != "staged after first rebase" || string(working) != "working after first rebase\n" || string(untracked) != "untracked after first rebase\n" {
 		t.Fatalf("abort did not restore the staged, working and untracked versions: %s", task.Diagnostic)
+	}
+	writePlanningFixture(t, admin, "refs/steerline/planning/"+task.ID+"/checkpoint.lock", "locked\n")
+	task.Operation = &roadmap.PlanningOperation{Kind: "rebase", Stage: "leased", Target: secondTarget, Lease: "lease"}
+	if err := port.applyPlanningLease(ctx, &task); err == nil || task.Operation.Stage != "git_running" || task.Operation.Command != "" || task.Operation.Lease != "lease" {
+		t.Fatal("an unverified Git write prepared a lease release")
+	}
+	if err := port.applyPlanningLease(ctx, &task); err == nil || task.Operation.Command != "" {
+		t.Fatal("recovery returned a lease without proving the Rebase result")
 	}
 }
 
@@ -149,6 +164,19 @@ func TestRoadmapPlanningSelectedPublicationAndHandoff(t *testing.T) {
 	pmGit(t, port.config.Repository, "push", remote, head+":refs/heads/main")
 	fact := roadmapPR{Merged: true, MergeCommit: head}
 	fact.Base.Ref, fact.Head.Ref, fact.Head.SHA = "main", task.Publication.Branch, head
+	changes := task.Publication.Versions[0].Changes
+	approved := changes[1].After
+	changes[1].After = []byte("different approved content\n")
+	task.Body = "# Previous verified preview\n"
+	if err := port.adoptPlanningMerge(ctx, &task, fact); err == nil || task.Body != "# Previous verified preview\n" || task.Merged != "" {
+		t.Fatal("a partial match updated the verified preview or accepted the merge")
+	}
+	changes[1].After = approved
+	stale := task
+	stale.Revision++
+	if err := port.adoptPlanningMerge(ctx, &stale, fact); err == nil || stale.Merged != "" || stale.Body != task.Body {
+		t.Fatal("a stale database revision adopted an uncommitted merge observation")
+	}
 	require(t, port.adoptPlanningMerge(ctx, &task, fact))
 	task.Operation = nil
 	if err := port.handoffPlanning(ctx, &task); err == nil || task.SourceID != "" {
@@ -160,8 +188,17 @@ func TestRoadmapPlanningSelectedPublicationAndHandoff(t *testing.T) {
 		t.Fatal("handed off a locally modified draft")
 	}
 	pmGit(t, port.config.Repository, "restore", "--", task.Path)
-	require(t, port.handoffPlanning(ctx, &task))
-	if task.SourceID != roadmap.SourceID(task.Project, task.Path) || task.Status != "handed_off" {
+	pmGit(t, remote, "update-ref", "refs/heads/main", task.Base, head)
+	if err := port.handoffPlanning(ctx, &task); err == nil || task.SourceID != "" {
+		t.Fatal("a cached observation allowed handoff after the remote dropped the merge")
+	}
+	pmGit(t, remote, "update-ref", "refs/heads/main", head, task.Base)
+	offline := errors.New("original Runner offline")
+	port.runner = planningLeaseFixture{inspectErr: offline}
+	if err := port.advance(ctx, &task); !errors.Is(err, offline) {
+		t.Fatalf("offline Runner proof was lost: %v", err)
+	}
+	if task.SourceID != roadmap.SourceID(task.Project, task.Path) || task.Status != "handed_off" || task.Operation != nil || task.Run.StopStatus == "stopped" {
 		t.Fatalf("missing stable source handoff: %+v", task)
 	}
 }
@@ -240,13 +277,17 @@ func testPlanningPublicationReplay(t *testing.T) {
 }
 
 type planningLeaseFixture struct {
-	run     *runnercontract.Run
-	command *runnercontract.Command
-	stale   bool
+	run        *runnercontract.Run
+	command    *runnercontract.Command
+	stale      bool
+	inspectErr error
 }
 
 func (f planningLeaseFixture) BuildPin() runnercontract.BuildPin { return runnercontract.BuildPin{} }
 func (f planningLeaseFixture) Inspect(_ context.Context, selector, _ string) (runnercontract.Inspection, error) {
+	if f.inspectErr != nil {
+		return runnercontract.Inspection{}, f.inspectErr
+	}
 	if f.stale && selector == "request-id" {
 		return runnercontract.Inspection{}, &runnerclient.Failure{Code: "request_not_found"}
 	}
@@ -350,7 +391,21 @@ func TestRoadmapPlanningRecoveryRejectsHistoricalLease(t *testing.T) {
 			require(t, err)
 			return stops
 		}
-		if len(startup(task.Run)) != 0 || len(startup(&released)) != 0 {
+		if len(startup(task.Run)) != 0 {
+			t.Fatal("startup stop was queued while the original lease remained held")
+		}
+		proof := runnerclient.StoppedVerification{StateDir: cli.StateDir, ResourcesSettled: true,
+			Runs: []runnerclient.StoppedRun{{RunID: task.Run.RunID, InputDigest: task.Run.InputDigest, ResourcesSettled: true}}}
+		if err := verifyPlanningLifecycle(ctx, []roadmap.PlanningTask{state}, proof, nil); err == nil {
+			t.Fatal("offline resource proof alone discarded the held lease")
+		}
+		require(t, verifyPlanningLifecycle(ctx, []roadmap.PlanningTask{state}, proof, &task.Build))
+		wrongBuild := task.Build
+		wrongBuild.SHA256 = strings.Repeat("f", 64)
+		if err := verifyPlanningLifecycle(ctx, []roadmap.PlanningTask{state}, proof, &wrongBuild); err == nil {
+			t.Fatal("recovery accepted a different Runner build while the lease remained held")
+		}
+		if len(startup(&released)) != 0 {
 			t.Fatal("startup stop was queued before reconciling the original lease release")
 		}
 		finish := &planningPort{roadmapPort: owner.roadmapPort, runner: planningLeaseFixture{run: &released, command: &runnercontract.Command{Command: "workspace release", ActionStatus: "completed"}}}
@@ -368,6 +423,14 @@ func TestRoadmapPlanningRecoveryRejectsHistoricalLease(t *testing.T) {
 		}
 		if again := startup(state.Run); len(again) != 1 || again[0].Request.RequestID != stops[0].Request.RequestID {
 			t.Fatal("startup stop did not reuse its original request")
+		}
+		stopped := released
+		stopped.StopStatus = "stopped"
+		state.Run = &stopped
+		require(t, verifyPlanningLifecycle(ctx, []roadmap.PlanningTask{state}, proof, nil))
+		proof.Runs[0].InputDigest = "another-input"
+		if err := verifyPlanningLifecycle(ctx, []roadmap.PlanningTask{state}, proof, nil); err == nil {
+			t.Fatal("offline verification accepted another input's stop proof")
 		}
 	})
 }

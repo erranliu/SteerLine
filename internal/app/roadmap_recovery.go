@@ -47,7 +47,7 @@ func preparePlanningStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 			}
 			return nil, err
 		}
-		if err := p.verifyPlanningRun(&task, view.Run); err != nil {
+		if err := verifyPlanningRun(&task, view.Run); err != nil {
 			return nil, err
 		}
 		if !cold || !planningStartupCanStop(&task, view.Run) {
@@ -56,7 +56,7 @@ func preparePlanningStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 		if task.Operation != nil {
 			prior, offline, err := cli.InspectBeforeStart(ctx, "request-id", task.Operation.Request.RequestID)
 			if err == nil {
-				if err := p.verifyPlanningRun(&task, prior.Run); err != nil {
+				if err := verifyPlanningRun(&task, prior.Run); err != nil {
 					return nil, err
 				}
 				if prior.Command == nil || prior.Command.Command != "stop" {
@@ -98,6 +98,63 @@ func preparePlanningStartupRequest(task *roadmap.PlanningTask) bool {
 	planControl(task.Operation, "stop", task.Run.Revision, nil)
 	return true
 }
+
+func verifyPlanningLifecycle(ctx context.Context, tasks []roadmap.PlanningTask, proof runnerclient.StoppedVerification, restart *runnercontract.BuildPin) error {
+	for _, task := range tasks {
+		if task.Run == nil && task.Operation == nil {
+			continue
+		}
+		if restart != nil {
+			if planningLeaseReturnedAndStopped(task.Run) && task.Operation == nil {
+				continue
+			}
+			if err := verifyPlanningRestart(ctx, &task, *restart); err != nil {
+				return err
+			}
+			continue
+		}
+		if !runnerbinding.SamePath(task.Build.StateDir, proof.StateDir) || !planningLeaseReturnedAndStopped(task.Run) {
+			return errors.New("original Roadmap planning lease return or session stop is unverified")
+		}
+		settled := false
+		for _, run := range proof.Runs {
+			if run.RunID == task.Run.RunID && run.InputDigest != "" && run.InputDigest == task.Run.InputDigest && run.ResourcesSettled {
+				settled = true
+				break
+			}
+		}
+		if !settled {
+			return errors.New("original Roadmap planning resource settlement is unverified")
+		}
+	}
+	return nil
+}
+
+func planningLeaseReturnedAndStopped(run *runnercontract.Run) bool {
+	return run != nil && run.RunID != "" && run.StopStatus == "stopped" &&
+		run.WorkspaceWrite != nil && run.WorkspaceWrite.Owner == "runner" && run.WorkspaceWrite.LeaseID == ""
+}
+
+func verifyPlanningRestart(ctx context.Context, task *roadmap.PlanningTask, pin runnercontract.BuildPin) error {
+	if !runnerbinding.SameBuild(task.Build, pin) {
+		return errors.New("Roadmap planning requires the original Runner build for restart")
+	}
+	cli := runnerclient.Client{Executable: pin.Executable, StateDir: pin.StateDir, SHA256: pin.SHA256, BuildVersion: pin.Version, ResourceDigest: pin.ResourceDigest}
+	var runID, digest string
+	if task.Run != nil {
+		runID, digest = task.Run.RunID, task.Run.InputDigest
+	}
+	view, cold, err := inspectOriginalBeforeStart(ctx, cli, task.Build.StateDir, runID, digest, task.Submission)
+	if err != nil {
+		var failure *runnerclient.Failure
+		if cold && runID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
+			return nil
+		}
+		return err
+	}
+	return verifyPlanningRun(task, view.Run)
+}
+
 func prepareRoadmapStops(ctx context.Context, c *Config, store *sqlite.SQLiteStore, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
 	rows, e := store.Roadmaps(ctx, c.Identity())
 	if e != nil {

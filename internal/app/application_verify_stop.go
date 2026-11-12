@@ -307,6 +307,17 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 			contents = append(contents, o.Content(r))
 		}
 	}
+	readPlanning := reader.PlanningTasks
+	if discard {
+		readPlanning = reader.PlanningTasksForDiscard
+	}
+	planning, err := readPlanning(ctx, c.Identity())
+	if err != nil {
+		return proof, err
+	}
+	if err = verifyPlanningLifecycle(ctx, planning, runnerProof, restartPin); err != nil {
+		return proof, err
+	}
 	for _, r := range roadmaps {
 		// Older document batches stored their single Runner binding on the
 		// parent. Include it in discard settlement before archiving the row.

@@ -179,10 +179,14 @@ func (p *planningPort) rebaseFacts(ctx context.Context, task *roadmap.PlanningTa
 	}
 	for _, kind := range []string{"rebase-merge", "rebase-apply"} {
 		dir := filepath.Join(strings.TrimSpace(string(admin)), kind)
-		head, readErr := os.ReadFile(filepath.Join(dir, "head-name"))
-		if os.IsNotExist(readErr) {
+		info, statErr := os.Lstat(dir)
+		if os.IsNotExist(statErr) {
 			continue
 		}
+		if statErr != nil || !info.IsDir() || branch != "" {
+			return "", "", "", nil, errors.New("原 Rebase 元数据目录无法核实")
+		}
+		head, readErr := os.ReadFile(filepath.Join(dir, "head-name"))
 		if readErr != nil {
 			return "", "", "", nil, readErr
 		}
@@ -195,7 +199,9 @@ func (p *planningPort) rebaseFacts(ctx context.Context, task *roadmap.PlanningTa
 			return "", "", "", nil, readErr
 		}
 		branch, target, start = strings.TrimSpace(string(head)), strings.TrimSpace(string(onto)), strings.TrimSpace(string(origin))
-		break
+		if branch == "" || target == "" || start == "" {
+			return "", "", "", nil, errors.New("原 Rebase 元数据不完整")
+		}
 	}
 	if branch == "" {
 		for _, marker := range []string{"MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "sequencer"} {
@@ -273,9 +279,6 @@ func (p *planningPort) applyPlanningLease(ctx context.Context, task *roadmap.Pla
 		} else {
 			effectErr = p.checkPlanningRebase(ctx, task, op.Target)
 		}
-		if effectErr != nil {
-			return effectErr
-		}
 	case task.Merged != "" || task.StopRequested:
 	case op.Kind == "rebase":
 		effectErr = p.startPlanningRebase(ctx, task)
@@ -285,6 +288,11 @@ func (p *planningPort) applyPlanningLease(ctx context.Context, task *roadmap.Pla
 		effectErr = p.capturePlanningReview(ctx, task)
 	}
 	if effectErr != nil {
+		if op.Stage == "git_running" {
+			// The managed Git call has returned, but the original effect still needs proof.
+			op.Writer = nil
+			return effectErr
+		}
 		task.Diagnostic = effectErr.Error()
 		op.Diagnostic = task.Diagnostic
 	}

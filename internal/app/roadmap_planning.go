@@ -503,7 +503,11 @@ func (p *planningPort) save(ctx context.Context, task *roadmap.PlanningTask) err
 func (p *planningPort) tick(ctx context.Context, task roadmap.PlanningTask) {
 	if (task.Operation != nil || task.Run != nil && task.Run.StopStatus != "stopped") && !runnerbinding.SameBuild(task.Build, p.runner.BuildPin()) {
 		const diagnostic = "原规划会话需要原 Runner 构建继续对账"
-		if task.Diagnostic != diagnostic {
+		previousSource := task.SourceID
+		if task.Merged != "" && task.SourceID == "" {
+			_ = p.handoffPlanning(ctx, &task)
+		}
+		if task.Diagnostic != diagnostic || task.SourceID != previousSource {
 			task.Diagnostic = diagnostic
 			_ = p.save(ctx, &task)
 		}
@@ -528,13 +532,15 @@ func (p *planningPort) tick(ctx context.Context, task roadmap.PlanningTask) {
 	}
 }
 
-func (p *planningPort) verifyPlanningRun(task *roadmap.PlanningTask, run *runnercontract.Run) error {
+func verifyPlanningRun(task *roadmap.PlanningTask, run *runnercontract.Run) error {
 	if run == nil || run.Correlation["steerline_planning"] != task.ID || run.Workflow.ID != "conversation" || run.Workflow.Version != 2 {
 		return errors.New("原规划 Run 绑定无法核实")
 	}
 	if task.Run != nil {
 		original := task.Run
-		if original.RunID != run.RunID || (original.Execution.SessionID != "" && original.Execution.SessionID != run.Execution.SessionID) ||
+		if original.RunID != run.RunID || (original.InputDigest != "" && original.InputDigest != run.InputDigest) ||
+			(original.WorkspaceOriginRunID != "" && original.WorkspaceOriginRunID != run.WorkspaceOriginRunID) ||
+			(original.Execution.SessionID != "" && original.Execution.SessionID != run.Execution.SessionID) ||
 			(original.WorkspaceIdentity != "" && (original.WorkspaceIdentity != run.WorkspaceIdentity || original.Execution.Workspace != run.Execution.Workspace || original.Execution.Branch != run.Execution.Branch)) {
 			return errors.New("原会话或 worktree 身份已变化")
 		}
@@ -545,16 +551,19 @@ func (p *planningPort) verifyPlanningRun(task *roadmap.PlanningTask, run *runner
 func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) error {
 	if task.Run != nil && task.Run.StopStatus != "stopped" {
 		current, err := p.runner.Inspect(ctx, "run-id", task.Run.RunID)
-		if err != nil {
-			return err
+		if err == nil {
+			err = verifyPlanningRun(task, current.Run)
 		}
-		if err = p.verifyPlanningRun(task, current.Run); err != nil {
+		if err != nil {
+			if task.Merged != "" && task.SourceID == "" {
+				return errors.Join(err, p.handoffPlanning(ctx, task))
+			}
 			return err
 		}
 		task.Run = current.Run
 	}
 	if task.Publication != nil && task.Publication.URL != "" && task.Merged == "" && !task.StopRequested {
-		if err := p.observePlanningPR(ctx, task); err != nil && task.Operation == nil {
+		if err := p.observePlanningPR(ctx, task); err != nil && (task.Operation == nil || task.Operation.Stage == "push_unknown") {
 			return err
 		}
 	}
@@ -567,6 +576,7 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 		return p.advancePlanningOperation(ctx, task)
 	}
 	if task.Merged != "" {
+		schedulePlanningClose(task)
 		return p.handoffPlanning(ctx, task)
 	}
 	if task.StopRequested {
@@ -605,7 +615,7 @@ func (p *planningPort) runPlanningControl(ctx context.Context, task *roadmap.Pla
 			}
 			return false, err
 		}
-		if err = p.verifyPlanningRun(task, result.Run); err != nil {
+		if err = verifyPlanningRun(task, result.Run); err != nil {
 			return false, err
 		}
 		task.Run = result.Run
@@ -681,7 +691,7 @@ func (p *planningPort) runPlanningControl(ctx context.Context, task *roadmap.Pla
 		}
 		return false, nil
 	}
-	if err = p.verifyPlanningRun(task, result.Run); err != nil {
+	if err = verifyPlanningRun(task, result.Run); err != nil {
 		return false, err
 	}
 	if result.Command == nil || result.Command.Command != op.Command {
@@ -741,7 +751,7 @@ func (p *planningPort) refreshPlanningLeaseRequest(ctx context.Context, task *ro
 	if err != nil {
 		return err
 	}
-	if err := p.verifyPlanningRun(task, current.Run); err != nil {
+	if err := verifyPlanningRun(task, current.Run); err != nil {
 		return err
 	}
 	task.Run = current.Run
