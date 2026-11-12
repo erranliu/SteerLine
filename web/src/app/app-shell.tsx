@@ -53,6 +53,7 @@ export function AppShell({
         environment: "项目运行环境",
         refactoring: "重构与维护",
         activities: "活动中心",
+        add: "添加已初始化项目",
       }[location.pathname.split("/").pop() ?? ""] ?? "规划与执行");
   return (
     <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>

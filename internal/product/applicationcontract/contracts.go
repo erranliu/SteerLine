@@ -49,6 +49,29 @@ type Catalog struct {
 	Projects              []Project `json:"projects"`
 }
 
+const ProjectRegistrationPath = "/projects/registration"
+
+type ProjectRegistration struct {
+	Name         string `json:"name"`
+	Repository   string `json:"repository"`
+	Remote       string `json:"remote"`
+	Branch       string `json:"branch"`
+	Provider     string `json:"provider"`
+	BaseURL      string `json:"base_url"`
+	PRRepository string `json:"pr_repository"`
+	TokenEnv     string `json:"token_env,omitempty"`
+	Confirmation string `json:"confirmation,omitempty"`
+}
+
+type ProjectRegistrationResult struct {
+	Repository   string `json:"repository"`
+	Commit       string `json:"commit"`
+	ConfigID     string `json:"config_id"`
+	ProjectID    string `json:"project_id"`
+	Confirmation string `json:"confirmation,omitempty"`
+	Saved        bool   `json:"saved"`
+}
+
 // RunnerShutdown is the single home-wide service settlement, not project state.
 type RunnerShutdown struct {
 	Attempted        bool   `json:"attempted"`
