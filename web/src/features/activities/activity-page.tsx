@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
+import { ArrowUpRight, RefreshCw } from "lucide-react";
 import { useWorkspace } from "../../app/context";
 import {
   usePageVisible,
@@ -20,31 +21,48 @@ import { CopyExecutionInfo } from "./execution-info";
 import { readingRoot } from "./reading-api";
 import "./activity-page.css";
 
+function ActivityPhase({ activity }: { activity: Activity }) {
+  const phase = activity.phase || activity.state;
+  return (
+    <span
+      className="reading-phase"
+      data-state={activity.state}
+      data-attention={activity.needs_attention}
+    >
+      {phase}
+      {activity.needs_attention && phase !== "需处理" ? " · 需处理" : ""}
+    </span>
+  );
+}
+
 function Message({ activity }: { activity: Activity }) {
   const message = activity.message;
   return (
     <div className="reading-message">
       {message?.text ? (
         <>
-          <small>
-            {message.kind === "current_question"
-              ? "当前问题"
-              : message.kind === "verified_final"
-                ? "已核实的最终回复"
-                : message.kind === "assistant"
-                  ? "最后观察到的可读消息"
-                  : "已保存结果"}{" "}
-            ·{" "}
-            {message.at
-              ? formatActivityTime(message.at)
-              : message.observed_at
-                ? "观察于 " + formatActivityTime(message.observed_at)
-                : "时间未记录"}
-            {message.observed_at &&
-            Date.now() - Date.parse(message.observed_at) > 60000
-              ? " · 样本已陈旧"
-              : ""}
-          </small>
+          <div className="reading-message-heading">
+            <strong>
+              {message.kind === "current_question"
+                ? "当前问题"
+                : message.kind === "verified_final"
+                  ? "已核实的最终回复"
+                  : message.kind === "assistant"
+                    ? "最后观察到的可读消息"
+                    : "已保存结果"}
+            </strong>
+            <small>
+              {message.at
+                ? formatActivityTime(message.at)
+                : message.observed_at
+                  ? "观察于 " + formatActivityTime(message.observed_at)
+                  : "时间未记录"}
+              {message.observed_at &&
+              Date.now() - Date.parse(message.observed_at) > 60000
+                ? " · 样本已陈旧"
+                : ""}
+            </small>
+          </div>
           <p className="reading-preview">{message.text}</p>
           {message.truncated && <small>有界预览</small>}
           {message.diagnostic && (
@@ -70,6 +88,7 @@ export function ActivityPage() {
   const filter: ActivityListFilter =
     text === "attention" || text === "history" ? text : "ongoing";
   const selected = params.get("activity") || "";
+  const headingElement = useRef<HTMLHeadingElement>(null);
   const listElement = useRef<HTMLDivElement>(null);
   const detailElement = useRef<HTMLDivElement>(null);
   const listPosition = useRef<{ id: string; y: number } | null>(null);
@@ -90,9 +109,7 @@ export function ActivityPage() {
           ".reading-select",
         ) || []),
       ].find((node) => node.dataset.readingId === position?.id);
-      (
-        button || listElement.current?.querySelector<HTMLHeadingElement>("h1")
-      )?.focus({ preventScroll: true });
+      (button || headingElement.current)?.focus({ preventScroll: true });
       window.scrollTo({ top: position?.y || 0 });
     }
   }, [selected]);
@@ -119,43 +136,56 @@ export function ActivityPage() {
       className={"activity-reading " + (selected ? "reading-selected" : "")}
       aria-label="活动中心独立页"
     >
+      <h1 className="reading-heading" ref={headingElement} tabIndex={-1}>
+        活动中心
+      </h1>
       <div className="reading-list" ref={listElement}>
-        <h1 tabIndex={-1}>活动中心</h1>
-        <div className="reading-filters" aria-label="独立页活动筛选">
-          {(
-            [
-              ["ongoing", "进行中"],
-              ["attention", "需处理"],
-              ["history", "历史"],
-            ] as const
-          ).map(([key, label]) => (
-            <Button
-              key={key}
-              variant={filter === key ? "default" : "ghost"}
-              aria-pressed={filter === key}
-              onClick={() =>
-                setParams((current) => {
-                  listPosition.current = null;
-                  const next = new URLSearchParams(current);
-                  next.set("filter", key);
-                  next.delete("activity");
-                  return next;
-                })
-              }
-            >
-              {label}{" "}
-              {first?.counts_known ? (first.counts[key] ?? "待核实") : "待核实"}
-            </Button>
-          ))}
+        <div className="reading-list-toolbar">
+          <div
+            className="segmented reading-filters"
+            aria-label="独立页活动筛选"
+          >
+            {(
+              [
+                ["ongoing", "进行中"],
+                ["attention", "需处理"],
+                ["history", "历史"],
+              ] as const
+            ).map(([key, label]) => (
+              <Button
+                key={key}
+                size="sm"
+                variant={filter === key ? "default" : "ghost"}
+                aria-pressed={filter === key}
+                onClick={() =>
+                  setParams((current) => {
+                    listPosition.current = null;
+                    const next = new URLSearchParams(current);
+                    next.set("filter", key);
+                    next.delete("activity");
+                    return next;
+                  })
+                }
+              >
+                {label}{" "}
+                {first?.counts_known
+                  ? (first.counts[key] ?? "待核实")
+                  : "待核实"}
+              </Button>
+            ))}
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="reading-refresh"
+            aria-label="刷新活动列表"
+            title="刷新活动列表"
+            disabled={!online || list.isFetching}
+            onClick={() => void list.refetch().catch(() => {})}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+          </Button>
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={!online || list.isFetching}
-          onClick={() => void list.refetch().catch(() => {})}
-        >
-          刷新活动列表
-        </Button>
         {(list.error ||
           (list.latest ?? first)?.sources.some((s) => !s.complete)) && (
           <p className="notice amber">
@@ -193,10 +223,7 @@ export function ActivityPage() {
                 aria-pressed={selected === activity.activity_id}
               >
                 <strong>{activity.title}</strong>
-                <span>
-                  {activity.phase || activity.state}
-                  {activity.needs_attention ? " · 需处理" : ""}
-                </span>
+                <ActivityPhase activity={activity} />
               </button>
               <Message activity={activity} />
               {filter === "history" && (
@@ -278,31 +305,40 @@ function ActivityDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </p>
       ) : (
         <>
-          <h2>{activity.title}</h2>
-          <p>{activity.phase || activity.state}</p>
-          {activity.summary && <p>{activity.summary}</p>}
-          {activity.diagnostic && (
-            <p className="notice amber">{activity.diagnostic}</p>
-          )}
-          <Message activity={activity} />
-          <div className="reading-actions">
-            <Link
-              className="button button-ghost"
-              to={activityDestination(identity.project_id, activity)}
-            >
-              {activity.needs_attention ? "去处理" : "查看原详情"}
-            </Link>
-            <CopyExecutionInfo
-              info={{
-                title: activity.title,
-                project: identity.repository_identity,
-                requestID: activity.execution_ref?.request_id,
-                record: { id: activity.source_id, label: "业务记录" },
-                taskID: activity.details_ref.task_id,
-                runner: activity.execution_ref,
-              }}
-            />
+          <div className="reading-overview">
+            <header className="reading-summary-heading">
+              <h2>{activity.title}</h2>
+              <ActivityPhase activity={activity} />
+            </header>
+            {activity.summary && (
+              <p className="reading-summary">{activity.summary}</p>
+            )}
+            {activity.diagnostic && (
+              <p className="notice amber">{activity.diagnostic}</p>
+            )}
+            <div className="reading-actions">
+              <Button
+                asChild
+                variant={activity.needs_attention ? "default" : "outline"}
+              >
+                <Link to={activityDestination(identity.project_id, activity)}>
+                  {activity.needs_attention ? "去处理" : "查看原详情"}
+                  <ArrowUpRight size={14} aria-hidden="true" />
+                </Link>
+              </Button>
+              <CopyExecutionInfo
+                info={{
+                  title: activity.title,
+                  project: identity.repository_identity,
+                  requestID: activity.execution_ref?.request_id,
+                  record: { id: activity.source_id, label: "业务记录" },
+                  taskID: activity.details_ref.task_id,
+                  runner: activity.execution_ref,
+                }}
+              />
+            </div>
           </div>
+          <Message activity={activity} />
           <ActivityConversation
             key={activity.activity_id}
             activity={activity}

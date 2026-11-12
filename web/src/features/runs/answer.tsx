@@ -29,6 +29,7 @@ export function draftKey(project: string, instance: string, run: Candidate) {
 export function Answer({ run }: { run: Candidate }) {
   const { api, online, submit: submitCommand, busy, requests } = useWorkspace();
   const decision = run.decision!;
+  const needsAnswer = requiresAnswer(run);
   const resume = decision.request.interaction_kind === "runner_resume";
   const key =
     (api.home ? api.home + "/" : "") +
@@ -277,18 +278,20 @@ export function Answer({ run }: { run: Candidate }) {
     );
   }
   return (
-    <section className="answer-panel">
+    <section
+      className={needsAnswer ? "answer-panel answer-required" : "answer-panel"}
+    >
       <div className="section-heading">
         <h3>
           {!businessOpen(run)
             ? "历史问题"
-            : requiresAnswer(run)
+            : needsAnswer
               ? "需要你的决定"
               : optionalAnswer(run)
                 ? "可稍后回答"
                 : "追加反馈"}
         </h3>
-        <Status value={decision.status} />
+        {!needsAnswer && <Status value={decision.status} />}
       </div>
       <h4>{decision.request.question}</h4>
       {decision.request.context &&
@@ -298,7 +301,7 @@ export function Answer({ run }: { run: Candidate }) {
       <p className="muted">
         {!businessOpen(run)
           ? "候选已结束，问题与回答仅供回看。"
-          : requiresAnswer(run)
+          : needsAnswer
             ? "回答后按原问题继续。"
             : optionalAnswer(run)
               ? "当前执行可继续，方便时回答这个问题。"
@@ -363,7 +366,9 @@ export function Answer({ run }: { run: Candidate }) {
                   </label>
                 ))}
               </div>
-              <label htmlFor="answer-note">回答 / 补充说明</label>
+              <label className="answer-label" htmlFor="answer-note">
+                回答 / 补充说明
+              </label>
               <textarea
                 id="answer-note"
                 aria-label="回答内容"
@@ -374,7 +379,7 @@ export function Answer({ run }: { run: Candidate }) {
                     ? "输入回答；多题可按问题 ID 填写 JSON。"
                     : "输入补充说明…"
                 }
-                rows={5}
+                rows={3}
                 disabled={!loaded || checking || busy}
                 onChange={(e) => update(e.target.value)}
                 onCompositionStart={() => setComposing(true)}
@@ -386,6 +391,7 @@ export function Answer({ run }: { run: Candidate }) {
                 </span>
                 <div className="actions">
                   <Button
+                    variant="ghost"
                     onClick={() => {
                       eligibility.current?.abort();
                       setOpened(false);
@@ -409,7 +415,7 @@ export function Answer({ run }: { run: Candidate }) {
                   >
                     {checking
                       ? "正在回复…"
-                      : requiresAnswer(run)
+                      : needsAnswer
                         ? "回复并继续"
                         : "提交回答"}
                   </Button>
