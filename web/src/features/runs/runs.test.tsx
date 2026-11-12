@@ -187,8 +187,10 @@ it("keeps dynamics polling independently and stops final polling when the result
   client.setQueryData(options.activity(run).queryKey, activity);
   client.setQueryData(options.final(run).queryKey, final);
   const get = vi.spyOn(api, "get").mockImplementation(
-    async (path) =>
-      (path === "/maintenance/readiness"
+    async (path) => {
+      if (path.startsWith("/environment/options"))
+        return { environments: [] } as never;
+      return (path === "/maintenance/readiness"
         ? { status: "not_ready", commit: "", total: 0, ready: 0, blockers: [] }
         : path.includes("/activity?")
           ? activity
@@ -198,7 +200,8 @@ it("keeps dynamics polling independently and stops final polling when the result
                 attempt_id: run.attempt_id,
                 message: null,
               }
-            : tasks) as never,
+            : tasks) as never;
+    },
   );
   let resolve!: (value: unknown) => void;
   const fetchFinal = vi.spyOn(api, "final").mockImplementation(
@@ -309,8 +312,10 @@ it("shows recent changes newest first and keeps each event's workflow context", 
   };
   client.setQueryData(options.activity(run).queryKey, activity);
   vi.spyOn(api, "get").mockImplementation(
-    async (path) =>
-      (path === "/maintenance/readiness"
+    async (path) => {
+      if (path.startsWith("/environment/options"))
+        return { environments: [] } as never;
+      return (path === "/maintenance/readiness"
         ? { status: "not_ready", commit: "", total: 0, ready: 0, blockers: [] }
         : path.includes("/activity?")
           ? activity
@@ -320,7 +325,8 @@ it("shows recent changes newest first and keeps each event's workflow context", 
                 attempt_id: run.attempt_id,
                 message: null,
               }
-            : tasks) as never,
+            : tasks) as never;
+    },
   );
   mountFeature(<Runs />, api, client);
   expect(screen.getByText("状态切换：执行中 → 已阻塞")).toBeVisible();
@@ -396,14 +402,17 @@ function stopWorkspace(
     presentation: { profiles: [], default_profile_id: "" },
   });
   vi.spyOn(api, "get").mockImplementation(
-    async (path) =>
-      (path === "/maintenance/readiness"
+    async (path) => {
+      if (path.startsWith("/environment/options"))
+        return { environments: [] } as never;
+      return (path === "/maintenance/readiness"
         ? { status: "not_ready", commit: "", total: 0, ready: 0, blockers: [] }
         : path.includes("/activity?")
           ? { page: { activity: [], diagnostics: [] } }
           : path.includes("/last-message?")
             ? { run_id: "execution", attempt_id: "attempt", message: null }
-            : taskPage) as never,
+            : taskPage) as never;
+    },
   );
   const runs = [1, 2, 3].map((number) => ({
     ...run,
@@ -817,6 +826,7 @@ it("preserves the selected answer editor across reordered snapshots and keeps th
   await waitFor(() =>
     expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
   );
+  expect(screen.getByText("等待输入", { exact: true })).toBeVisible();
   fireEvent.change(screen.getByRole("textbox", { name: "回答内容" }), {
     target: { value: "保留当前回答草稿" },
   });

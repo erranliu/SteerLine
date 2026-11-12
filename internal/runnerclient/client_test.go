@@ -126,6 +126,10 @@ func TestMain(m *testing.M) {
 			fmt.Printf(`{"protocol":"steerrunner-cli/v1","ok":false,"request_id":%q,"data":null,"error":{"code":"stale_revision","message":"Run changed"}}`, request.RequestID)
 			os.Exit(5)
 		}
+		if mode == "directory_unavailable" {
+			fmt.Printf(`{"protocol":"steerrunner-cli/v1","ok":false,"request_id":%q,"data":null,"error":{"code":"directory_unavailable","message":"repository_snapshot_limit_exceeded"}}`, request.RequestID)
+			os.Exit(4)
+		}
 		fmt.Printf(`{"protocol":"steerrunner-cli/v1","ok":true,"request_id":%q,"data":{"command_id":"command","run_id":"run","receipt_status":"accepted","action_status":"pending"},"error":null}`, request.RequestID)
 		os.Exit(0)
 	}
@@ -140,7 +144,7 @@ func TestSteerRunnerCLIContract(t *testing.T) {
 	callPath := filepath.Join(t.TempDir(), "call.json")
 	t.Setenv("STEERLINE_RUNNER_CLI_CALL", callPath)
 	request := Request{Protocol: Protocol, RequestID: "fixed-id", Input: json.RawMessage(`{"text":"中文\nwith spaces"}`)}
-	for _, mode := range []string{"accepted", "rejected", "broken", "wrong-id", "timeout"} {
+	for _, mode := range []string{"accepted", "rejected", "directory_unavailable", "broken", "wrong-id", "timeout"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("STEERLINE_RUNNER_CLI_FIXTURE", mode)
 			client := Client{Executable: exe, StateDir: filepath.Join(t.TempDir(), "runner with spaces"), Timeout: 200 * time.Millisecond}
@@ -162,12 +166,19 @@ func TestSteerRunnerCLIContract(t *testing.T) {
 			if !errors.As(err, &failure) {
 				t.Fatalf("missing classified failure: %v", err)
 			}
-			if mode == "rejected" {
+			switch mode {
+			case "rejected":
 				if failure.Unknown || failure.Exit != 5 {
 					t.Fatal(failure)
 				}
-			} else if !failure.Unknown || failure.Exit != 6 {
-				t.Fatal("mutation outcome was guessed", failure)
+			case "directory_unavailable":
+				if failure.Unknown || failure.Exit != 4 || failure.Code != mode || failure.Message != "repository_snapshot_limit_exceeded" {
+					t.Fatal(failure)
+				}
+			default:
+				if !failure.Unknown || failure.Exit != 6 {
+					t.Fatal("mutation outcome was guessed", failure)
+				}
 			}
 		})
 	}

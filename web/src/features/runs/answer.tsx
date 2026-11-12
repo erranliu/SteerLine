@@ -14,6 +14,7 @@ import {
   type AdvisoryDetail,
 } from "./continuation-suggestion";
 import { sameNotice } from "./presentation";
+import { replyBytes, replyMaxBytes, structuredAnswer } from "./answer-text";
 
 export function draftKey(project: string, instance: string, run: Candidate) {
   return [
@@ -36,6 +37,8 @@ export function Answer({ run }: { run: Candidate }) {
   const [suggestion, setSuggestion] = useState<AdvisoryDetail>();
   const answer = note ?? suggestion?.prompt ?? "";
   const [option, setOption] = useState("");
+  const bytes = resume ? 0 : replyBytes(decision.request, option, answer);
+  const excessBytes = bytes - replyMaxBytes;
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [storageError, setStorageError] = useState("");
@@ -157,7 +160,7 @@ export function Answer({ run }: { run: Candidate }) {
       .catch((e) => setStorageError(String(e)));
   };
   const submit = async () => {
-    if (submitting.current || answered) return;
+    if (submitting.current || answered || excessBytes > 0) return;
     submitting.current = true;
     eligibility.current?.abort();
     const controller = new AbortController();
@@ -185,21 +188,8 @@ export function Answer({ run }: { run: Candidate }) {
         source_attempt_id: run.attempt_id,
         expected_recovery_version: run.recovery_version,
       };
-      if (
-        !resume && decision.request.has_native_questions &&
-        answer.trim().startsWith("{")
-      ) {
-        const answers = JSON.parse(answer);
-        if (
-          !answers ||
-          Array.isArray(answers) ||
-          Object.values(answers).some(
-            (value) =>
-              !Array.isArray(value) ||
-              value.some((item) => typeof item !== "string"),
-          )
-        )
-          throw new Error("多题答案须为问题 ID 对应字符串数组的 JSON");
+      const answers = !resume && structuredAnswer(decision.request, answer);
+      if (answers) {
         payload.answers = answers;
         delete payload.note;
         delete payload.option_id;
@@ -377,6 +367,7 @@ export function Answer({ run }: { run: Candidate }) {
               <textarea
                 id="answer-note"
                 aria-label="回答内容"
+                aria-describedby="answer-byte-count"
                 value={answer}
                 placeholder={
                   decision.request.has_native_questions
@@ -390,7 +381,9 @@ export function Answer({ run }: { run: Candidate }) {
                 onCompositionEnd={() => setComposing(false)}
               />
               <div className="input-footer">
-                <span>Enter 换行 · 点击提交 · 绑定原候选与问题</span>
+                <span id="answer-byte-count">
+                  UTF-8 {bytes} / {replyMaxBytes} 字节
+                </span>
                 <div className="actions">
                   <Button
                     onClick={() => {
@@ -409,6 +402,7 @@ export function Answer({ run }: { run: Candidate }) {
                       composing ||
                       !loaded ||
                       !!storageError ||
+                      excessBytes > 0 ||
                       (!option && !answer.trim())
                     }
                     onClick={submit}
@@ -421,6 +415,11 @@ export function Answer({ run }: { run: Candidate }) {
                   </Button>
                 </div>
               </div>
+              {excessBytes > 0 && (
+                <p role="alert" className="notice amber">
+                  回答超出 {excessBytes} 字节。请缩短后提交，当前内容会保留。
+                </p>
+              )}
             </>
           )}
         </>

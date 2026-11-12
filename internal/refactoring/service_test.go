@@ -67,16 +67,15 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 			d["prompt"] = "交付已有成果，更新原PR和同源报告。"
 		}
 		data, _ := json.Marshal(d)
-		if g.Generate.Repository != nil {
-			run.RepositorySource = &rc.RepositorySource{LocalPath: g.Generate.Repository.LocalPath, Commit: g.Generate.Repository.Commit, Tree: "tree"}
-		} else {
-			run.Execution.Workspace = g.Generate.Directory.Path
+		if g.Generate.Repository != nil || g.Generate.Directory == nil || g.Generate.Directory.Path != f.dir || g.Generate.Directory.Access != "read_only" {
+			f.t.Fatalf("decision must use the original project directory read-only: %+v", g.Generate)
 		}
+		run.Execution.Workspace = g.Generate.Directory.Path
 		for _, doc := range g.Generate.Materials {
 			path := filepath.Join(f.dir, "materials", doc.Path)
 			run.Materials = append(run.Materials, rc.Material{Kind: "file", Path: doc.Path, Digest: m.Digest([]byte(*doc.Content)), SnapshotPath: path, ExecutionLocation: path})
 		}
-		run.ContentResult = &rc.ContentResult{Status: "succeeded", JSON: data, Source: *run.Final, FileMaterials: run.Materials, RepositorySource: run.RepositorySource}
+		run.ContentResult = &rc.ContentResult{Status: "succeeded", JSON: data, Source: *run.Final, FileMaterials: run.Materials}
 		f.reads++
 	} else {
 		if in.ReuseWorktreeFromRunID != f.latest {
@@ -339,18 +338,16 @@ func TestMaintenanceConcurrentTicksDoNotOrphanPending(t *testing.T) {
 	}
 }
 func TestMaintenanceRejectsForeignDecisionSource(t *testing.T) {
-	for _, change := range []string{"commit", "result-commit", "final", "material"} {
+	for _, change := range []string{"repository", "result-repository", "final", "material"} {
 		t.Run(change, func(t *testing.T) {
 			s, f, r := fixture(t)
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) > 0 && r.Operations[0].RunID != "" })
 			run := f.runs[r.Operations[0].RunID]
 			switch change {
-			case "commit":
-				run.RepositorySource.Commit = "foreign"
-			case "result-commit":
-				copy := *run.ContentResult.RepositorySource
-				copy.Commit = "foreign"
-				run.ContentResult.RepositorySource = &copy
+			case "repository":
+				run.RepositorySource = &rc.RepositorySource{Commit: "foreign"}
+			case "result-repository":
+				run.ContentResult.RepositorySource = &rc.RepositorySource{Commit: "foreign"}
 			case "final":
 				run.ContentResult.Source.TurnID = "foreign"
 			case "material":
@@ -374,7 +371,7 @@ func TestMaintenanceRejectsForeignDecisionSource(t *testing.T) {
 			return o.Purpose == "audit" && o.RunID != ""
 		})
 		o := r.Operations[len(r.Operations)-1]
-		f.runs[o.RunID].Execution.Workspace = filepath.Join(t.TempDir(), "foreign")
+		f.runs[o.RunID].Execution.Workspace = r.Workspace
 		if e := s.Tick(context.Background()); e == nil {
 			t.Fatal("foreign directory accepted")
 		}
@@ -460,7 +457,7 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if g.Generate.Instruction != string(golden) || g.Generate.Repository == nil || g.Generate.Repository.Commit != r.Frozen.Repository.BaseRevision || g.Generate.Directory != nil || len(g.Generate.Materials) != 2 || *g.Generate.Materials[0].Content != string(rules) {
+	if g.Generate.Instruction != string(golden) || g.Generate.Repository != nil || g.Generate.Directory == nil || g.Generate.Directory.Path != r.Frozen.Repository.LocalPath || g.Generate.Directory.Access != "read_only" || len(g.Generate.Materials) != 2 || *g.Generate.Materials[0].Content != string(rules) {
 		t.Fatal("actual read-only wire differs")
 	}
 	var initial struct {
@@ -474,7 +471,16 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 	before := "0.75"
 	head, clean := strings.Repeat("c", 40), false
 	git := &rc.WorkspaceGit{RunID: r.LatestOwner, Commit: &head, Clean: &clean, ObservedAt: time.Now(), Verified: true}
-	r.Operations = []m.Operation{{State: "complete", Cost: m.Cost{Amount: &before, Complete: true}, Run: &rc.Run{RunID: r.LatestOwner, Workflow: rc.Workflow{ID: "execute"}, Execution: rc.Execution{Branch: "codex/original"}}, WorkspaceGit: git}}
+	r.Operations = []m.Operation{{
+		State: "complete", Cost: m.Cost{Amount: &before, Complete: true},
+		Run: &rc.Run{
+			RunID: r.LatestOwner, Workflow: rc.Workflow{ID: "execute"},
+			Execution: rc.Execution{Branch: "codex/original", Workspace: r.Workspace},
+			Materials: []rc.Material{{SnapshotPath: filepath.Join(r.Workspace, "private.md")}},
+			Question:  &rc.Question{ID: "original-question", Text: "原执行的提问"},
+		},
+		WorkspaceGit: git, Result: &m.Result{Summary: "diff and test evidence"},
+	}}
 	r.Phase = "audit"
 	read, e = s.prepareOperation(r)
 	if e != nil {
@@ -482,11 +488,15 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 	}
 	g = rc.GenerateRunInput{}
 	_ = json.Unmarshal(read.Request.Input, &g)
-	if g.Generate.Directory == nil || g.Generate.Directory.Path != r.Workspace || g.Generate.Repository != nil {
-		t.Fatal("audit lost original dirty workspace")
+	if g.Generate.Directory == nil || g.Generate.Directory.Path != r.Frozen.Repository.LocalPath || g.Generate.Directory.Access != "read_only" || g.Generate.Repository != nil {
+		t.Fatal("audit did not use the original project directory read-only")
 	}
 	var current facts
-	if e = json.Unmarshal([]byte(*g.Generate.Materials[1].Content), &current); e != nil || current.Repository.LocalPath != "" || current.ManagedWorkspace != r.Workspace || current.WorkspaceGit == nil || !current.WorkspaceGit.Verified || current.WorkspaceGit.RunID != r.LatestOwner || current.WorkspaceGit.Commit == nil || *current.WorkspaceGit.Commit != head || current.WorkspaceGit.Clean == nil || *current.WorkspaceGit.Clean {
+	contextBody := *g.Generate.Materials[1].Content
+	if strings.Contains(contextBody, "original-worktree") || !strings.Contains(contextBody, "diff and test evidence") || !strings.Contains(contextBody, "原执行的提问") {
+		t.Fatal("audit context must expose Runner evidence without the worktree path")
+	}
+	if e = json.Unmarshal([]byte(contextBody), &current); e != nil || current.Repository.LocalPath != "" || current.WorkspaceGit == nil || !current.WorkspaceGit.Verified || current.WorkspaceGit.RunID != r.LatestOwner || current.WorkspaceGit.Commit == nil || *current.WorkspaceGit.Commit != head || current.WorkspaceGit.Clean == nil || *current.WorkspaceGit.Clean {
 		t.Fatal("audit did not receive the verified original workspace evidence", e, current)
 	}
 	frozenAt := time.Date(2026, 11, 11, 4, 0, 0, 0, time.UTC)

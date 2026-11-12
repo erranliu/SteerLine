@@ -271,7 +271,7 @@ func (s *Server) exchange(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "ticket_expired", "opening ticket expired or was already used; open Web from the CLI again")
 		return
 	}
-	s.sessions[token] = session{CSRF: csrf, Expires: time.Now().Add(12 * time.Hour)}
+	s.sessions[token] = session{CSRF: csrf, Expires: time.Now().Add(48 * time.Hour)}
 	s.mu.Unlock()
 	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 	writeJSON(w, 200, map[string]string{"csrf_token": csrf})

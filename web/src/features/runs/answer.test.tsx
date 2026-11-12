@@ -216,6 +216,10 @@ it("submits native multi-question JSON once without duplicating it as a note", a
         context: "color: 颜色\nred: 红色\ndetails: 说明",
         options: [],
         has_native_questions: true,
+        native_questions: [
+          { id: "color", options: [{ ID: "red", Label: "红色" }] },
+          { id: "details" },
+        ],
       },
     },
   } as unknown as Candidate;
@@ -228,12 +232,15 @@ it("submits native multi-question JSON once without duplicating it as a note", a
     expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
   );
   fireEvent.change(screen.getByRole("textbox", { name: "回答内容" }), {
-    target: { value: '{"color":["red"],"details":["保留原任务"]}' },
+    target: { value: '{ "color": ["red"], "details": ["保留原任务&"] }' },
   });
+  const delivered = '{"color":["红色"],"details":["保留原任务\\u0026"]}';
+  const bytes = new TextEncoder().encode(delivered).length;
+  expect(screen.getByText("UTF-8 " + bytes + " / 2000 字节")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "回复并继续" }));
   await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
   const payload = send.mock.calls[0][3];
-  expect(payload.answers).toEqual({ color: ["red"], details: ["保留原任务"] });
+  expect(payload.answers).toEqual({ color: ["red"], details: ["保留原任务&"] });
   expect(payload).not.toHaveProperty("note");
   expect(payload).not.toHaveProperty("option_id");
   expect(payload).toMatchObject({
@@ -298,6 +305,16 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
     expect(screen.getByRole("textbox", { name: "回答内容" })).toBeEnabled(),
   );
   const input = screen.getByRole("textbox", { name: "回答内容" });
+  const oversized = "界".repeat(666) + "😀";
+  fireEvent.change(input, { target: { value: oversized } });
+  expect(screen.getByText("UTF-8 2002 / 2000 字节")).toBeVisible();
+  expect(screen.getByRole("alert")).toHaveTextContent("回答超出 2 字节");
+  fireEvent.click(screen.getByRole("button", { name: "回复并继续" }));
+  expect(send).not.toHaveBeenCalled();
+  const atLimit = "界".repeat(666) + "ab";
+  fireEvent.change(input, { target: { value: atLimit } });
+  expect(screen.getByText("UTF-8 2000 / 2000 字节")).toBeVisible();
+  expect(screen.getByRole("button", { name: "回复并继续" })).toBeEnabled();
   fireEvent.change(input, { target: { value: "中文回答\n第二行" } });
   fireEvent.compositionStart(input);
   expect(screen.getByRole("button", { name: "回复并继续" })).toBeDisabled();
@@ -307,12 +324,13 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
   fireEvent.keyDown(input, { key: "Enter" });
   expect(send).not.toHaveBeenCalled();
   expect(document.querySelector("script")).toBeNull();
+  fireEvent.change(input, { target: { value: oversized } });
   await waitFor(async () =>
     expect(
       await readDraft(
         draftKey(api.identity.project_id, api.identity.instance_id, candidate),
       ),
-    ).toBe("中文回答\n第二行"),
+    ).toBe(oversized),
   );
   const other = {
     ...candidate,
@@ -330,9 +348,13 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
   );
   await waitFor(() =>
     expect(screen.getByRole("textbox", { name: "回答内容" })).toHaveValue(
-      "中文回答\n第二行",
+      oversized,
     ),
   );
+  expect(screen.getByRole("button", { name: "回复并继续" })).toBeDisabled();
+  fireEvent.change(screen.getByRole("textbox", { name: "回答内容" }), {
+    target: { value: "中文回答\n第二行" },
+  });
   fireEvent.click(screen.getByRole("button", { name: "回复并继续" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(

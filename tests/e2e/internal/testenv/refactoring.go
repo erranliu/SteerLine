@@ -12,6 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
@@ -189,6 +190,9 @@ func RefactoringMaintenance(s *Scenario) {
 			s.t.Fatal("missing Runner operation", o.RunID)
 		}
 		if run.Workflow.ID == "generate" {
+			if !runnerbinding.SamePath(run.Execution.Workspace, p.Repo) || run.RepositorySource != nil {
+				s.t.Fatalf("decision %s did not use the original project directory: %q", o.RunID, run.Execution.Workspace)
+			}
 			if len(run.Materials) != 2 || run.Materials[1].Path != "maintenance/context.json" {
 				s.t.Fatal("missing decision context", run.Materials)
 			}

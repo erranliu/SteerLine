@@ -20,7 +20,7 @@ func (c *Catalog) ValidateMaintenance(write, read runnercontract.ExecutionInput)
 	if err := c.ValidateEnvironmentExecution(write); err != nil {
 		return err
 	}
-	if err := c.FileMaterialGenerationUnavailable(); err != "" {
+	if err := c.fileMaterialGenerationUnavailable(); err != "" {
 		return errors.New(err)
 	}
 	return c.ValidateConfiguration(read, runnercontract.Workflow{ID: "generate", Version: 1})
