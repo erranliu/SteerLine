@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Layers } from "lucide-react";
 import { useWorkspace } from "../../app/context";
+import type { CandidateStart } from "../../app/use-candidate-starts";
 import type {
   Candidate,
   Envelope,
@@ -26,6 +27,7 @@ import {
   candidateFilters,
   matchesCandidate,
   optionalAnswer,
+  startingExecution,
   type CandidateFilter,
 } from "./state";
 import { LastMessage } from "./last-message";
@@ -42,7 +44,7 @@ import {
 import { PlanTests } from "./plan-tests";
 import { CandidateDocuments } from "./candidate-documents";
 import { nativeSessionReason } from "./native-session";
-import { RunTask, taskDependencyReason } from "./run-task";
+import { RunTask } from "./run-task";
 import { CopyExecutionInfo } from "./copy-execution-info";
 import { CopyExecutionInfo as CopyInfo } from "../activities/execution-info";
 import { StopCandidate } from "./stop-candidate";
@@ -53,8 +55,15 @@ import { ContinuationSuggestion } from "./continuation-suggestion";
 
 function candidateExecutionState(state: string) {
   if (state === "running") return state;
-  if (["pending", "accepted", "queued", "preparing"].includes(state))
-    return "task_starting";
+  if (startingExecution(state)) return "task_starting";
+}
+
+function matchesStart(start: CandidateStart, filter: CandidateFilter) {
+  return (
+    filter === "running" &&
+    start.participating &&
+    candidateStartStatus(start) === "task_starting"
+  );
 }
 
 function CandidateStatuses({
@@ -263,7 +272,6 @@ export function Runs() {
   const selectionEpoch = useRef(0);
   const [params, setParams] = useSearchParams();
   const taskID = params.get("task") ?? "";
-  const runID = params.get("run") ?? "";
   const [filter, setFilter] = useState<CandidateFilter>("all");
   const [showStopped, setShowStopped] = useState(false);
   const page = snapshot?.connection.snapshot.page;
@@ -291,12 +299,24 @@ export function Runs() {
     enabled: online,
     refetchInterval: 2500,
   });
+  const blockedTasks = new Set(
+    tasks.data?.tasks
+      .filter((task) => task.status === "open" && !task.dependency_ready)
+      .map((task) => task.task_id),
+  );
+  const selectableTasks = (tasks.data?.tasks ?? []).filter(
+    (task) => !blockedTasks.has(task.task_id),
+  );
+  const firstRun = runs.find(
+    (run) => !blockedTasks.has(run.domain_task_id || run.task_id),
+  );
   const selectedTask =
-    taskID ||
-    runs[0]?.domain_task_id ||
-    runs[0]?.task_id ||
-    tasks.data?.tasks[0]?.task_id ||
+    (blockedTasks.has(taskID) ? "" : taskID) ||
+    firstRun?.domain_task_id ||
+    firstRun?.task_id ||
+    selectableTasks[0]?.task_id ||
     "";
+  const runID = blockedTasks.has(taskID) ? "" : params.get("run") ?? "";
   const taskCandidates = runs.filter(
     (r) => (r.domain_task_id || r.task_id) === selectedTask,
   );
@@ -310,7 +330,6 @@ export function Runs() {
   const selectedTaskRecord = tasks.data?.tasks.find(
     (task) => task.task_id === selectedTask,
   );
-  const selectedDependencyReason = taskDependencyReason(selectedTaskRecord);
   const requested = runID
     ? taskCandidates.find((r) => r.run_id === runID)
     : taskCandidates[0];
@@ -322,19 +341,24 @@ export function Runs() {
     !showStopped && requested?.participation === "abandoned" && !awaitingStop
       ? candidates[0]
       : requested;
-  const groups = (tasks.data?.tasks ?? []).map((task) => {
+  const groups = selectableTasks.map((task) => {
     const candidates = visibleRuns.filter(
       (run) => (run.domain_task_id || run.task_id) === task.task_id,
     );
     const pending = starts.filter((entry) => entry.taskID === task.task_id);
-    const matching = (value: CandidateFilter) =>
-      candidates
+    const matching = (value: CandidateFilter) => [
+      ...candidates
         .filter((run) => matchesCandidate(run, value, task))
         .sort(
           (a, b) =>
             a.candidate_number - b.candidate_number ||
             a.run_id.localeCompare(b.run_id),
-        );
+        )
+        .map((run) => run.run_id),
+      ...pending
+        .filter((entry) => matchesStart(entry, value))
+        .map((entry) => entry.id),
+    ];
     const counts = new Map<string, number>();
     for (const run of candidates) {
       const facets = candidateFacets(run, task);
@@ -344,8 +368,12 @@ export function Runs() {
       for (const state of states)
         counts.set(state, (counts.get(state) ?? 0) + 1);
     }
-    for (const entry of pending)
-      counts.set(entry.status, (counts.get(entry.status) ?? 0) + 1);
+    for (const entry of pending) {
+      const state = matchesStart(entry, "running")
+        ? label("running")
+        : entry.status;
+      counts.set(state, (counts.get(state) ?? 0) + 1);
+    }
     return {
       task,
       matching,
@@ -375,8 +403,12 @@ export function Runs() {
     const next = groups
       .find((group) => group.task.task_id === id)
       ?.matching(value)[0];
-    setParams(next ? { task: id, run: next.run_id } : { task: id });
+    setParams(next ? { task: id, run: next } : { task: id });
   };
+  const selectedMatches = (value: CandidateFilter) =>
+    selectedStart
+      ? matchesStart(selectedStart, value)
+      : !!selected && matchesCandidate(selected, value, selectedTaskRecord);
   const applyFilter = (value: CandidateFilter) => {
     setFilter(value);
     if (value === "all") return;
@@ -386,9 +418,7 @@ export function Runs() {
       matching[0];
     if (
       next &&
-      (!selected ||
-        !matchesCandidate(selected, value, next.task) ||
-        next.task.task_id !== selectedTask)
+      (next.task.task_id !== selectedTask || !selectedMatches(value))
     ) {
       chooseTask(next.task.task_id, value);
     }
@@ -467,7 +497,7 @@ export function Runs() {
     <>
       <div className="page-heading">
         <div>
-          <h1>执行与待处理</h1>
+          <h1>任务执行</h1>
         </div>
         <Layers className="heading-icon" size={30} />
       </div>
@@ -550,8 +580,7 @@ export function Runs() {
         <section className="execution-panel">
           {filter !== "all" &&
             (selected || selectedStart) &&
-            (!selected ||
-              !matchesCandidate(selected, filter, selectedTaskRecord)) && (
+            !selectedMatches(filter) && (
               <p className="notice amber" role="status">
                 当前候选已不符合筛选，保留当前查看内容。
               </p>
@@ -587,25 +616,31 @@ export function Runs() {
                 </button>
               );
             })}
-            {pendingCandidates.map((entry) => (
-              <button
-                key={entry.id}
-                onClick={() => chooseRun(entry.id)}
-                className={
-                  "candidate-card " + (runID === entry.id ? "active" : "")
-                }
-                aria-pressed={runID === entry.id}
-                data-execution-state={candidateStartStatus(entry)}
-              >
-                <span>新候选</span>
-                <strong>{entry.profile}</strong>
-                <TaskStatus status={candidateStartStatus(entry)} />
-                <span className="muted candidate-start-detail">
-                  {entry.status}
-                  {entry.rejected ? "（历史）" : ""}
-                </span>
-              </button>
-            ))}
+            {pendingCandidates.map((entry) => {
+              const matches = filter !== "all" && matchesStart(entry, filter);
+              return (
+                <button
+                  key={entry.id}
+                  onClick={() => chooseRun(entry.id)}
+                  className={
+                    "candidate-card " +
+                    (runID === entry.id ? "active " : "") +
+                    (matches ? "filter-match" : "")
+                  }
+                  aria-pressed={runID === entry.id}
+                  data-execution-state={candidateStartStatus(entry)}
+                >
+                  <span>新候选</span>
+                  <strong>{entry.profile}</strong>
+                  <TaskStatus status={candidateStartStatus(entry)} />
+                  {matches && <span className="candidate-match">符合筛选</span>}
+                  <span className="muted candidate-start-detail">
+                    {entry.status}
+                    {entry.rejected ? "（历史）" : ""}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           {selectedStart ? (
             <div
@@ -689,9 +724,9 @@ export function Runs() {
               taskCandidates.length > 0 &&
               candidates.length === 0
                 ? "此任务的候选均已停止参与，勾选“显示已停止参与候选”可查看历史。"
-                : selectedDependencyReason
-                  ? `${selectedDependencyReason}，解除依赖阻塞后可启动。`
-                  : "此任务尚无执行候选，请从任务详情手动启动。"}
+                : selectedTask
+                  ? "此任务尚无执行候选，请从任务详情手动启动。"
+                  : "暂无可显示的任务。"}
             </div>
           )}
         </section>

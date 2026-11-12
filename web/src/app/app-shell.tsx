@@ -42,7 +42,7 @@ export function AppShell({
         roadmaps: "Roadmap 草稿",
         "roadmap-planning": "Roadmap 规划",
         dag: "任务 DAG",
-        runs: "执行与待处理",
+        runs: "任务执行",
         tests: "测试管理",
         settings: "配置",
         environment: "项目运行环境",
@@ -84,11 +84,11 @@ export function AppShell({
                 <span>任务 DAG</span>
               </NavLink>
               <NavLink
-                aria-label="执行与待处理"
+                aria-label="任务执行"
                 to={`/projects/${projectId}/runs`}
               >
                 <Layers size={17} />
-                <span>执行与待处理</span>
+                <span>任务执行</span>
                 {questions > 0 && (
                   <span className="nav-count">{questions}</span>
                 )}

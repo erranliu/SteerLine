@@ -84,7 +84,7 @@ test("native session: original candidate viewer and replay through product HTTP"
     })
     .toBe(true);
   const before = (await snapshot()).runs[0];
-  await page.getByRole("link", { name: /执行与待处理/ }).click();
+  await page.getByRole("link", { name: "任务执行", exact: true }).click();
   const button = page.getByRole("button", { name: /在 Codex 中查看/ });
   await expect(button).toBeEnabled();
   const requestPromise = page.waitForRequest(

@@ -23,6 +23,7 @@ import { saveRequest, listRequests } from "../shared/api/journal";
 import type { Receipt } from "../shared/api/types";
 import { projectQueries } from "../shared/api/queries";
 import {
+  graph,
   identity as fixtureIdentity,
   snapshot as makeSnapshot,
   tasks,
@@ -56,6 +57,7 @@ function workspaceRead(api: Api, path: string): unknown {
       tasks: [],
     };
   if (path.startsWith("/tasks?")) return tasks;
+  if (path.startsWith("/graph?")) return graph;
   throw new Error("Unexpected Workspace read: " + path);
 }
 
@@ -332,6 +334,39 @@ it("runs only one reconciliation round while journal observations refresh and ab
   client.clear();
 });
 
+it("shows task dispatch settings only on the task DAG and task execution routes", async () => {
+  await Promise.all([
+    import("../features/tasks/dag"),
+    import("../features/runs/runs"),
+  ]);
+  const client = testClient();
+  const api = new Api(
+    { ...fixtureIdentity, project_id: "task-dispatch-routes" },
+    "csrf",
+    "task-dispatch-routes-home",
+  );
+  vi.spyOn(Api.prototype, "get").mockImplementation(
+    async (path) => workspaceRead(api, path) as never,
+  );
+  mountWorkspace(api, client);
+  await screen.findByText("服务在线", { exact: true });
+  const dispatchTitle = "任务派发设定";
+  expect(screen.queryByText(dispatchTitle)).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("link", { name: "任务执行" }));
+  expect(await screen.findByRole("heading", { name: "任务执行" })).toBeVisible();
+  expect(screen.getByText(dispatchTitle)).toBeVisible();
+
+  fireEvent.click(screen.getByRole("link", { name: "任务 DAG" }));
+  expect(await screen.findByRole("heading", { name: "任务 DAG" })).toBeVisible();
+  expect(screen.getByText(dispatchTitle)).toBeVisible();
+
+  fireEvent.click(screen.getByRole("link", { name: "配置" }));
+  expect(await screen.findByRole("heading", { name: "配置" })).toBeVisible();
+  expect(screen.queryByText(dispatchTitle)).not.toBeInTheDocument();
+  client.clear();
+});
+
 it("disables commands when offline even while paused queries retain a successful snapshot", async () => {
   const identity = {
     project_id: "offline-project",
@@ -358,7 +393,7 @@ it("disables commands when offline even while paused queries retain a successful
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  mountWorkspace(api, client);
+  mountWorkspace(api, client, {}, "runs");
   await waitFor(() =>
     expect(screen.getByText("服务在线", { exact: true })).toBeVisible(),
   );

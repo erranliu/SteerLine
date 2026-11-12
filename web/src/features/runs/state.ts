@@ -9,6 +9,10 @@ export const candidateFilters = [
 ] as const;
 export type CandidateFilter = (typeof candidateFilters)[number][0];
 
+export function startingExecution(status: string) {
+  return ["pending", "accepted", "queued", "preparing"].includes(status);
+}
+
 // Execution, questions and recovery are independent facts. A running candidate
 // can still have an unanswered asynchronous question.
 function currentCandidate(run: Candidate, task?: Task) {
@@ -29,7 +33,11 @@ export function candidateFacets(
 ): CandidateFilter[] {
   if (!currentCandidate(run, task)) return [];
   const facets: CandidateFilter[] = [];
-  if (run.execution_status === "running") facets.push("running");
+  if (
+    run.execution_status === "running" ||
+    startingExecution(run.execution_status)
+  )
+    facets.push("running");
   if (
     requiresAnswer(run) ||
     (businessOpen(run) &&
@@ -136,7 +144,7 @@ export function candidateStatuses(run: Candidate, task?: Task) {
     return [run.stop_requested ? "stop_pending" : "historical"];
   }
   const facets = candidateFacets(run, task);
-  if (primary === "observation_reconnecting")
+  if (primary === "observation_reconnecting" || startingExecution(primary))
     return [primary, ...facets.filter((facet) => facet !== "running")];
   return [...new Set([primary, ...facets])];
 }

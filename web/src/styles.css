@@ -681,22 +681,6 @@ textarea {
   background: #223d2c;
   border-color: #41644b;
 }
-.run-task.dependency-blocked {
-  box-shadow: inset 3px 0 #bda36b;
-}
-.run-task-blocker {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  margin-top: 9px;
-  color: #e6ce91;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-.run-task-blocker svg {
-  flex-shrink: 0;
-  align-self: center;
-}
 .run-task strong {
   display: block;
   font-size: 12px;

@@ -396,8 +396,12 @@ function stopWorkspace(
   const client = testClient();
   const options = projectQueries(api);
   client.setQueryData(options.tasks().queryKey, taskPage);
-  for (const task of taskPage.tasks)
-    client.setQueryData(options.task(task.task_id).queryKey, taskPage);
+  const taskDetails = new Map<string, TaskPage>();
+  for (const task of taskPage.tasks) {
+    const detail = { ...taskPage, tasks: [task] };
+    taskDetails.set(`/tasks/${encodeURIComponent(task.task_id)}`, detail);
+    client.setQueryData(options.task(task.task_id).queryKey, detail);
+  }
   client.setQueryData(options.presentation().queryKey, {
     presentation: { profiles: [], default_profile_id: "" },
   });
@@ -411,7 +415,7 @@ function stopWorkspace(
           ? { page: { activity: [], diagnostics: [] } }
           : path.includes("/last-message?")
             ? { run_id: "execution", attempt_id: "attempt", message: null }
-            : taskPage) as never;
+            : taskDetails.get(path) ?? taskPage) as never;
     },
   );
   const runs = [1, 2, 3].map((number) => ({
@@ -930,7 +934,7 @@ it("excludes ended task and abandoned candidate history from current filters eve
   w.client.clear();
 });
 
-it("keeps unconfirmed starts visible in all candidates without counting them as running", () => {
+it("includes starting candidates in the running filter without counting unknown submissions as running", () => {
   const w = stopWorkspace([]);
   w.update({
     candidateStarts: {
@@ -950,7 +954,48 @@ it("keeps unconfirmed starts visible in all candidates without counting them as 
   expect(screen.getByText("等待执行信息")).toBeVisible();
   expect(screen.getByText("提交结果待核实")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "运行中" }));
-  expect(screen.getByText("运行中：0 个任务 / 0 个候选")).toBeVisible();
-  expect(screen.getByText("没有符合筛选条件的任务")).toBeVisible();
+  expect(screen.getByText("运行中：1 个任务 / 1 个候选")).toBeVisible();
+  const selectedMatch = () =>
+    document.querySelector(".candidate-card.active.filter-match");
+  expect(selectedMatch()).toHaveTextContent("方案0");
+  expect(document.querySelectorAll(".candidate-card.filter-match")).toHaveLength(
+    1,
+  );
+  expect(screen.queryByText(/当前候选已不符合筛选/)).not.toBeInTheDocument();
+  w.update({
+    snapshot: w.state([{ ...run, run_id: "start0", execution_status: "queued" }]),
+  });
+  expect(screen.getByText("运行中：1 个任务 / 1 个候选")).toBeVisible();
+  expect(selectedMatch()).toHaveTextContent("排队中");
+  w.client.clear();
+});
+
+it("omits dependency-blocked tasks from counts and selection until their dependencies clear", async () => {
+  const ready = tasks.tasks[0];
+  const blocked = {
+    ...ready,
+    task_id: "2",
+    title: "等待前置任务的后继",
+    dependency_ready: false,
+  };
+  const taskPage = { ...tasks, tasks: [blocked, ready] };
+  const w = stopWorkspace([], taskPage, "/?task=2");
+  expect(screen.getByText("全部：1 个任务 / 0 个候选")).toBeVisible();
+  expect(screen.queryByText(blocked.title)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /缓存任务/ })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+
+  act(() => {
+    w.client.setQueryData(projectQueries(w.api).tasks().queryKey, {
+      ...taskPage,
+      tasks: [{ ...blocked, dependency_ready: true }, ready],
+    });
+  });
+  expect(
+    await screen.findByRole("button", { name: /等待前置任务的后继/ }),
+  ).toBeVisible();
+  expect(screen.getByText("全部：2 个任务 / 0 个候选")).toBeVisible();
   w.client.clear();
 });
