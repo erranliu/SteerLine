@@ -17,6 +17,7 @@ import (
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type apiReader struct {
@@ -27,6 +28,7 @@ type apiReader struct {
 	recoveryReads       int
 	onResolveStart      func(string, string)
 	onNormalizeDecision func(api.DecisionInput) (api.DecisionInput, error)
+	decisionSubmitErr   error
 	snapshot            api.ProjectSnapshot
 	page                api.TaskPage
 	graph               api.GraphPage
@@ -196,6 +198,9 @@ func (apiDecision) Eligibility(context.Context, *api.CandidateSummary) error { r
 func (d *apiDecision) Submit(_ context.Context, input api.DecisionInput) (api.CommandReceipt, bool, error) {
 	d.submits++
 	d.reader.decisionSubmits++
+	if err := d.reader.decisionSubmitErr; err != nil {
+		return api.CommandReceipt{}, false, err
+	}
 	now := time.Now().UTC()
 	receipt := api.CommandReceipt{ProjectIdentity: "C:/repo", CommandID: input.CommandID, Kind: "answer_decision",
 		TargetID: input.Answer.DecisionID, ExpectedVersion: input.Answer.ExpectedDecisionVersion, RequestedBy: input.RequestedBy,
@@ -560,6 +565,44 @@ func TestAPIAnswerDecisionReceiptAndUniqueRequest(t *testing.T) {
 	if err != nil || queried.Status != "rejected" || queried.Code != failed.ResultCode ||
 		queried.Diagnostic != failed.ResultError || reader.decisionSubmits != 1 {
 		t.Fatalf("original request did not report its final Runner failure: %+v %v", queried, err)
+	}
+}
+
+func TestAPIAnswerTooLargePersistsRejection(t *testing.T) {
+	server, _, reader, _ := newAPIFixture(t)
+	ctx := context.Background()
+	client, err := Open(ctx, server.options.RunDir, server.options.ProjectIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID, attemptID, decisionID := strings.Repeat("a", 32), strings.Repeat("b", 32), strings.Repeat("c", 32)
+	reader.snapshot.Connection.Snapshot.Page.Runs = []*api.CandidateSummary{{
+		RunID: runID, AttemptID: attemptID, ControlRevision: 7, RecoveryVersion: 3,
+		Decision: &api.DecisionSummary{ID: decisionID, Status: "pending", Version: 3},
+	}}
+	reader.snapshot.Observation.Page = reader.snapshot.Connection.Snapshot.Page
+	note := strings.Repeat("界", 667)
+	payload, err := json.Marshal(answerPayload{RunID: runID, DecisionID: decisionID, Note: note,
+		ExpectedRunRevision: 7, SourceAttemptID: attemptID, ExpectedRecoveryVersion: new(uint64(3))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := CommandEnvelope{RequestID: strings.Repeat("d", 32), ProjectID: ProjectID("C:/repo"),
+		InstanceID: "instance-a", Action: "answer_decision", TargetID: decisionID, ExpectedVersion: 3, Payload: payload}
+	rejection := &taskmodel.Error{Code: "answer_too_large", Message: "回答为 2001 个 UTF-8 字节，上限 2000"}
+	reader.decisionSubmitErr = rejection
+	check := func(result CommandResponse, err error) {
+		t.Helper()
+		if err != nil || result.Status != "rejected" || result.Code != rejection.Code || result.Diagnostic != rejection.Message ||
+			result.Original == nil || !sameEnvelope(*result.Original, envelope) || result.Command != nil {
+			t.Fatalf("missing original rejection receipt: %+v, %v", result, err)
+		}
+	}
+	check(client.SubmitCommand(ctx, envelope))
+	check(client.Command(ctx, envelope.RequestID))
+	check(client.SubmitCommand(ctx, envelope))
+	if reader.decisionSubmits != 1 {
+		t.Fatalf("rejected answer was submitted %d times", reader.decisionSubmits)
 	}
 }
 

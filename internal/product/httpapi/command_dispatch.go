@@ -2,10 +2,12 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func (s *commandRegistry) dispatch(ctx context.Context, envelope CommandEnvelope, parsed actionPayload, record *requestRecord, requestedBy string) (CommandResponse, error) {
@@ -29,6 +31,11 @@ func (s *commandRegistry) dispatch(ctx context.Context, envelope CommandEnvelope
 		}
 		receipt, _, err := s.commands.SubmitDecision(ctx, *record.Decision)
 		if err != nil {
+			var answerErr *taskmodel.Error
+			if errors.As(err, &answerErr) && answerErr.Code == "answer_too_large" {
+				response.Status, response.Code, response.Diagnostic = "rejected", answerErr.Code, answerErr.Message
+				return response, nil
+			}
 			return response, err
 		}
 		if !matchesCommand(envelope, record, receipt) {

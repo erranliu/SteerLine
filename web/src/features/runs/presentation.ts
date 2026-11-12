@@ -60,11 +60,12 @@ export function stageLabel(stage?: string) {
   return stages[stage?.split(".")[0] ?? ""] ?? "阶段待核实";
 }
 export function currentStage(run: Candidate) {
-  return stageLabel(
-    run.runner_delivery?.available && run.runner_delivery.step
-      ? run.runner_delivery.step
-      : run.workflow_stage,
-  );
+  const delivery = run.runner_delivery?.available
+    ? run.runner_delivery
+    : undefined;
+  if ((delivery?.status ?? run.workflow_status) === "waiting_input")
+    return "等待输入";
+  return stageLabel(delivery?.step || run.workflow_stage);
 }
 export function executionEnded(run: Candidate) {
   const terminal = [

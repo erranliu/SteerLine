@@ -266,15 +266,20 @@ type PRSummary struct {
 }
 
 type DecisionOption struct{ ID, Label, Detail string }
+type DecisionQuestion struct {
+	ID      string           `json:"id"`
+	Options []DecisionOption `json:"options,omitempty"`
+}
 type DecisionRequest struct {
-	InteractionKind    string           `json:"interaction_kind"`
-	BlocksProgress     bool             `json:"blocks_progress"`
-	Question           string           `json:"question"`
-	Context            string           `json:"context"`
-	Recommended        string           `json:"recommended"`
-	Options            []DecisionOption `json:"options"`
-	AllowFreeText      bool             `json:"allow_free_text"`
-	HasNativeQuestions bool             `json:"has_native_questions"`
+	InteractionKind    string             `json:"interaction_kind"`
+	BlocksProgress     bool               `json:"blocks_progress"`
+	Question           string             `json:"question"`
+	Context            string             `json:"context"`
+	Recommended        string             `json:"recommended"`
+	Options            []DecisionOption   `json:"options"`
+	AllowFreeText      bool               `json:"allow_free_text"`
+	HasNativeQuestions bool               `json:"has_native_questions"`
+	NativeQuestions    []DecisionQuestion `json:"native_questions,omitempty"`
 }
 type DecisionSummary struct {
 	ID         string          `json:"id"`
