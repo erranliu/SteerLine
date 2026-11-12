@@ -35,8 +35,9 @@ func preparePlanningStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 		view, cold, err := inspectOriginalBeforeStart(ctx, *cli, task.Build.StateDir, runID, digest, task.Submission)
 		if err != nil {
 			var failure *runnerclient.Failure
-			if runID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
-				if cold {
+			unaccepted := submitNotAccepted(view, cold, task.Submission.RequestID, err)
+			if runID == "" && (unaccepted || errors.As(err, &failure) && failure.Code == "request_not_found") {
+				if unaccepted {
 					task.Operation, task.Status = nil, "closed"
 					task.ModelSlot = false
 					if err := p.save(ctx, &task); err != nil {
@@ -146,8 +147,7 @@ func verifyPlanningRestart(ctx context.Context, task *roadmap.PlanningTask, pin 
 	}
 	view, cold, err := inspectOriginalBeforeStart(ctx, cli, task.Build.StateDir, runID, digest, task.Submission)
 	if err != nil {
-		var failure *runnerclient.Failure
-		if cold && runID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
+		if runID == "" && submitNotAccepted(view, cold, task.Submission.RequestID, err) {
 			return nil
 		}
 		return err
@@ -180,8 +180,7 @@ func prepareRoadmapStops(ctx context.Context, c *Config, store *sqlite.SQLiteSto
 			}
 			view, cold, err := inspectOriginalBeforeStart(ctx, *cli, r.Runner.StateDir, r.RunID, r.InputDigest, r.Request)
 			if err != nil {
-				var failure *runnerclient.Failure
-				if cold && r.RunID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
+				if r.RunID == "" && submitNotAccepted(view, cold, r.Request.RequestID, err) {
 					r.State = "rejected"
 					if _, err := reconcile.SaveExecution(ctx, r); err != nil {
 						return nil, err

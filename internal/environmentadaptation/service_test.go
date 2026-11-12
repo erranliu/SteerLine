@@ -37,6 +37,7 @@ type runner struct {
 	inspectErr       bool
 	submitFailure    error
 	inspectFailure   error
+	inspectCommand   *runnercontract.Command
 }
 
 func (r *runner) Call(_ context.Context, command string, _ []string, q *runnerclient.Request) (runnerclient.Response, error) {
@@ -82,8 +83,8 @@ func (r *runner) Inspect(context.Context, string, string) (runnerclient.Inspecti
 	if r.unknown || r.inspectErr {
 		return runnerclient.Inspection{}, errors.New("original request unknown")
 	}
-	if r.run == nil {
-		return runnerclient.Inspection{}, nil
+	if r.inspectCommand != nil || r.run == nil {
+		return runnerclient.Inspection{Command: r.inspectCommand}, nil
 	}
 	copy := *r.run
 	if r.inspectRevision > 0 {

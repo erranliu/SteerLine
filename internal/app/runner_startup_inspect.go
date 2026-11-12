@@ -9,8 +9,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
-// Original requests are inspected before workers start. Only a cold, leased
-// request_not_found can prove absence; an online missing reply remains unknown.
+// Original requests are inspected before workers start. An online missing
+// reply is inconclusive. A durable rejection proves that no Run was created.
 func inspectOriginalBeforeStart(ctx context.Context, cli runnerclient.Client, stateDir, runID, digest string, request runnercontract.Request) (runnerclient.Inspection, bool, error) {
 	if !runnerbinding.SamePath(stateDir, cli.StateDir) {
 		return runnerclient.Inspection{}, false, errors.New("original Runner namespace differs; use the original installation to reconcile its resources")
@@ -34,4 +34,17 @@ func inspectOriginalBeforeStart(ctx context.Context, cli runnerclient.Client, st
 		return view, cold, errors.New("original Runner submit binding differs")
 	}
 	return view, cold, nil
+}
+
+func submitNotAccepted(view runnerclient.Inspection, cold bool, id string, err error) bool {
+	if view.Run != nil {
+		return false
+	}
+	var failure *runnerclient.Failure
+	if cold && errors.As(err, &failure) && failure.Code == "request_not_found" {
+		return true
+	}
+	command := view.Command
+	return command != nil && command.IsSubmitAdmission(id) &&
+		(command.SubmitRejected() || cold && command.SubmitPreparing())
 }

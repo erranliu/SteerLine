@@ -182,8 +182,7 @@ func prepareCandidateStops(ctx context.Context, candidates []runnerstate.Candida
 		}
 		view, cold, err := inspectOriginalBeforeStart(ctx, cli, candidate.StateDir, candidate.RunID, candidate.InputDigest, candidate.Submit)
 		if err != nil {
-			var failure *runnerclient.Failure
-			if cold && candidate.RunID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
+			if candidate.RunID == "" && submitNotAccepted(view, cold, candidate.Submit.RequestID, err) {
 				if err := bridge.RecoverInputs(ctx, candidate.Project, candidate.ID); err != nil {
 					return nil, err
 				}

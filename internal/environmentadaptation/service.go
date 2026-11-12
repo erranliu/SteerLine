@@ -298,10 +298,22 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 		a.Diagnostic = "original Run read unavailable; preserving its stop obligation: " + e.Error()
 	}
 	if v.Run == nil {
-		if v.Command != nil && (v.Command.ReceiptStatus == "rejected" || v.Command.ActionStatus == "rejected") {
-			a.Submission = "rejected"
-			a.Settled = true
-			return s.next(ctx, r)
+		if selector == "request-id" && v.Command != nil && v.Command.IsSubmitAdmission(id) {
+			switch {
+			case v.Command.SubmitPreparing():
+				const preparing = "Runner 正在核验原提交"
+				if r.Diagnostic != preparing || r.ObservationDiagnostic != "" {
+					r.Diagnostic, r.ObservationDiagnostic = preparing, ""
+					return s.save(ctx, r)
+				}
+				return nil
+			case v.Command.SubmitRejected():
+				a.Submission = "rejected"
+				a.Settled = true
+				a.Diagnostic = v.Command.Error.Error()
+				r.ObservationDiagnostic = ""
+				return s.next(ctx, r)
+			}
 		}
 		return errors.New("original environment submission remains unverified")
 	}

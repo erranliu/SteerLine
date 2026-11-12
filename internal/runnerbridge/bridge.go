@@ -207,6 +207,16 @@ func (b *Bridge) Step(ctx context.Context, project, id string) (resultErr error)
 		}
 		original, lookup := cli.Inspect(ctx, "request-id", c.Submit.RequestID)
 		if lookup == nil {
+			if original.Run == nil && original.Command != nil && original.Command.IsSubmitAdmission(c.Submit.RequestID) {
+				if original.Command.SubmitPreparing() {
+					return nil
+				}
+				if original.Command.SubmitRejected() {
+					c.SubmitState = "rejected"
+					c.Diagnostic = original.Command.Error.Error()
+					return b.save(ctx, &c)
+				}
+			}
 			if original.Command == nil || original.Command.Command != "submit" || original.Run == nil {
 				return errors.New("original submission identity is incomplete")
 			}
@@ -384,6 +394,10 @@ func (b *Bridge) VerifyBinding(ctx context.Context, project, id string) error {
 		return err
 	}
 	command := observed.Command
+	if observed.Run == nil && command != nil && command.IsSubmitAdmission(c.Submit.RequestID) &&
+		(command.SubmitPreparing() || command.SubmitRejected()) {
+		return nil
+	}
 	if command == nil || command.RequestID != c.Submit.RequestID || command.Command != "submit" || command.CommandID == "" || command.RunID == nil || observed.Run == nil || *command.RunID != observed.Run.RunID || observed.Run.InputDigest == "" {
 		return errors.New("original submit identity is incomplete during startup")
 	}
