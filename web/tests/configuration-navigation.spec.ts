@@ -10,7 +10,13 @@ const projectReadiness: ProjectReadiness = {
   commit: "",
   total: 0,
   ready: 0,
-  blockers: [{ category: "task_material", code: "task_material_unprepared", diagnostic: "fixture project not prepared" }],
+  blockers: [
+    {
+      category: "task_material",
+      code: "task_material_unprepared",
+      diagnostic: "fixture project not prepared",
+    },
+  ],
 };
 
 test.setTimeout(120000);
@@ -142,7 +148,7 @@ test("SteerAgent settings preserve drafts and unrelated configuration", async ({
   await page.getByLabel("SteerAgent 模型").selectOption("browser-chosen");
   await page.getByLabel("SteerAgent 思考强度").selectOption("medium");
   page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await page.getByRole("link", { name: "执行方案管理", exact: true }).click();
   await expect(page.getByLabel("SteerAgent 模型")).toHaveValue(
     "browser-chosen",
   );
@@ -254,7 +260,7 @@ test("global developer switches preserve drafts, require restart and disappear i
     page.getByText("当前生效状态：环境就绪阻塞已开启"),
   ).toBeVisible();
   page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await page.getByRole("link", { name: "执行方案管理", exact: true }).click();
   await expect(toggle).not.toBeChecked();
   await page.getByRole("button", { name: "保存开发者配置" }).click();
   await expect(
@@ -286,7 +292,7 @@ test("global developer switches preserve drafts, require restart and disappear i
   // The other editor must retain its unsaved protection with both panels mounted.
   await page.getByLabel("生成最大并发数").fill("7");
   page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await page.getByRole("link", { name: "执行方案管理", exact: true }).click();
   await expect(page.getByLabel("生成最大并发数")).toHaveValue("7");
   await page.getByRole("button", { name: "取消修改", exact: true }).click();
   available = false;
@@ -376,6 +382,18 @@ test("runtime environments keep row actions, failed observations and task return
       status: "open",
       dependency_ready: true,
       startup_blockers: [],
+      start_eligibility: {
+        action: "start_task",
+        blockers: [],
+        environment_readiness_required: true,
+        profile_blockers: {
+          default: null,
+          alternate: {
+            code: "environment_not_ready",
+            diagnostic: "环境需要重新检测",
+          },
+        },
+      },
       predecessors: [],
       successors: [],
       workflow_runs: [],
@@ -516,7 +534,12 @@ test("runtime environments keep row actions, failed observations and task return
     else if (path.endsWith("/presentation"))
       data = { presentation: { profiles, default_profile_id: "default" } };
     else if (/\/tasks(?:\/38)?$/.test(path))
-      data = { tasks: [task], graph_revision: 1, has_more: false };
+      data = {
+        tasks: [task],
+        authority_version: 1,
+        graph_revision: 1,
+        has_more: false,
+      };
     else if (path.endsWith("/roadmaps")) data = { records: [] };
     await route.fulfill({ json: data });
   });
@@ -736,6 +759,36 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
         };
       }
       data = snapshot;
+    } else if (path === "/api/web/billing-config") {
+      data = {
+        schema: "steerline-billing/v1",
+        configured: true,
+        saved_digest: "billing-v1",
+        active_policy_version: "v1",
+        policies: [
+          {
+            version: "v1",
+            currency: "USD",
+            source: "synthetic fixture",
+            rules: [
+              {
+                id: "fixture",
+                model: "fixture-model",
+                provider: "fixture-provider",
+                effective_from: "2026-11-01T00:00:00Z",
+                rates: {
+                  input_uncached_per_million: "1",
+                  cache_read_per_million: "0.1",
+                  cache_write_per_million: "0",
+                  output_per_million: "2",
+                },
+              },
+            ],
+          },
+        ],
+      };
+    } else if (path === "/api/web/usage-collection") {
+      data = { status: "ready", usage_policy: { enabled: true } };
     } else if (path.endsWith("/discover"))
       data = {
         state: "ready",
@@ -797,19 +850,37 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
     else data = { tasks: [], runs: [] };
     await route.fulfill({ json: data });
   });
-  const target = `/projects/${project}/settings?task=selected#details`;
-  await page.goto(origin + target);
+  const target = `/projects/${project}/status?task=selected#details`;
+  await page.goto(`${origin}/projects/${project}/runs`);
+  const entry = page.getByRole("link", { name: "配置", exact: true });
   await expect(
-    page.getByRole("heading", { name: "配置", exact: true }),
+    page.locator(".sidebar").getByRole("link", { name: "配置", exact: true }),
+  ).toHaveCount(1);
+  await expect(page.getByRole("navigation", { name: "配置导航" })).toHaveCount(
+    0,
+  );
+  await entry.click();
+  await expect(page.getByRole("heading", { name: "项目状态" })).toBeVisible();
+  await page.goto(origin + target);
+  const nav = page.getByRole("navigation", { name: "配置导航" });
+  await expect(
+    nav.getByRole("group", { name: "项目设置" }).getByRole("link"),
+  ).toHaveCount(4);
+  await expect(
+    nav.getByRole("group", { name: "SteerLine 配置" }).getByRole("link"),
+  ).toHaveCount(3);
+  await nav.getByRole("link", { name: "通用设置" }).click();
+  await expect(
+    page.getByRole("heading", { name: "通用设置", exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel("生成最大并发数")).toHaveValue("5");
   await page.screenshot({
     path: info.outputPath("configuration-desktop.png"),
     fullPage: true,
   });
-  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await page.getByRole("link", { name: "执行方案管理", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "执行方案配置", exact: true }),
+    page.getByRole("heading", { name: "执行方案管理", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".sidebar")).toHaveCount(1);
   await expect(page.locator(".topbar")).toHaveCount(1);
@@ -834,6 +905,7 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("link", { name: "返回项目" }).click();
   await expect(page).toHaveURL(origin + target);
+  await nav.getByRole("link", { name: "通用设置" }).click();
   await page.getByLabel("生成最大并发数").fill("3");
   await page.getByRole("button", { name: "保存生成并发" }).click();
   await expect(
@@ -854,7 +926,7 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
       path: info.outputPath(`configuration-${width}.png`),
       fullPage: true,
     });
-    await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+    await page.getByRole("link", { name: "执行方案管理", exact: true }).click();
     await expect(page.getByLabel("配置名称")).toBeVisible();
     expect(
       await page.evaluate(
@@ -865,10 +937,46 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
       path: info.outputPath(`profiles-${width}.png`),
       fullPage: true,
     });
-    await page.getByRole("link", { name: "返回项目" }).click();
+    await nav.getByRole("link", { name: "计费", exact: true }).click();
+    await expect(
+      page.getByRole("rowheader", { name: /fixture-model/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("switch", { name: "启用 Token 采集" }),
+    ).toBeChecked();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`billing-${width}.png`),
+      fullPage: true,
+    });
+    await nav.getByRole("link", { name: "通用设置" }).click();
   }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(origin + "/settings/billing");
+  await expect(nav.getByRole("link", { name: "计费" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(
+    page.getByRole("rowheader", { name: /fixture-model/ }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("billing-desktop.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "编辑价表" }).click();
+  await page.getByLabel("价格来源").fill("未保存价表");
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await nav.getByRole("link", { name: "通用设置" }).click();
+  await expect(page.getByLabel("价格来源")).toHaveValue("未保存价表");
+  await page.getByRole("button", { name: "取消编辑" }).click();
   hasProjects = false;
-  await page.goto(origin + "/settings/execution-configs");
+  await page.goto(origin + "/settings/billing");
+  await expect(nav.getByRole("group", { name: "项目设置" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "返回项目" })).toHaveCount(0);
   await page.getByRole("link", { name: "配置", exact: true }).click();
   await expect(page.getByLabel("生成最大并发数")).toHaveValue("3");
