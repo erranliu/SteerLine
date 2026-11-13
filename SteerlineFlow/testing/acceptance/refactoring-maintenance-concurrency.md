@@ -1,6 +1,6 @@
 # 重构与维护并发与运行环境选择验收
 
-2026-11-13 · 变基至含 #549 和 #557 的主线。受控并发、原 PR 续作和独立合入评审已验证。新交付协议的真实双交付与冲突续作待验证。[Spec](../../spec/refactoring-maintenance-concurrency.spec.md) · [Plan](../../plans/refactoring-maintenance-concurrency.plan.md) · [正式测试选择](../../plans/refactoring-maintenance-concurrency.tests.json)
+2026-11-13 · 受控并发及新协议真实双交付均通过。原 PR 冲突续作登记了新基线和第二份独立评审，正文逐字一致。[Spec](../../spec/refactoring-maintenance-concurrency.spec.md) · [Plan](../../plans/refactoring-maintenance-concurrency.plan.md) · [正式测试选择](../../plans/refactoring-maintenance-concurrency.tests.json)
 
 环境与证据遵循[测试指南](../../testing.md#环境与证据)。受控场景在 Windows 使用独立 home、项目、数据库、Runner/provider 夹具和 Edge。真实场景使用固定独立 Runner EXE、本机 Codex 与自有远端测试分支。实际构建及执行命令在实施时固定。验收从以下最小结果判断，通过记录链接原始证据。
 
@@ -10,7 +10,7 @@
 | RMC-A02 | 自动，P1–P2 后。用受控屏障让同项目同环境的前三条保持执行，提交第四条，另一项目另发一条。用可控时钟让一条行动先排队 3 分钟、推进 2 分钟、等共享配额 5 分钟、再推进 4 分钟、停止待结算 2 分钟。重放或乱序返回原观察。另设恰好耗尽时间额度的行动。 | 峰值占位为 3，第四条等到原占位释放，第二项目名额独立。占位等待共享容量时暂停预算，停止未结算时保留占位。示例结算后预算用时为 6 分钟、总历时为 16 分钟，重复观察不重复累计。恰好耗尽的行动进入收尾，收尾消耗继续记录。阻塞多行动推进。 | 已验收，受控及定向 |
 | RMC-A03 | 自动，P1–P2 后。一条等待人工后答复，一条停止或遇未知回执/观察超时，另一条继续推进。验证未发送取消、已发送停止、重启、迟到受理、关闭排空，以及原 PR 在续作排队中关闭或合并。 | 待答复结算后让位，答复排在已入队行动之后。未发送取消清掉共享登记，已发送未知保留名额且零重发。结算只释放原行动的占位。关闭或合并的原 PR 保留原交付并且本次续作零派发。阻塞生命周期。 | 已验收，受控及定向 |
 | RMC-A04 | 自动，P3 后。Edge 宽窄屏用键盘打开侧栏、提交后定位、返回列表、浏览器前进后退、展开历史和打开活动深链。让已选行动完成、翻页后冲突续作换组。关闭侧栏后再返回受理回执，并注入列表或详情单独失败、断线和切项目。 | 换组无重复行，选中详情和历史范围保持。前进后退恢复选择，窄屏返回恢复列表位置。迟到回执更新原行动，不抢焦点或覆盖新草稿。列表失败时已核实的在线详情仍可操作，详情失效时不能用旧状态发命令。刷新和浏览零执行命令。阻塞 Web 交互。 | 已验收，受控 Edge、HTTP 及组件 |
-| RMC-A05 | 自动，P4 受控项通过后。固定 Runner 在同项目、同环境同时启动两条有独立改动范围的维护行动，交付后构造一个原 PR 的目标分支冲突并执行续作。 | 公开 Run 时间证明实际执行重叠。核对各自的 worktree、分支、head/base、PR 正文与报告、费用归属。续作复用原身份并更新原 PR，全部自有 Run、服务和测试资源结算。阻塞真实并发交付声明。 | 最新联验确认可写 Run 重叠，#809 已登记首份报告，#810 发布重试后因空候选 PR 绑定阻断。真实双交付未通过，未进入冲突续作，新基线和第二份报告仅在受控场景验证。两个草稿 PR、远端分支和本轮 Runner 已清理 |
+| RMC-A05 | 自动，P4 受控项通过后。固定 Runner 在同项目、同环境同时启动两条有独立改动范围的维护行动，交付后构造一个原 PR 的目标分支冲突并执行续作。 | 公开 Run 时间证明实际执行重叠。核对各自的 worktree、分支、head/base、独立评审和参考费用归属。续作复用原身份并更新原 PR，登记新基线和第二份独立评审，保持原正文。结算全部本轮 Run、服务和测试资源。 | 通过。#845、#846 完成独立交付，#846 在原行动登记第二份独立评审和新基线，正文逐字一致。两份草稿 PR 已关闭且未合并，专用基线、两个 head 分支和本轮 Runner 已清理 |
 | RMC-M01 | 人工，自动交互项通过后。分别用宽屏和窄屏体验新建、容量已满提交、返回原行动、处理待答复和查看交付。 | 能辨认环境与方案的关系、行动排队原因、当前操作目标和各自交付物。体验签收单独登记。 | 待验收，参与人和窗口待安排 |
 
 ## 2026-11-11 验证记录
@@ -162,3 +162,18 @@ PR 分支更新至 `main` 的 `805cfcae`，SQLite schema 提升到 49，同时�
 | L1、L2 | `42fe8560`，均通过；后续维护定向和 L3 覆盖 #557 接线变化 | `test-results/{L1,L2}/20261113-184544-392-rebase-556` |
 | 维护、App、存储及提示词定向 | `d5b96a9d`，97 项通过。覆盖冲突评审有效重试登记新版本及连续无效时保留首份评审 | `diagnostics/20261113-190330-982-rebase-557` |
 | `runtime.refactoring-maintenance` | `d5b96a9d`，通过并确认清理。当前 Web 构建覆盖侧栏和结构化答复、原 PR 第二份独立评审、三条 Run 重叠、第四条排队及接位 | `test-results/L3/20261113-190330-982-rebase-557` |
+
+## 2026-11-13 新协议真实双交付与原 PR 续作
+
+受测为 #515 的干净提交 `b2fce072befeaa3d85b4a79f98ba1d5d390bbad1`。正式入口为 `go run ./cmd/test-feedback -level=L4 -suite=refactoring -env=live -scenario refactoring.local-codex -out <报告根>`。使用 #549 真实验收用的独立 Runner，EXE SHA-256 为 `8f4f4b363dad85089cf14007026ef066d0d7b6f1fed74697897086a39712069f`。报告根为 `C:/SteerlineDebug/wt-317b-refactoring-concurrency/test-results/L4/20261113-191533-864-pr-review-live/`，`summary.json` 确认通过。
+
+公开 Runner 采样确认两条首轮只读 Run 重叠，北京时间 19:22:07 的补充采样确认可写 Run 重叠。副行动交付 [#845](https://github.com/erranliu/SteerlineTest/pull/845)，差异只涉及 `gamma.cjs`。主行动两轮交付 [#846](https://github.com/erranliu/SteerlineTest/pull/846)，五次可写 Run 沿原工作区身份。两条行动独立绑定 worktree、分支、PR 和参考费用。主、副行动已覆盖的参考费用分别为 0.822570 和 0.486137 美元，主行动的费用采集仍有缺口。证据见 `maintenance-native-overlap.json`、`maintenance-native-write-overlap.json` 和 `refactoring-live-proof.json`。
+
+场景推进本轮专用基线后，`git merge-tree` 确认 `alpha.cjs` 和 `beta.cjs` 都存在内容冲突。续作复用 #846 原 PR、分支及工作区，保留双方改动。新基线是交付 head 的祖先，两版交付树的 `node check.cjs` 均通过。原行动保留首份评审并登记第二份。第二份评审建议修改后再审，验收核对的是评审登记和实际交付版本。副行动在基线推进后也自动刷新了评审。证据见 `conflict-proof.txt`、`initial-tree-check.log`、`conflict-tree-check.log` 和两条行动视图。
+
+| #846 评审 | Head | Base |
+| --- | --- | --- |
+| 首份 | `ccb5e2b7ade97ce55f53f6b1558a13a027507a72` | `a6548128de735f3c1de8aeb7d824f3c7f7a7358b` |
+| 续作后第二份 | `4e2ec14e4a49c96df1aaf456164052d949b95040` | `054a7d9a1723b105bd7ceb5295b181d662234220` |
+
+场景从 GitHub 读取 #846 续作前后的正文并逐字比较。独立复查确认两次正文均为 270 个 UTF-8 字节，SHA-256 均为 `18381874378c634a8e21f6844b422192b69a8cace6f52f2f65859c2340445558`，见 `original-pr-before-conflict-push.json` 和 `original-pr-body-verified.json`。#845、#846 均已关闭且未合并。专用基线与两个 head 分支均已删除，Runner 和隔离现场已清理。复查见 `remote-cleanup-verified.json`、`maintenance-live-runner-cleanup.json` 和 `scenario.json`。
