@@ -559,9 +559,7 @@ function MaintenanceDetail({
         </p>
       )}
       {current.wall_seconds !== undefined && (
-        <p>
-          总历时 {duration(current.wall_seconds)}（含等待与离线）
-        </p>
+        <p>总历时 {duration(current.wall_seconds)}（含等待与离线）</p>
       )}
       <p>
         费用包含主会话与已登记内部调用；不覆盖子
@@ -621,80 +619,103 @@ function MaintenanceDetail({
           </Button>
         )}
         {current.can_review && (
-          <Button variant="outline" disabled={disabled}
-            onClick={() => void command("refactoring_review", current.id, current.revision, {})}
+          <Button
+            variant="outline"
+            disabled={disabled}
+            onClick={() =>
+              void command(
+                "refactoring_review",
+                current.id,
+                current.revision,
+                {},
+              )
+            }
           >
             重新评审
           </Button>
         )}
         {current.pr && <SafeLink url={current.pr.url}>查看 PR</SafeLink>}
       </div>
-          {current.question && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (disabled || !option) return;
-                void command(
-                  "refactoring_answer",
-                  current.id,
-                  current.revision,
-                  { question_id: current.question!.id, option_id: option, note: answer },
-                );
-              }}
-            >
-              <p className="refactoring-pre">{current.question.prompt}</p>
-              <ul>
-                {[...current.question.facts, ...current.question.attempts].map((fact, index) => (
-                  <li key={index}>{fact}</li>
-                ))}
-              </ul>
-              <fieldset>
-                <legend>选择处理方式</legend>
-                {current.question.options.map((choice) => (
-                  <div key={choice.id}>
-                    <label>
-                      <input
-                        type="radio"
-                        name="maintenance-option"
-                        value={choice.id}
-                        checked={option === choice.id}
-                        onChange={() => setChoice({ question: current.question!.id, option: choice.id })}
-                      />
-                      {choice.label}
-                    </label>
-                    <p>{choice.impact}</p>
-                    {current.question!.recommended_option_id === choice.id && (
-                      <p>推荐 · {current.question!.recommendation_reason}</p>
-                    )}
-                  </div>
-                ))}
-              </fieldset>
-              <label>
-                补充说明（可选）
-                <textarea
-                  maxLength={32768}
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                />
-              </label>
-              <Button variant="default" disabled={disabled || !option}>
-                答复并继续
-              </Button>
-            </form>
+      {current.question && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (disabled || !option) return;
+            void command("refactoring_answer", current.id, current.revision, {
+              question_id: current.question!.id,
+              option_id: option,
+              note: answer,
+            });
+          }}
+        >
+          <p className="refactoring-pre">{current.question.prompt}</p>
+          <ul>
+            {[...current.question.facts, ...current.question.attempts].map(
+              (fact, index) => (
+                <li key={index}>{fact}</li>
+              ),
+            )}
+          </ul>
+          <fieldset>
+            <legend>选择处理方式</legend>
+            {current.question.options.map((choice) => (
+              <div key={choice.id}>
+                <label>
+                  <input
+                    type="radio"
+                    name="maintenance-option"
+                    value={choice.id}
+                    checked={option === choice.id}
+                    onChange={() =>
+                      setChoice({
+                        question: current.question!.id,
+                        option: choice.id,
+                      })
+                    }
+                  />
+                  {choice.label}
+                </label>
+                <p>{choice.impact}</p>
+                {current.question!.recommended_option_id === choice.id && (
+                  <p>推荐 · {current.question!.recommendation_reason}</p>
+                )}
+              </div>
+            ))}
+          </fieldset>
+          <label>
+            补充说明（可选）
+            <textarea
+              maxLength={32768}
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+            />
+          </label>
+          <Button variant="default" disabled={disabled || !option}>
+            答复并继续
+          </Button>
+        </form>
+      )}
+      {current.reports?.map((r, i) => (
+        <article key={i}>
+          <h3>PR 合入评审 {i + 1}</h3>
+          <p>
+            head {r.head} · base {r.base}
+          </p>
+          <p>
+            {
+              {
+                merge: "建议合入",
+                revise: "建议修改后再审",
+                insufficient_evidence: "证据不足",
+              }[r.recommendation]
+            }
+          </p>
+          {current.report_stale && i === current.reports!.length - 1 && (
+            <p>此评审已过期或正在复核。</p>
           )}
-          {current.reports?.map((r, i) => (
-            <article key={i}>
-              <h3>PR 合入评审 {i + 1}</h3>
-              <p>
-                head {r.head} · base {r.base}
-              </p>
-              <p>{{ merge: "建议合入", revise: "建议修改后再审", insufficient_evidence: "证据不足" }[r.recommendation]}</p>
-              {current.report_stale && i === current.reports!.length - 1 && (
-                <p>此评审已过期或正在复核。</p>
-              )}
-              <div className="refactoring-pre">{r.body}</div>
-            </article>
-          ))}
+          <div className="refactoring-pre">{r.body}</div>
+        </article>
+      ))}
       <h3>轮次与执行反馈</h3>
       {current.operations?.map((o) => (
         <details key={o.id}>

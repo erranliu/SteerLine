@@ -101,7 +101,9 @@ test("maintenance report, history and refresh remain observational", async ({
     return;
   }
   if (e.STEERLINE_MAINTENANCE_MODE === "answer") {
-    await expect(page.getByText("是否保留公共接口？", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("是否保留公共接口？", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("维持兼容", { exact: true })).toBeVisible();
     const submit = page.getByRole("button", { name: "答复并继续" });
     await expect(submit).toBeDisabled();
@@ -117,7 +119,9 @@ test("maintenance report, history and refresh remain observational", async ({
       .getByRole("region", { name: "维护详情" })
       .getByText("已交付", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "PR 合入评审 2" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "PR 合入评审 2" }),
+  ).toBeVisible();
   const detail = page.getByRole("region", { name: "维护详情" });
   await detail.getByText("方向提示词", { exact: true }).click();
   await expect(
@@ -128,13 +132,17 @@ test("maintenance report, history and refresh remain observational", async ({
   ).toBeVisible();
   await expect(page.getByText(/不覆盖子 Agent/)).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "PR 合入评审 2" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "PR 合入评审 2" }),
+  ).toBeVisible();
   expect(commands).toEqual([]);
   await page.setViewportSize({ width: 375, height: 900 });
   await page.getByRole("button", { name: "返回行动列表" }).click();
   await expect(page.getByRole("region", { name: "行动列表" })).toBeVisible();
   await page.goBack();
-  await expect(page.getByRole("heading", { name: "PR 合入评审 2" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "PR 合入评审 2" }),
+  ).toBeVisible();
   await page.screenshot({
     path: join(out, "maintenance-mobile.png"),
     fullPage: true,

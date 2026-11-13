@@ -775,7 +775,8 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				if err != nil {
 					return err
 				}
-				if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Report || !proof.PRBodyUnchanged || !proof.Conflict || proof.PR == "" || proof.Head == "" || proof.Base == "" {
+				if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Report || !proof.PRBodyUnchanged || !proof.Conflict ||
+					!proof.Overlap || proof.PR == "" || proof.ParallelPR == "" || proof.ParallelPR == proof.PR || proof.Head == "" || proof.Base == "" {
 					return errors.New("native maintenance proof incomplete")
 				}
 				continue

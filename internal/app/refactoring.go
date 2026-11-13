@@ -19,6 +19,7 @@ import (
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
@@ -475,6 +476,7 @@ func (p *refactoringPort) readiness(ctx context.Context) (any, error) {
 		Project        pm.Readiness                 `json:"project"`
 		Environments   []refactoringEnvironmentView `json:"environments"`
 		DefaultProfile string                       `json:"default_profile"`
+		SteerAgent     executionconfig.SteerAgent   `json:"steer_agent"`
 		Reason         string                       `json:"reason,omitempty"`
 	}{Branch: c.Branch, Project: project, Environments: items, DefaultProfile: current.DefaultProfile}
 	if !c.environmentPolicy.RequireReadiness() {
@@ -485,6 +487,20 @@ func (p *refactoringPort) readiness(ctx context.Context) (any, error) {
 		out.Reason = "项目运行环境状态待核实"
 		return out, nil
 	}
+	agent, err := executionconfig.SteerAgentSettings(c.RunnerExecution.SteerAgent)
+	if err != nil {
+		out.Reason = err.Error()
+		return out, nil
+	}
+	out.SteerAgent = agent
+	read, readErr := c.runtimeNative.Lookup(runnercontract.ExecutionConfigurationRequest{
+		Operation: "compose", BaseExecution: executionconfig.SteerAgentBase(c.RunnerExecution.Profiles),
+		Workflow: runnercontract.Workflow{ID: "generate", Version: 1},
+		Selection: &runnercontract.ExecutionSelection{
+			Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex",
+			Model: &agent.Model, ReasoningEffort: &agent.ReasoningEffort, AccessMode: "read_only",
+		},
+	})
 	ctx = materialReads(ctx)
 	for _, item := range c.runtimeEnvironment.configurationOptions(ctx).Environments {
 		v := refactoringEnvironmentView{Key: item.Key, Name: item.Name, Target: item.Target, Agent: item.Agent, Status: "unverified", Profiles: []refactoringProfileView{}}
@@ -512,8 +528,7 @@ func (p *refactoringPort) readiness(ctx context.Context) (any, error) {
 			if err != nil || write.Execution == nil {
 				continue
 			}
-			read, err := c.runtimeNative.Lookup(runnercontract.ExecutionConfigurationRequest{Operation: "derive", Execution: &profile.Execution, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, AccessMode: "read_only"})
-			if err != nil || read.Execution == nil || c.runtimeNative.Catalog.ValidateMaintenance(*write.Execution, *read.Execution) != nil {
+			if readErr != nil || read.Execution == nil || c.runtimeNative.Catalog.ValidateMaintenance(*write.Execution, *read.Execution) != nil {
 				continue
 			}
 			v.Name = "本机 · Codex 直连"

@@ -50,7 +50,15 @@ const record: MaintenanceRecord = {
   source_commit: "b".repeat(40),
   elapsed_seconds: 65,
   cost_complete: false,
-  question: { id: "question", prompt: "保留原公共接口还是允许调整？建议保留。", facts: ["有调用方"], attempts: [], options: [{ id: "keep", label: "保留公共接口", impact: "维持兼容" }], recommended_option_id: "keep", recommendation_reason: "易验证" },
+  question: {
+    id: "question",
+    prompt: "保留原公共接口还是允许调整？建议保留。",
+    facts: ["有调用方"],
+    attempts: [],
+    options: [{ id: "keep", label: "保留公共接口", impact: "维持兼容" }],
+    recommended_option_id: "keep",
+    recommendation_reason: "易验证",
+  },
   can_finish: true,
   can_stop: true,
   can_conflict: false,
@@ -273,7 +281,11 @@ it("shows coverage exclusions and answers the original question without another 
     action: "refactoring_answer",
     target_id: id,
     expected_version: 7,
-    payload: { question_id: "question", option_id: "keep", note: "保留公共接口" },
+    payload: {
+      question_id: "question",
+      option_id: "keep",
+      note: "保留公共接口",
+    },
   });
 });
 it("keeps known details operable when the list fails and isolates drafts by question", async () => {

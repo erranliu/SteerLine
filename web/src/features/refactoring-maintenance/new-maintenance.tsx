@@ -22,6 +22,7 @@ type Readiness = {
   project: ProjectReadiness;
   environments: Environment[];
   default_profile: string;
+  steer_agent?: { model: string; reasoning_effort: string };
   reason?: string;
 };
 type Catalogue = {
@@ -280,6 +281,12 @@ export function NewMaintenance({
           }}
         >
           <fieldset disabled={pending}>
+            {ready?.steer_agent?.model && (
+              <p>
+                SteerAgent 只读决策 {ready.steer_agent.model} /{" "}
+                {ready.steer_agent.reasoning_effort}
+              </p>
+            )}
             <label>
               运行环境
               <select
