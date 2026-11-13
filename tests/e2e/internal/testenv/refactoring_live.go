@@ -24,6 +24,13 @@ import (
 
 func RefactoringLive(s *Scenario) {
 	p := s.NewLiveProject("maintenance-live", "local-codex")
+	configPath := filepath.Join(p.Home, "execution.json")
+	configBytes, e := os.ReadFile(configPath)
+	s.Must(e)
+	var config map[string]any
+	s.Must(json.Unmarshal(configBytes, &config))
+	config["steer_agent"] = map[string]string{"model": "gpt-6-luna", "reasoning_effort": "medium"}
+	s.Must(controlled.Write(configPath, config))
 	// Copy only login into this owned home; do not run sessions in the user's home.
 	auth, e := os.ReadFile(filepath.Join(s.Run.AuthHome, "auth.json"))
 	s.Must(e)

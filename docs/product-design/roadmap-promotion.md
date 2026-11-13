@@ -1,6 +1,8 @@
 # Roadmap 读取、解析与入图
 
-当前 Web 读取 SteerlineFlow/Roadmap/drafts/ 下普通 UTF-8 Markdown，提供解析、确认任务依赖并生成文档、审阅、发布与正式入图。草稿可以在 SteerLine 外维护，也可通过「Roadmap 规划」在独立 worktree 改稿并审阅发布。规划 PR 合入且项目工作树能读取对应来源后，从稳定链接进入本流程。[Roadmap 规划 Spec](../../SteerlineFlow/spec/roadmap-planning.spec.md)
+「任务规划」支持规划单个任务或 Roadmap。Roadmap 草稿可在独立 worktree 改稿并审阅发布，也可在 SteerLine 外维护。规划 PR 合入且项目工作树能读取对应来源后，原链接进入「Roadmap 草稿」。该页读取 `SteerlineFlow/Roadmap/drafts/` 下的 UTF-8 Markdown，提供任务解析、依赖确认、文档生成、审阅、发布与入图。[Roadmap 规划 Spec](../../SteerlineFlow/spec/roadmap-planning.spec.md)
+
+单任务在同一规划详情页讨论和编辑任务卡，只从当前项目 DAG 选择已有任务作为前置。确认任务卡会固定内容、依赖和代码基线，接入同一文档生成、审阅、发布及入图流程。单任务的 PR 包含 Spec、Plan、测试安排与验收文档。用户在仓库合并文档 PR，SteerLine 核实后开放「加入 DAG」，并在入图事务内分配编号。正式任务回链到原规划详情。
 
 完整项目添加仍是[后续方案](project-onboarding.md)。
 
@@ -14,11 +16,13 @@
 
 原始字节与摘要保留；草稿修改标记、跨阶段内容比较允许 LF/CRLF 差异。Run/结果 manifest 须匹配原仓库与上传字节，证明材料来源，不证明模型逐文件已读或结论正确。具体供给边界归[提示词治理](../prompt-governance.md)。
 
+解析和文档生成共用结构化结果接收规则。原 Run 完成并停止后，SteerLine 仅在成功的 `ContentResult` 含 JSON，且其 `Source` 与该 Run 已验证的 `Final` 完全一致时采用结果。来源缺失或错配时记录无效结果，审阅入口保持关闭。
+
 ## 文档生成与审阅
 
 确认后的解析记录派生 purpose=documents 的**独立文档记录**，parent_id 指向原解析；解析持有一个 Run；文档记录的 generations 按任务保留独立原请求、Run、session、创建时间、结果和停止义务，记录外层继续持有一次确认、审阅及发布。文档批次没有根级 Run，不混用目标。文档生成固定完整 commit/tree、原规划、SpecGuide 与测试/编写规范，能力按所选 Runner 公开 schema 校验。
 
-页面使用“确认任务依赖并生成 Spec / Plan”一次提交：后台先按当前 revision 校验草稿、任务图及解析结果，展示并保存含 coordination、每项 provides_tests 及项目入口声明材料的确认摘要和独立确认请求，再启动文档生成。确认与生成请求分别绑定各自记录。生成准备或模型执行失败保留已确认规划，页面提供“重试生成 Spec / Plan”，继续以已确认解析为父记录；重试仍核对当前草稿和任务图。结果未知时沿原请求核实，不启动重复生成；待澄清问题仍要求修订草稿并重新解析。
+页面使用“确认任务依赖并生成 Spec / Plan”一次提交：后台先按当前 revision 校验草稿、任务图及解析结果，展示并保存含 coordination、每项 provides_tests 及项目入口声明材料的确认摘要和独立确认请求，再启动文档生成。确认与生成请求分别绑定各自记录。生成准备或模型执行失败保留已确认规划，页面提供“重试生成 Spec / Plan”，继续以已确认解析为父记录；重试仍核对当前草稿和任务图。结果未知时沿原请求核实，不启动重复生成；待澄清问题仍要求修订草稿并重新解析。解析、文档生成和明确失败后的单项重生成在准备新请求时使用全局 SteerAgent 配置，已准备的请求保留原值。
 
 应用在确认保存后、文档请求保存前中断时，原请求核实先排除仍在处理的生成，再用本次独立确认记录核实“已确认、生成尚未提交”，保存可重试的失败回执；查询不重新调用模型或改写确认规划。
 

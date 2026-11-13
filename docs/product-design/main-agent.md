@@ -2,7 +2,7 @@
 
 状态：已随 [PR #478](https://github.com/erranliu/SteerLine/pull/478) 合并，接入现有 Runner generate/1，本地 Codex 只读生成；未部署。正式契约见[Spec](../../SteerlineFlow/spec/main-agent-advisory.spec.md)、[Plan](../../SteerlineFlow/plans/main-agent-advisory.plan.md)，实际验证与未验项见[验收](../../SteerlineFlow/testing/acceptance/main-agent-advisory.md)。用户已明确放宽此前严格零工具要求，并选择直接接入开发候选的明确待答问题。
 
-按 [SteerAgent 长期分类](steer-agent.md)，本文能力归对话续作中的建议生成。当前模块已按建议产物重归，专用设置为平铺 continuation_suggestion；实际分类收敛范围及验证见[分类 Spec](../../SteerlineFlow/spec/steer-agent-classification.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/steer-agent-classification.md)。advisory-v1、原路由/命令/活动来源及提示资产名称保留，不代表具备其他类型能力。
+按 [SteerAgent 长期分类](steer-agent.md)，本文能力归对话续作中的建议生成。模型和思考强度使用全局 [SteerAgent 配置](execution-configuration.md#调用方设置与环境边界)。实际分类收敛范围及验证见[分类 Spec](../../SteerlineFlow/spec/steer-agent-classification.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/steer-agent-classification.md)。advisory-v1、原路由/命令/活动来源及提示资产名称保留，不代表具备其他类型能力。
 
 ## 模块和执行边界
 
@@ -13,7 +13,7 @@
 | `internal/steeragent/suggestion/contract` | stdlib-only advisory-v1 DTO、UTF-8/字段/数量/字节校验 |
 | `internal/steeragent/suggestion` | 明确输入校验、固定提示词同包组装、唯一 prompt 校验，无外部读取或执行 |
 | `internal/steeragentbridge/suggestion` | 异步作业、冻结请求、共享配额、原请求提交/观察、取消及结算 |
-| app | 从原 owner 的持久候选投影读取明确待答与固定版本材料；组装本地 Codex 模型配置及恢复/停止接线 |
+| app | 从原 owner 的持久候选投影读取明确待答问题，组装本地 Codex 模型配置及恢复/停止接线 |
 | SQLite / 查询 / Web | payload/CAS与隔离、纯读活动投影；建议默认填入原问题回答框，用户点击后通过原回答入口提交；历史可查看/复制，不展示内部执行记录 |
 
 调用链固定 SteerLine → Runner 公开 generate/1 → Runner 内部本地 Codex。复用既有 Run、原请求去重、完整 final、停止和资源结算；没有新增 workflow、原生直连或模型 API 旁路。默认 GPT 6.1 Sol / high，复用已有本地执行器，配置在准备新请求时冻结，重启后新设置生效。
@@ -24,7 +24,7 @@
 
 来源为仍参与、未停止候选的原生 Question，须有原 Attempt/Question 身份、Run 未关闭且公开 CanReply 为 true。覆盖普通待答，也能帮助继续讨论材料不足和冲突；不依赖不存在的业务原因码，不根据文案或通用 blocked/attention 分类。Runner 不因此取得跨任务协调职责。
 
-后台独立于页面读取持久候选，按 project/candidate/Attempt+Question/protocol 去重登记，再冻结原问题、Spec/Plan、公共及验收引用、已核实 final、必要测试安排。文档按绑定引用的 commit 与 SHA 核验，不混用当前工作树；准备失败也有作业、已取得材料和诊断。心跳、普通 revision、重启不重开同一事项，取消/失败不自动重试。
+后台独立于页面读取持久候选，按 project/candidate/Attempt+Question/protocol 去重登记，冻结原问题、选项及原生作答格式作为建议生成的业务输入。阶段结果、测试安排和项目文档继续由各自的流程使用。心跳、普通 revision、重启不重开同一事项，取消/失败不自动重试。
 
 来源解除后取消尚未提交的生成，已提交则停止原生成并结算；完成历史仍可查看/复制，不代替原问题解除。新问题或 Attempt 使用新 occurrence。
 

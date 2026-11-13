@@ -82,7 +82,7 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 		if old.TaskID != c.TaskID || old.StateDir != c.StateDir || old.Explicit != c.Explicit || old.Number != c.Number || old.Claimant != c.Claimant || old.ContractDigest != c.ContractDigest || old.BaseRevision != c.BaseRevision || digestValue(old.Submit) != digestValue(c.Submit) || old.RunID != "" && old.RunID != c.RunID || old.InputDigest != "" && old.InputDigest != c.InputDigest || old.Branch != "" && old.Branch != c.Branch || old.PRURL != "" && old.PRURL != c.PRURL || old.StopRequested && !c.StopRequested || old.SubmitObserveOnly && !c.SubmitObserveOnly || old.Participation != c.Participation {
 			return nativeErr("immutable_task", "candidate update changed a frozen task association")
 		}
-		if digestValue(old.Contract) != digestValue(c.Contract) || old.MaterialDigest != c.MaterialDigest || !bytes.Equal(old.TestPlan, c.TestPlan) || digestValue(old.Environment) != digestValue(c.Environment) || old.EnvironmentReadinessSkipped != c.EnvironmentReadinessSkipped || old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
+		if digestValue(old.Contract) != digestValue(c.Contract) || old.MaterialDigest != c.MaterialDigest || !bytes.Equal(old.TestPlan, c.TestPlan) || digestValue(old.ManualChecks) != digestValue(c.ManualChecks) || digestValue(old.Environment) != digestValue(c.Environment) || old.EnvironmentReadinessSkipped != c.EnvironmentReadinessSkipped || old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
 			return nativeErr("immutable_task", "candidate update changed its original start identity")
 		}
 		if digestValue(old.Withdrawal) != digestValue(c.Withdrawal) {
@@ -214,7 +214,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			if err := freezeNumber(previous.Number); err != nil {
 				return err
 			}
-			if digestValue(previous.Contract) != digestValue(c.Contract) || previous.MaterialDigest != c.MaterialDigest || !bytes.Equal(previous.TestPlan, c.TestPlan) || previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || digestValue(previous.Environment) != digestValue(c.Environment) || previous.EnvironmentReadinessSkipped != c.EnvironmentReadinessSkipped || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
+			if digestValue(previous.Contract) != digestValue(c.Contract) || previous.MaterialDigest != c.MaterialDigest || !bytes.Equal(previous.TestPlan, c.TestPlan) || digestValue(previous.ManualChecks) != digestValue(c.ManualChecks) || previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || digestValue(previous.Environment) != digestValue(c.Environment) || previous.EnvironmentReadinessSkipped != c.EnvironmentReadinessSkipped || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
 				return nativeErr("idempotency_conflict", "candidate ID belongs to another original request")
 			}
 			return errAtomicReplay
@@ -242,20 +242,17 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 				return err
 			}
 		}
-		if !candidate && (c.Explicit && graph.Authority.DispatchMode != "manual" || !c.Explicit && graph.Authority.DispatchMode != "auto") {
-			return nativeErr("wrong_mode", "dispatch mode differs from the original start")
+		if blocked := taskmodel.StartDispatchError(graph.Authority.DispatchMode, c.Explicit, candidate); blocked != nil {
+			return blocked
 		}
-		if candidate && !c.Explicit {
-			return nativeErr("wrong_mode", "new candidates require an explicit start")
-		}
-		var active, number int
-		if err := tx.tx.QueryRowContext(ctx, `SELECT coalesce(sum(CASE WHEN json_extract(payload,'$.participation')='active' AND coalesce(json_extract(payload,'$.material_digest'),'')=? THEN 1 ELSE 0 END),0),coalesce(max(json_extract(payload,'$.number')),0) FROM runner_candidates WHERE project_identity=? AND task_id=?`, c.MaterialDigest, c.Project, c.TaskID).Scan(&active, &number); err != nil {
+		facts, err := readCandidateStartFacts(ctx, tx.tx, c.Project, c.TaskID, c.MaterialDigest)
+		if err != nil {
 			return err
 		}
-		if active >= 5 {
-			return nativeErr("candidate_limit_reached", "当前材料版本已有五个参与候选")
+		if blocked := taskmodel.CandidateStartError(candidate, facts.active, facts.merged); blocked != nil {
+			return blocked
 		}
-		if err := freezeNumber(number + 1); err != nil {
+		if err := freezeNumber(facts.lastNumber + 1); err != nil {
 			return err
 		}
 		if !c.Explicit {
@@ -329,6 +326,23 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		return nil
 	}
 	return err
+}
+
+type candidateStartFacts struct {
+	active, lastNumber int
+	merged             bool
+}
+
+func readCandidateStartFacts(ctx context.Context, tx *sql.Tx, project, task, material string) (candidateStartFacts, error) {
+	var facts candidateStartFacts
+	err := tx.QueryRowContext(ctx, `
+		SELECT count(CASE WHEN json_extract(payload,'$.participation')='active'
+			AND coalesce(json_extract(payload,'$.material_digest'),'')=? THEN 1 END),
+			coalesce(max(json_extract(payload,'$.number')),0),
+			count(CASE WHEN json_extract(payload,'$.projection.pr.state')='merged' THEN 1 END)>0
+		FROM runner_candidates WHERE project_identity=? AND task_id=?`, material, project, task).
+		Scan(&facts.active, &facts.lastNumber, &facts.merged)
+	return facts, err
 }
 
 // requestRunnerTaskStops runs inside the task's terminal transaction. A late

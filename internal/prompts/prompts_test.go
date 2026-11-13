@@ -32,11 +32,19 @@ func TestPromptGovernanceGolden(t *testing.T) {
 			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/scripts/verify-environment.ps1")
 		}},
 		{"environment-repair", func() (string, error) { return EnvironmentRepair("SteerlineFlow/environment.md") }},
+		{"project-initialization", ProjectInitialization},
+		{"project-registration", func() (string, error) {
+			return ProjectRegistration(`D:\Tools\SteerLine 安装`)
+		}},
 		{"roadmap-parse", func() (string, error) { return RoadmapParse("roadmap.md", "fixed") }},
 		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md", "T1") }},
 		{"roadmap-planning", func() (string, error) {
 			return RoadmapPlanning("rules.md", "drafts/topic.md", "用户目标原文\r\n下一行")
 		}},
+		{"task-planning", func() (string, error) {
+			return TaskPlanning("rules.md", "cards/topic.json", "用户目标原文\r\n下一行")
+		}},
+		{"task-planning-documents", func() (string, error) { return TaskPlanningDocuments("fixed", "T1") }},
 		{"roadmap-planning-conflict", func() (string, error) { return RoadmapPlanningConflict("保留原定范围。") }},
 		{"roadmap-planning-conflict-default", func() (string, error) { return RoadmapPlanningConflict("") }},
 	}
@@ -121,11 +129,12 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		{"maintenance-cautious", "36fb56b30ba9e12306c3066b0f9315752bb5e880dbaaa7261cf543612657c7f4", func() ([]byte, error) { return MaintenanceStrategy("cautious") }},
 		{"maintenance-autonomous", "f0c2470a07e019911ae36c30046e1ad320a5ea60b9a5db46a7d67b404ef57776", func() ([]byte, error) { return MaintenanceStrategy("autonomous") }},
 		{"maintenance-aggressive", "e9ed219ceaf5abdab0b467664db2d247ddf3f57a8da853d918246c993a08130b", func() ([]byte, error) { return MaintenanceStrategy("aggressive") }},
-		{"main-agent", "156e47b49a34bcb45b7393978607a92ea2bd2c687163e5064d386c3c66985ec6", MainAgentRules},
+		{"main-agent", "1fa5687dcca43dc78f5a91b0114dd3892c5918d626d0c86105e540d5ae5f2128", MainAgentRules},
 		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
-		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},
+		{"roadmap-documents", "62f392fc7d180d272949910dc7a7b32514bd43040c8f5655d354db16bdaff7ea", RoadmapDocumentRules},
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
 		{"roadmap-planning", "d405343c050b42dad6cd74d63d2d53e52ee34551965bd21ecb79fa49bb362261", RoadmapPlanningRules},
+		{"task-planning", "62818dbf7dc3186cdbaee93ee5feb5caa13c056a960e0a3e24126f1f39880e42", TaskPlanningRules},
 	}
 	for _, direction := range []struct{ id, sha256 string }{
 		{"simplify", "0eae9dbb8636492f585982d01964e43b8a3116d6957ed5fb92f39437477b1abd"},

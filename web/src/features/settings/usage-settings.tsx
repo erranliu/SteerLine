@@ -85,7 +85,7 @@ export function UsageSettings({
   return (
     <section
       id="usage-collection"
-      className="settings-panel"
+      className="settings-panel usage-settings"
       aria-label="用量采集设置"
     >
       <h2>用量采集</h2>
@@ -93,47 +93,55 @@ export function UsageSettings({
         Token
         采集默认启用，自动读取当前运行已核实的本机和远端会话日志。修改采集开关后须正式重启。
       </p>
-      <p role="status">
-        {ready
-          ? pending
-            ? "已保存，待正式重启"
-            : "运行中策略已生效"
-          : "运行中策略未知或服务离线"}
-      </p>
-      {(error || config.error || effective.error) && (
-        <p role="alert">{error || String(config.error || effective.error)}</p>
-      )}
-      {notice && <p role="status">{notice}</p>}
-      {base && (
-        <>
-          <label>
+      <div className="billing-actions">
+        {base && (
+          <label className="usage-switch">
+            启用 Token 采集
             <input
               type="checkbox"
+              role="switch"
               checked={policy.enabled}
               disabled={busy || !base.writable}
               onChange={(e) => change({ ...policy, enabled: e.target.checked })}
             />
-            启用 Token 采集
           </label>
+        )}
+        <p
+          role="status"
+          className={ready && !pending ? "usage-effective" : undefined}
+        >
+          {ready
+            ? pending
+              ? "已保存，待正式重启"
+              : "运行中策略已生效"
+            : "运行中策略未知或服务离线"}
+        </p>
+      </div>
+      {(error || config.error || effective.error) && (
+        <p role="alert">{error || String(config.error || effective.error)}</p>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      <div className="billing-actions">
+        {base && (
           <Button
             disabled={!draft || busy || !base.writable}
             onClick={() => void save()}
           >
             保存采集设置
           </Button>
-        </>
-      )}
-      <Button
-        disabled={busy || effective.isFetching}
-        onClick={() => {
-          void effective.refetch();
-          void config.refetch().then((r) => {
-            if (!r.error) setDraft(undefined);
-          });
-        }}
-      >
-        重新读取采集状态
-      </Button>
+        )}
+        <Button
+          disabled={busy || effective.isFetching}
+          onClick={() => {
+            void effective.refetch();
+            void config.refetch().then((r) => {
+              if (!r.error) setDraft(undefined);
+            });
+          }}
+        >
+          重新读取采集状态
+        </Button>
+      </div>
     </section>
   );
 }

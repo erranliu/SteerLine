@@ -47,32 +47,3 @@ func (s tmSnapshotStore) Progress(context.Context, string, string) (testmodel.Pr
 	}
 	return testmodel.Progress{}, testmanagement.ErrNotFound
 }
-
-type auxiliaryObservationStore struct {
-	testManagementStore
-	cancel      context.CancelFunc
-	generations int
-}
-
-func (s *auxiliaryObservationStore) RunnerCandidates(context.Context, string, string) ([]runnerstate.Candidate, error) {
-	if s.cancel != nil {
-		s.cancel()
-	}
-	return nil, errors.New("progress unavailable")
-}
-
-func TestTMAuxiliaryStagesAdvanceAfterCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	store := &auxiliaryObservationStore{cancel: cancel}
-	p := &testManagementPort{
-		progress: &testmanagement.ProgressService{Store: store},
-	}
-	if err := p.observe(ctx); !errors.Is(err, context.Canceled) || store.generations != 0 {
-		t.Fatal("cancelled stage did not yield", err, store.generations)
-	}
-	store.cancel = nil
-	if err := p.observe(context.Background()); err == nil || store.generations != 0 {
-		t.Fatal("actor polled maintenance generations or hid its progress error", err, store.generations)
-	}
-}

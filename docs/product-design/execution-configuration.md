@@ -37,7 +37,7 @@
 
 ## 调用方设置与环境边界
 
-continuation_suggestion 是对话续作提示词建议的 home 级平铺覆盖，只含 model 与 reasoning_effort；缺省或 null 沿用 gpt-6.1-sol / high，显式对象沿原字段校验，不接受旧 main_agent 键。设置保存后重启供新请求使用，准备时冻结；已经准备或排队的请求保留原模型、正文、摘要与请求身份。它不覆盖 Roadmap profile、开发候选或原 Run 的消息设置；不按四种产品分类建立配置树。见[分类收敛验收](../../SteerlineFlow/testing/acceptance/steer-agent-classification.md)。
+所有项目的 SteerAgent 共用 `steer_agent`，包含本地 Codex 的 `model` 和 `reasoning_effort`。缺省或 null 使用 `gpt-6.1-sol / high`。从「配置 → SteerAgent」保存并重启后，对话建议、Roadmap 解析、材料生成、多轮规划及维护的只读调查、决策和审计使用新值。准备请求、建立会话或启动维护行动时冻结配置，已准备或排队的请求沿用原输入。维护的代码修改、验证和交付由发起行动时所选的 Runner 执行配置决定。原 Run 的续作沿用原 Run 配置。旧 `continuation_suggestion` 键须从开发环境的 `execution.json` 中移除，原模型值可手动填入 `steer_agent`。
 
 max_generate_concurrency 是 home 级辅助 generate 准入上限，省略为 5，显式值为正整数；项目已登记生成共享队列，名额覆盖实际执行和待核实请求，开发候选和 Runner 内部辅助操作不计入。保存后重启生效，范围见[生成队列验收](../../SteerlineFlow/testing/acceptance/generate-queue.md)。材料准备仍须按[项目维护](project-maintenance.md)显式登记。
 

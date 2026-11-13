@@ -1,16 +1,19 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Activity,
-  Command,
-  FlaskConical,
+  ClipboardCheck,
   GitBranch,
   Layers,
   PanelLeftClose,
   Settings,
 } from "lucide-react";
 import { Button } from "../shared/ui/button";
+import {
+  configurationPage,
+  ConfigurationNavigation,
+} from "./configuration-navigation";
 
 export function AppShell({
   projectId,
@@ -23,6 +26,7 @@ export function AppShell({
   returnTo,
   activities,
   dispatchStatus,
+  projectStatus,
 }: {
   projectId?: string;
   projectName?: string;
@@ -34,23 +38,24 @@ export function AppShell({
   returnTo?: string;
   activities?: ReactNode;
   dispatchStatus?: ReactNode;
+  projectStatus?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const global = location.pathname.startsWith("/settings");
-  const title = location.pathname.endsWith("/execution-configs")
-    ? "执行方案配置"
-    : ({
-        roadmaps: "Roadmap 草稿",
-        "roadmap-planning": "Roadmap 规划",
-        dag: "任务 DAG",
-        runs: "任务执行",
-        tests: "测试管理",
-        settings: "配置",
-        environment: "项目运行环境",
-        refactoring: "重构与维护",
-        activities: "活动中心",
-      }[location.pathname.split("/").pop() ?? ""] ?? "规划与执行");
+  const configuration = configurationPage(location.pathname, projectId);
+  const title =
+    configuration?.title ??
+    {
+      roadmaps: "Roadmap 草稿",
+      "roadmap-planning": "任务规划",
+      dag: "任务 DAG",
+      runs: "任务执行",
+      "manual-verification": "人工核验",
+      refactoring: "重构与维护",
+      activities: "活动中心",
+      add: "添加已初始化项目",
+    }[location.pathname.split("/").pop() ?? ""] ??
+    "规划与执行";
   return (
     <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>
       <aside className="sidebar">
@@ -63,9 +68,12 @@ export function AppShell({
         <nav aria-label="主导航">
           {projectId ? (
             <>
-              <NavLink to={"/projects/" + projectId + "/roadmap-planning"}>
+              <NavLink
+                aria-label="任务规划"
+                to={"/projects/" + projectId + "/roadmap-planning"}
+              >
                 <GitBranch size={17} />
-                <span>Roadmap 规划</span>
+                <span>任务规划</span>
               </NavLink>
               <NavLink
                 aria-label="重构与维护"
@@ -85,10 +93,7 @@ export function AppShell({
                 <GitBranch size={17} />
                 <span>任务 DAG</span>
               </NavLink>
-              <NavLink
-                aria-label="任务执行"
-                to={`/projects/${projectId}/runs`}
-              >
+              <NavLink aria-label="任务执行" to={`/projects/${projectId}/runs`}>
                 <Layers size={17} />
                 <span>任务执行</span>
                 {questions > 0 && (
@@ -96,18 +101,11 @@ export function AppShell({
                 )}
               </NavLink>
               <NavLink
-                aria-label="项目运行环境"
-                to={`/projects/${projectId}/environment`}
+                aria-label="人工核验"
+                to={`/projects/${projectId}/manual-verification`}
               >
-                <Command size={17} />
-                <span>项目运行环境</span>
-              </NavLink>
-              <NavLink
-                aria-label="测试管理"
-                to={`/projects/${projectId}/tests`}
-              >
-                <FlaskConical size={17} />
-                <span>测试管理</span>
+                <ClipboardCheck size={17} />
+                <span>人工核验</span>
               </NavLink>
               <NavLink
                 aria-label="活动中心"
@@ -118,29 +116,22 @@ export function AppShell({
               </NavLink>
             </>
           ) : (
-            <NavLink to="/projects">
+            <NavLink aria-label="选择项目" to="/projects">
               <GitBranch size={17} />
               <span>选择项目</span>
             </NavLink>
           )}
         </nav>
         <div className="sidebar-footer">
-          <NavLink
-            aria-label="执行方案配置"
-            title="执行方案配置"
-            to="/settings/execution-configs"
-          >
-            <Settings size={16} />
-            <span>执行方案配置</span>
-          </NavLink>
-          <NavLink
+          <Link
             aria-label="配置"
             title="配置"
-            to={projectId ? `/projects/${projectId}/settings` : "/settings"}
+            className={configuration ? "active" : undefined}
+            to={projectId ? `/projects/${projectId}/status` : "/settings"}
           >
             <Settings size={16} />
             <span>配置</span>
-          </NavLink>
+          </Link>
           {switcher}
         </div>
       </aside>
@@ -155,10 +146,19 @@ export function AppShell({
             >
               <PanelLeftClose size={17} />
             </Button>
-            <span className="breadcrumb-project" title={projectName}>
-              {global ? "设置" : projectName || "当前项目"}
+            <span
+              className="breadcrumb-project"
+              title={configuration ? undefined : projectName}
+            >
+              {configuration ? "配置" : projectName || "当前项目"}
             </span>
             <span>/</span>
+            {configuration && (
+              <>
+                <span>{configuration.section}</span>
+                <span>/</span>
+              </>
+            )}
             <strong>{title}</strong>
           </div>
           <div className="topbar-actions">
@@ -168,12 +168,20 @@ export function AppShell({
                 {returnTo === "/projects" ? "选择项目" : "返回项目"}
               </NavLink>
             )}
+            {projectStatus}
             {dispatchStatus}
             {activities}
             {connection}
           </div>
         </header>
-        <main>{children}</main>
+        <div
+          className={
+            configuration ? "configuration-layout" : "workspace-layout"
+          }
+        >
+          {configuration && <ConfigurationNavigation projectId={projectId} />}
+          <main>{children}</main>
+        </div>
         {footer && <footer className="app-footer">{footer}</footer>}
       </div>
     </div>

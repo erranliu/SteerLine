@@ -12,15 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
@@ -47,46 +46,37 @@ type roadmapPort struct {
 	planning         *planningPort
 	config           Config
 	store            *sqlite.SQLiteStore
+	materials        committedMaterialReader
 	service          *roadmapservice.Service
 	publicationMu    sync.Mutex
 	generationMu     sync.Mutex
 	initializationMu sync.Mutex
 	preparationMu    sync.Mutex
 	preparationCache *roadmapPreparation
-	mutateTask       func(context.Context, func(context.Context) error) error
+	taskAdmission    roadmapTaskAdmission
+	mergeHistory     roadmapMergeHistory
 }
 
-func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *roadmapPort {
+func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, taskAdmission roadmapTaskAdmission, mergeHistory roadmapMergeHistory, refreshBaselineWithRewrite func(context.Context) (commit string, rewritten bool, err error)) *roadmapPort {
 	c = bindNativeConfiguration(c, cli)
-	p := &roadmapPort{config: c, store: store}
-	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit}
+	p := &roadmapPort{config: c, store: store, materials: materials, taskAdmission: taskAdmission, mergeHistory: mergeHistory}
+	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit, refreshBaselineWithRewrite: refreshBaselineWithRewrite}
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source
 	p.service.Graph = p.graph
-	p.service.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		profile, e := c.RunnerExecution.Profile(id, "")
-		if e != nil {
-			return runnercontract.ExecutionInput{}, nil, e
-		}
-		resolved, e := c.deriveProfile(ctx, profile, "generate", "read_only")
-		if e != nil || resolved.Execution == nil {
-			return runnercontract.ExecutionInput{}, nil, e
-		}
-		return *resolved.Execution, c.runtimeNative.Catalog, nil
-	}
+	p.service.Prepare = c.prepareSteerAgentGeneration
 	p.service.PrepareDocuments = p.documentContext
-	p.service.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
-		reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
-		return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
+	p.service.ReadCommitted = materials.readCommittedMaterial
+	if c.runtimeMaintenance != nil {
+		p.service.ReadCommittedFiles = c.runtimeMaintenance.readCommittedMaterials
 	}
 	return p
 }
 func (p *roadmapPort) source(ctx context.Context, relative string) (roadmap.Source, error) {
-	m := p.config.runtimeMaintenance
-	if m == nil {
+	if p.materials == nil {
 		return roadmap.Source{}, errors.New("project Git unavailable")
 	}
-	head, e := m.git(ctx, "rev-parse", "--verify", "HEAD^{commit}")
+	head, e := p.config.repositoryGit(ctx, "rev-parse", "--verify", "HEAD^{commit}")
 	if e != nil {
 		return roadmap.Source{}, e
 	}
@@ -94,7 +84,7 @@ func (p *roadmapPort) source(ctx context.Context, relative string) (roadmap.Sour
 	if e != nil {
 		return source, e
 	}
-	committed, readErr := m.read(ctx, source.Head, relative)
+	committed, readErr := p.materials.readCommittedMaterial(ctx, source.Head, relative)
 	source.Modified = readErr != nil || !roadmap.SameMarkdown(committed, []byte(source.Body))
 	return source, nil
 }
@@ -107,7 +97,7 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 	if len(graph.Tasks) == 0 {
 		return result, nil
 	}
-	observation, e := p.config.runtimeMaintenance.check(ctx)
+	baseline, e := p.mergeHistory.refreshBaseline(ctx)
 	if e != nil {
 		return nil, e
 	}
@@ -116,7 +106,7 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 		if e != nil {
 			return nil, e
 		}
-		spec, e := p.config.runtimeMaintenance.read(ctx, observation.Commit, contract.SpecRef.Path)
+		spec, e := p.materials.readCommittedMaterial(ctx, baseline, contract.SpecRef.Path)
 		if e != nil {
 			return nil, fmt.Errorf("已有任务 #%s 的 Spec 无法读取: %w", t.TaskID, e)
 		}
@@ -238,20 +228,24 @@ func (p *roadmapPort) read(ctx context.Context, route string, values url.Values)
 	for _, r := range records {
 		publicRecords = append(publicRecords, publicRoadmap(r))
 	}
-	profiles := []map[string]string{}
-	for _, profile := range p.config.RunnerExecution.Profiles {
-		if _, e := p.config.deriveProfile(ctx, profile, "generate", "read_only"); e == nil {
-			profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
+	agent, err := executionconfig.SteerAgentSettings(p.config.RunnerExecution.SteerAgent)
+	if err != nil {
+		return nil, err
+	}
+	reason := p.config.runtimeCatalog.FileMaterialGenerationUnavailable()
+	if reason == "" {
+		if _, _, err = p.config.prepareSteerAgentGeneration(ctx); err != nil {
+			reason = err.Error()
 		}
 	}
 	return struct {
-		Sources            []roadmap.Source      `json:"sources"`
-		Records            []publicRoadmapRecord `json:"records"`
-		Profiles           []map[string]string   `json:"profiles"`
-		DocumentsAvailable bool                  `json:"documents_available"`
-		DocumentsReason    string                `json:"documents_reason"`
-		Preparation        roadmapPreparation    `json:"preparation"`
-	}{sources, publicRecords, profiles, p.config.runtimeCatalog.FileMaterialGenerationUnavailable() == "", p.config.runtimeCatalog.FileMaterialGenerationUnavailable(), p.preparation(ctx)}, nil
+		Sources            []roadmap.Source           `json:"sources"`
+		Records            []publicRoadmapRecord      `json:"records"`
+		SteerAgent         executionconfig.SteerAgent `json:"steer_agent"`
+		DocumentsAvailable bool                       `json:"documents_available"`
+		DocumentsReason    string                     `json:"documents_reason"`
+		Preparation        roadmapPreparation         `json:"preparation"`
+	}{sources, publicRecords, agent, reason == "", reason, p.preparation(ctx)}, nil
 }
 func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
 	out := maintenanceResponse(in)
@@ -262,11 +256,11 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 	if port == nil || p.actor == nil || !p.Server.Identity(ctx).Ready {
 		return out, projectStoppingError()
 	}
-	allowed := map[string]bool{"roadmap_prepare_static": true, "roadmap_parse": true, "roadmap_confirm": true, "roadmap_observe": true, "roadmap_stop": true, "roadmap_generate_documents": true, "roadmap_publish": true, "roadmap_edit_documents": true, "roadmap_admit": true, "roadmap_resume": true, "roadmap_retry_documents": true}
+	allowed := map[string]bool{"roadmap_prepare_static": true, "roadmap_parse": true, "roadmap_confirm": true, "roadmap_observe": true, "roadmap_stop": true, "roadmap_generate_documents": true, "roadmap_publish": true, "roadmap_edit_documents": true, "roadmap_admit": true, "roadmap_resume": true, "roadmap_retry_documents": true, taskPlanningGenerate: true}
 	if !allowed[in.Action] {
 		return out, errors.New("unknown roadmap action")
 	}
-	if in.Action == "roadmap_generate_documents" || in.Action == "roadmap_retry_documents" {
+	if roadmapGenerationCommand(in.Action) {
 		port.generationMu.Lock()
 		defer port.generationMu.Unlock()
 	}
@@ -308,7 +302,7 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 		out.Code = "roadmap_rejected"
 		out.Diagnostic = actionErr.Error()
 		if record, e := port.store.RoadmapRequest(context.WithoutCancel(ctx), port.config.Identity(), in.RequestID); e == nil {
-			if in.Action == "roadmap_generate_documents" || in.Action == "roadmap_retry_documents" {
+			if roadmapGenerationCommand(in.Action) {
 				// A read-back binding proves the atomic work intent was saved,
 				// even if its write receipt failed. Generation finishes separately.
 				out.Status, out.Code, out.Diagnostic = "applied", "", ""
@@ -333,6 +327,9 @@ func (p *runtimeProjectPort) roadmapCommand(ctx context.Context, in httpcontract
 	return out, nil
 }
 func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelope) (any, error) {
+	if in.Action == taskPlanningGenerate {
+		return p.generateTaskDocuments(ctx, in)
+	}
 	if in.Action == "roadmap_prepare_static" {
 		return p.prepareStatic(ctx, in)
 	}
@@ -402,12 +399,18 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 		if e := decodeStrictJSON(in.Payload, &struct{}{}); e != nil {
 			return nil, e
 		}
+		if e := p.verifyCurrentTaskCard(ctx, r); e != nil {
+			return nil, e
+		}
 		return p.service.GenerateDocuments(ctx, r.ID, in.RequestID, in.ExpectedVersion)
 	case "roadmap_retry_documents":
 		var input struct {
 			Key string `json:"local_key"`
 		}
 		if e := decodeStrictJSON(in.Payload, &input); e != nil {
+			return nil, e
+		}
+		if e := p.verifyCurrentTaskCard(ctx, r); e != nil {
 			return nil, e
 		}
 		return p.service.RetryDocuments(ctx, r.ID, input.Key, in.RequestID, in.ExpectedVersion)
@@ -433,6 +436,11 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 					r.Documents[i].Plan.Body = input.Body
 				case "acceptance":
 					r.Documents[i].Acceptance[0].Body = input.Body
+				case "manual_checks":
+					r.Documents[i].ManualChecks = nil
+					if strings.TrimSpace(input.Body) != "" {
+						r.Documents[i].ManualChecks = json.RawMessage(input.Body)
+					}
 				case "tests":
 					var selection tm.Arrangement
 					if err := tm.Decode([]byte(input.Body), &selection); err != nil {
@@ -486,7 +494,7 @@ func (p *runtimeProjectPort) roadmapReceipt(ctx context.Context, id string) (*ht
 	if err = json.Unmarshal(old.Payload, &envelope); err != nil {
 		return nil, err
 	}
-	if envelope.Action == "roadmap_generate_documents" || envelope.Action == "roadmap_retry_documents" {
+	if roadmapGenerationCommand(envelope.Action) {
 		p.config.runtimeRoadmaps.generationMu.Lock()
 		defer p.config.runtimeRoadmaps.generationMu.Unlock()
 	}
@@ -535,7 +543,7 @@ func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string
 			if err := p.store.UpdateCommand(ctx, old); err != nil {
 				return nil, err
 			}
-		} else if envelope.Action == "roadmap_generate_documents" {
+		} else if envelope.Action == "roadmap_generate_documents" || envelope.Action == taskPlanningGenerate {
 			// The generation lock excludes a command still preparing its child.
 			// A saved confirmation without a child proves generation was not submitted.
 			confirmation := roadmapservice.DocumentConfirmationRequest(id)
@@ -543,10 +551,15 @@ func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string
 			if err != nil && !errors.Is(err, roadmap.ErrNotFound) {
 				return nil, err
 			}
-			if err == nil && parent.ID == envelope.TargetID && parent.Purpose != "documents" && parent.State == "confirmed" && parent.ConfirmationRequest == confirmation && parent.ConfirmedDigest != "" {
+			confirmed := err == nil && parent.Purpose != "documents" && parent.State == "confirmed" && parent.ConfirmationRequest == confirmation && parent.ConfirmedDigest != ""
+			bound := confirmed && (parent.ID == envelope.TargetID || envelope.Action == taskPlanningGenerate && parent.Source.PlanningID == envelope.TargetID)
+			if bound || envelope.Action == taskPlanningGenerate {
 				out.Status, out.Code = "rejected", "roadmap_generation_not_submitted"
-				out.Diagnostic = "任务与依赖已确认，文档生成尚未提交，请重试生成 Spec / Plan"
-				out.Roadmap, _ = json.Marshal(publicRoadmap(parent))
+				out.Diagnostic = "文档生成尚未提交，请刷新后重试"
+				if bound {
+					out.Diagnostic = "任务与依赖已确认，文档生成尚未提交，请重试生成 Spec / Plan"
+					out.Roadmap, _ = json.Marshal(publicRoadmap(parent))
+				}
 				old.Result, _ = json.Marshal(out)
 				old.Status, old.UpdatedAt = out.Status, time.Now().UTC()
 				if err := p.store.UpdateCommand(ctx, old); err != nil {
@@ -558,9 +571,13 @@ func (p *runtimeProjectPort) roadmapReceiptLocked(ctx context.Context, id string
 	return &out, nil
 }
 
+func roadmapGenerationCommand(action string) bool {
+	return action == "roadmap_generate_documents" || action == "roadmap_retry_documents" || action == taskPlanningGenerate
+}
+
 func roadmapEffectPending(action string, r roadmap.Record) bool {
 	switch action {
-	case "roadmap_generate_documents", "roadmap_retry_documents":
+	case "roadmap_generate_documents", "roadmap_retry_documents", taskPlanningGenerate:
 		// The original command creates durable work; model completion is observed separately.
 		return false
 	case "roadmap_publish":

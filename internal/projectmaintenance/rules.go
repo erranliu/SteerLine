@@ -11,6 +11,14 @@ import (
 
 type Reader func(string) ([]byte, error)
 
+type InvalidCatalogueError struct {
+	Path string
+	Err  error
+}
+
+func (e *InvalidCatalogueError) Error() string { return e.Err.Error() }
+func (e *InvalidCatalogueError) Unwrap() error { return e.Err }
+
 func Read(r Reader, path string) ([]byte, error) {
 	b, err := r(path)
 	if err != nil {
@@ -65,7 +73,7 @@ func Arrangement(plan, commit string, r Reader, protocol []byte) (tm.Snapshot, [
 	}
 	catalogue, err := tm.ParseCatalogue(rawCatalogue)
 	if err != nil {
-		return out, nil, err
+		return out, nil, &InvalidCatalogueError{Path: entry.TestingCatalogue, Err: err}
 	}
 	out.Definitions, err = tm.Select(rawArrangement, catalogue)
 	if err != nil {

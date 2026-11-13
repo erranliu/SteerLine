@@ -93,6 +93,10 @@ flowchart LR
 - SQLite 与存储端口无产品包生产依赖；查询层从同快照事实生成 DTO。`runnerbridge` 不导入 SQLite 或 task 实现，`runnerbinding` 仅使用公开契约和 caller 事实。
 - `product/client` 只依赖产品 API；任务交付/项目权威归 `task/model`，宿主 checkpoint/控制及观察契约归 `hostcontract`。这些值不能经旧包别名重新形成双所有者。
 - `taskrunner`、storage 和 query 仍消费 `execution/model` 等展示或配置值；app 也同时包含组装与产品适配。它们是现存耦合，不能因文件已拆分就宣称可独立编译、替换或交付。
+- 项目运行时分别注入固定提交材料读取与执行预留。读取返回指定提交下的普通 Git 文件，执行预留由项目维护核实就绪并持有基线锁完成保存。环境准备使用基线预留，任务启动继续按环境目标、项目基线、存储的顺序取得锁。
+- 环境资格通过项目维护读取已有基线观察或主动刷新。等待、取消和观察发布由项目维护处理，环境模块在发布前核对并撤销失效资格。
+- Roadmap 核实文档合并并保存固定批次和原入图请求，通过[入图适配](../../internal/app/roadmap_task_commands.go)提交批次或读取原回执。Task 在事务内分配编号、写入图和保存回执，Roadmap 据原回执保存编号映射。
+- 项目运行时向启动资格、派发状态和项目就绪路由注入只读就绪查询，向候选视图和测试进度注入材料新鲜度查询。实际启动仍刷新准入并在预留时复核基线。
 
 新增边界按实际消费者收窄；未实施的 app 拆分、调用面调整等建议保留在历史入口，需另行确认。当前任务交付的同一原子事务和项目资源所有权不因拆包改变。
 
@@ -111,5 +115,7 @@ flowchart LR
 随实现更新受影响的图、模块与来源链接；格式版本唯一定位在数据模型，不在本页重复数字。技术栈和开发操作归 Web README；任务安排归 Spec/Plan，审计及验证归[历史证据入口](../../SteerlineFlow/archive/design/architecture-web-history.md)。本页不追加日期增量、已完成任务清单或拟议模块。
 
 ## 统一异步观察
+
+各业务模块从单份持久记录解析会话和操作关联。项目运行时绑定来源读取，公共会话入口校验原 Run、Attempt、Session 和 Generation，再按现有分页和输出预算读取 Runner。已记录交互继续使用原有存储快照及正文校验。
 
 `storage/ports.AsyncActivityReader` 提供中性有界事实；SQLite 单条查询获取来源及关联，产品 `query/async_activities.go` 只做状态、相关性与列表投影。App 注入四个静态来源并暴露 `GET /activities`，绕开 actor 的业务执行路径；不调用 Runner 或 Git。业务 owner 负责批次/关联/观察元数据的持久化，读取方没有执行能力。Web 的 App 在 keyed Workspace 外保存抽屉偏好，Workspace 内按 home/project/instance 保存查询；入口通过 slot 交给应用壳。设计与扩展约定见[异步活动中心](../product-design/async-activities.md)，实际验证见[专属验收](../../SteerlineFlow/testing/acceptance/async-activity-center.md)。

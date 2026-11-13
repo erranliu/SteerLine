@@ -1,10 +1,19 @@
+export type ProjectBlocker = {
+  category: "remote" | "worktree" | "task_material" | "test_plan";
+  code: string;
+  diagnostic: string;
+  task_id?: string;
+  path?: string;
+  target_branch?: string;
+};
+
 export type ProjectReadiness = {
   waiting?: number;
   status: "ready" | "not_ready";
   commit: string;
   total: number;
   ready: number;
-  blockers: string[];
+  blockers: ProjectBlocker[];
 };
 
 export type Materials = {
@@ -54,6 +63,29 @@ export interface Presentation {
     runner?: { executable: string };
   };
 }
+export interface TaskStartBlocker {
+  code: string;
+  diagnostic: string;
+}
+export interface DispatchObservation {
+  mode: "manual" | "auto";
+  revision: number;
+  state: "closed" | "waiting" | "ready";
+  default_profile_id: string;
+  default_profile_name: string;
+  environment_readiness_required: boolean;
+  blocker?: {
+    category: "project" | "environment" | "profile" | "tasks" | "execution";
+    code: string;
+    diagnostic: string;
+  };
+}
+export interface TaskStartEligibility {
+  action: "start_task" | "start_candidate";
+  blockers: TaskStartBlocker[];
+  profile_blockers: Record<string, TaskStartBlocker | null>;
+  environment_readiness_required: boolean;
+}
 export interface Task {
   task_id: string;
   title: string;
@@ -62,6 +94,7 @@ export interface Task {
   spec_path: string;
   dependency_ready: boolean;
   startup_blockers: string[];
+  start_eligibility?: TaskStartEligibility;
   predecessors: {
     task_id: string;
     delivered: boolean;
@@ -84,6 +117,7 @@ export interface Task {
 }
 export interface TaskPage {
   tasks: Task[];
+  authority_version?: number;
   next_cursor?: string;
   has_more: boolean;
   graph_revision: number;
@@ -165,6 +199,7 @@ export interface Candidate {
     native_outcome?: string;
     final_verified: boolean;
     content_status?: string;
+    manual_verification?: boolean;
     pr_state?: string;
     pr_checked_at?: string;
     pr_query_error?: string;

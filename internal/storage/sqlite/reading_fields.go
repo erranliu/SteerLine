@@ -49,7 +49,9 @@ func putReadingField(ctx context.Context, tx readingWriter, project string, f re
 	VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_identity,source,source_id,item_id) DO UPDATE SET
 	preview=excluded.preview,body_bytes=excluded.body_bytes,body_sha256=excluded.body_sha256,state=excluded.state,at=excluded.at,
 	run_id=excluded.run_id,attempt_id=excluded.attempt_id,session_id=excluded.session_id,turn_id=excluded.turn_id,group_name=excluded.group_name
-	WHERE reading_fields.body_sha256<>excluded.body_sha256 OR reading_fields.state<>excluded.state OR reading_fields.at<>excluded.at`,
+	WHERE reading_fields.body_sha256<>excluded.body_sha256 OR reading_fields.state<>excluded.state OR reading_fields.at<>excluded.at
+	OR reading_fields.run_id<>excluded.run_id OR reading_fields.attempt_id<>excluded.attempt_id
+	OR reading_fields.session_id<>excluded.session_id OR reading_fields.turn_id<>excluded.turn_id OR reading_fields.group_name<>excluded.group_name`,
 		project, f.source, f.sourceID, f.id, f.origin, f.originID, f.field, f.role, f.kind, f.label, readingPrefix(f.text, 512), len(f.text), hex.EncodeToString(sum[:]), f.at, f.state, f.run, f.attempt, f.session, f.turn, f.group)
 	if err != nil {
 		return err
@@ -143,6 +145,8 @@ func (s *SQLiteStore) ReadingVersion(ctx context.Context, project, source, id st
 		err = db.QueryRowContext(ctx, `SELECT CAST(revision AS TEXT) FROM roadmaps WHERE project_identity=? AND roadmap_id=?`, project, id).Scan(&version)
 	case "main_agent_advisory":
 		err = db.QueryRowContext(ctx, `SELECT CAST(revision AS TEXT) FROM advisory_jobs WHERE project_identity=? AND request_id=?`, project, id).Scan(&version)
+	case "refactoring":
+		err = db.QueryRowContext(ctx, `SELECT CAST(revision AS TEXT) FROM refactoring_actions WHERE project_identity=? AND action_id=?`, project, id).Scan(&version)
 	case "baseline_check":
 		err = db.QueryRowContext(ctx, `SELECT status||':'||updated_at FROM commands WHERE project_identity=? AND command_id=? AND kind='project_maintenance' AND json_extract(payload,'$.action')='maintenance_check'`, project, id).Scan(&version)
 	default:
@@ -164,6 +168,8 @@ func readingOrigin(origin string) (table, key string) {
 		return "roadmaps", "roadmap_id"
 	case "advisory":
 		return "advisory_jobs", "request_id"
+	case "refactoring":
+		return "refactoring_actions", "action_id"
 	}
 	return "", ""
 }

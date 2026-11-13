@@ -61,9 +61,10 @@ test("web.smoke.billing: isolated settings save, conflict, versions and narrow l
       ).status(),
     )
     .toBe(200);
-  await page.goto(new URL("/settings#billing", opening).toString());
-  const panel = page.getByRole("region", { name: "计费设置" });
+  await page.goto(new URL("/settings/billing", opening).toString());
+  const panel = page.getByRole("region", { name: "模型价表", exact: true });
   await expect(panel.getByRole("combobox", { name: "价表版本" })).toBeVisible();
+  await panel.getByRole("button", { name: "创建价表" }).click();
   await panel
     .getByRole("textbox", { name: "价格来源", exact: true })
     .fill("浏览器隔离合成测试价，非供应商报价");
@@ -90,6 +91,7 @@ test("web.smoke.billing: isolated settings save, conflict, versions and narrow l
   await expect(panel.getByRole("status")).toHaveText(/价表已保存并立即/);
   const versions = panel.getByRole("combobox", { name: "价表版本" });
   const first = await versions.inputValue();
+  await panel.getByRole("button", { name: "编辑价表" }).click();
   await panel
     .getByRole("textbox", { name: "价格来源", exact: true })
     .fill("第二版隔离合成测试价");
@@ -98,21 +100,23 @@ test("web.smoke.billing: isolated settings save, conflict, versions and narrow l
   const second = await versions.inputValue();
   expect(second).not.toBe(first);
   await versions.selectOption(first);
-  await expect(
-    panel.getByRole("textbox", { name: "价格来源", exact: true }),
-  ).toHaveValue("浏览器隔离合成测试价，非供应商报价");
+  await expect(versions).toHaveValue(first);
+  await panel.getByRole("button", { name: "编辑价表" }).click();
+  await expect(panel.getByRole("textbox", { name: "价格来源", exact: true })).toHaveValue(
+    "浏览器隔离合成测试价，非供应商报价",
+  );
   const other = await context.newPage();
-  await other.goto(new URL("/settings#billing", opening).toString());
-  const otherPanel = other.getByRole("region", { name: "计费设置" });
-  await expect(
-    otherPanel.getByRole("textbox", { name: "价格来源", exact: true }),
-  ).toBeVisible();
+  await other.goto(new URL("/settings/billing", opening).toString());
+  const otherPanel = other.getByRole("region", { name: "模型价表", exact: true });
+  await expect(otherPanel.getByRole("rowheader", { name: /fixture-model/ })).toBeVisible();
   await panel
     .getByRole("textbox", { name: "价格来源", exact: true })
     .fill("必须保留的并发草稿");
   await otherPanel
     .getByRole("combobox", { name: "价表版本" })
     .selectOption(second);
+  await expect(otherPanel.getByRole("combobox", { name: "价表版本" })).toHaveValue(second);
+  await otherPanel.getByRole("button", { name: "编辑价表" }).click();
   await expect(
     otherPanel.getByRole("textbox", { name: "价格来源", exact: true }),
   ).toHaveValue("第二版隔离合成测试价");

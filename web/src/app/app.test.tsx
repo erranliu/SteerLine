@@ -33,7 +33,18 @@ import {
 function workspaceRead(api: Api, path: string): unknown {
   if (path.startsWith("/environment/options"))
     return { profiles: [], environments: [], generators: [] };
+  if (path.startsWith("/environment/materials?"))
+    return { document: "# 项目运行环境" };
   if (path === "/snapshot") return makeSnapshot(api);
+  if (path === "/dispatch")
+    return {
+      mode: "manual",
+      revision: 1,
+      state: "closed",
+      default_profile_id: "default",
+      default_profile_name: "默认方案",
+      environment_readiness_required: true,
+    };
   if (path === "/presentation")
     return { presentation: { profiles: [], default_profile_id: "" } };
   if (path === "/maintenance/readiness")
@@ -42,7 +53,7 @@ function workspaceRead(api: Api, path: string): unknown {
       commit: "",
       total: 0,
       ready: 0,
-      blockers: ["远端尚未检查"],
+      blockers: [{ category: "remote", code: "remote_unchecked", diagnostic: "远端尚未检查" }],
     };
   if (path === "/maintenance")
     return {
@@ -51,7 +62,7 @@ function workspaceRead(api: Api, path: string): unknown {
         commit: "",
         total: 0,
         ready: 0,
-        blockers: ["远端尚未检查"],
+        blockers: [{ category: "remote", code: "remote_unchecked", diagnostic: "远端尚未检查" }],
       },
       observation: { commit: "" },
       tasks: [],
@@ -193,7 +204,8 @@ it("preloads only after connection verification, shares presentation in StrictMo
         makeSnapshot(api),
       );
     });
-  expect(screen.getByRole("button", { name: /项目维护/ })).toBeVisible();
+  expect(await screen.findByText("项目未就绪 · 远端尚未检查")).toBeVisible();
+  expect(get.mock.calls.some(([path]) => path === "/maintenance")).toBe(false);
   vi.useFakeTimers();
   await act(() => vi.advanceTimersByTimeAsync(21000));
   expect(
@@ -203,30 +215,31 @@ it("preloads only after connection verification, shares presentation in StrictMo
     get.mock.calls.filter(([path]) => path.startsWith("/tasks?")),
   ).toHaveLength(1);
   expect(
-    get.mock.calls.every(
-      ([path]) =>
-        path === "/snapshot" ||
-        path === "/presentation" ||
-        path === "/tasks?limit=100&cursor=" ||
-        path === "/maintenance" ||
-        path === "/maintenance/readiness" ||
-        path === "/environment/options" ||
-        path === "/environment/options?configuration=true" ||
-        path.startsWith("/activities?"),
-    ),
-  ).toBe(true);
+    get.mock.calls
+      .map(([path]) => path)
+      .filter(
+        (path) =>
+          !(
+            path === "/snapshot" ||
+            path === "/dispatch" ||
+            path === "/presentation" ||
+            path === "/tasks?limit=100&cursor=" ||
+            path === "/maintenance" ||
+            path === "/maintenance/readiness" ||
+            path === "/environment/options" ||
+            path === "/environment/options?configuration=true" ||
+            path.startsWith("/activities?")
+          ),
+      ),
+  ).toEqual([]);
+  expect(get.mock.calls.filter(([path]) => path === "/dispatch")).toHaveLength(1);
   client.clear();
 });
 
-it("removes duplicated profiles from configuration and scopes manual refresh", async () => {
+it("keeps project dispatch separate from shared configuration and scopes manual refresh", async () => {
   const client = testClient();
   const identity = { ...fixtureIdentity, project_id: "manual" };
   const api = new Api(identity, "csrf", "manual-home");
-  client.setQueryData([api.home, "execution-config"], configSnapshot);
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => Response.json(configSnapshot)),
-  );
   const other = [api.home, "another-project", "instance", "snapshot"];
   client.setQueryData(other, {});
   const refreshConnection = vi.fn();
@@ -234,7 +247,8 @@ it("removes duplicated profiles from configuration and scopes manual refresh", a
     async (path) => workspaceRead(api, path) as never,
   );
   mountWorkspace(api, client, { onRefreshConnection: refreshConnection });
-  expect(await screen.findByLabelText("生成最大并发数")).toHaveValue(5);
+  expect(await screen.findByRole("heading", { name: "任务自动派发" })).toBeVisible();
+  expect(screen.queryByLabelText("生成最大并发数")).not.toBeInTheDocument();
   expect(screen.queryByText("当前服务已加载方案")).not.toBeInTheDocument();
   expect(screen.queryByText("全局执行配置")).not.toBeInTheDocument();
   await screen.findByText("服务在线", { exact: true });

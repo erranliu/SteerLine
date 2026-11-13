@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
-import { SafeLink } from "../../shared/ui/status";
+import { SafeLink, short } from "../../shared/ui/status";
 import { testPreparationNames as names } from "../tasks/use-test-readiness";
 import type { ProjectReadiness } from "../../shared/api/types";
+import { projectBlockerLabel } from "./project-readiness-status";
 import {
   CopyExecutionInfo,
   requestExecutionInfo,
@@ -101,22 +102,14 @@ export function ProjectMaintenance() {
   const { api, identity, online, refresh, requests, submit, pendingRequests } =
     useWorkspace();
   const feedback = useActivityFeedback();
-  const [open, setOpen] = useState(false),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [logs, setLogs] = useState(false),
     [page, setPage] = useState(0),
     [scope, setScope] = useState("history");
-  const location = useLocation();
-  const panel = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (
-      new URLSearchParams(location.search).get("maintenance") === "preparation"
-    ) {
-      setOpen(true);
-      panel.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-    }
-  }, [location.search, location.key]);
+  const [params] = useSearchParams();
+  const requestID = params.get("request_id");
+  const taskID = params.get("task");
   const base = [
     api.home,
     identity.project_id,
@@ -130,13 +123,20 @@ export function ProjectMaintenance() {
     refetchInterval: online ? 5000 : false,
     retry: false,
   });
+  const taskVisible = view.data?.tasks.some((task) => task.task_id === taskID);
+  useEffect(() => {
+    if (taskVisible)
+      document
+        .getElementById("project-status-task-" + taskID)
+        ?.scrollIntoView?.();
+  }, [taskID, taskVisible]);
   const log = useQuery({
     queryKey: [...base, "log", view.data?.observation.commit, page, scope],
     queryFn: () =>
       api.get<{ commits: Commit[]; more: boolean }>(
         "/maintenance/log?page=" + page + "&scope=" + scope,
       ),
-    enabled: online && open && logs,
+    enabled: online && logs,
     retry: false,
   });
   async function action(
@@ -180,7 +180,7 @@ export function ProjectMaintenance() {
     }
   }
   const v = view.data;
-  const ready = online && view.isSuccess && v?.readiness.status === "ready";
+  const verified = online && view.isSuccess;
   const l = v?.local;
   const localLabel = !l
     ? "正在读取本地版本"
@@ -221,25 +221,63 @@ export function ProjectMaintenance() {
           ? "检查结果待核实 · 请查看原请求"
           : "";
   return (
-    <section
-      ref={panel}
-      id="project-maintenance"
-      aria-label="项目维护"
-      className="settings-panel maintenance-panel"
-    >
-      <button onClick={() => setOpen(!open)} aria-expanded={open}>
-        项目维护 · {ready ? "已就绪" : "未就绪"}
-      </button>
-      <span className="muted">
-        {v?.readiness
-          ? ` · ${localLabel} · 测试安排 ${v.readiness.ready}/${v.readiness.total} 就绪${v.readiness.waiting ? ` · ${v.readiness.waiting} 项等待前置测试` : ""}`
-          : " · 状态待核实"}
-      </span>
-      {(open ||
-        !online ||
-        error ||
-        view.error ||
-        v?.observation.diagnostic) && (
+    <section aria-label="项目状态" className="settings-panel maintenance-panel">
+      <h1>项目状态</h1>
+      <p className="path">{identity.repository_identity}</p>
+      <p className="muted">
+        项目 {short(identity.project_id)} · 服务实例{" "}
+        {short(identity.instance_id)}
+      </p>
+      <div>
+        {!verified && (
+          <p className="notice amber">
+            {online ? "当前状态待核实" : "离线 · 当前状态待核实"}
+            {v &&
+              ` · 上次状态核实 ${time(new Date(view.dataUpdatedAt).toISOString())}`}
+          </p>
+        )}
+        {(error || view.error) && (
+          <p role="alert">{error || String(view.error)}</p>
+        )}
+        {requestID && (
+          <OperationResult
+            requestID={requestID}
+            targetID={identity.project_id}
+          />
+        )}
+        {!!v?.readiness.blockers.length && (
+          <section aria-labelledby="project-blockers-heading">
+            <h2 id="project-blockers-heading">
+              {verified ? "未就绪原因" : "上次核实的原因"}
+            </h2>
+            <ul className="project-status-reasons">
+              {v.readiness.blockers.map((reason) => (
+                <li
+                  className="notice amber"
+                  key={JSON.stringify([
+                    reason.code,
+                    reason.task_id,
+                    reason.path,
+                  ])}
+                >
+                  <strong>{projectBlockerLabel(reason)}</strong>
+                  <p>{reason.diagnostic}</p>
+                  {reason.path && <code>{reason.path}</code>}{" "}
+                  {reason.task_id ? (
+                    <a
+                      href={`#project-status-task-${encodeURIComponent(reason.task_id)}`}
+                    >
+                      查看任务 #{reason.task_id} 材料
+                    </a>
+                  ) : (
+                    <a href="#project-status-git">查看 Git 基线</a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        <h2 id="project-status-git">远端基线 · {v?.remote_name}</h2>
         <p className="muted">
           {v?.observation.last_success ? (
             <time dateTime={v.observation.last_success}>
@@ -249,189 +287,143 @@ export function ProjectMaintenance() {
             "上次成功检查时间未知"
           )}
         </p>
-      )}
-      {!open && (
-        <>
-          {!online && (
-            <p className="notice amber">离线 · 上次已知状态，当前待核实</p>
-          )}
-          {(error || view.error) && (
-            <p role="alert">{error || String(view.error)}</p>
-          )}
-          {v?.readiness.blockers.map((reason) => (
-            <p className="notice amber" key={reason}>
-              {reason}
-            </p>
-          ))}
-          {v?.observation.diagnostic && (
-            <p role="alert">检查远端失败：{v.observation.diagnostic}</p>
-          )}
-        </>
-      )}
-      {open && (
-        <div>
-          {!online && (
-            <p className="notice amber">
-              离线 · 以下为最后观察，当前状态待核实
-            </p>
-          )}
-          {(error || view.error) && (
-            <p role="alert">{error || String(view.error)}</p>
-          )}
-          {new URLSearchParams(location.search).get("request_id") && (
-            <OperationResult
-              requestID={new URLSearchParams(location.search).get(
-                "request_id",
-              )!}
-              targetID={identity.project_id}
-            />
-          )}
-          {v?.readiness.blockers.map((reason) => (
-            <p className="notice amber" key={reason}>
-              {reason}
-            </p>
-          ))}
-          {v?.observation.diagnostic && (
-            <p role="alert">
-              检查远端失败：{v.observation.diagnostic}
-              。请核对网络、认证及目标分支后重试。
-            </p>
-          )}
-          <h4>远端基线 · {v?.remote_name}</h4>
-          {v?.remote?.sha ? (
-            <CommitDetails commit={v.remote} />
-          ) : (
-            <p>尚无成功观察</p>
-          )}
-          <h4>
-            本地基线 · {l?.branch || "分支待核实"} · {localLabel}
-          </h4>
-          {v?.local_info?.sha ? (
-            <CommitDetails commit={v.local_info} />
-          ) : (
-            l?.commit && <code>{l.commit.slice(0, 12)}</code>
-          )}
-          {l?.reason && <p className="notice amber">{l.reason}</p>}
-          <p>
-            <button
-              disabled={
-                !online ||
-                busy ||
-                checking() ||
-                pending.some((r) => r.envelope.action === "maintenance_check")
-              }
-              onClick={() =>
-                void action("maintenance_check", identity.project_id)
-              }
-            >
-              {checking() ? "正在检查更新…" : "检查更新"}
+        {v?.remote?.sha ? (
+          <CommitDetails commit={v.remote} />
+        ) : (
+          <p>尚无成功观察</p>
+        )}
+        <h2>
+          本地基线 · {l?.branch || "分支待核实"} · {localLabel}
+        </h2>
+        {v?.local_info?.sha ? (
+          <CommitDetails commit={v.local_info} />
+        ) : (
+          l?.commit && <code>{l.commit.slice(0, 12)}</code>
+        )}
+        <p>
+          <button
+            disabled={
+              !online ||
+              busy ||
+              checking() ||
+              pending.some((r) => r.envelope.action === "maintenance_check")
+            }
+            onClick={() =>
+              void action("maintenance_check", identity.project_id)
+            }
+          >
+            {checking() ? "正在检查更新…" : "检查更新"}
+          </button>{" "}
+          <button
+            disabled={
+              !online ||
+              busy ||
+              checking() ||
+              pending.some((r) => r.envelope.action === "maintenance_check") ||
+              !l?.can_update
+            }
+            onClick={() =>
+              void action("maintenance_update", identity.project_id)
+            }
+          >
+            更新本地
+          </button>{" "}
+          <button onClick={() => setLogs(!logs)} aria-expanded={logs}>
+            查看提交日志
+          </button>
+        </p>
+        <SubmissionStatus
+          label={checkLabel}
+          busy={checking()}
+          showActivity={!!latestCheck}
+        />
+        {latestCheck && (
+          <CopyExecutionInfo
+            key={latestCheck.envelope.request_id}
+            info={{
+              ...requestExecutionInfo(
+                latestCheck.envelope,
+                latestCheck.response,
+              ),
+              project: identity.repository_identity,
+            }}
+          />
+        )}
+        {logs && (
+          <section aria-label="提交日志">
+            <label>
+              日志范围{" "}
+              <select
+                value={scope}
+                onChange={(e) => {
+                  setScope(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="history">远端提交历史</option>
+                <option value="behind">本地缺少的提交</option>
+                <option value="ahead">本地独有的提交</option>
+              </select>
+            </label>
+            {log.error && <p role="alert">{String(log.error)}</p>}
+            {log.data?.commits.map((c) => (
+              <CommitDetails key={c.sha} commit={c} />
+            ))}
+            {log.data?.commits.length === 0 && <p>没有对应提交</p>}
+            <button disabled={page === 0} onClick={() => setPage(page - 1)}>
+              上一页
             </button>{" "}
             <button
-              disabled={
-                !online ||
-                busy ||
-                checking() ||
-                pending.some(
-                  (r) => r.envelope.action === "maintenance_check",
-                ) ||
-                !l?.can_update
-              }
+              disabled={!log.data?.more}
+              onClick={() => setPage(page + 1)}
+            >
+              下一页
+            </button>
+          </section>
+        )}
+        <h2>Git 任务材料与测试安排</h2>
+        {v?.readiness && (
+          <p className="muted">
+            测试安排 {v.readiness.ready}/{v.readiness.total} 就绪
+            {!!v.readiness.waiting &&
+              ` · ${v.readiness.waiting} 项等待前置测试`}
+          </p>
+        )}
+        <p className="muted">
+          检查更新后读取已提交的 Plan 和同名 .tests.json。材料错误通过正常 Git
+          修改处理。
+        </p>
+        {v?.tasks.map((t) => (
+          <article key={t.task_id} id={`project-status-task-${t.task_id}`}>
+            <p>
+              任务 #{t.task_id} · {names[t.status] || t.status}
+            </p>
+            <code>
+              {t.contract.plan_ref.path.replace(/\.plan\.md$/, ".tests.json")}
+            </code>
+            {t.diagnostic && <p role="alert">{t.diagnostic}</p>}
+          </article>
+        ))}
+        {pending.map((r) => (
+          <p key={r.envelope.request_id}>
+            有更新操作结果待核实。
+            <button
+              disabled={!online || busy}
               onClick={() =>
-                void action("maintenance_update", identity.project_id)
+                void api
+                  .reconcile(r.envelope)
+                  .then(() => {
+                    refresh();
+                    void view.refetch();
+                  })
+                  .catch((e) => setError(String(e)))
               }
             >
-              更新本地
-            </button>{" "}
-            <button onClick={() => setLogs(!logs)} aria-expanded={logs}>
-              查看提交日志
+              核对更新结果
             </button>
           </p>
-          <SubmissionStatus
-            label={checkLabel}
-            busy={checking()}
-            showActivity={!!latestCheck}
-          />
-          {latestCheck && (
-            <CopyExecutionInfo
-              key={latestCheck.envelope.request_id}
-              info={{
-                ...requestExecutionInfo(
-                  latestCheck.envelope,
-                  latestCheck.response,
-                ),
-                project: identity.repository_identity,
-              }}
-            />
-          )}
-          {logs && (
-            <section aria-label="提交日志">
-              <label>
-                日志范围{" "}
-                <select
-                  value={scope}
-                  onChange={(e) => {
-                    setScope(e.target.value);
-                    setPage(0);
-                  }}
-                >
-                  <option value="history">远端提交历史</option>
-                  <option value="behind">本地缺少的提交</option>
-                  <option value="ahead">本地独有的提交</option>
-                </select>
-              </label>
-              {log.error && <p role="alert">{String(log.error)}</p>}
-              {log.data?.commits.map((c) => (
-                <CommitDetails key={c.sha} commit={c} />
-              ))}
-              {log.data?.commits.length === 0 && <p>没有对应提交</p>}
-              <button disabled={page === 0} onClick={() => setPage(page - 1)}>
-                上一页
-              </button>{" "}
-              <button
-                disabled={!log.data?.more}
-                onClick={() => setPage(page + 1)}
-              >
-                下一页
-              </button>
-            </section>
-          )}
-          <h4>Git 任务材料与测试安排</h4>
-          <p className="muted">
-            检查更新后读取已提交的 Plan 和同名 .tests.json。材料错误通过正常 Git
-            修改处理。
-          </p>
-          {v?.tasks.map((t) => (
-            <article key={t.task_id}>
-              <p>
-                任务 #{t.task_id} · {names[t.status] || t.status}
-              </p>
-              <code>
-                {t.contract.plan_ref.path.replace(/\.plan\.md$/, ".tests.json")}
-              </code>
-              {t.diagnostic && <p role="alert">{t.diagnostic}</p>}
-            </article>
-          ))}
-          {pending.map((r) => (
-            <p key={r.envelope.request_id}>
-              有更新操作结果待核实。
-              <button
-                disabled={!online || busy}
-                onClick={() =>
-                  void api
-                    .reconcile(r.envelope)
-                    .then(() => {
-                      refresh();
-                      void view.refetch();
-                    })
-                    .catch((e) => setError(String(e)))
-                }
-              >
-                核对更新结果
-              </button>
-            </p>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
     </section>
   );
 }

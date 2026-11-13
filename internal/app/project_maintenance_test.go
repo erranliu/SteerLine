@@ -234,7 +234,7 @@ func TestPMSGitArrangementFreshnessAndCandidateVersions(t *testing.T) {
 		t.Fatal("selected definition change ignored")
 	}
 	candidate.Project, candidate.RunID, candidate.InputDigest = m.config.Identity(), "original-run", "original-input"
-	port := testManagementPort{project: candidate.Project, maintenance: m, store: tmSnapshotStore{
+	port := testManagementPort{project: candidate.Project, freshness: m, store: tmSnapshotStore{
 		candidate: candidate,
 		progress: testmodel.Progress{
 			RunID: candidate.RunID, InputDigest: candidate.InputDigest, ParsedVersion: 2,

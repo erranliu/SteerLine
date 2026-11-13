@@ -69,7 +69,7 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	case "task_candidate":
 		table = "runner_candidates a"
 		id = "a.candidate_id"
-		payload = "json_remove(CAST(a.payload AS TEXT),'$.contract','$.submit','$.test_plan','$.runner_build','$.environment','$.actions','$.projection.final')"
+		payload = "json_remove(CAST(a.payload AS TEXT),'$.contract','$.submit','$.test_plan','$.manual_checks','$.runner_build','$.environment','$.actions','$.projection.final')"
 		payload = `CASE WHEN json_type(a.payload,'$.projection')='object' THEN json_set(json_remove(` + payload + `,'$.projection.question'),'$.projection.question',CASE WHEN json_type(a.payload,'$.projection.question')='object' THEN json('{}') ELSE NULL END) ELSE ` + payload + ` END`
 		created = "json_extract(CAST(a.payload AS TEXT),'$.created_at')"
 		finished = "json_extract(CAST(a.payload AS TEXT),'$.projection.updated_at')"

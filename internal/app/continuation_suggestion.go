@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/steeragent/suggestion/contract"
 	suggestionbridge "github.com/erranliu/SteerLine/internal/steeragentbridge/suggestion"
@@ -27,20 +25,7 @@ func newContinuationSuggestionPort(c Config, store *sqlite.SQLiteStore, cli runn
 	c = bindNativeConfiguration(c, cli)
 	p := &continuationSuggestionPort{config: c, store: store}
 	p.service = &suggestionbridge.Service{Project: c.Identity(), Store: store, Build: p.context, Runner: cli, RunnerBuild: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
-	p.service.Prepare = func(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
-		settings, err := executionconfig.ContinuationSuggestionSettings(c.RunnerExecution.ContinuationSuggestion)
-		if err != nil {
-			return runnercontract.ExecutionInput{}, nil, err
-		}
-		resolved, err := c.runtimeNative.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{Operation: "compose", BaseExecution: executionconfig.ContinuationSuggestionBase(c.RunnerExecution.Profiles), Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Selection: &runnercontract.ExecutionSelection{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex", Model: &settings.Model, ReasoningEffort: &settings.ReasoningEffort, AccessMode: "read_only"}})
-		if err != nil {
-			return runnercontract.ExecutionInput{}, nil, err
-		}
-		if resolved.Execution == nil {
-			return runnercontract.ExecutionInput{}, nil, errors.New("Runner 未返回对话续作 · 提示词建议 执行配置")
-		}
-		return *resolved.Execution, c.runtimeNative.Catalog, nil
-	}
+	p.service.Prepare = c.prepareSteerAgentGeneration
 	return p
 }
 
@@ -54,12 +39,6 @@ func materialAdviceSource(c runnerstate.Candidate) (suggestionbridge.Source, boo
 	source.BaseRevision, source.ContractDigest = c.BaseRevision, c.ContractDigest
 	q, _ := json.Marshal(r.Question)
 	source.Facts = []contract.Material{{ID: "question", Label: "原问题", Body: string(q), Source: c.ID, Revision: source.Occurrence}}
-	if r.Final != nil && r.Final.Verified {
-		source.Facts = append(source.Facts, contract.Material{ID: "final", Label: "已核实的原结果", Body: r.Final.Text, Source: c.ID, Revision: source.Occurrence})
-	}
-	if len(c.TestPlan) > 0 {
-		source.Facts = append(source.Facts, contract.Material{ID: "test-plan", Label: "原测试安排", Body: string(c.TestPlan), Source: c.ID})
-	}
 	return source, source.Valid()
 }
 func (p *continuationSuggestionPort) tick(ctx context.Context) error {
@@ -106,24 +85,13 @@ func (p *continuationSuggestionPort) context(ctx context.Context, source suggest
 		return out, errors.New("原待答问题已变化")
 	}
 	// Use the original occurrence/goal. Later observations cannot replace the frozen request.
-	out.Context.Materials = append(out.Context.Materials, source.Facts...)
-	refs := append(append(append(c.Contract.CommonRefs[:0:0], c.Contract.CommonRefs...), c.Contract.AcceptanceRefs...), c.Contract.SpecRef, c.Contract.PlanRef)
-	seen := map[string]bool{}
-	for _, ref := range refs {
-		if ref.Path == "" || seen[ref.Path] {
-			continue
+	for _, material := range source.Facts {
+		if material.ID == "question" {
+			out.Context.Materials = append(out.Context.Materials, material)
+			return out, contract.Validate(out)
 		}
-		seen[ref.Path] = true
-		body, e := p.config.runtimeMaintenance.read(ctx, ref.Commit, ref.Path)
-		if e != nil {
-			return out, e
-		}
-		if ref.Commit == "" || contract.Digest(body) != ref.SHA256 {
-			return out, errors.New("原绑定材料正文或版本不匹配：" + ref.Path)
-		}
-		out.Context.Materials = append(out.Context.Materials, contract.Material{ID: ref.Path, Label: ref.Path, Body: string(body), Source: ref.Path, Revision: ref.Commit})
 	}
-	return out, contract.Validate(out)
+	return out, errors.New("缺少原待答问题")
 }
 func (p *continuationSuggestionPort) read(ctx context.Context, route string, values url.Values) (any, error) {
 	if route == "/main-agent" {

@@ -76,9 +76,11 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 
 func callerFrozenWork(t *testing.T, m *projectMaintenance, contract taskmodel.TaskContract) taskmodel.FixedWork {
 	t.Helper()
-	entry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(context.Background(), contract.PlanRef.Commit, path) })
+	entry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) {
+		return m.readCommittedMaterial(context.Background(), contract.PlanRef.Commit, path)
+	})
 	require(t, err)
-	body, err := m.read(context.Background(), contract.PlanRef.Commit, entry.TestingCatalogue)
+	body, err := m.readCommittedMaterial(context.Background(), contract.PlanRef.Commit, entry.TestingCatalogue)
 	require(t, err)
 	catalogue, err := testmanagement.ParseCatalogue(body)
 	require(t, err)

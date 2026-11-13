@@ -12,6 +12,16 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
+type roadmapTaskAdmission interface {
+	submit(ctx context.Context, sourceID, requestID string, batch taskmodel.TaskBatchInput) (taskmodel.TaskBatchReceipt, error)
+	receipt(ctx context.Context, requestID string) (taskmodel.TaskBatchReceipt, error)
+}
+
+type roadmapMergeHistory interface {
+	refreshBaseline(context.Context) (string, error)
+	verifyAncestor(ctx context.Context, ancestor, descendant string) error
+}
+
 func (p *roadmapPort) admissionBatch(ctx context.Context, r roadmap.Record) (taskmodel.TaskBatchInput, error) {
 	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion, ProjectID: p.config.Identity(), Tasks: []taskmodel.TaskBatchTask{}, Dependencies: []taskmodel.TaskBatchEdge{}}
 	if e := roadmap.ValidateDocuments(r); e != nil {
@@ -95,13 +105,8 @@ func (p *roadmapPort) admit(ctx context.Context, r roadmap.Record, request strin
 		if e != nil {
 			return r, e
 		}
-		graph, e := p.service.Graph(ctx)
-		if e != nil {
+		if e = p.verifyAdmissionGraph(ctx, r); e != nil {
 			return r, e
-		}
-		// Only a stable confirmed dependency/material snapshot can reach the transaction.
-		if roadmap.GraphDigest(graph) != r.GraphDigest {
-			return r, errors.New("已有 DAG 或任务材料已变化，请重新核对规划")
 		}
 		r.AdmissionBatch, e = json.Marshal(batch)
 		if e != nil {
@@ -118,23 +123,7 @@ func (p *roadmapPort) admit(ctx context.Context, r roadmap.Record, request strin
 	if e := json.Unmarshal(r.AdmissionBatch, &batch); e != nil {
 		return r, e
 	}
-	graph, e := p.store.TaskGraphSnapshot(ctx, p.config.Identity())
-	if e != nil {
-		return r, e
-	}
-	commands := NewTaskCommands(p.store, p.config)
-	taskRequest := roadmap.Digest([]byte("roadmap-admission\n" + request))[:32]
-	var receipt taskmodel.TaskBatchReceipt
-	mutate := func(ctx context.Context) error {
-		var e error
-		receipt, e = commands.AdmitRoadmap(ctx, r.Source.ID, batch, taskRequest, graph.Authority.AuthorityVersion, "local-user")
-		return e
-	}
-	if p.mutateTask != nil {
-		e = p.mutateTask(ctx, mutate)
-	} else {
-		e = mutate(ctx)
-	}
+	receipt, e := p.taskAdmission.submit(ctx, r.Source.ID, r.AdmissionRequest, batch)
 	if e != nil {
 		return r, e
 	}
@@ -159,11 +148,11 @@ func (p *roadmapPort) verifyMerged(ctx context.Context, r *roadmap.Record) error
 	if !fact.Merged || fact.Base.Ref != p.config.Branch || fact.Head.Ref != r.Publication.Branch || fact.Head.SHA != r.Publication.Commit || fact.MergeCommit == "" {
 		return errors.New("文档 PR 尚未合并或绑定身份不符")
 	}
-	observation, e := p.config.runtimeMaintenance.check(ctx)
+	baseline, e := p.mergeHistory.refreshBaseline(ctx)
 	if e != nil {
 		return e
 	}
-	if _, e = p.config.runtimeMaintenance.git(ctx, "merge-base", "--is-ancestor", fact.MergeCommit, observation.Commit); e != nil {
+	if e = p.mergeHistory.verifyAncestor(ctx, fact.MergeCommit, baseline); e != nil {
 		return errors.New("文档合并未进入项目目标主分支")
 	}
 	files, e := p.publicationFiles(ctx, *r)
@@ -171,7 +160,10 @@ func (p *roadmapPort) verifyMerged(ctx context.Context, r *roadmap.Record) error
 		return e
 	}
 	for name, body := range files {
-		got, e := p.config.runtimeMaintenance.read(ctx, fact.MergeCommit, name)
+		got, e := p.materials.readCommittedMaterial(ctx, fact.MergeCommit, name)
+		if body == "" && strings.HasSuffix(name, ".manual-checks.json") && isMissingRoadmapFile(e) {
+			continue
+		}
 		if e != nil {
 			return e
 		}
@@ -195,19 +187,9 @@ func (p *roadmapPort) reconcileAdmission(ctx context.Context, r roadmap.Record) 
 	if r.AdmissionRequest == "" {
 		return r, errors.New("没有原入图请求")
 	}
-	commands := NewTaskCommands(p.store, p.config)
-	id := roadmap.Digest([]byte("roadmap-admission\n" + r.AdmissionRequest))[:32]
-	value, e := commands.ReadReceipt(ctx, id, "create_task_batch", p.config.Identity())
+	receipt, e := p.taskAdmission.receipt(ctx, r.AdmissionRequest)
 	if e != nil {
 		return r, e
-	}
-	raw, _ := json.Marshal(value)
-	var receipt taskmodel.TaskBatchReceipt
-	if e = json.Unmarshal(raw, &receipt); e != nil {
-		return r, e
-	}
-	if receipt.Status != "accepted" || receipt.RequestID != id || len(receipt.TaskIDs) == 0 {
-		return r, errors.New("原入图回执未核实")
 	}
 	r.Mapping = receipt.TaskIDs
 	r.State = "admitted"
@@ -226,16 +208,37 @@ func (p *roadmapPort) resumeAdmission(ctx context.Context, r roadmap.Record) (ro
 	}
 	// The original Task request does not exist. Recheck its fixed prerequisites
 	// before explicitly resuming the same idempotent transaction.
-	graph, err := p.service.Graph(ctx)
-	if err != nil {
+	if err = p.verifyAdmissionGraph(ctx, r); err != nil {
 		return r, err
-	}
-	if roadmap.GraphDigest(graph) != r.GraphDigest {
-		return r, errors.New("原入图前置已变化，不能继续，请重新核对规划")
 	}
 	if err = p.verifyMerged(ctx, &r); err != nil {
 		return r, err
 	}
 	r.State = "admission-unknown"
 	return p.admit(ctx, r, r.AdmissionRequest)
+}
+
+func (p *roadmapPort) verifyAdmissionGraph(ctx context.Context, r roadmap.Record) error {
+	if r.Source.PlanningID != "" {
+		// A single task has only explicit edges from existing tasks. Unrelated
+		// additions between publication and admission do not change those edges.
+		graph, err := p.store.TaskGraphSnapshot(ctx, p.config.Identity())
+		if err != nil {
+			return err
+		}
+		tasks := make([]roadmap.Existing, 0, len(graph.Tasks))
+		for _, task := range graph.Tasks {
+			tasks = append(tasks, roadmap.Existing{ID: task.TaskID, Status: task.Status})
+		}
+		_, err = roadmap.ValidateAnalysis(*r.Analysis, r.Source, tasks)
+		return err
+	}
+	graph, err := p.service.Graph(ctx)
+	if err != nil {
+		return err
+	}
+	if roadmap.GraphDigest(graph) != r.GraphDigest {
+		return errors.New("已有 DAG 或任务材料已变化，请重新核对规划")
+	}
+	return nil
 }

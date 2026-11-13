@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	roadmaps "github.com/erranliu/SteerLine/internal/roadmap"
@@ -28,8 +29,9 @@ const planningAction = "roadmap_planning_"
 
 type planningPort struct {
 	*roadmapPort
-	runner planningRunner
-	admit  func(context.Context) error
+	runner                     planningRunner
+	admit                      func(context.Context) error
+	refreshBaselineWithRewrite func(context.Context) (commit string, rewritten bool, err error)
 }
 
 type planningRunner interface {
@@ -41,6 +43,10 @@ type planningRunner interface {
 type planningView struct {
 	ID         string                    `json:"id"`
 	Title      string                    `json:"title"`
+	Kind       string                    `json:"kind,omitempty"`
+	Goal       string                    `json:"goal,omitempty"`
+	Card       *roadmap.TaskCard         `json:"card,omitempty"`
+	DAGTaskID  string                    `json:"dag_task_id,omitempty"`
 	Path       string                    `json:"path"`
 	Revision   uint64                    `json:"revision"`
 	Status     string                    `json:"status"`
@@ -57,7 +63,15 @@ type planningView struct {
 }
 
 func viewPlanning(task roadmap.PlanningTask) planningView {
-	view := planningView{ID: task.ID, Title: task.Title, Path: task.Path, Revision: task.Revision, Status: task.Status, Diagnostic: task.Diagnostic, Body: task.Body, SourceID: task.SourceID, Busy: task.Operation != nil, Conflict: task.Conflict, Review: task.Review}
+	view := planningView{ID: task.ID, Title: task.Title, Kind: task.Kind, Path: task.Path, Revision: task.Revision, Status: task.Status, Diagnostic: task.Diagnostic, Body: task.Body, SourceID: task.SourceID, Busy: task.Operation != nil, Conflict: task.Conflict, Review: task.Review}
+	if task.Kind == roadmap.SingleTaskPlanning {
+		view.Goal = task.Goal
+		view.Body = ""
+		var card roadmap.TaskCard
+		if decodeStrictJSON([]byte(task.Body), &card) == nil {
+			view.Card = &card
+		}
+	}
 	if task.Publication != nil {
 		view.PR = task.Publication.URL
 	}
@@ -85,18 +99,21 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		for _, task := range tasks {
 			if task.SourceID == "" {
 				view := viewPlanning(task)
-				view.Body, view.Review, view.Question = "", nil, nil
+				view.Body, view.Goal, view.Card, view.Review, view.Question = "", "", nil, nil, nil
 				list = append(list, view)
 			}
 		}
-		profiles := []map[string]string{}
-		workflow := runnercontract.Workflow{ID: "conversation", Version: 2}
-		for _, profile := range p.config.RunnerExecution.Profiles {
-			if p.config.runtimeCatalog.SupportsManagedConversation() && profile.Execution.Adapter == "codex-app-server" && profile.Execution.Target.Kind == "local" && p.config.runtimeCatalog.ValidateConfiguration(profile.Execution, workflow) == nil {
-				profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
-			}
+		agent, err := executionconfig.SteerAgentSettings(p.config.RunnerExecution.SteerAgent)
+		if err != nil {
+			return nil, err
 		}
-		return map[string]any{"tasks": list, "profiles": profiles, "available": p.config.runtimeCatalog.SupportsManagedConversation()}, nil
+		var reason string
+		if !p.config.runtimeCatalog.SupportsManagedConversation() {
+			reason = "固定 Runner 缺少 conversation/2 与 worktree 租约"
+		} else if _, err := p.config.runtimeCatalog.ConfigurationCapability("compose"); err != nil {
+			reason = err.Error()
+		}
+		return map[string]any{"tasks": list, "steer_agent": agent, "available": reason == "", "unavailable_reason": reason}, nil
 	}
 	id, tail, _ := strings.Cut(strings.TrimPrefix(route, planningRoute+"/"), "/")
 	if !roadmap.IDPattern.MatchString(id) {
@@ -141,10 +158,34 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		}
 		return page, nil
 	}
+	if tail == "predecessors" && len(values) == 0 && task.Kind == roadmap.SingleTaskPlanning {
+		graph, err := p.store.TaskGraphSnapshot(ctx, task.Project)
+		if err != nil {
+			return nil, err
+		}
+		options := []roadmap.Existing{}
+		for _, node := range graph.Tasks {
+			if node.Status != "discarded" {
+				options = append(options, roadmap.Existing{ID: node.TaskID, Title: node.Title, Status: node.Status})
+			}
+		}
+		return options, nil
+	}
 	if tail != "" || len(values) != 0 {
 		return nil, roadmap.ErrNotFound
 	}
-	return viewPlanning(task), nil
+	view := viewPlanning(task)
+	if task.Kind == roadmap.SingleTaskPlanning {
+		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		if err != nil {
+			return nil, err
+		}
+		view.DAGTaskID = mapping["T1"]
+		if view.DAGTaskID != "" {
+			view.CanMessage, view.CanRebase, view.Question = false, false, nil
+		}
+	}
+	return view, nil
 }
 
 func (p *planningPort) receipt(ctx context.Context, id string) (*httpcontract.CommandResponse, error) {
@@ -197,12 +238,9 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		if err != nil {
 			return nil, nil, err
 		}
-		target, err := p.config.runtimeMaintenance.check(ctx)
+		target, err := p.rebaseTarget(ctx)
 		if err != nil {
 			return nil, nil, err
-		}
-		if target.Rewritten {
-			return nil, nil, errors.New("目标分支历史已改写，请先核对项目基线")
 		}
 		var ready []roadmap.PlanningTask
 		skipped := map[string]string{}
@@ -214,10 +252,10 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 				skipped[task.ID] = "当前轮次、冲突或其他操作尚未结算"
 				continue
 			}
-			schedulePlanning(&task, "rebase", target.Commit)
+			schedulePlanning(&task, "rebase", target)
 			ready = append(ready, task)
 		}
-		return ready, map[string]any{"target": target.Commit, "queued": len(ready), "skipped": skipped}, nil
+		return ready, map[string]any{"target": target, "queued": len(ready), "skipped": skipped}, nil
 	}
 	task, err := p.store.PlanningTask(ctx, p.config.Identity(), in.TargetID)
 	if err != nil {
@@ -228,6 +266,15 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		return nil, nil, errors.New("任务状态已变化或原操作未结算")
 	}
 	view := viewPlanning(task)
+	if task.Kind == roadmap.SingleTaskPlanning {
+		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(mapping) != 0 {
+			return nil, nil, errors.New("任务已正式入图")
+		}
+	}
 	switch in.Action {
 	case planningAction + "message", planningAction + "resolve":
 		var input struct {
@@ -280,21 +327,18 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		if !view.CanRebase || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
 			return nil, nil, errors.New("任务当前无法 Rebase")
 		}
-		target, err := p.config.runtimeMaintenance.check(ctx)
+		target, err := p.rebaseTarget(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		if target.Rewritten {
-			return nil, nil, errors.New("目标分支历史已改写，请先核对项目基线")
-		}
-		schedulePlanning(&task, "rebase", target.Commit)
+		schedulePlanning(&task, "rebase", target)
 	case planningAction + "abort":
 		if task.Conflict == nil || !view.CanMessage || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
 			return nil, nil, errors.New("没有可中止的 Rebase")
 		}
 		schedulePlanning(&task, "abort", task.Conflict.Target)
 	case planningAction + "review":
-		if !view.CanRebase || task.Body == "" || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
+		if task.Kind == roadmap.SingleTaskPlanning || !view.CanRebase || task.Body == "" || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
 			return nil, nil, errors.New("当前草稿无法审阅")
 		}
 		schedulePlanning(&task, "review", "")
@@ -306,7 +350,7 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		if err := decodeStrictJSON(in.Payload, &input); err != nil {
 			return nil, nil, err
 		}
-		if !view.CanRebase || task.Review == nil || task.Review.Digest != input.Digest || len(input.Paths) == 0 {
+		if task.Kind == roadmap.SingleTaskPlanning || !view.CanRebase || task.Review == nil || task.Review.Digest != input.Digest || len(input.Paths) == 0 {
 			return nil, nil, errors.New("审阅版本已变化")
 		}
 		schedulePlanning(&task, "publish", "")
@@ -315,6 +359,17 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		return nil, nil, errors.New("unknown planning command")
 	}
 	return []roadmap.PlanningTask{task}, viewPlanning(task), nil
+}
+
+func (p *planningPort) rebaseTarget(ctx context.Context) (string, error) {
+	target, rewritten, err := p.refreshBaselineWithRewrite(ctx)
+	if err != nil {
+		return "", err
+	}
+	if rewritten {
+		return "", errors.New("目标分支历史已改写，请先核对项目基线")
+	}
+	return target, nil
 }
 
 func schedulePlanning(task *roadmap.PlanningTask, kind, target string) {
@@ -341,16 +396,26 @@ func planControl(op *roadmap.PlanningOperation, command string, revision uint64,
 
 func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelope) (roadmap.PlanningTask, error) {
 	var input struct {
-		Title   string `json:"title"`
-		Goal    string `json:"goal"`
-		File    string `json:"file"`
-		Profile string `json:"profile"`
+		Title string `json:"title"`
+		Goal  string `json:"goal"`
+		File  string `json:"file"`
+		Kind  string `json:"kind"`
 	}
 	if err := decodeStrictJSON(in.Payload, &input); err != nil {
 		return roadmap.PlanningTask{}, err
 	}
-	if len(input.Title) > 240 || len(input.Goal) > 65536 || strings.TrimSpace(input.Title) == "" || strings.TrimSpace(input.Goal) == "" || !validPlanningFileName(input.File) {
-		return roadmap.PlanningTask{}, errors.New("需要任务名称、目标及有效的 Markdown 文件名")
+	if len(input.Title) > 240 || len(input.Goal) > 65536 || strings.TrimSpace(input.Title) == "" || strings.TrimSpace(input.Goal) == "" {
+		return roadmap.PlanningTask{}, errors.New("需要规划名称与目标")
+	}
+	if input.Kind == "roadmap" {
+		input.Kind = ""
+	}
+	if input.Kind == "" && !validPlanningFileName(input.File) || input.Kind == roadmap.SingleTaskPlanning && input.File != "" || input.Kind != "" && input.Kind != roadmap.SingleTaskPlanning {
+		return roadmap.PlanningTask{}, errors.New("规划类型或草稿文件名无效")
+	}
+	id := in.RequestID
+	if !roadmap.IDPattern.MatchString(id) {
+		return roadmap.PlanningTask{}, errors.New("invalid planning request ID")
 	}
 	if err := p.admit(ctx); err != nil {
 		return roadmap.PlanningTask{}, err
@@ -358,22 +423,23 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 	if !p.config.runtimeCatalog.SupportsManagedConversation() {
 		return roadmap.PlanningTask{}, errors.New("固定 Runner 缺少 conversation/2 与 worktree 租约")
 	}
-	profile, err := p.config.RunnerExecution.Profile(input.Profile, "")
+	p.config.runtimeNative.RefreshFailures()
+	workflow := runnercontract.Workflow{ID: "conversation", Version: 2}
+	execution, err := p.config.resolveSteerAgentExecution(ctx, workflow, "full_access")
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
-	workflow := runnercontract.Workflow{ID: "conversation", Version: 2}
-	// #146 publishes the managed conversation schema but does not support
-	// deriving an execution profile for it. Validate the selected profile as-is.
-	if err = p.config.runtimeCatalog.ValidateConfiguration(profile.Execution, workflow); err != nil {
-		return roadmap.PlanningTask{}, err
-	}
-	obs, err := p.config.runtimeMaintenance.check(ctx)
+	baseline, err := p.mergeHistory.refreshBaseline(ctx)
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
 	path := roadmap.Root + input.File
-	entries, err := p.config.runtimeMaintenance.git(ctx, "ls-tree", "-r", "--name-only", "-z", obs.Commit, "--", strings.TrimSuffix(roadmap.Root, "/"))
+	directory := strings.TrimSuffix(roadmap.Root, "/")
+	if input.Kind == roadmap.SingleTaskPlanning {
+		path = roadmap.TaskCardPath(id)
+		directory = "SteerlineFlow/task-planning"
+	}
+	entries, err := p.config.repositoryGit(ctx, "ls-tree", "-r", "--name-only", "-z", baseline, "--", directory)
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
@@ -382,28 +448,30 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 			return roadmap.PlanningTask{}, errors.New("目标分支已有同名草稿")
 		}
 	}
-	remote, err := p.config.runtimeMaintenance.git(ctx, "config", "--get", "remote."+p.config.Remote+".url")
+	remote, err := p.config.repositoryGit(ctx, "config", "--get", "remote."+p.config.Remote+".url")
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
 	rules, err := prompts.RoadmapPlanningRules()
+	if input.Kind == roadmap.SingleTaskPlanning {
+		rules, err = prompts.TaskPlanningRules()
+	}
 	if err != nil || len(rules) == 0 {
 		return roadmap.PlanningTask{}, errors.New("规划规则文件缺失")
-	}
-	id := in.RequestID
-	if !roadmap.IDPattern.MatchString(id) {
-		return roadmap.PlanningTask{}, errors.New("invalid planning request ID")
 	}
 	material, err := safePlanningPath(p.config.RunDir, "roadmap-planning/"+id+"/rules.md")
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
 	instruction, err := prompts.RoadmapPlanning(material, path, input.Goal)
+	if input.Kind == roadmap.SingleTaskPlanning {
+		instruction, err = prompts.TaskPlanning(material, path, input.Goal)
+	}
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
-	request := runnercontract.ConversationRunInput{Title: input.Title, Correlation: map[string]string{"steerline_planning": id}, Workflow: workflow, Execution: profile.Execution,
-		Repository:   runnercontract.Repository{URL: strings.TrimSpace(string(remote)), LocalPath: p.config.Repository, Remote: p.config.Remote, BaseBranch: p.config.Branch, BaseRevision: obs.Commit},
+	request := runnercontract.ConversationRunInput{Title: input.Title, Correlation: map[string]string{"steerline_planning": id}, Workflow: workflow, Execution: execution,
+		Repository:   runnercontract.Repository{URL: strings.TrimSpace(string(remote)), LocalPath: p.config.Repository, Remote: p.config.Remote, BaseBranch: p.config.Branch, BaseRevision: baseline},
 		Conversation: runnercontract.ConversationInput{Instruction: instruction, Materials: []runnercontract.Document{}}}
 	if err = p.config.runtimeCatalog.ValidateManagedConversation(request); err != nil {
 		return roadmap.PlanningTask{}, err
@@ -416,7 +484,7 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 		return roadmap.PlanningTask{}, err
 	}
 	submit := runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: roadmaps.Token(), Input: raw}
-	return roadmap.PlanningTask{ID: id, Project: p.config.Identity(), Title: input.Title, Goal: input.Goal, Path: path, Base: obs.Commit, Revision: 1, Status: "starting", Build: p.runner.BuildPin(), Submission: submit, Material: material, MaterialSHA: roadmap.Digest(rules), Operation: &roadmap.PlanningOperation{Kind: "submit", Stage: "runner", Command: "submit", Request: &submit, QueuedAt: time.Now().UTC()}}, nil
+	return roadmap.PlanningTask{ID: id, Project: p.config.Identity(), Title: input.Title, Goal: input.Goal, Kind: input.Kind, Path: path, Base: baseline, Revision: 1, Status: "starting", Build: p.runner.BuildPin(), Submission: submit, Material: material, MaterialSHA: roadmap.Digest(rules), Operation: &roadmap.PlanningOperation{Kind: "submit", Stage: "runner", Command: "submit", Request: &submit, QueuedAt: time.Now().UTC()}}, nil
 }
 
 func storePlanningMaterial(filePath string, rules []byte) error {
@@ -579,6 +647,13 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 		schedulePlanningClose(task)
 		return p.handoffPlanning(ctx, task)
 	}
+	if task.Kind == roadmap.SingleTaskPlanning && !task.StopRequested {
+		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		if err != nil {
+			return err
+		}
+		task.StopRequested = len(mapping) != 0
+	}
 	if task.StopRequested {
 		schedulePlanningClose(task)
 		return nil
@@ -586,6 +661,8 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 	if task.Run != nil && task.Run.Controls.CanMessage && task.Conflict == nil {
 		if raw, err := roadmaps.ReadRegular(task.Run.Execution.Workspace, task.Path); err == nil {
 			task.Body = string(raw)
+		} else if task.Kind == roadmap.SingleTaskPlanning {
+			task.Body = ""
 		}
 		task.Status = "ready"
 		if task.Publication != nil && task.Publication.URL != "" {

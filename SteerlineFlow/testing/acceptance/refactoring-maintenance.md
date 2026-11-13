@@ -178,3 +178,33 @@ RM-A11 不要求将测试 PR 合入业务主线。专用测试 base、PR 状态�
 - L4 `go.runner-result` 通过，见 `test-results/L4/20261111T105539067Z/summary.json`。固定 Runner `c404d6e5` 与同源原生协议夹具核对原项目目录、两份冻结材料、四次执行复用同一 worktree 和未跟踪文件保留。
 
 本次未部署。以上验证使用受控执行或协议夹具，真实模型及远程 worktree 尚未联验。
+
+## 维护表单后台刷新
+
+2026-11-12，受测源码为 `400e15dcfab24074d0062caeb46d35043a5e09e8` 加本次工作树中的前端改动。当前配置已有就绪结果时，后台刷新期间可切换方向并提交。首次进入或切换执行配置须等本次查询完成，刷新返回未就绪或失败后禁用提交。提交沿用服务端启动校验。
+
+- `npm --prefix web test -- src/features/refactoring-maintenance/refactoring-maintenance.test.tsx src/app/project-switch.test.tsx` 通过 30 项，覆盖后台刷新、首次就绪、切回已有缓存的配置及服务端拒绝回执。
+- `node web/node_modules/typescript/bin/tsc --project web/tsconfig.json` 通过。
+- `go run ./cmd/test-feedback -level=L1` 通过，报告为 `C:\SteerlineDebug\wt-6cef-refactoring-readiness\test-results\L1\c17a4b2b-f98b-4174-a0a9-553e0ed0b8f0\summary.json`。
+- `go run ./cmd/test-feedback -level=L2` 通过，报告为 `C:\SteerlineDebug\wt-6cef-refactoring-readiness\test-results\L2\1e283e31-ed9b-4bc2-9d8a-5fe9137e4f94\summary.json`。
+
+本次未部署，未运行浏览器整链及真实模型联验。
+
+## 后台刷新与操作状态回归
+
+2026-11-12，受测源码为 `400e15dcfab24074d0062caeb46d35043a5e09e8` 加本次工作树改动。维护表单保留已读取的方向和就绪结果，启动条件失效时在按钮旁显示原因。服务端校验到方向版本变化时，在原回执的 `code` 字段返回 `refactoring_direction_changed`。前端等待所选方向的新版本并展示正文，保留填写内容。提示词正文、版本算法及校验条件沿用原实现。
+
+环境总计与明细共用检测状态，读取失败的行计为待核实。Roadmap 保留已核实的空列表、已读取的对话和正在编辑的输入。活动列表加载后续页时保留原分页，发现首页变化后提示手动刷新，计数可独立更新。
+
+证据根为 `C:\SteerlineDebug\wt-6cef-background-refresh\test-results\`。
+
+| 检查 | 结果与报告 |
+| --- | --- |
+| Web 全量 `web.unit` | 54 个文件、482 项通过。覆盖就绪状态变化、刷新失败、启动拒绝时保留输入和分页请求竞态。见 `L4/95c0ac33-41df-4613-9fbd-c4966015fc57/summary.json`。 |
+| Web 生产构建 | `npm --prefix web run build` 通过。 |
+| L1 `l1.minimum` | 通过，见 `L1/5459269d-537c-4a0b-bb9b-d3176fe5059e/summary.json`。 |
+| L2 `smoke.delivery` | 通过，见 `L2/67af2838-06ce-421d-86e7-a0f746d0c17c/summary.json`。 |
+| L3 `runtime.refactoring-maintenance` | 通过，受控 HTTP 校验旧方向版本及回执错误码，Edge 使用当前版本启动并完成维护。见 `L3/e6becfe6-c3cb-4917-b67e-96b38a75285f/summary.json`。 |
+| L4 `go.http` | 通过，见 `L4/11d73652-3d7c-41c3-958b-3cd89a72306d/summary.json`。 |
+
+本次未部署，未运行真实模型联验。

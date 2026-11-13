@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -44,12 +45,14 @@ type Service struct {
 	Store                                       Store
 	Bridge                                      *runnerbridge.Bridge
 	QueryPR                                     storageports.RunnerPRQuery
+	ObserveManualPR                             func(context.Context, storageports.RunnerPRObservation, error) error
 	ResolveBase                                 func(context.Context, taskmodel.FixedWork, bool) (string, error)
 	Admit                                       func(context.Context) error
 	RunnerBuild                                 runnercontract.BuildPin
 	ReserveExecution                            func(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
 	PrepareExecution                            func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error)
 	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (json.RawMessage, error)
+	PrepareManualChecks                         func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (*manualverification.Snapshot, error)
 	CheckExecution                              func(context.Context, string, bool) error
 	mu                                          sync.Mutex
 }
@@ -110,18 +113,9 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if profileID == "" {
 		profileID = s.DefaultProfile
 	}
-	profile, ok := s.Profiles[profileID]
-	if !ok {
-		return runnerbridge.Candidate{}, failure("profile_not_found", "selected Runner profile is unavailable")
-	}
-	if profile.UnavailableReason != "" {
-		return runnerbridge.Candidate{}, failure("unsupported_capability", profile.UnavailableReason)
-	}
-	if profile.Input.Workflow.ID == "" || profile.Input.Workflow.Version <= 0 {
-		return runnerbridge.Candidate{}, failure("invalid_profile", "execution preset must select a published workflow explicitly")
-	}
-	if profile.Input.Workflow.ID == "generate" || profile.Input.Workflow.ID == "conversation" {
-		return runnerbridge.Candidate{}, failure("invalid_profile", "content workflows cannot execute a development task")
+	profile, err := s.startProfile(profileID)
+	if err != nil {
+		return runnerbridge.Candidate{}, err
 	}
 	if err := s.checkExecution(ctx, profileID, true); err != nil {
 		return runnerbridge.Candidate{}, err
@@ -171,6 +165,13 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 			return runnerbridge.Candidate{}, err
 		}
 	}
+	var manualChecks *manualverification.Snapshot
+	if s.PrepareManualChecks != nil {
+		manualChecks, err = s.PrepareManualChecks(ctx, work, &run)
+		if err != nil {
+			return runnerbridge.Candidate{}, err
+		}
+	}
 
 	run.Correlation["steerline_project"] = s.Project
 	run.Correlation["steerline_task_id"], run.Correlation["steerline_candidate_id"] = input.TaskID, input.RequestID
@@ -184,6 +185,12 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	}
 	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(profile.Input.Execution, profile.Input.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: id(), Input: raw}}
 	c.TestPlan = testPlan
+	if manualChecks != nil {
+		c.ManualChecks, err = json.Marshal(manualChecks)
+		if err != nil {
+			return runnerbridge.Candidate{}, err
+		}
+	}
 	c.Contract = work.Contract
 	c.MaterialDigest = work.MaterialDigest
 	reserve := s.Store.ReserveRunnerCandidate
@@ -252,6 +259,22 @@ func (s *Service) checkExecution(ctx context.Context, profile string, refresh bo
 	return s.CheckExecution(ctx, profile, refresh)
 }
 
+func (s *Service) startProfile(id string) (Profile, error) {
+	profile, ok := s.Profiles[id]
+	switch {
+	case !ok:
+		return profile, failure("profile_not_found", "所选执行方案不可用")
+	case profile.UnavailableReason != "":
+		return profile, failure("unsupported_capability", profile.UnavailableReason)
+	case profile.Input.Workflow.ID == "" || profile.Input.Workflow.Version <= 0:
+		return profile, failure("invalid_profile", "执行方案须指定已发布的工作流")
+	case profile.Input.Workflow.ID == "generate" || profile.Input.Workflow.ID == "conversation":
+		return profile, failure("invalid_profile", "内容工作流不能执行开发任务")
+	default:
+		return profile, nil
+	}
+}
+
 func (s *Service) Dispatch(ctx context.Context) error {
 	if err := s.checkExecution(ctx, s.DefaultProfile, false); err != nil {
 		var blocked *taskmodel.Error
@@ -264,10 +287,7 @@ func (s *Service) Dispatch(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for _, task := range ready {
-		if !s.Tasks.CanExecuteType(task.Type) {
-			continue
-		}
+	if task, found := s.nextDispatchTask(ready); found {
 		_, err := s.Start(ctx, Start{RequestID: id(), TaskID: task.TaskID, TaskVersion: task.Version})
 		return err
 	}

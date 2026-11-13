@@ -20,3 +20,17 @@
 收尾保存本包 Web/应用/项目服务退出事实、精确 owned 进程与监听为 0。只读核验额外保存核验前后的项目目录/数据库事实；提交故障额外保存原 request ID、唯一登记、authority 及同一操作补齐证据。
 
 本轮文档静态检查不构成产品验收，无 PON-A1–A5 通过记录。
+
+## 已初始化项目的 Web 添加
+
+2026-11-12，基线 `0b0e1bf551aa05322121d6dd271f6804bd7257df` 加本次工作区改动。此批次验证项目切换器、零项目页面及按接入指南核验并保存配置的流程，沿用正常重启装载。
+
+| 验证 | 结果 |
+| --- | --- |
+| `go test ./internal/app -run '^TestProjectRegistration' -count=1 -v` | 通过。受控 Git HTTP 远端覆盖工作区文件不算已发布、远端更新使旧确认失效、重复确认、重复仓库及重读启动配置。核验和确认均未创建项目状态。 |
+| `go test ./internal/product/applicationhttp ./internal/product/applicationclient ./web/server -count=1` | 通过。覆盖现有应用 API 和 Web 回归，以及新入口的会话、CSRF 和转发。 |
+| `npm --prefix web test -- src/app/project-switch.test.tsx` | 通过。覆盖两个入口、核验后才可确认及保存后的待重启状态。 |
+| `npm --prefix web run build` 与本地 Vite/Edge 浏览器检查 | 通过。构建生产资源，并在模拟 API 下检查 1280×800 和 390×844 的入口与表单。 |
+| `go run ./cmd/test-feedback -level=L1`、`-level=L2` | 通过。仓库外报告见本次 `project-registration/{L1,L2}/5d86cf854de740b581111b003f529c09/summary.json`。 |
+
+本批次使用隔离 Git 仓库、应用配置和浏览器夹具。正式安装实例中的添加与重启、真实 PR 发布及拟议 PON-A1–A5 的完整方案仍待验证。

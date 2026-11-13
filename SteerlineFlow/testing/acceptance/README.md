@@ -1,8 +1,28 @@
 # 验收流程与记录
 
+配置二级导航与独立计费页（2026-11-13）。[实现与验收](configuration-sections.md)
+
+Roadmap 结构化结果的 Final 来源校验（2026-11-13）。[实现与验收](roadmap-verified-final.md)
+
+维护只读决策结果校验（2026-11-13）。[实现与验收](maintenance-structured-decisions.md)
+
+自动派发开关与就绪状态（2026-11-12）。[实现与验收](automatic-dispatch-readiness.md)
+
+任务启动与新增候选资格收敛（2026-11-12）。[实现与验收](task-start-eligibility.md)
+
+Web UI 恢复可见时刷新（2026-11-12）。[验收记录](web-foreground-refresh.md)
+
+项目运行环境准备要求默认折叠（2026-11-12）。[验收记录](project-environment-preparation-fold.md)
+
+活动中心统一对话阅读（2026-11-12，已实现，未部署）。[实现及真实检测验证](activity-conversations.md)
+
+SteerAgent 全局配置（2026-11-12）。[验收记录](steer-agent-configuration.md)
+
 任务派发设定与任务执行导航（2026-11-12）。[验收记录](task-dispatch-navigation.md)
 
 候选答复投递和等待状态（2026-11-12）。[修复、提示词正文差异与验证](candidate-answer-delivery.md)
+
+候选回答建议只使用原问题（2026-11-13）。[提示词差异和验证](candidate-reply-prompt.md)
 
 普通任务运行期间重检项目环境（2026-11-11）。[并行实测与准入回归](environment-recheck-with-running-tasks.md)
 

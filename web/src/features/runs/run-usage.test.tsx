@@ -96,7 +96,10 @@ it("keeps tokens without a price table; unknown and proven zero remain distinct"
   const get = vi.spyOn(api, "get").mockResolvedValue(structuredClone(sample));
   const mounted = mountFeature(<RunUsage run={run} />, api, client);
   expect(await screen.findByText("Token 225,453 · 已核实部分")).toBeVisible();
-  expect(screen.getByRole("link", { name: /未配置价表/ })).toBeVisible();
+  expect(screen.getByRole("link", { name: /未配置价表/ })).toHaveAttribute(
+    "href",
+    "/settings/billing",
+  );
   sample.usage!.tokens = null;
   sample.usage!.status = "unavailable";
   get.mockResolvedValue(structuredClone(sample));

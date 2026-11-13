@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   useInfiniteQuery,
+  useQuery,
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
@@ -8,10 +9,13 @@ import { useWorkspace } from "../../app/context";
 import { useQueryVisibility } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
 import type { Api } from "../../shared/api/client";
+import type { Activity } from "./model";
 import { readingRoot } from "./reading-api";
+import { RecordedInteractions } from "./recorded-interactions";
 
 type ConversationPage = {
   activity_id: string;
+  target_id: string;
   run_id: string;
   attempt_id: string;
   session_id: string;
@@ -28,58 +32,178 @@ type ConversationPage = {
   }[];
 };
 
+type ConversationTarget = {
+  id: string;
+  label: string;
+  run_id?: string;
+  attempt_id?: string;
+  state: "available" | "unbound" | "unavailable" | "unsupported";
+};
+
+type ConversationTargets = {
+  activity_id: string;
+  targets: ConversationTarget[];
+  diagnostic?: string;
+  operation?: {
+    label: string;
+    request_id: string;
+    status: string;
+    diagnostic?: string;
+  };
+};
+
+const targetDiagnostic = {
+  unbound: "尚无可核实的原会话绑定。",
+  unavailable: "原 Runner 状态目录或当前实例暂不可读。",
+  unsupported: "当前 Runner 构建没有公开原会话历史。",
+};
+
 function getConversation(
   api: Api,
   activityID: string,
+  targetID: string,
   cursor: string,
   signal: AbortSignal,
 ) {
-  const path = readingRoot(activityID) + "/conversation";
+  const params = new URLSearchParams({ session: targetID });
+  if (cursor) params.set("cursor", cursor);
   return api.get<ConversationPage>(
-    cursor ? path + "?cursor=" + encodeURIComponent(cursor) : path,
+    readingRoot(activityID) + "/conversation?" + params.toString(),
     signal,
   );
 }
 
-export function CandidateConversation({
-  activityID,
-  runID,
-  attemptID,
-}: {
-  activityID: string;
-  runID: string;
-  attemptID: string;
-}) {
+export function ActivityConversation({ activity }: { activity: Activity }) {
   const [open, setOpen] = useState(false);
-  const [revision, setRevision] = useState(0);
   return (
-    <>
-      <Button aria-expanded={open} onClick={() => setOpen(!open)}>
+    <div className="reading-conversation">
+      <Button
+        variant={open || activity.needs_attention ? "outline" : "default"}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
         {open ? "收起对话" : "查看对话"}
       </Button>
-      {open && (
+      {open && <ConversationPanel activity={activity} />}
+    </div>
+  );
+}
+
+function ConversationPanel({ activity }: { activity: Activity }) {
+  const { api, identity, online } = useWorkspace();
+  const [selectedID, setSelectedID] = useState("");
+  const [revision, setRevision] = useState(0);
+  const activityID = activity.activity_id;
+  const runID = activity.execution_ref?.run_id;
+  const attemptID = activity.execution_ref?.attempt_id;
+  const key = [
+    api.home,
+    identity.project_id,
+    identity.instance_id,
+    activityID,
+    "activity-conversation-targets",
+    runID,
+    attemptID,
+    revision,
+  ];
+  const active = useQueryVisibility(online, key);
+  const result = useQuery({
+    queryKey: key,
+    queryFn: async ({ signal }) => {
+      const list = await api.get<ConversationTargets>(
+        readingRoot(activityID) + "/conversation",
+        signal,
+      );
+      if (list.activity_id !== activityID || !Array.isArray(list.targets)) {
+        throw new Error("会话列表与原活动不符，请刷新");
+      }
+      return list;
+    },
+    enabled: active,
+    staleTime: Infinity,
+    retry: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+  });
+  const targets = result.data?.targets ?? [];
+  const target =
+    targets.find((item) => item.id === selectedID) ??
+    targets.find(
+      (item) =>
+        runID &&
+        item.run_id === runID &&
+        (!attemptID || item.attempt_id === attemptID),
+    ) ??
+    targets.at(-1);
+  return (
+    <section className="reading-interactions" aria-label="活动对话">
+      {!online && <p role="status">连接后可继续读取对话。</p>}
+      {result.isFetching && <p role="status">正在读取会话列表…</p>}
+      {result.error && <p role="alert">{result.error.message}</p>}
+      {result.data?.diagnostic && <p>{result.data.diagnostic}</p>}
+      {result.data?.operation && (
+        <>
+          <p>
+            {result.data.operation.label} ·{" "}
+            {activity.phase || result.data.operation.status}
+          </p>
+          <p>原请求 {result.data.operation.request_id}</p>
+          {result.data.operation.diagnostic && (
+            <p>{result.data.operation.diagnostic}</p>
+          )}
+        </>
+      )}
+      {result.data && !targets.length && !result.data.diagnostic && (
+        <p>暂无可定位的原会话。</p>
+      )}
+      {targets.length > 1 && (
+        <label className="reading-session">
+          执行会话{" "}
+          <select
+            value={target?.id}
+            onChange={(event) => setSelectedID(event.target.value)}
+          >
+            {targets.map((item) => (
+              <option value={item.id} key={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {target?.state === "available" ? (
         <Conversation
+          key={target.id}
           activityID={activityID}
-          runID={runID}
-          attemptID={attemptID}
+          target={target}
           revision={revision}
           refresh={() => setRevision((value) => value + 1)}
         />
+      ) : (
+        <>
+          {target && <p>{targetDiagnostic[target.state]}</p>}
+          <Button
+            variant="ghost"
+            disabled={!active || result.isFetching}
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            刷新会话列表
+          </Button>
+        </>
       )}
-    </>
+      <RecordedInteractions activity={activity} />
+    </section>
   );
 }
 
 function Conversation({
   activityID,
-  runID,
-  attemptID,
+  target,
   revision,
   refresh,
 }: {
   activityID: string;
-  runID: string;
-  attemptID: string;
+  target: ConversationTarget;
   revision: number;
   refresh: () => void;
 }) {
@@ -90,9 +214,8 @@ function Conversation({
     identity.project_id,
     identity.instance_id,
     activityID,
-    runID,
-    attemptID,
-    "candidate-conversation",
+    "activity-conversation",
+    target.id,
     revision,
   ];
   const active = useQueryVisibility(online, key);
@@ -101,13 +224,20 @@ function Conversation({
     enabled: active,
     initialPageParam: "",
     queryFn: async ({ pageParam, signal }): Promise<ConversationPage> => {
-      const page = await getConversation(api, activityID, pageParam, signal);
+      const page = await getConversation(
+        api,
+        activityID,
+        target.id,
+        pageParam,
+        signal,
+      );
       const first =
         client.getQueryData<InfiniteData<ConversationPage>>(key)?.pages[0];
       if (
         page.activity_id !== activityID ||
-        page.run_id !== runID ||
-        page.attempt_id !== attemptID ||
+        page.target_id !== target.id ||
+        page.run_id !== target.run_id ||
+        page.attempt_id !== target.attempt_id ||
         !page.session_id ||
         !page.generation ||
         !Array.isArray(page.messages) ||
@@ -117,7 +247,7 @@ function Conversation({
           (page.session_id !== first.session_id ||
             page.generation !== first.generation))
       ) {
-        throw new Error("对话与原候选会话不符，请刷新");
+        throw new Error("对话与原执行会话不符，请刷新");
       }
       return page;
     },
@@ -135,7 +265,6 @@ function Conversation({
   }
   return (
     <section className="reading-interactions" aria-label="原会话对话">
-      {!online && <p role="status">连接后可继续读取对话。</p>}
       {history.isFetching && <p role="status">正在读取对话…</p>}
       {history.error && (
         <p role="alert">
@@ -170,7 +299,9 @@ function Conversation({
               : "reading-interaction"
           }
         >
-          <small>{message.role === "user" ? "用户" : "助手"}</small>
+          <strong className="reading-role">
+            {message.role === "user" ? "用户" : "助手"}
+          </strong>
           {message.body_cursor && first ? (
             <ConversationBody
               key={JSON.stringify([
@@ -230,6 +361,7 @@ function ConversationBody({
       const page = await getConversation(
         api,
         binding.activity_id,
+        binding.target_id,
         pageParam,
         signal,
       );
@@ -243,6 +375,7 @@ function ConversationBody({
             new TextEncoder().encode(last.messages[0].text).length;
       if (
         page.activity_id !== binding.activity_id ||
+        page.target_id !== binding.target_id ||
         page.run_id !== binding.run_id ||
         page.attempt_id !== binding.attempt_id ||
         page.session_id !== binding.session_id ||

@@ -29,6 +29,7 @@ export function BillingSettings({
   const api = useMemo(() => billingAPI(csrf), [csrf]);
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const query = useQuery({
     queryKey: [home, "billing-config"],
     queryFn: ({ signal }) => api.read(signal),
@@ -70,6 +71,7 @@ export function BillingSettings({
       await client.cancelQueries({ queryKey: [home, "billing-config"] });
       client.setQueryData([home, "billing-config"], result);
       setDraft(undefined);
+      setEditing(false);
       window.dispatchEvent(new Event("billing-settings-changed"));
       await client.invalidateQueries({
         predicate: (q) =>
@@ -87,31 +89,20 @@ export function BillingSettings({
     <section
       id="billing"
       className="settings-panel billing-settings"
-      aria-label="计费设置"
+      aria-label="模型价表"
     >
-      <h2>计费</h2>
-      <p>
-        所有项目共享。按约定配置模型估算，非实际账单；历史用量按当前价表重算。以候选创建时间匹配价格，同一配置模型须唯一匹配计价供应商。
-      </p>
-      <p className="muted">
-        固定费率不包含上下文阶梯、服务档位、缓存多档、折扣及附加费。单价单位：每一百万
-        Token。
-      </p>
-      {(error || query.error) && (
-        <p role="alert">{error || String(query.error)}</p>
-      )}
-      {notice && <p role="status">{notice}</p>}
-      {query.isPending ? (
-        <p role="status">正在读取计费设置…</p>
-      ) : (
-        base && (
-          <>
-            <label>
+      <div className="billing-panel-heading">
+        <div>
+          <h2>模型价表</h2>
+          <p className="muted">单价单位：{policy.currency} / 百万 Token</p>
+        </div>
+        {base && (
+          <div className="billing-actions">
+            <label className="billing-version">
               价表版本
               <select
-                aria-label="价表版本"
                 value={base.active_policy_version}
-                disabled={busy || !!draft}
+                disabled={busy || editing}
                 onChange={(e) => void write(e.target.value)}
               >
                 {!base.configured && <option value="">未配置</option>}
@@ -122,6 +113,24 @@ export function BillingSettings({
                 ))}
               </select>
             </label>
+            {!editing && (
+              <Button disabled={busy} onClick={() => setEditing(true)}>
+                {base.configured ? "编辑价表" : "创建价表"}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      {(error || query.error) && (
+        <p role="alert">{error || String(query.error)}</p>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      {query.isPending ? (
+        <p role="status">正在读取计费设置…</p>
+      ) : (
+        base &&
+        (editing ? (
+          <>
             <label>
               币种
               <input
@@ -214,38 +223,98 @@ export function BillingSettings({
                 </Button>
               </fieldset>
             ))}
-            <Button
-              disabled={busy}
-              onClick={() =>
-                change({
-                  ...policy,
-                  rules: [
-                    ...policy.rules,
-                    {
-                      id: crypto.randomUUID(),
-                      provider: "",
-                      model: "",
-                      effective_from: "",
-                      effective_until: null,
-                      rates: {
-                        input_uncached_per_million: "",
-                        cache_read_per_million: "",
-                        cache_write_per_million: "",
-                        output_per_million: "",
+            <div className="billing-actions">
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  change({
+                    ...policy,
+                    rules: [
+                      ...policy.rules,
+                      {
+                        id: crypto.randomUUID(),
+                        provider: "",
+                        model: "",
+                        effective_from: "",
+                        effective_until: null,
+                        rates: {
+                          input_uncached_per_million: "",
+                          cache_read_per_million: "",
+                          cache_write_per_million: "",
+                          output_per_million: "",
+                        },
                       },
-                    },
-                  ],
-                })
-              }
-            >
-              添加模型费率
-            </Button>
-            <Button disabled={busy || !draft} onClick={() => void write()}>
-              保存为新价表版本
-            </Button>
+                    ],
+                  })
+                }
+              >
+                添加模型费率
+              </Button>
+              <Button disabled={busy || !draft} onClick={() => void write()}>
+                保存为新价表版本
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setEditing(false);
+                  setDraft(undefined);
+                  setError("");
+                }}
+              >
+                取消编辑
+              </Button>
+            </div>
           </>
-        )
+        ) : base.configured ? (
+          <div
+            className="billing-rate-table"
+            role="region"
+            aria-label="模型费率"
+            tabIndex={0}
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">配置模型</th>
+                  <th scope="col">计价供应商</th>
+                  {rateFields.map(([key, label]) => (
+                    <th scope="col" key={key}>
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {policy.rules.map((r) => (
+                  <tr key={r.id}>
+                    <th scope="row">
+                      {r.model}
+                      <small className="muted">
+                        {r.effective_from}
+                        {r.effective_until && ` 至 ${r.effective_until}`}
+                      </small>
+                    </th>
+                    <td>{r.provider}</td>
+                    {rateFields.map(([key]) => (
+                      <td key={key}>{r.rates[key]}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>尚未配置模型价表。</p>
+        ))
       )}
+      <details className="billing-notes">
+        <summary>估算说明</summary>
+        <p className="muted">
+          历史用量按当前价表重算，以候选创建时间匹配价格。同一配置模型须唯一匹配计价供应商。
+          固定费率不包含上下文阶梯、服务档位、缓存多档、折扣及附加费。
+        </p>
+        {policy.source && <p className="muted">价格来源 · {policy.source}</p>}
+      </details>
       <Button
         disabled={busy || query.isFetching}
         onClick={() => {
@@ -257,7 +326,7 @@ export function BillingSettings({
           });
         }}
       >
-        重新读取（放弃未保存修改）
+        {draft ? "重新读取（放弃未保存修改）" : "重新读取价表"}
       </Button>
     </section>
   );

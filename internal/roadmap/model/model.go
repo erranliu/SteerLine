@@ -27,6 +27,7 @@ const Root = "SteerlineFlow/Roadmap/drafts/"
 const MaxBytes = 2 << 20
 
 type Source struct {
+	PlanningID string `json:"planning_id,omitempty"`
 	ID         string `json:"id"`
 	Path       string `json:"path"`
 	Body       string `json:"body"`
@@ -74,12 +75,13 @@ type Document struct {
 	Body string `json:"body"`
 }
 type Documents struct {
-	Key           string     `json:"local_key"`
-	Spec          Document   `json:"spec"`
-	Plan          Document   `json:"plan"`
-	Tests         []string   `json:"tests"`
-	ProvidesTests []string   `json:"provides_tests"`
-	Acceptance    []Document `json:"acceptance"`
+	Key           string          `json:"local_key"`
+	Spec          Document        `json:"spec"`
+	Plan          Document        `json:"plan"`
+	Tests         []string        `json:"tests"`
+	ProvidesTests []string        `json:"provides_tests"`
+	Acceptance    []Document      `json:"acceptance"`
+	ManualChecks  json.RawMessage `json:"manual_checks,omitempty"`
 }
 type Publication struct {
 	RequestID    string `json:"request_id"`
@@ -112,7 +114,7 @@ type Record struct {
 	Source              Source                    `json:"source"`
 	Existing            []Existing                `json:"existing"`
 	GraphDigest         string                    `json:"graph_digest"`
-	Profile             string                    `json:"profile"`
+	Profile             string                    `json:"profile,omitempty"`
 	CreatedAt           time.Time                 `json:"created_at"`
 	State               string                    `json:"state"`
 	Diagnostic          string                    `json:"diagnostic,omitempty"`
@@ -436,6 +438,9 @@ func ValidateSourceMapping(a Analysis, mapping map[string]string) error {
 	return nil
 }
 func (r Record) Settled() bool {
+	if r.Purpose == "task-planning" {
+		return true
+	}
 	if r.Purpose == "documents" && r.GenerationID == "" {
 		for _, g := range r.Generations {
 			if !r.Execution(g).Settled() {

@@ -58,6 +58,16 @@ function mock() {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
+      if (url.endsWith("/dispatch")) {
+        return Response.json({
+          mode: url.includes(a) ? "manual" : "auto",
+          revision: 1,
+          state: url.includes(a) ? "closed" : "ready",
+          default_profile_id: "default",
+          default_profile_name: "Codex 标准",
+          environment_readiness_required: true,
+        });
+      }
       if (url.includes("/environment/options")) {
         return Response.json({
           profiles: [{ id: "default", name: "Codex 标准" }],
@@ -170,7 +180,7 @@ it("resolves an activity summary deep link to its project and preserves it throu
     return original(...args);
   });
   const target = `/projects/${a}/activities?activity=chosen`;
-  mount(target);
+  const { router } = mount(target);
   await screen.findByRole("heading", { name: "选中的活动" });
   expect(screen.getByRole("combobox", { name: "当前项目" })).toHaveValue(a);
   expect(
@@ -182,7 +192,9 @@ it("resolves an activity summary deep link to its project and preserves it throu
           String(url).includes("/body?"),
       ),
   ).toBe(false);
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await act(async () => {
+    await router.navigate("/settings/execution-configs");
+  });
   await waitFor(() =>
     expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
       "href",
@@ -240,7 +252,7 @@ it("keeps drawer UI outside keyed Workspace while isolating project and instance
     ),
   );
   expect(
-    await screen.findByRole("link", { name: "任务自动派发：Codex 标准" }),
+    await screen.findByRole("link", { name: "任务自动派发：已开启，可派发" }),
   ).toHaveAttribute("href", `/projects/${b}/settings#task-dispatch`);
   panel = await screen.findByRole("region", { name: /活动中心/ });
   expect(
@@ -309,6 +321,100 @@ afterEach(() => {
   setJournalHome("");
 });
 
+it("opens project registration from the zero-project page and confirms only after checking", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  const requests: Array<Record<string, string>> = [];
+  const initialization = "请按项目接入指南完成初始化。";
+  const registration = "安装目录：D:\\SteerLine 安装";
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [url, options] = args;
+    if (url === "/api/v2/application/projects")
+      return Response.json({ projects: [] });
+    if (url === "/api/v2/application/projects/registration/prompt")
+      return Response.json({
+        initialization_prompt: initialization,
+        prompt: registration,
+      });
+    if (url === "/api/v2/application/projects/registration") {
+      const input = JSON.parse(String(options?.body));
+      requests.push(input);
+      return Response.json({
+        repository: "C:/Projects/new",
+        commit: "c".repeat(40),
+        config_id: "new.json",
+        project_id: a,
+        ...(input.confirmation
+          ? { saved: true }
+          : { saved: false, confirmation: "checked" }),
+      });
+    }
+    return original(...args);
+  });
+  mount("/projects");
+  expect(await screen.findByText("尚无已配置项目")).toBeVisible();
+  fireEvent.click(screen.getByRole("link", { name: "添加已初始化项目" }));
+  expect(
+    await screen.findByRole("heading", { name: "添加已初始化项目" }),
+  ).toBeVisible();
+  const initialize = screen.getByRole("button", {
+    name: "1. 复制项目初始化提示词",
+  });
+  const copy = screen.getByRole("button", { name: "2. 复制项目接入提示词" });
+  await waitFor(() => expect(initialize).toBeEnabled());
+  await waitFor(() => expect(copy).toBeEnabled());
+  const writeText = vi
+    .fn()
+    .mockResolvedValueOnce(undefined)
+    .mockRejectedValueOnce(new Error("permission denied"))
+    .mockResolvedValueOnce(undefined);
+  vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+  fireEvent.click(initialize);
+  expect(
+    await screen.findByText("已复制项目初始化提示词，可粘贴给目标项目的 Agent。"),
+  ).toBeVisible();
+  expect(writeText).toHaveBeenLastCalledWith(initialization);
+  fireEvent.click(copy);
+  expect(await screen.findByRole("textbox", { name: /手动复制/ })).toHaveValue(
+    registration,
+  );
+  fireEvent.click(copy);
+  expect(
+    await screen.findByText("已复制项目接入提示词，可粘贴给目标项目的 Agent。"),
+  ).toBeVisible();
+  expect(writeText).toHaveBeenLastCalledWith(registration);
+  expect(requests).toHaveLength(0);
+  for (const [label, value] of [
+    ["项目名称", "new"],
+    ["服务机器上的仓库路径", "C:/Projects/new"],
+    ["Git remote", "origin"],
+    ["目标分支", "main"],
+    ["PR 服务地址", "https://git.example.com"],
+    ["PR 仓库", "owner/new"],
+  ]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  expect(screen.queryByRole("button", { name: "确认添加" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "核验目标分支" }));
+  const confirm = await screen.findByRole("button", { name: "确认添加" });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].confirmation).toBeUndefined();
+  fireEvent.click(confirm);
+  expect(await screen.findByText("已保存，待重启生效")).toBeVisible();
+  expect(requests[1].confirmation).toBe("checked");
+});
+
+it("opens project registration from the project switcher", async () => {
+  mock();
+  mount("/projects/" + a + "/dag");
+  const entry = await screen.findByRole("link", { name: "添加已初始化项目" });
+  expect(entry.closest(".project-selector")).not.toBeNull();
+  fireEvent.click(entry);
+  expect(
+    await screen.findByRole("heading", { name: "添加已初始化项目" }),
+  ).toBeVisible();
+});
+
 it("recognizes a direct maintenance action route", async () => {
   mock();
   const original = vi.mocked(fetch).getMockImplementation()!;
@@ -344,7 +450,7 @@ it("recognizes direct roadmap routes, keeps the page when switching projects, an
         )
       : original(...args),
   );
-  mount(`/projects/${a}/roadmaps?source=draft-a`);
+  const { router } = mount(`/projects/${a}/roadmaps?source=draft-a`);
   await screen.findByRole(
     "heading",
     { name: "Roadmap 草稿" },
@@ -364,7 +470,9 @@ it("recognizes direct roadmap routes, keeps the page when switching projects, an
     { name: "Roadmap 草稿" },
     { timeout: 5000 },
   );
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await act(async () => {
+    await router.navigate("/settings/execution-configs");
+  });
   await waitFor(() =>
     expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
       "href",
@@ -426,14 +534,14 @@ it("cancels the old project's pending preload and never installs its late respon
 
 it("switches same-name projects by ID, preserving page type and dropping task selection", async () => {
   mock();
-  mount("/projects/" + a + "/settings?task=1");
-  await screen.findByText("配置", { selector: "h1" });
+  mount("/projects/" + a + "/status?task=1");
+  await screen.findByRole("heading", { name: "项目状态" });
   fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), {
     target: { value: b },
   });
   await waitFor(() =>
     expect(screen.getByTestId("location")).toHaveTextContent(
-      "/projects/" + b + "/settings",
+      "/projects/" + b + "/status",
     ),
   );
   expect(screen.getByTestId("location")).not.toHaveTextContent("task=");
@@ -697,16 +805,16 @@ it("returns from execution profiles to the same project, page, query and fragmen
   mock();
   const target = `/projects/${a}/settings?task=1#details`;
   mount(target);
-  await screen.findByRole("heading", { name: "配置" });
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
-  await screen.findByRole("heading", { name: "执行方案配置" });
+  await screen.findByRole("heading", { name: "任务自动派发" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案管理" }));
+  await screen.findByRole("heading", { name: "执行方案管理" });
   expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
     "href",
     target,
   );
   expect(screen.getByRole("link", { name: "配置" })).toHaveAttribute(
     "href",
-    `/projects/${a}/settings`,
+    `/projects/${a}/status`,
   );
   expect(screen.queryByLabelText("生成最大并发数")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
@@ -740,7 +848,7 @@ it("keeps configuration available without projects and returns to project select
       : original(...args),
   );
   mount("/settings/execution-configs");
-  await screen.findByRole("heading", { name: "执行方案配置" });
+  await screen.findByRole("heading", { name: "执行方案管理" });
   expect(
     screen.queryByRole("link", { name: "返回项目" }),
   ).not.toBeInTheDocument();
@@ -757,8 +865,8 @@ it("keeps configuration available without projects and returns to project select
 it("guards return links and browser back while an execution profile has unsaved changes", async () => {
   mock();
   const { router } = mount(`/projects/${a}/settings`);
-  await screen.findByRole("heading", { name: "配置" });
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await screen.findByRole("heading", { name: "任务自动派发" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案管理" }));
   const name = await screen.findByLabelText("配置名称");
   fireEvent.change(name, { target: { value: "未保存方案" } });
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -774,7 +882,7 @@ it("guards return links and browser back while an execution profile has unsaved 
   );
   confirm.mockReturnValue(true);
   fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
-  await screen.findByRole("heading", { name: "配置" });
+  await screen.findByRole("heading", { name: "任务自动派发" });
 });
 
 it("keeps the exact return route when browser preference storage is unavailable", async () => {
@@ -786,8 +894,8 @@ it("keeps the exact return route when browser preference storage is unavailable"
     throw new DOMException("blocked");
   });
   mount(`/projects/${a}/settings?task=4`);
-  await screen.findByRole("heading", { name: "配置" });
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await screen.findByRole("heading", { name: "任务自动派发" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案管理" }));
   await waitFor(() =>
     expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
       "href",

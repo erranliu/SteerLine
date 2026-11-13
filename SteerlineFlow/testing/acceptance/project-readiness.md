@@ -42,3 +42,16 @@
 | 项目就绪 / 候选事务定向回归 | 通过；`diagnostics/pr-owner-c3250a2d36124ef8a84dc5b8358a371a/summary.json`。实际选择 `./internal/app ./internal/storage/sqlite -run 'TestProjectReadiness\|TestPMSCandidateSnapshotCASVersionsAndReplay\|TestMaintenanceCandidateAdmission' -count=1`。 |
 
 同步后文档导航检查通过（701 个 Markdown、4316 个本地导航链接，零错误），差异检查通过。此前 SQLite/HTTP 全集仍按上文原基线与报告追溯，不扩大本次补验范围。
+
+## 2026-11-12 项目状态页与结构化原因
+
+源码基线 `ea3f9b8e`，报告采集时含本次未提交修改。顶栏最多显示两个去重原因，额外原因以 `+N` 计数。项目状态页展开每条阻塞记录。就绪查询、维护响应和候选准入使用同一后端判定。
+
+| 验证范围 | 结果与证据 |
+| --- | --- |
+| L1、L2、Web 全集 | 均通过，Web 485 项。报告根为 `C:\SteerlineDebug\project-status-b4597570405147c6a00158c1f9186609\test-results`，入口分别为 `L1/baseline/summary.json`、`L2/baseline/summary.json` 和 `L4/web-unit/summary.json`。 |
+| Go 项目就绪、维护和 SQLite 定向回归 | 通过。最终补测包括已就绪返回空原因数组、查询与维护响应一致、脏工作区同时落后、测试安排缺失和原请求重放。报告为 `C:\SteerlineDebug\project-status-41c6c4e2a6c341c68f1e8416bed808b0\diagnostics\readiness\summary.json`。 |
+| Edge 浏览器 B4 | 通过。在 1440、800、375 像素宽度检查页面，覆盖顶栏去重与计数、全部原因和两个跳转入口。截图和 trace 在 `C:\SteerlineDebug\project-status-9f34f71aea5140aebcc550544fa42df2\diagnostics\browser`。 |
+| 生产构建与最后一处任务页文案补测 | `npm --prefix web run build` 与任务详情 24 项定向测试通过。 |
+
+本次验证范围为本地源码、生产构建和隔离夹具。安装版部署及真实模型、真实 PR 链未验。

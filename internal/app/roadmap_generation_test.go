@@ -64,13 +64,13 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 	} else {
 		r, err := f.port.store.Roadmap(ctx, f.port.config.Identity(), in.Correlation["steerline_roadmap_parse"])
 		require(f.t, err)
-		text, err := f.port.config.runtimeMaintenance.read(ctx, r.CodeCommit, "logic.go")
+		text, err := f.port.materials.readCommittedMaterial(ctx, r.CodeCommit, "logic.go")
 		require(f.t, err)
 		blob := fixtureGit(f.t, f.port.config.Repository, "rev-parse", r.CodeCommit+":logic.go")
 		src := &runnercontract.RepositorySource{LocalPath: in.Generate.Repository.LocalPath, Commit: r.CodeCommit, Tree: r.RepositoryTree,
 			Files: []runnercontract.RepositoryFile{{Path: "logic.go", Blob: blob, SHA256: roadmap.Digest(text), SizeBytes: len(text)}}}
 		for _, guide := range r.Materials {
-			body, e := f.port.config.runtimeMaintenance.read(ctx, r.CodeCommit, guide.Path)
+			body, e := f.port.materials.readCommittedMaterial(ctx, r.CodeCommit, guide.Path)
 			require(f.t, e)
 			blob := fixtureGit(f.t, f.port.config.Repository, "rev-parse", r.CodeCommit+":"+guide.Path)
 			src.Files = append(src.Files, runnercontract.RepositoryFile{Path: guide.Path, Blob: blob, SHA256: roadmap.Digest(body), SizeBytes: len(body)})
@@ -149,6 +149,7 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 	require(f.t, err)
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: f.run.RepositorySource, FileMaterials: f.run.Materials,
 		Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: q.RequestID, TurnID: "controlled-turn"}}
+	f.run.Final = new(f.run.ContentResult.Source)
 	if f.runs == nil {
 		f.runs = map[string]runnercontract.Run{}
 		f.requests = map[string]runnercontract.Request{}
@@ -248,8 +249,8 @@ func configurePromotionGeneration(t *testing.T, port *roadmapPort, live bool) {
 	}
 	port.config.runtimeCatalog = catalog
 	port.service = &roadmapservice.Service{Project: port.config.Identity(), Repository: port.config.Repository, Store: port.store, Runner: runner, Build: build, Queue: runnerbinding.NewContentQueue(5),
-		Source: port.source, Graph: port.graph, PrepareDocuments: port.documentContext, ReadCommitted: port.config.runtimeMaintenance.read,
-		Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+		Source: port.source, Graph: port.graph, PrepareDocuments: port.documentContext, ReadCommitted: port.materials.readCommittedMaterial,
+		Prepare: func(context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 			return execution, catalog, nil
 		}}
 }

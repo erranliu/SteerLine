@@ -131,5 +131,8 @@ func (s *SQLiteStore) SaveRefactoring(ctx context.Context, r refactoring.Record,
 			return e
 		}
 	}
+	if e = indexRefactoringReading(ctx, tx, r); e != nil {
+		return e
+	}
 	return tx.Commit()
 }

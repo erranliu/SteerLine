@@ -60,7 +60,7 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	}
 	c.runtimeEnvironmentAdmission = &environmentAdmission{}
 	c.runtimeEnvironmentAdmission.register(c)
-	port := newEnvironmentPort(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, nil)
+	port := newEnvironmentPort(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, nil, nil)
 	c.runtimeEnvironment = port
 	return port, c, store
 }
@@ -109,7 +109,7 @@ func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) 
 	fixtureGit(t, c.Repository, "push", "origin", "HEAD:refs/heads/environment-validation")
 	prepared, e := p.prepare(ctx, "remote")
 	require(t, e)
-	service := runnerTaskService(c, store, runnerclient.Client{})
+	service := runnerTaskService(c, store, runnerclient.Client{}, nil, nil)
 	input, _ := json.Marshal(prepared.Input)
 	candidate := runnerbridge.Candidate{ProfileID: "remote", Submit: runnerclient.Request{Input: input}}
 	if e = service.ReserveExecution(ctx, taskmodel.FixedWork{}, candidate, false); e == nil || !strings.Contains(e.Error(), "环境未就绪") {
@@ -224,7 +224,7 @@ func testEnvironmentRecheckWithRunningTask(t *testing.T) {
 		Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: envmodel.ID(), Input: mustJSON(input)},
 	}
 	work := taskmodel.FixedWork{Record: task, Contract: contract, Authority: graph.TaskGraph().Authority}
-	require(t, runnerTaskService(c, store, runnerclient.Client{}).ReserveExecution(ctx, work, candidate, false))
+	require(t, runnerTaskService(c, store, runnerclient.Client{}, nil, nil).ReserveExecution(ctx, work, candidate, false))
 	candidate, err = store.Candidate(ctx, c.Identity(), candidate.ID)
 	require(t, err)
 	candidate.Revision++

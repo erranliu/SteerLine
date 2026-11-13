@@ -69,7 +69,9 @@ func PureImportsAllowed(owner, dependency string) bool {
 	case module + "/internal/task/model", module + "/internal/projectmaintenance/model":
 		return dependency == module+"/internal/taskcontract"
 	case module + "/internal/projectmaintenance":
-		return dependency == module+"/internal/projectmaintenance/model" || dependency == module+"/internal/testmanagement/model"
+		return dependency == module+"/internal/projectmaintenance/model" || dependency == module+"/internal/testmanagement/model" || dependency == module+"/internal/activityconversation"
+	case module + "/internal/activityconversation":
+		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/executionconfig":
 		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/developerconfig"
 	case module + "/internal/runnerbinding":
@@ -92,7 +94,11 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return false
 	case module + "/internal/steeragent/suggestion":
 		return dependency == module+"/internal/steeragent/suggestion/contract" || dependency == module+"/internal/prompts"
-	case module + "/internal/testmanagement/model", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model":
+	case module + "/internal/roadmap/model":
+		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/manualverification"
+	case module + "/internal/manualverification":
+		return dependency == module+"/internal/runnercontract" || dependency == hostContract
+	case module + "/internal/testmanagement/model", module + "/internal/environmentadaptation/model":
 		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/prompts":
 		return dependency == module+"/internal/testmanagement/model" || dependency == module+"/internal/runnercontract" || dependency == module+"/tools"
@@ -102,7 +108,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/steeragent/maintenance", module + "/internal/refactoring/model", module + "/internal/steeragent", module + "/internal/steeragent/suggestion", module + "/internal/steeragent/suggestion/contract", module + "/internal/billing", module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/manualverification", module + "/internal/activityconversation", module + "/internal/steeragent/maintenance", module + "/internal/refactoring/model", module + "/internal/steeragent", module + "/internal/steeragent/suggestion", module + "/internal/steeragent/suggestion/contract", module + "/internal/billing", module + "/internal/developerconfig", module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -460,7 +466,7 @@ func storageSQLiteImportAllowed(dependency string) bool {
 		module + "/internal/storage/ports", module + "/internal/task/model",
 		module + "/internal/testmanagement/model",
 		module + "/internal/prompts",
-		module + "/internal/projectmaintenance/model",
+		module + "/internal/projectmaintenance/model", module + "/internal/manualverification",
 		module + "/internal/refactoring/model", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/steeragent/suggestion/contract",
 	} {
 		if dependency == allowed {

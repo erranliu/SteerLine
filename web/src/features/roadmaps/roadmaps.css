@@ -1,12 +1,7 @@
 .roadmaps-page {
-  padding: 24px;
   min-width: 0;
 }
-.roadmaps-page h1 {
-  font-size: 24px;
-}
 .roadmaps-page h2 {
-  font-size: 17px;
   margin: 0 0 12px;
 }
 .roadmaps-page p,
@@ -16,22 +11,22 @@
 .roadmaps-page .page-header {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: var(--ui-gap);
   align-items: flex-start;
-  margin-bottom: 24px;
+  margin-bottom: var(--ui-gap);
 }
 .roadmaps-grid {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr) 260px;
-  gap: 20px;
+  gap: var(--ui-gap);
 }
 .roadmaps-progress {
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-panel, #142019);
-  box-shadow: 0 8px 24px #0004;
+  padding: var(--ui-panel-padding);
+  margin-bottom: var(--ui-gap);
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-panel-radius);
+  background: var(--ui-surface);
   overflow-wrap: anywhere;
 }
 .roadmaps-progress-heading {
@@ -55,7 +50,7 @@
   font-size: 13px;
 }
 .roadmaps-steps li {
-  color: var(--color-muted);
+  color: var(--ui-secondary);
 }
 .roadmaps-steps li span {
   margin-right: 6px;
@@ -68,12 +63,13 @@
   font-weight: 700;
 }
 .roadmaps-page .roadmaps-primary {
-  background: #335f43;
-  color: #fff;
-  border: 1px solid #719b7d;
-  border-radius: 6px;
-  padding: 8px 12px;
+  background: var(--color-primary);
+  color: #10281c;
+  border-color: var(--color-primary);
   font-weight: 600;
+}
+.roadmaps-page .roadmaps-primary:hover:not(:disabled) {
+  background: #9fe9c6;
 }
 .roadmaps-progress .roadmaps-actions {
   align-items: center;
@@ -104,9 +100,10 @@
 .roadmaps-controls,
 .roadmaps-document {
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
+  padding: var(--ui-panel-padding);
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-panel-radius);
+  background: var(--ui-panel);
 }
 .roadmaps-library button {
   display: block;
@@ -118,11 +115,13 @@
 }
 .roadmaps-library button span {
   display: block;
-  font-size: 11px;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
   margin-top: 6px;
 }
 .roadmaps-library button.active {
-  background: #223e30;
+  background: var(--ui-selected);
+  border-inline-start: 2px solid var(--color-primary);
 }
 .roadmaps-page textarea {
   box-sizing: border-box;
@@ -130,7 +129,7 @@
   resize: vertical;
   padding: 14px;
   font:
-    13px/1.8 Consolas,
+    14px/1.7 Consolas,
     monospace;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -141,11 +140,11 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   padding: 14px;
-  background: #152019;
+  background: var(--ui-surface);
   border-radius: 8px;
   max-height: 650px;
   overflow: auto;
-  font-size: 12px;
+  font-size: var(--ui-body-size);
 }
 .roadmaps-page select {
   display: block;
@@ -160,9 +159,10 @@
   margin: 12px 0;
 }
 .roadmaps-page button {
-  padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 6px 11px;
+  border: 1px solid var(--ui-line);
+  border-radius: 7px;
 }
 .roadmaps-page button:disabled {
   opacity: 0.5;
@@ -173,10 +173,11 @@
 }
 .roadmaps-section {
   scroll-margin-top: 24px;
-  margin-top: 24px;
-  padding: 20px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
+  margin-top: var(--ui-gap);
+  padding: var(--ui-panel-padding);
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-panel-radius);
+  background: var(--ui-panel);
   min-width: 0;
 }
 .roadmaps-table {
@@ -334,9 +335,6 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px 8px;
     font-size: 12px;
-  }
-  .roadmaps-page {
-    padding: 12px;
   }
   .roadmaps-grid {
     grid-template-columns: minmax(0, 1fr);

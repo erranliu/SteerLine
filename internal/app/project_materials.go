@@ -29,9 +29,40 @@ func isRetryableMaterialRead(err error) bool {
 	var invalid *taskmodel.Error
 	return !errors.As(err, &missing) && !errors.As(err, &nonregular) && !errors.Is(err, errMismatchedTestWriter) && !errors.As(err, &invalid)
 }
-func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.TaskRecord, commit string) (pmm.Material, error) {
+func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.TaskRecord, commit string) (result pmm.Material, resultErr error) {
 	ctx = materialReads(ctx)
-	result := pmm.Material{TaskID: task.TaskID, Commit: commit, Status: "invalid"}
+	result = pmm.Material{TaskID: task.TaskID, Commit: commit, Status: "invalid"}
+	var arrangement, catalogue string
+	failure := pmm.Blocker{Category: pmm.TaskMaterial, Code: pmm.TaskMaterialInvalid}
+	defer func() {
+		if resultErr == nil {
+			return
+		}
+		var missing *missingCommittedFileError
+		var nonregular *nonRegularCommittedFileError
+		var invalidCatalogue *pm.InvalidCatalogueError
+		switch {
+		case errors.As(resultErr, &missing):
+			failure.Path = missing.path
+			switch missing.path {
+			case arrangement:
+				failure.Category, failure.Code = pmm.TestPlan, pmm.TestPlanMissing
+			case catalogue:
+				failure.Category, failure.Code = pmm.TestPlan, pmm.TestCatalogueInvalid
+			}
+		case errors.As(resultErr, &nonregular):
+			failure.Path = nonregular.path
+			switch nonregular.path {
+			case arrangement:
+				failure.Category, failure.Code = pmm.TestPlan, pmm.TestPlanInvalid
+			case catalogue:
+				failure.Category, failure.Code = pmm.TestPlan, pmm.TestCatalogueInvalid
+			}
+		case errors.As(resultErr, &invalidCatalogue):
+			failure = pmm.Blocker{Category: pmm.TestPlan, Code: pmm.TestCatalogueInvalid, Path: invalidCatalogue.Path}
+		}
+		result.Failure = &failure
+	}()
 	contract, err := m.store.TaskContract(ctx, m.config.Identity(), task)
 	if err != nil {
 		return result, err
@@ -39,7 +70,7 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 	result.Contract = contract
 	// Reuse the existing request cache and batch reader. Serial per-file Git
 	// processes can exhaust the finite assessment budget before parsing begins.
-	arrangement, err := testmodel.ArrangementPath(contract.PlanRef.Path)
+	arrangement, err = testmodel.ArrangementPath(contract.PlanRef.Path)
 	if err != nil {
 		return result, err
 	}
@@ -61,6 +92,7 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 	if err != nil {
 		return result, err
 	}
+	catalogue = entry.TestingCatalogue
 	if _, err = reader.readCommittedFiles(ctx, commit, entry.Paths()); err != nil {
 		if isRetryableMaterialRead(err) {
 			result.Status = "unknown"
@@ -75,7 +107,7 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 		return result, err
 	}
 	read := func(path string) ([]byte, error) {
-		body, e := m.read(ctx, commit, path)
+		body, e := m.readCommittedMaterial(ctx, commit, path)
 		if e != nil && isRetryableMaterialRead(e) {
 			result.Status = "unknown"
 		}
@@ -104,6 +136,7 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 		}
 		return result, err
 	}
+	failure = pmm.Blocker{Category: pmm.TestPlan, Code: pmm.TestPlanInvalid, Path: arrangement}
 	plan, basis, err := pm.Arrangement(contract.PlanRef.Path, commit, read, protocol)
 	if err != nil {
 		var missing *testmodel.MissingTestIDs
@@ -167,6 +200,11 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 	}
 	return nil
 }
+
+type materialFreshnessReader interface {
+	freshness(context.Context, runnerstate.Candidate) string
+}
+
 func (m *projectMaintenance) freshness(ctx context.Context, c runnerstate.Candidate) string {
 	o := m.current()
 	if o.Commit == "" || o.Diagnostic != "" {
@@ -245,7 +283,7 @@ func (m *projectMaintenance) candidateDocuments(ctx context.Context, id string) 
 	refs = append(refs, c.Contract.AcceptanceRefs...)
 	arrangementPath, _ := testmodel.ArrangementPath(c.Contract.PlanRef.Path)
 	refs = append(refs, taskmodel.FileReference{Path: arrangementPath, Commit: c.BaseRevision})
-	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, c.BaseRevision, path) })
+	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.readCommittedMaterial(ctx, c.BaseRevision, path) })
 	if readErr != nil {
 		return nil, readErr
 	}
@@ -258,11 +296,11 @@ func (m *projectMaintenance) candidateDocuments(ctx context.Context, id string) 
 			continue
 		}
 		seen[r.Path] = true
-		before, err := m.read(ctx, r.Commit, r.Path)
+		before, err := m.readCommittedMaterial(ctx, r.Commit, r.Path)
 		if err != nil {
 			return nil, err
 		}
-		after, err := m.read(ctx, latest.Commit, r.Path)
+		after, err := m.readCommittedMaterial(ctx, latest.Commit, r.Path)
 		f := file{Path: r.Path, Before: string(before), After: string(after)}
 		if err != nil {
 			f.Diagnostic = err.Error()
@@ -371,7 +409,7 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 	refs = append(refs, latest.Contract.AcceptanceRefs...)
 	arrangementPath, _ := testmodel.ArrangementPath(latest.Contract.PlanRef.Path)
 	refs = append(refs, taskmodel.FileReference{Path: arrangementPath})
-	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, latest.Commit, path) })
+	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.readCommittedMaterial(ctx, latest.Commit, path) })
 	if readErr != nil {
 		return nil, readErr
 	}
@@ -384,7 +422,7 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 			continue
 		}
 		seen[ref.Path] = true
-		body, err := m.read(ctx, latest.Commit, ref.Path)
+		body, err := m.readCommittedMaterial(ctx, latest.Commit, ref.Path)
 		d := document{Path: ref.Path, Body: string(body)}
 		if err != nil {
 			d.Diagnostic = err.Error()

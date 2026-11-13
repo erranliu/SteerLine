@@ -497,8 +497,9 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 	if run.StopStatus != "stopped" {
 		return nil
 	}
+	content := run.ContentResult
 	decisionSucceeded := run.Status == "completed" && run.Final != nil && run.Final.Verified && run.Final.NativeOutcome == "succeeded" &&
-		(run.ContentResult == nil || run.ContentResult.Status == "succeeded")
+		content != nil && content.Status == "succeeded" && len(content.JSON) > 0
 	if binding.WorkflowID == "generate" && decisionSucceeded && !r.StopRequested {
 		var in runnercontract.GenerateRunInput
 		if json.Unmarshal(o.Request.Input, &in) != nil {
@@ -516,20 +517,18 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			in.Generate.Directory == nil && !runnerbinding.SamePath(run.Execution.Workspace, filepath.Join(r.Frozen.Runner.StateDir, "runs", run.RunID, "content")) {
 			return errors.New("只读目录来源不匹配")
 		}
-		if run.ContentResult != nil {
-			if err := runnerclient.VerifyFileMaterials(in.Generate.Materials, run.ContentResult.FileMaterials); err != nil {
-				return err
+		if err := runnerclient.VerifyFileMaterials(in.Generate.Materials, content.FileMaterials); err != nil {
+			return err
+		}
+		if in.Generate.Repository != nil {
+			if e := runnerclient.VerifyRepositoryFiles(content.RepositorySource, *in.Generate.Repository, nil); e != nil {
+				return e
 			}
-			if in.Generate.Repository != nil {
-				if e := runnerclient.VerifyRepositoryFiles(run.ContentResult.RepositorySource, *in.Generate.Repository, nil); e != nil {
-					return e
-				}
-			} else if run.ContentResult.RepositorySource != nil {
-				return errors.New("只读结果意外关联了仓库快照")
-			}
-			if !reflect.DeepEqual(run.ContentResult.Source, *run.Final) {
-				return errors.New("只读结果与原生Final来源不匹配")
-			}
+		} else if content.RepositorySource != nil {
+			return errors.New("只读结果意外关联了仓库快照")
+		}
+		if !reflect.DeepEqual(content.Source, *run.Final) {
+			return errors.New("只读结果与原生Final来源不匹配")
 		}
 	}
 	feedback := ""
@@ -613,13 +612,16 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 		}
 		if !decisionSucceeded {
 			detail := run.Diagnostic
-			if detail == "" && run.ContentResult != nil {
-				detail = run.ContentResult.Diagnostic
+			if detail == "" && content != nil {
+				detail = content.Diagnostic
+			}
+			if detail == "" && run.Status == "completed" && (content == nil || content.Status == "succeeded" && len(content.JSON) == 0) {
+				detail = "缺少结构化决策结果 ContentResult.JSON"
 			}
 			if detail == "" {
 				detail = run.Status
 			}
-			if retryableDecisionOutput(run.ContentResult) {
+			if retryableDecisionOutput(content) {
 				alreadyRetried := false
 				if len(r.Operations) > 1 {
 					previous := r.Operations[len(r.Operations)-2]
@@ -635,13 +637,7 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			r.Pause(now)
 			return nil
 		}
-		var raw []byte
-		if run.ContentResult != nil && len(run.ContentResult.JSON) > 0 {
-			raw = run.ContentResult.JSON
-		} else {
-			raw = []byte(feedback)
-		}
-		d, de := decision.Accept(raw, o.Purpose)
+		d, de := decision.Accept(content.JSON, o.Purpose)
 		if de != nil {
 			r.Phase = "blocked"
 			r.Diagnostic = de.Error()

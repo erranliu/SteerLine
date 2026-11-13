@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,7 +22,7 @@ import (
 
 func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 	ctx := context.Background()
-	c, _ := nativeTaskFixture(t)
+	c, beforeDocuments := nativeTaskFixture(t)
 	files := map[string]string{"SteerlineFlow/spec/roadmap/a.spec.md": "# Spec\n目标", "SteerlineFlow/plans/roadmap/a.plan.md": "# Plan\n实施", "SteerlineFlow/testing/acceptance/roadmap/a.md": "# Acceptance\n通过条件"}
 	for name, body := range files {
 		full := filepath.Join(c.Repository, filepath.FromSlash(name))
@@ -57,6 +58,12 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 		return out
 	}
 	commands := NewTaskCommands(store, c)
+	port := &roadmapPort{config: c, store: store, materials: newProjectMaintenance(c, store)}
+	empty, e := port.graph(ctx)
+	require(t, e)
+	if empty == nil || len(empty) != 0 {
+		t.Fatalf("empty graph should return an empty slice without refreshing the baseline: %+v", empty)
+	}
 	one := batch("one", 2)
 	request := strings.Repeat("1", 32)
 	first, e := commands.AdmitRoadmap(ctx, "roadmap-one", one, request, 1, "fixture")
@@ -69,6 +76,34 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 	if len(graph.Tasks) != 2 || len(graph.Edges) != 1 || graph.Edges[0].PredecessorID != "0" || graph.Edges[0].SuccessorID != "1" {
 		t.Fatal(graph)
 	}
+	t.Run("existing graph reads one refreshed commit", func(t *testing.T) {
+		refreshes := 0
+		port.mergeHistory = mergeHistoryFixture{refresh: func(context.Context) (string, error) {
+			refreshes++
+			if refreshes == 1 {
+				return commit, nil
+			}
+			return beforeDocuments, nil
+		}}
+		existing, err := port.graph(ctx)
+		require(t, err)
+		if refreshes != 1 || len(existing) != 2 {
+			t.Fatalf("expected two tasks from one baseline refresh, got %d tasks and %d refreshes", len(existing), refreshes)
+		}
+		specPath := one.Tasks[0].Contract.SpecRef.Path
+		for _, task := range existing {
+			if task.Spec != specPath || task.SpecText != files[specPath] || task.MaterialDigest != roadmap.Digest([]byte(files[specPath])) {
+				t.Fatalf("unexpected committed Spec for task #%s: %+v", task.ID, task)
+			}
+		}
+		if existing[0].ID != "0" || existing[1].ID != "1" || len(existing[1].Predecessors) != 1 || existing[1].Predecessors[0] != "0" {
+			t.Fatalf("unexpected existing graph order or dependencies: %+v", existing)
+		}
+		existing, err = port.graph(ctx)
+		if refreshes != 2 || existing != nil || err == nil || !strings.Contains(err.Error(), "已有任务 #"+graph.Tasks[0].TaskID+" 的 Spec 无法读取") || errors.Unwrap(err) == nil {
+			t.Fatalf("missing Spec at the refreshed commit did not return a task-specific error: %+v, %v", existing, err)
+		}
+	})
 	// Replay does not reread Git or allocate, even when the observer has a newer authority version.
 	replayCommands := commands
 	replayCommands.Documents = nil
@@ -135,9 +170,50 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 	if len(seen) != 3 {
 		t.Fatal(seen)
 	}
+
+	t.Run("recover committed tasks before roadmap mapping", func(t *testing.T) {
+		request := strings.Repeat("a", 32)
+		id := strings.Repeat("b", 32)
+		frozen, err := json.Marshal(batch("recover", 2))
+		require(t, err)
+		pending := roadmap.Record{ID: id, Project: c.Identity(), Revision: 1, Source: roadmap.Source{ID: "recover-source"}, State: "admission-unknown", AdmissionRequest: request, AdmissionBatch: frozen}
+		require(t, store.SaveRoadmap(ctx, pending, 0))
+		lost := errors.New("actor response lost after task commit")
+		writes := 0
+		port := &roadmapPort{store: store, taskAdmission: newRoadmapTaskCommands(store, c, func(ctx context.Context, run func(context.Context) error) error {
+			writes++
+			if err := run(ctx); err != nil {
+				return err
+			}
+			return lost
+		})}
+		if _, err = port.admit(ctx, pending, request); !errors.Is(err, lost) {
+			t.Fatal("expected lost response after durable commit", err)
+		}
+		pending, err = store.Roadmap(ctx, c.Identity(), id)
+		require(t, err)
+		if pending.State != "admission-unknown" || len(pending.Mapping) != 0 {
+			t.Fatal("roadmap mapped tasks before receiving a receipt", pending)
+		}
+		originalID := roadmap.Digest([]byte("roadmap-admission\n" + request))[:32]
+		raw, err := commands.ReadReceipt(ctx, originalID, "create_task_batch", c.Identity())
+		require(t, err)
+		var original taskmodel.TaskBatchReceipt
+		require(t, json.Unmarshal(raw, &original))
+		before, err := store.TaskGraphSnapshot(ctx, c.Identity())
+		require(t, err)
+		recovered, err := port.resumeAdmission(ctx, pending)
+		require(t, err)
+		after, err := store.TaskGraphSnapshot(ctx, c.Identity())
+		require(t, err)
+		if writes != 1 || recovered.State != "admitted" || roadmap.ValueDigest(recovered.Mapping) != roadmap.ValueDigest(original.TaskIDs) || after.Authority.GraphRevision != before.Authority.GraphRevision || len(after.Tasks) != len(before.Tasks) {
+			t.Fatal("recovery changed the original mapping or repeated the write", writes, recovered.Mapping, original.TaskIDs)
+		}
+	})
 }
 
 func TestRoadmapSourceAndMissingDocumentCapability(t *testing.T) {
+	t.Run("merge uses injected target history", testRoadmapVerifyMergedUsesInjectedTargetHistory)
 	t.Run("public-native-projection", func(t *testing.T) {
 		r := roadmap.Record{Purpose: "documents", Generations: []roadmap.Generation{{ID: "g", State: "accepted", Submission: "started", Request: runnercontract.Request{Input: json.RawMessage(`{"secret":"private request"}`)}, Projection: &runnercontract.Run{Status: "blocked", ResumeRequired: true, Diagnostic: "native execution needs attention"}}}}
 		out := publicRoadmap(r)
@@ -157,7 +233,7 @@ func TestRoadmapSourceAndMissingDocumentCapability(t *testing.T) {
 	require(t, e)
 	defer store.Close()
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
-	port := &roadmapPort{config: c, store: store}
+	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store}
 	name := roadmap.Root + "source.md"
 	full := filepath.Join(c.Repository, filepath.FromSlash(name))
 	require(t, os.MkdirAll(filepath.Dir(full), 0700))

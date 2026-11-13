@@ -84,8 +84,8 @@ test("explicit submissions give immediate local feedback without a second coordi
   // original clean-worktree readiness requirement. Never bypass admission.
   writeFileSync(draft, originalDraft);
 
-  const maintenance = page.getByRole("region", { name: "项目维护" });
-  await maintenance.getByRole("button", { name: /^项目维护/ }).click();
+  await page.getByRole("link", { name: "配置", exact: true }).click();
+  const maintenance = page.getByRole("region", { name: "项目状态" });
   await maintenance
     .getByRole("button", { name: "检查更新", exact: true })
     .click();

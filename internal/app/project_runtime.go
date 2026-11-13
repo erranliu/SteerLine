@@ -191,7 +191,8 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if runner.environments != nil {
 		runner.environments.register(r.config)
 	}
-	r.environment = newEnvironmentPort(r.config, r.store, runner.client, nil)
+	maintenance := newProjectMaintenance(r.config, r.store)
+	r.environment = newEnvironmentPort(r.config, r.store, runner.client, nil, maintenance)
 	r.config.runtimeEnvironment = r.environment
 	if retErr = bindRunnerBuild(ctx, r.config, r.store); retErr != nil {
 		return
@@ -199,30 +200,28 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr = runner.validateProject(r.config); retErr != nil {
 		return
 	}
-	r.config.runtimeMaintenance = newProjectMaintenance(r.config, r.store)
-	r.environment.config.runtimeMaintenance = r.config.runtimeMaintenance
-	r.config.runtimeMaintenance.environmentObservation = r.environment.observeBasis
+	r.config.runtimeMaintenance = maintenance
+	maintenance.environmentObservation = r.environment.observeBasis
 	maintenanceDone = make(chan struct{})
-	go func() { defer close(maintenanceDone); r.config.runtimeMaintenance.observe(ctx) }()
+	go func() { defer close(maintenanceDone); maintenance.observe(ctx) }()
 	hostPort := host.NewServiceHost(r.hostConfig, "off", r.log, serviceActivityFormatter{})
 	var service *taskrunner.Actor
-	service, retErr = newRunnerService(r.config, hostPort, r.store, runner.client, runner.info)
+	service, retErr = newRunnerService(r.config, hostPort, r.store, runner.client, runner.info, maintenance)
 	if retErr != nil {
 		return
 	}
 	instance := service.InstanceID()
-	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, maintenance, maintenance)
 	r.environment.service.Admit = service.VerifyRunnerAdmission
 	r.config.runtimeTests = r.tests
-	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
-	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
-	r.tests.roadmaps = r.config.runtimeRoadmaps
+	taskAdmission := newRoadmapTaskCommands(r.store, r.config, service.ExecuteTaskMutation)
+	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, taskAdmission, maintenance, maintenance.refreshBaselineWithRewrite)
 	r.config.runtimeContinuationSuggestion = newContinuationSuggestionPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
-	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, maintenance)
 	if retErr = r.config.runtimeRefactoring.service.Recover(ctx); retErr != nil {
 		return
 	}
-	service.ObserveAuxiliary = r.tests.observe
+	service.ObserveAuxiliary = auxiliaryObserver(r.tests.progress.ObserveNext, r.config.runtimeRoadmaps.service.ObserveNext)
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
 		if action == "stop_candidate" {
@@ -232,7 +231,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeHost = &r.hostConfig
 	r.product, retErr = openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context) (productclient.TaskCommands, error) {
 		return &runtimeTaskCommands{clientTaskCommands: newClientTaskCommands(r.store, r.config), service: service}, nil
-	}, r.store)
+	}, r.store, maintenance, maintenance)
 	if retErr != nil {
 		return
 	}
@@ -241,7 +240,11 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr != nil {
 		return
 	}
-	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance, readingBodies: runner.readingBodies}
+	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance, readingBodies: runner.readingBodies, readiness: maintenance, conversationReaders: newActivityConversationReaders(r.store)}
+	r.port.manual = newManualVerification(r.config, r.store)
+	if err := r.port.manual.recover(ctx); err != nil {
+		return result, err
+	}
 	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -265,7 +268,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 			}
 			if preparationDone == nil {
 				preparationDone = make(chan struct{})
-				go func() { defer close(preparationDone); r.config.runtimeMaintenance.runPreparation(ctx) }()
+				go func() { defer close(preparationDone); maintenance.runPreparation(ctx) }()
 			}
 			if environmentDone == nil {
 				environmentDone = make(chan struct{})
@@ -280,6 +283,24 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	}}
 	retErr = host.RunService(ctx, actor, r.hostConfig, "manual")
 	return
+}
+
+// The project actor calls the observer serially with its shared observation budget.
+func auxiliaryObserver(stages ...func(context.Context) error) func(context.Context) error {
+	next := 0
+	return func(ctx context.Context) error {
+		var failures []error
+		for range stages {
+			if ctx.Err() != nil {
+				break
+			}
+			stage := stages[next]
+			// Advance before the call so a timeout cannot starve the next stage.
+			next = (next + 1) % len(stages)
+			failures = append(failures, stage(ctx))
+		}
+		return errors.Join(append(failures, ctx.Err())...)
+	}
 }
 
 // close is the sole final resource closer, including partial startup failures.
@@ -324,6 +345,9 @@ func (r *ProjectRuntime) close() {
 			cancel()
 		}
 		if r.port != nil {
+			if r.port.manual != nil {
+				r.port.manual.close()
+			}
 			r.localErr = errors.Join(r.localErr, r.port.Server.Close(context.Background()))
 		}
 		if r.product != nil {
@@ -350,13 +374,16 @@ type runtimeProjectPort struct {
 	actor    *taskrunner.Actor
 	instance string
 	*httpapi.Server
-	product       *productclient.Client
-	config        Config
-	store         taskStorage
-	stopping      atomic.Bool
-	users         sync.RWMutex
-	readingOnce   sync.Once
-	readingBodies *query.ReadingBodyCache
+	product             *productclient.Client
+	config              Config
+	store               taskStorage
+	stopping            atomic.Bool
+	users               sync.RWMutex
+	readingOnce         sync.Once
+	readingBodies       *query.ReadingBodyCache
+	readiness           projectReadinessReader
+	conversationReaders map[string]activityConversationReader
+	manual              *manualVerification
 }
 
 func (p *runtimeProjectPort) StopAccepting() { p.stopping.Store(true) }
@@ -365,6 +392,9 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 		return httpcontract.CommandResponse{}, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(in.Action, "manual_verification_") {
+		return p.manualVerificationCommand(ctx, in)
+	}
 	if strings.HasPrefix(in.Action, "refactoring_") {
 		return p.refactoringCommand(ctx, in)
 	}
@@ -471,8 +501,20 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if route == "/dispatch" {
+		if len(values) != 0 {
+			return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "dispatch observation does not accept parameters"}
+		}
+		return p.readDispatch(ctx)
+	}
 	if route == "/activities" {
 		return p.readAsyncActivities(ctx, values)
+	}
+	if route == "/manual-verification" || strings.HasPrefix(route, "/manual-verification/") {
+		if len(values) != 0 {
+			return nil, errors.New("人工核验查询不接受参数")
+		}
+		return p.manualVerificationRead(ctx, route)
 	}
 	if route == "/refactoring" || strings.HasPrefix(route, "/refactoring/") {
 		if p.config.runtimeRefactoring == nil {
@@ -528,6 +570,21 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.maintenanceRead(ctx, route, values.Get("page"), values.Get("scope"))
 	}
 	if strings.HasPrefix(route, "/commands/") {
+		if p.manual != nil {
+			raw, err := p.manual.store.ManualVerificationReceipt(ctx, p.config.Identity(), strings.TrimPrefix(route, "/commands/"))
+			if err != nil {
+				return nil, err
+			}
+			if len(raw) != 0 {
+				var in httpcontract.CommandEnvelope
+				if err := json.Unmarshal(raw, &in); err != nil {
+					return nil, err
+				}
+				out := maintenanceResponse(in)
+				out.Status = "applied"
+				return out, nil
+			}
+		}
 		if p.config.runtimeRefactoring != nil {
 			if r, e := p.refactoringReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
 				return nil, e

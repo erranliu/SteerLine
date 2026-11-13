@@ -12,10 +12,8 @@ import { useWorkspace } from "../../app/context";
 import type { CandidateStart } from "../../app/use-candidate-starts";
 import { RoadmapTaskSource } from "../roadmaps/roadmaps";
 import { TaskMaterials } from "./task-materials";
-import { useProjectReadiness } from "../project-maintenance/use-readiness";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
-import { participating } from "../runs/state";
 import { SafeLink } from "../../shared/ui/status";
 import { TaskStatus, taskStartStatus } from "./task-status";
 
@@ -35,7 +33,6 @@ export function TaskDetail({
   const confirmed = useRef(false);
   const navigate = useNavigate();
   const environment = useEnvironmentReadiness();
-  const project = useProjectReadiness();
   const [params] = useSearchParams();
   const restored =
     params.get("task") === id ? params.get("start_profile") || "" : "";
@@ -67,84 +64,33 @@ export function TaskDetail({
     (task?.workflow_runs?.length ?? 0) > 0 ||
     candidates.length > 0 ||
     pendingStarts.some((entry) => entry.participating);
-  const awaitingClaim =
-    task?.status === "open" &&
-    (candidates.length > 0 ||
-      pendingStarts.some((entry) => entry.participating));
-  const participatingIDs = new Set([
-    ...candidates
-      .filter((run) => participating(run) && run.material_status !== "outdated")
-      .map((run) => run.run_id),
-    ...(task?.workflow_runs
-      ?.filter(
-        (run) =>
-          run.participation === "active" &&
-          !candidates.some(
-            (c) =>
-              c.run_id === run.workflow_run_id &&
-              c.material_status === "outdated",
-          ),
-      )
-      .map((run) => run.workflow_run_id) ?? []),
-    ...pendingStarts
-      .filter((entry) => entry.participating)
-      .map((entry) => entry.id),
-  ]);
-  const action = hasCandidates ? "start_candidate" : "start_task";
+  const eligibility = task?.start_eligibility;
+  const candidate =
+    eligibility?.action === "start_candidate" ||
+    pendingStarts.some((entry) => entry.participating);
   const profiles = presentation.data?.presentation.profiles ?? [];
-  const chosen =
-    profile || presentation.data?.presentation.default_profile_id || "";
-  const selected = profiles.find((p) => p.id === chosen);
-  const supported = page?.service.capabilities?.includes(action);
-  const dependenciesMissing = hasCandidates
-    ? task?.predecessors?.some((p) => !p.delivered)
-    : !task?.dependency_ready;
-  const blockers = hasCandidates
-    ? task?.startup_blockers?.filter((value) => value !== "task_not_open")
-    : task?.startup_blockers;
-  const startReason = !online
+  const chosen = profile || presentation.data?.presentation.default_profile_id || "";
+  const selected = profiles.find((item) => item.id === chosen);
+  const controlRevision = detail.data?.authority_version;
+  const blockers = eligibility?.blockers ?? [];
+  const entryReason = !online
     ? "服务未连接"
     : detail.isError
-      ? "任务查询失败"
-      : !supported
-        ? "服务未提供此动作"
-        : page?.control.dispatch_mode !== "manual"
-          ? "手动启动要求手动派发模式"
-          : task?.delivery
-            ? "任务已交付"
-            : task?.status === "discarded"
-              ? "任务已放弃"
-              : dependenciesMissing
-                ? "前置尚未交付"
-                : blockers?.length
-                  ? blockers.join("；")
-                  : hasCandidates &&
-                      !awaitingClaim &&
-                      task?.status !== "in_progress" &&
-                      !candidates.some(
-                        (run) => run.workflow_stage === "start.submit",
-                      )
-                    ? "新增候选需要进行中的任务"
-                    : hasCandidates &&
-                        candidates.some((run) => run.pr.state === "merged")
-                      ? "已有候选 PR 合并"
-                      : hasCandidates && participatingIDs.size >= 5
-                        ? "已达到 5 个参与候选"
-                        : "";
-  const profileReason =
-    !selected || selected.unavailable_reason
-      ? selected?.unavailable_reason || "没有可用执行方案"
-      : "";
-  const preparation = environment.data?.profiles?.find((p) => p.id === chosen);
-  const environmentReason = !environment.required
-    ? ""
-    : !environment.verified
-      ? "项目运行环境状态待核实"
-      : preparation?.status === "ready"
-        ? ""
-        : preparation?.reason || "环境准备状态尚未核实";
-  const entryReason = startReason || project.reason;
-  const reason = entryReason || profileReason || environmentReason;
+      ? "任务资格查询失败"
+      : !eligibility || !controlRevision
+        ? "任务启动资格待核实"
+        : blockers.map((blocker) => blocker.diagnostic).join("；");
+  const profileBlocker = eligibility?.profile_blockers[chosen];
+  const profileReason = !selected
+    ? "请选择可用执行方案"
+    : profileBlocker === undefined
+      ? "执行方案资格待核实"
+      : profileBlocker?.diagnostic;
+  const reason = entryReason || profileReason;
+  const projectBlocked = blockers.some(
+    ({ code }) => code === "project_not_ready" || code === "project_readiness_unverified",
+  );
+  const preparation = environment.data?.profiles?.find((item) => item.id === chosen);
   if (!task)
     return (
       <div className="empty">
@@ -170,7 +116,6 @@ export function TaskDetail({
         )}
       </div>
       {(!!task.predecessors?.length ||
-        !!blockers?.length ||
         !!task.stop_pending?.length) && (
         <div className="detail-section">
           <h3>依赖与阻塞</h3>
@@ -186,11 +131,6 @@ export function TaskDetail({
           ) : (
             <p className="muted">没有前置依赖</p>
           )}
-          {blockers?.map((b) => (
-            <p className="notice amber" key={b}>
-              {b}
-            </p>
-          ))}
           {task.stop_pending?.map((b) => (
             <p className="notice amber" key={b}>
               停止待核实 · {b}
@@ -211,20 +151,10 @@ export function TaskDetail({
             查看活动
           </button>
         )}
-        {!task.delivery && (
-          <div role="status" aria-label="项目就绪状态">
-            <p className="muted">{project.text}</p>
-            {project.diagnostic && (
-              <p className="muted">{project.diagnostic}</p>
-            )}
-            {!project.ready && (
-              <Link
-                to={`/projects/${api.identity.project_id}/dag?maintenance=preparation&task=${encodeURIComponent(id)}`}
-              >
-                前往项目维护 <ArrowUpRight size={13} />
-              </Link>
-            )}
-          </div>
+        {projectBlocked && (
+          <Link to={`/projects/${api.identity.project_id}/status?task=${encodeURIComponent(id)}`}>
+            前往项目状态 <ArrowUpRight size={13} />
+          </Link>
         )}
         {task.delivery ? (
           <>
@@ -251,20 +181,18 @@ export function TaskDetail({
             </Link>
           </Button>
         )}
-        {!task.delivery && (!hasCandidates || allowCandidate) && (
+        {!task.delivery && (!candidate || allowCandidate) && (
           <Button
             variant="default"
             disabled={!!entryReason || !candidateStarts}
             title={entryReason}
             onClick={() => setStarting(!starting)}
           >
-            {hasCandidates ? <Plus size={14} /> : <Play size={14} />}{" "}
-            {hasCandidates ? "新增并行候选" : "手动启动"}
+            {candidate ? <Plus size={14} /> : <Play size={14} />}{" "}
+            {candidate ? "新增并行候选" : "手动启动"}
           </Button>
         )}
-        {startReason && !task.delivery && (
-          <p className="muted">{startReason}</p>
-        )}
+        {!task.delivery && entryReason && <p className="muted">{entryReason}</p>}
       </div>
       {starting && (
         <div className="start-panel">
@@ -280,7 +208,7 @@ export function TaskDetail({
               </option>
             )}
             {profiles.map((p) => (
-              <option key={p.id} value={p.id} disabled={!!p.unavailable_reason}>
+              <option key={p.id} value={p.id} disabled={!!eligibility?.profile_blockers[p.id] && eligibility.profile_blockers[p.id]?.code !== "environment_not_ready"}>
                 {p.name} · {p.host}/{p.agent}
               </option>
             ))}
@@ -298,10 +226,10 @@ export function TaskDetail({
               : "当前待核实"}
           </p>
           {reason && <p className="muted">{reason}</p>}
-          {!environment.required && (
+          {eligibility?.environment_readiness_required === false && (
             <p className="notice amber">环境就绪阻塞已关闭（开发者配置）</p>
           )}
-          {environmentReason && (
+          {profileBlocker?.code === "environment_not_ready" && (
             <Link to={environmentLink(api.identity.project_id, chosen, id)}>
               前往环境准备
             </Link>
@@ -314,6 +242,7 @@ export function TaskDetail({
               onClick={(event) => {
                 if (
                   !selected ||
+                  !controlRevision ||
                   !candidateStarts ||
                   reason ||
                   confirmed.current
@@ -324,7 +253,7 @@ export function TaskDetail({
                   task,
                   selected,
                   detail.data!.graph_revision,
-                  page?.control.revision ?? 0,
+                  controlRevision,
                 );
                 if (!requestID) {
                   confirmed.current = false;

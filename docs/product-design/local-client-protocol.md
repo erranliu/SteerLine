@@ -15,8 +15,9 @@
 | 路径 | 用途 |
 | --- | --- |
 | `/identity` | 项目/实例、进程、ready、能力、诊断及认证后的原锁路径 |
-| `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务 |
+| `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务。在线任务详情还提供显式启动资格 |
 | `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
+| `/dispatch` | 已保存的派发模式及版本、默认执行方案、当前派发状态和结构化等待原因 |
 | `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
 | `/activities/{activity_id}` | 精确活动摘要；仍只读本地事实和有界消息预览 |
 | `/activities/{activity_id}/interactions` | 显式读取已记录交互一页，默认 50、最多 200、1 MiB；游标绑定项目/实例/活动/原成员范围与读取版本，变化失效后显式刷新 |
@@ -36,6 +37,8 @@
 
 分页保留原身份、revision、筛选条件和 cursor，失效后刷新原查询，不拼接不同快照。activity 的近期查询 `recent=true` 不混用流式 cursor。conversation 空 attempt 读取原 Execution 的完整历史，指定历史 attempt 则核对正式投影归属；recovery/decision-eligibility 必须绑定当前 Execution/Attempt。
 
+在线 `GET /tasks/{task_id}` 的 `start_eligibility` 返回当前显式动作、任务级 `blockers` 和按执行方案索引的 `profile_blockers`。阻断包含 `code` 与 `diagnostic`，方案值为 null 时表示当前观察未发现该方案的阻断。Web 使用同页的任务、图和派发版本提交原动作。候选上限按当前材料摘要计算，预留事务重新核对参与候选、任务、图、材料及环境资格。
+
 final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取，单页最多 256 KiB，核对原 Attempt、revision、SHA-256 和 UTF-8 offset。来源规则见[公开会话结果](execution-observability.md#公开结果来源)，不回退原生日志。
 
 候选的 participation、submission_status、stop_requested 与 Runner workflow_status 分别表达原事实；有公开 Projection 时保留 Runner Status，无投影时使用提交状态。winner/loser 只从同一快照 TaskDelivery 产生，历史缺交付上下文时不补造。人工退出参与保留 reason/by/ended_at，不等于 Runner 停止；业务与资源边界见[生命周期](runner-lifecycle.md)。
@@ -48,7 +51,7 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 
 | action | 目标、版本与 payload |
 | --- | --- |
-| `start_task` | task ID / task version，control revision；`{execution_profile_id}` |
+| `start_task` | task ID / task version，control revision，Web 同时提交已观察的 graph revision；`{execution_profile_id}` |
 | `start_candidate` | task ID / task version，graph/control revision；`{execution_profile_id}` |
 | `stop_candidate`、`resolve_pr_conflict` | candidate ID / candidate version，control revision、graph revision 必须为 0；`{task_id}`。前者退出参与，后者沿原冲突处理入口 |
 | `answer_decision` | decision ID / version；`{run_id,decision_id,option_id,note,answers,expected_run_revision,source_attempt_id,expected_recovery_version}`，核对当前问题及原执行身份 |
@@ -57,9 +60,23 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 | `open_terminal`、`recheck_environment` | run ID / blocker version，control revision；`{target:{run_id,execution_id,attempt_id,turn_id,blocker_id,version}}`，只作用于原 blocker |
 | `open_native_session` | run ID / 0；原 `NativeSessionTarget` 的 run/Execution/Attempt/session/generation。只打开原查看器，无新业务轮次 |
 
-新项目默认关闭自动派发（`manual`），可手动启动符合资格的任务。开启后（`auto`），服务轮询并派发符合资格的任务。关闭开关只停止后续自动派发。
+新项目默认关闭自动派发（`manual`），可手动启动符合资格的任务。项目或环境准备期间可以开启自动派发（`auto`）。服务在条件满足后按现有轮询派发，候选预留继续核对当前模式与执行资格。进行中的任务在两种派发模式下均可显式新增合格候选。关闭开关只停止后续自动派发。
 
-以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning、人工验收和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
+`GET /dispatch` 按派发模式返回 `closed`，或按当前任务、执行槽位、默认方案及项目和环境观察返回 `waiting` 或 `ready`。等待原因包含 `category`、`code` 和 `diagnostic`。界面按对应派发版本展示状态。这个查询只读取事实，实际派发使用原启动和预留路径。
+
+以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning 和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
+
+人工核验使用项目范围的 `/manual-verification` 列表及 `/manual-verification/{candidate_id}/logs/{attempt_id}` 日志查询。命令以 `manual_verification_` 为前缀，按候选 ID 与核验记录版本定位。请求载荷均携带完整 `head`。
+
+| 后缀 | 载荷 |
+| --- | --- |
+| `start` | `head` 是页面所见的 PR Head。可选 `source` 默认为 `pr`，已合入时也接受 `remote_head`。服务端从冻结 Plan 读取启动命令，启动记录返回实际来源及 SHA。 |
+| `stop`、`remove` | `head` 与 `attempt_id` 定位原启动。 |
+| `result` | `head`、`attempt_id`、`check_id`、`outcome`，可选 `notes` 和 `evidence`。来源由原启动记录确定。 |
+| `close` | `source` 与 `head` 定位具备全部结论的核验提交。 |
+| `reopen` | `head` 匹配原关闭记录。 |
+
+待办状态、来源与记录规则见[人工核验设计](manual-verification.md)。
 
 POST 正文最大 1,048,576 bytes。登记前检查原信封、固定意图、digest、时间与 JSON framing 聚合编码：无结果摘要最多 1,064,960 bytes，为结果预留 16 KiB；持久读写硬上限 1,081,344 bytes。超限分别返回 HTTP 413 / request_body_too_large 或 request_record_too_large，新 ID 不登记、零业务副作用。持久摘要的 code/diagnostic 各限 1,024 UTF-8 bytes，超长保留前缀与 ` [truncated]`；正式 authority 回执保持完整。仲裁文件只存一份原信封、意图与紧凑结果，typed receipt 从原权威查询，不复制膨胀。
 

@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/product/query"
-	m "github.com/erranliu/SteerLine/internal/refactoring/model"
-	"github.com/erranliu/SteerLine/internal/storage/ports"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/product/query"
+	m "github.com/erranliu/SteerLine/internal/refactoring/model"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func TestRefactoringTransactionalSlotCASAndActivity(t *testing.T) {
@@ -52,4 +55,55 @@ func TestRefactoringTransactionalSlotCASAndActivity(t *testing.T) {
 	if e != nil || len(page.Items) != 1 || page.Items[0].SteerAgent.Type != "maintenance" {
 		t.Fatal(page, e)
 	}
+}
+
+func TestRefactoringReadingUsesOriginalPublicFields(t *testing.T) {
+	s := openDomainTestStore(t)
+	ctx := context.Background()
+	final := &runnercontract.Final{Verified: true, AttemptID: "attempt-1", SessionID: "session", TurnID: "turn", Text: strings.Repeat("公开回复", 100)}
+	r := m.Record{ID: m.ID(), Project: "p", Revision: 1, Phase: "stopped",
+		Operations: []m.Operation{
+			{ID: "operation", Purpose: "execute", State: "complete", Prompt: "内部指令",
+				RunID: "run", Run: &runnercontract.Run{RunID: "run", Final: final},
+				Result: &m.Result{Summary: "操作结果"}},
+		},
+		Answers: []m.Answer{{QuestionID: "q", Option: m.QuestionOption{ID: "keep", Label: "保留公共接口"}, Note: "用户补充"}},
+	}
+	if err := s.SaveRefactoring(ctx, r, 0, nil); err != nil {
+		t.Fatal(err)
+	}
+	if version, err := s.ReadingVersion(ctx, "p", "refactoring", r.ID); err != nil || version != "1" {
+		t.Fatalf("missing reading version: %s, %v", version, err)
+	}
+	read := func(attempt string) {
+		t.Helper()
+		page, err := s.ReadReadingWindow(ctx, "p", "refactoring", r.ID, 0, 0, 10)
+		if err != nil || len(page.Records) != 4 {
+			t.Fatalf("expected the reply, result, answer option, and note: %+v, %v", page, err)
+		}
+		item := page.Records[0]
+		if item.Role != "assistant" || item.RunID != "run" || item.AttemptID != attempt || item.Group != "操作 1" || len(item.Preview) >= item.Bytes ||
+			page.Records[1].Kind != "generated_result" || page.Records[2].Role != "user" || page.Records[2].AttemptID != "" {
+			t.Fatalf("incorrect role, provenance, or bounds: %+v", page)
+		}
+		body, err := s.ReadReadingBody(ctx, "p", "refactoring", r.ID, item.ID, item.Bytes)
+		if err != nil || body != final.Text {
+			t.Fatalf("did not read the original reply: %v", err)
+		}
+		for i, want := range []string{r.Answers[0].Option.Label, r.Answers[0].Note} {
+			item := page.Records[i+2]
+			body, err := s.ReadReadingBody(ctx, "p", "refactoring", r.ID, item.ID, item.Bytes)
+			if err != nil || item.Role != "user" || body != want {
+				t.Fatalf("did not read the original answer field: item=%+v body=%q err=%v", item, body, err)
+			}
+		}
+	}
+	read("attempt-1")
+
+	r.Revision++
+	final.AttemptID = "attempt-2"
+	if err := s.SaveRefactoring(ctx, r, 1, nil); err != nil {
+		t.Fatal(err)
+	}
+	read("attempt-2")
 }

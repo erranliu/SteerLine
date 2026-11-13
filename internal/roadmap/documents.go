@@ -55,11 +55,11 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		if old.Source.ID == r.Source.ID && !old.ObservationComplete() {
 			return r, errors.New("原内容请求尚未结算，请先查询或停止")
 		}
-		if old.Source.ID == r.Source.ID && old.Publication != nil && old.State != "admitted" {
+		if old.Source.ID == r.Source.ID && old.Publication != nil && (old.State != "admitted" || r.Source.PlanningID != "") {
 			return r, errors.New("存在在途发布，请先核实原请求")
 		}
 	}
-	source, err := s.Source(ctx, r.Source.Path)
+	source, err := s.documentSource(ctx, r)
 	if err != nil {
 		return r, err
 	}
@@ -70,7 +70,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	if !source.SameContent(r.Source) || model.GraphDigest(graph) != r.GraphDigest {
 		return r, errors.New("来源或已有图材料变化，请重新解析确认")
 	}
-	execution, catalog, err := s.Prepare(ctx, r.Profile)
+	execution, catalog, err := s.Prepare(ctx)
 	if err != nil {
 		return r, err
 	}
@@ -84,11 +84,14 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	if err != nil {
 		return r, err
 	}
+	if r.Source.PlanningID != "" && fixed.Commit != r.Source.Head {
+		return r, errors.New("代码基线已变化，请重新确认任务卡")
+	}
 	if err = s.verifyPlanning(ctx, r, fixed.Commit); err != nil {
 		return r, err
 	}
 	r = model.Record{ID: request, RequestID: request, Purpose: "documents", ParentID: parent, Project: s.Project, Revision: 1,
-		Source: r.Source, Existing: r.Existing, GraphDigest: r.GraphDigest, Profile: r.Profile, CreatedAt: time.Now().UTC(),
+		Source: r.Source, Existing: r.Existing, GraphDigest: r.GraphDigest, CreatedAt: time.Now().UTC(),
 		State: "queued", Runner: s.Build, Analysis: r.Analysis, ConfirmedDigest: r.ConfirmedDigest,
 		CodeCommit: fixed.Commit, RepositoryTree: fixed.Tree, Materials: fixed.Materials, Documents: []model.Documents{}, Mapping: r.Mapping, PlanningMaterials: r.PlanningMaterials}
 	err = validateProviders(r)
@@ -127,7 +130,12 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		g := model.Generation{ID: Token(), Key: d.Key, CreatedAt: r.CreatedAt, State: "queued", Submission: "pending"}
 		r.Generations = append(r.Generations, g)
 		view := r.Execution(g)
-		instruction, err := prompts.RoadmapDocuments(r.CodeCommit, r.Source.Path, d.Key)
+		var instruction string
+		if r.Source.PlanningID != "" {
+			instruction, err = prompts.TaskPlanningDocuments(r.CodeCommit, d.Key)
+		} else {
+			instruction, err = prompts.RoadmapDocuments(r.CodeCommit, r.Source.Path, d.Key)
+		}
 		if err != nil {
 			return r, err
 		}
@@ -153,6 +161,13 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	}
 	s.track(r)
 	return r, nil
+}
+
+func (s *Service) documentSource(ctx context.Context, r model.Record) (model.Source, error) {
+	if r.Source.PlanningID != "" {
+		return r.Source, nil
+	}
+	return s.Source(ctx, r.Source.Path)
 }
 
 // DocumentConfirmationRequest binds the confirmation milestone of one generation command.

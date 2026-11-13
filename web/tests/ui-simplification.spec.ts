@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { readFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
+import type { ProjectBlocker } from "../src/shared/api/types";
 
 test.setTimeout(120000);
 test.use({ actionTimeout: 10000 });
@@ -112,6 +113,7 @@ async function setup(page: Page) {
     requests: [] as string[],
     errors: [] as string[],
     delivery: undefined as unknown,
+    blockers: [] as ProjectBlocker[],
   };
   page.on("pageerror", (e) => state.errors.push(e.message));
   const task = () => ({
@@ -134,6 +136,12 @@ async function setup(page: Page) {
     database_id: "db",
     sampled_at: now(),
     has_more: false,
+  });
+  const readiness = () => ({
+    status: state.blockers.length ? "not_ready" : "ready",
+    blockers: state.blockers,
+    total: 1,
+    ready: 1,
   });
   await page.addInitScript(() =>
     Object.defineProperty(navigator, "clipboard", {
@@ -236,11 +244,12 @@ async function setup(page: Page) {
       };
     else if (path.endsWith("/environment/history"))
       data = { records: [], has_more: false };
-    else if (path.endsWith("/maintenance/readiness"))
-      data = { status: "ready", blockers: [], total: 1, ready: 1 };
+    else if (path.endsWith("/tests/catalogue"))
+      data = { commit: "base", tests: [] };
+    else if (path.endsWith("/maintenance/readiness")) data = readiness();
     else if (path.endsWith("/maintenance"))
       data = {
-        readiness: { status: "ready", blockers: [], total: 1, ready: 1 },
+        readiness: readiness(),
         observation: {},
         remote_name: "main",
         remote: { sha: "", title: "", prs: [] },
@@ -593,7 +602,7 @@ test("B3 ended cold entry, reload, switching and explicit collapse retain histor
     contentType: "application/json",
   });
 });
-test("B4 routes, activity, navigation and compact maintenance remain reachable", async ({
+test("B4 routes, activity and project status remain reachable", async ({
   page,
 }, info) => {
   const state = await setup(page);
@@ -608,10 +617,46 @@ test("B4 routes, activity, navigation and compact maintenance remain reachable",
   for (const name of ["进行中 0", "需处理 0", "最近结束 0"])
     await page.getByRole("button", { name, exact: true }).click();
   await page.getByRole("button", { name: "关闭活动中心" }).click();
-  await page.goto(`${origin}/projects/${project}/dag?maintenance=preparation`);
+  state.blockers = [
+    { category: "worktree", code: "worktree_dirty", diagnostic: "有本地修改" },
+    {
+      category: "worktree",
+      code: "local_behind_remote",
+      diagnostic: "落后 1 个提交",
+    },
+    {
+      category: "test_plan",
+      code: "test_plan_invalid",
+      task_id: "1",
+      diagnostic: "测试安排 1 无效",
+    },
+    {
+      category: "test_plan",
+      code: "test_plan_invalid",
+      task_id: "2",
+      diagnostic: "测试安排 2 无效",
+    },
+  ];
+  await page.setViewportSize({ width: 375, height: 850 });
+  await page.goto(`${origin}/projects/${project}/dag`);
+  const status = page.locator(".project-readiness-status");
+  const summary = status.locator("summary");
+  await expect(summary).toHaveText("项目未就绪 · 未提交修改、未同步远端 +1");
+  await expect(page.getByRole("region", { name: "项目状态" })).toHaveCount(0);
+  await summary.click();
+  await status.getByRole("link", { name: "项目状态" }).click();
+  await expect(page).toHaveURL(/\/status$/);
   await expect(
     page.getByRole("button", { name: "检查更新", exact: true }),
   ).toBeVisible();
+  const reasons = page.getByRole("region", { name: "未就绪原因" });
+  await expect(reasons.getByRole("listitem")).toHaveCount(4);
+  await expect(reasons.getByText("测试安排 2 无效")).toBeVisible();
+  await screenshotStates(page, info, "project-status");
+  await summary.click();
+  await status.getByRole("link", { name: "测试管理" }).click();
+  await expect(page).toHaveURL(/\/tests$/);
+  await expect(page.getByRole("heading", { name: "测试管理" })).toBeVisible();
   expect(state.requests.every((r) => r.startsWith("GET "))).toBe(true);
   expect(state.errors).toEqual([]);
 });

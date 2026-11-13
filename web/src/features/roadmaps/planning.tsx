@@ -1,7 +1,10 @@
+import type { SteerAgentConfig } from "../../shared/api/execution-configs";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
+import { Button } from "../../shared/ui/button";
+import { Roadmaps, roadmapQueryKey, type RoadmapTask } from "./roadmaps";
 import "./planning.css";
 
 type Change = {
@@ -23,6 +26,10 @@ type Planning = {
   id: string;
   revision: number;
   title: string;
+  kind?: "task";
+  goal?: string;
+  card?: TaskCard;
+  dag_task_id?: string;
   path: string;
   status: string;
   body?: string;
@@ -35,6 +42,14 @@ type Planning = {
   question?: PlanningQuestion;
   conflict?: { files: string[] };
   review?: { digest: string; changes: Change[] };
+};
+type TaskCard = {
+  goal: string;
+  scope: string;
+  constraints: string;
+  acceptance: string;
+  predecessors?: string[];
+  provides_tests?: string[];
 };
 type HistoryEntry = {
   role: string;
@@ -84,10 +99,10 @@ export default function RoadmapPlanning() {
   const { api, identity, online, submit } = useWorkspace();
   const [params, setParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
+  const [planningKind, setPlanningKind] = useState<"task" | "roadmap">("task");
   const [title, setTitle] = useState("");
   const [file, setFile] = useState("");
   const [goal, setGoal] = useState("");
-  const [profile, setProfile] = useState("");
   const [message, setMessage] = useState("");
   const [answer, setAnswer] = useState<{
     question: string;
@@ -116,7 +131,8 @@ export default function RoadmapPlanning() {
       api.get<{
         tasks: Planning[];
         available: boolean;
-        profiles: { id: string; name: string }[];
+        steer_agent: SteerAgentConfig;
+        unavailable_reason?: string;
       }>(route),
     enabled: online,
     refetchInterval: online ? 2500 : false,
@@ -225,10 +241,11 @@ export default function RoadmapPlanning() {
     );
 
   return (
-    <section className="planning-page" aria-label="Roadmap 规划">
+    <section className="planning-page" aria-label="任务规划">
       <header className="planning-header">
-        <h1>Roadmap 规划</h1>
-        <button
+        <h1>任务规划</h1>
+        <Button
+          variant="default"
           disabled={!online || !list.data?.available}
           onClick={() => {
             setCreating(true);
@@ -236,15 +253,16 @@ export default function RoadmapPlanning() {
           }}
         >
           新建规划
-        </button>
-        <button
+        </Button>
+        <Button
           disabled={
-            sending || !list.data?.tasks.some((item) => item.can_rebase)
+            sending ||
+            !list.data?.tasks.some((item) => item.can_rebase)
           }
           onClick={() => void act("rebase_all", {}, true)}
         >
           全部 Rebase
-        </button>
+        </Button>
       </header>
       {error && <p role="alert">{error}</p>}
       {(list.error || detail.error) && (
@@ -267,7 +285,7 @@ export default function RoadmapPlanning() {
         </div>
       )}
       {list.data && !list.data.available && (
-        <p role="status">当前 Runner 缺少可写原生会话与 worktree 写入能力。</p>
+        <p role="status">{list.data.unavailable_reason}</p>
       )}
       <div className="planning-layout">
         <nav aria-label="规划任务">
@@ -284,12 +302,13 @@ export default function RoadmapPlanning() {
             >
               {item.title}
               <small>
+                {item.kind === "task" ? "单个任务" : "Roadmap"} ·{" "}
                 {item.busy ? "处理中" : statuses[item.status] || item.status}
               </small>
             </Link>
           ))}
         </nav>
-        <main>
+        <div className="planning-detail">
           {creating ? (
             <form
               onSubmit={(event) => {
@@ -298,14 +317,28 @@ export default function RoadmapPlanning() {
                   "create",
                   {
                     title,
-                    file,
+                    kind: planningKind,
+                    file: planningKind === "roadmap" ? file : "",
                     goal,
-                    profile: profile || list.data?.profiles[0]?.id || "",
                   },
                   true,
                 );
               }}
             >
+              <label>
+                规划类型
+                <select
+                  value={planningKind}
+                  onChange={(event) =>
+                    setPlanningKind(
+                      event.target.value === "task" ? "task" : "roadmap",
+                    )
+                  }
+                >
+                  <option value="task">规划单个任务</option>
+                  <option value="roadmap">规划 Roadmap</option>
+                </select>
+              </label>
               <label>
                 名称
                 <input
@@ -314,15 +347,17 @@ export default function RoadmapPlanning() {
                   onChange={(event) => setTitle(event.target.value)}
                 />
               </label>
-              <label>
-                草稿文件名
-                <input
-                  required
-                  placeholder="roadmap-topic.md"
-                  value={file}
-                  onChange={(event) => setFile(event.target.value)}
-                />
-              </label>
+              {planningKind === "roadmap" && (
+                <label>
+                  草稿文件名
+                  <input
+                    required
+                    placeholder="roadmap-topic.md"
+                    value={file}
+                    onChange={(event) => setFile(event.target.value)}
+                  />
+                </label>
+              )}
               <label>
                 规划目标
                 <textarea
@@ -331,20 +366,13 @@ export default function RoadmapPlanning() {
                   onChange={(event) => setGoal(event.target.value)}
                 />
               </label>
-              <label>
-                本机 Codex 方案
-                <select
-                  value={profile || list.data?.profiles[0]?.id || ""}
-                  onChange={(event) => setProfile(event.target.value)}
-                >
-                  {(list.data?.profiles || []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button disabled={sending || !list.data?.profiles.length}>
+              {list.data?.steer_agent && (
+                <p>
+                  SteerAgent：{list.data.steer_agent.model} /{" "}
+                  {list.data.steer_agent.reasoning_effort}
+                </p>
+              )}
+              <button disabled={sending || !list.data?.available}>
                 开始规划
               </button>
             </form>
@@ -364,7 +392,7 @@ export default function RoadmapPlanning() {
                       .catch((failure: unknown) => setError(String(failure)));
                   }}
                 >
-                  复制草稿链接
+                  {task.kind === "task" ? "复制规划链接" : "复制草稿链接"}
                 </button>
                 <button
                   disabled={!task.can_rebase || sending}
@@ -380,7 +408,7 @@ export default function RoadmapPlanning() {
               </header>
               {task.diagnostic && <p role="status">{task.diagnostic}</p>}
               {task.status === "merged_pending_sync" && (
-                <Link to={project + "/settings"}>前往项目维护</Link>
+                <Link to={project + "/status"}>前往项目状态</Link>
               )}
               {task.conflict && (
                 <section aria-label="Rebase 冲突">
@@ -406,6 +434,13 @@ export default function RoadmapPlanning() {
               <div className="planning-content">
                 <section aria-label="规划对话">
                   <h3>规划对话</h3>
+                  {history.isError && (
+                    <p className="notice amber" role="status">
+                      {history.data
+                        ? "对话历史刷新失败，显示上次结果。"
+                        : "对话历史读取失败。"}
+                    </p>
+                  )}
                   <div className="planning-history">
                     {[
                       ...(history.data?.entries || []),
@@ -504,22 +539,57 @@ export default function RoadmapPlanning() {
                     </>
                   )}
                 </section>
-                <section aria-label="草稿预览">
-                  <h3>草稿预览</h3>
-                  <small>{task.path}</small>
-                  {task.body ? (
-                    <Markdown body={task.body} />
-                  ) : (
-                    <p>等待草稿生成。</p>
-                  )}
-                  <button
-                    disabled={sending || !task.can_rebase || !task.body}
-                    onClick={() => void act("review")}
-                  >
-                    审阅文件差异
-                  </button>
-                </section>
+                {task.kind === "task" ? (
+                  <section aria-label="任务卡预览">
+                    <h3>任务卡预览</h3>
+                    {task.card ? (
+                      <dl>
+                        <dt>目标</dt>
+                        <dd>{task.card.goal}</dd>
+                        <dt>范围</dt>
+                        <dd>{task.card.scope}</dd>
+                        <dt>约束</dt>
+                        <dd>{task.card.constraints || "无"}</dd>
+                        <dt>验收条件</dt>
+                        <dd>{task.card.acceptance}</dd>
+                      </dl>
+                    ) : (
+                      <p>{task.goal}</p>
+                    )}
+                  </section>
+                ) : (
+                  <section aria-label="草稿预览">
+                    <h3>草稿预览</h3>
+                    <small>{task.path}</small>
+                    {task.body ? (
+                      <Markdown body={task.body} />
+                    ) : (
+                      <p>等待草稿生成。</p>
+                    )}
+                    <button
+                      disabled={sending || !task.can_rebase || !task.body}
+                      onClick={() => void act("review")}
+                    >
+                      审阅文件差异
+                    </button>
+                  </section>
+                )}
               </div>
+              {task.kind === "task" && (
+                <Roadmaps
+                  key={task.id}
+                  planning={{
+                    id: task.id,
+                    cardForm: (disabled, confirmed) => (
+                      <TaskCardForm
+                        task={task}
+                        disabled={disabled}
+                        confirmed={confirmed}
+                      />
+                    ),
+                  }}
+                />
+              )}
               {review && (
                 <section aria-label="发布审阅">
                   <h3>发布审阅</h3>
@@ -591,8 +661,204 @@ export default function RoadmapPlanning() {
                 : "创建规划任务，开始与 SteerAgent 讨论。"}
             </p>
           )}
-        </main>
+        </div>
       </div>
     </section>
+  );
+}
+
+function TaskCardForm({
+  task,
+  disabled,
+  confirmed,
+}: {
+  task: Planning;
+  disabled: boolean;
+  confirmed?: RoadmapTask;
+}) {
+  const { api, identity, online, submit } = useWorkspace();
+  const client = useQueryClient();
+  const key = roadmapQueryKey(
+    api.home,
+    identity.project_id,
+    identity.instance_id,
+  );
+  const [draft, setDraft] = useState<TaskCard>();
+  const [testIDs, setTestIDs] = useState<string>();
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const card = draft ??
+    (confirmed && {
+      goal: confirmed.goal,
+      scope: confirmed.scope,
+      constraints: confirmed.constraints,
+      acceptance: confirmed.acceptance,
+      predecessors: confirmed.proposed_dependencies.formal,
+      provides_tests: confirmed.provides_tests,
+    }) ??
+    task.card ?? {
+      goal: task.goal || "",
+      scope: "",
+      constraints: "",
+      acceptance: "",
+    };
+  const predecessors = useQuery({
+    queryKey: [
+      api.home,
+      identity.project_id,
+      identity.instance_id,
+      route,
+      task.id,
+      "predecessors",
+    ],
+    queryFn: () =>
+      api.get<{ id: string; title: string }[]>(
+        `${route}/${task.id}/predecessors`,
+      ),
+    enabled: online,
+    refetchInterval: online ? 5000 : false,
+  });
+  const available = predecessors.data || [];
+  const selected = card.predecessors || [];
+  const testText = testIDs ?? (card.provides_tests || []).join("\n");
+  const missing = selected.filter(
+    (id) => !available.some((option) => option.id === id),
+  );
+  const ready =
+    ["ready", "closed"].includes(task.status) && !task.busy && !task.conflict;
+
+  async function confirm() {
+    if (
+      disabled ||
+      !ready ||
+      !online ||
+      sending ||
+      !predecessors.isSuccess ||
+      missing.length
+    )
+      return;
+    setSending(true);
+    setError("");
+    try {
+      const result = await submit(
+        api.envelope("roadmap_task_generate", task.id, task.revision, {
+          ...card,
+          predecessors: selected,
+          provides_tests: testText
+            .split(/\r?\n/)
+            .map((id) => id.trim())
+            .filter(Boolean),
+        }),
+      );
+      if (result?.status !== "applied")
+        setError(result?.diagnostic || "原请求待核实");
+    } catch (failure) {
+      setError(String(failure));
+    } finally {
+      await client.invalidateQueries({ queryKey: key });
+      setSending(false);
+    }
+  }
+
+  return (
+    <form
+      aria-label="任务卡"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void confirm();
+      }}
+    >
+      {(
+        [
+          ["goal", "目标"],
+          ["scope", "范围"],
+          ["constraints", "约束"],
+          ["acceptance", "验收条件"],
+        ] as const
+      ).map(([field, label]) => (
+        <label key={field}>
+          {label}
+          <textarea
+            required={field !== "constraints"}
+            value={card[field]}
+            onChange={(event) =>
+              setDraft({ ...card, [field]: event.target.value })
+            }
+          />
+        </label>
+      ))}
+      {(draft || confirmed) && task.card && (
+        <button
+          type="button"
+          onClick={() =>
+            setDraft({
+              ...task.card!,
+              predecessors: selected,
+              provides_tests: card.provides_tests,
+            })
+          }
+        >
+          采用最新任务卡
+        </button>
+      )}
+      <fieldset>
+        <legend>已有 DAG 前置</legend>
+        {predecessors.isPending && <p>正在读取 DAG…</p>}
+        {predecessors.isError && (
+          <p role="alert">
+            读取 DAG 前置失败。
+            <button type="button" onClick={() => void predecessors.refetch()}>
+              重试
+            </button>
+          </p>
+        )}
+        {predecessors.isSuccess && !available.length && (
+          <p>当前没有可选前置。</p>
+        )}
+        {[
+          ...available,
+          ...missing.map((id) => ({ id, title: "已不可用" })),
+        ].map((option) => (
+          <label key={option.id}>
+            <input
+              type="checkbox"
+              checked={selected.includes(option.id)}
+              onChange={(event) =>
+                setDraft({
+                  ...card,
+                  predecessors: event.target.checked
+                    ? [...selected, option.id]
+                    : selected.filter((id) => id !== option.id),
+                })
+              }
+            />
+            #{option.id} {option.title}
+          </label>
+        ))}
+      </fieldset>
+      <details>
+        <summary>新增测试登记</summary>
+        <label>
+          本任务将新增的测试 ID（每行一个）
+          <textarea
+            value={testText}
+            onChange={(event) => setTestIDs(event.target.value)}
+          />
+        </label>
+      </details>
+      {error && <p role="alert">{error}</p>}
+      <button
+        disabled={
+          disabled ||
+          !ready ||
+          !online ||
+          sending ||
+          !predecessors.isSuccess ||
+          !!missing.length
+        }
+      >
+        {sending ? "正在提交…" : "确认并生成 Spec / Plan"}
+      </button>
+    </form>
   );
 }

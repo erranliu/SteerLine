@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/billingconfig"
 	"github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
@@ -27,17 +28,15 @@ import (
 )
 
 type refactoringPort struct {
-	config  Config
-	store   *sqlite.SQLiteStore
-	service *refactoring.Service
+	config    Config
+	store     *sqlite.SQLiteStore
+	service   *refactoring.Service
+	materials committedMaterialReader
 }
 
-func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *refactoringPort {
-	p := &refactoringPort{config: c, store: store}
-	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReadCost: p.cost, Queue: c.runtimeGenerations, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
-	p.service.Reserve = func(ctx context.Context, commit string, save func() error) error {
-		return c.runtimeMaintenance.reserveReadyExecution(ctx, commit, save)
-	}
+func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, reserver readyExecutionReserver) *refactoringPort {
+	p := &refactoringPort{config: c, store: store, materials: materials}
+	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReadCost: p.cost, Queue: c.runtimeGenerations, Reserve: reserver.reserveReadyExecution, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
 	return p
 }
 func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen, error) {
@@ -78,14 +77,11 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 		}
 		return out, e
 	}
-	read, e := c.deriveProfile(ctx, profile, "generate", "read_only")
-	if e != nil || read.Execution == nil {
-		if e == nil {
-			e = errors.New("只读执行配置缺失")
-		}
+	read, _, e := c.prepareSteerAgentGeneration(ctx)
+	if e != nil {
 		return out, e
 	}
-	if e = c.runtimeNative.Catalog.ValidateMaintenance(*write.Execution, *read.Execution); e != nil {
+	if e = c.runtimeNative.Catalog.ValidateMaintenance(*write.Execution, read); e != nil {
 		return out, e
 	}
 	if c.environmentPolicy.RequireReadiness() {
@@ -106,7 +102,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	}
 	// These are real existing references, not generated maintenance Spec/Plan.
 	var entry model.ProjectEntry
-	entryBody, e := m.read(ctx, observation.Commit, "SteerlineFlow/environment-project.json")
+	entryBody, e := p.materials.readCommittedMaterial(ctx, observation.Commit, "SteerlineFlow/environment-project.json")
 	if e != nil {
 		return out, e
 	}
@@ -119,7 +115,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	}
 	requirementsPath := entry.Requirements[0]
 	for _, path := range []string{requirementsPath, entry.TestingCatalogue} {
-		if _, e = m.read(ctx, observation.Commit, path); e != nil {
+		if _, e = p.materials.readCommittedMaterial(ctx, observation.Commit, path); e != nil {
 			return out, e
 		}
 	}
@@ -142,7 +138,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	out.Direction = direction
 	out.Repository = runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}
 	out.Documents = runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}
-	out.Write, out.Read, out.Runner = *write.Execution, *read.Execution, cli.BuildPin()
+	out.Write, out.Read, out.Runner = *write.Execution, read, cli.BuildPin()
 	out.Publication = map[string]string{"provider": c.PR.Kind, "base_url": c.PR.BaseURL, "repository": c.PR.Repository, "base_branch": c.Branch, "token_env": c.PR.TokenEnv}
 	settings, priceErr := (billingconfig.Store{Home: HomeDir()}).Read()
 	if priceErr == nil {
@@ -152,18 +148,19 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 		}
 	}
 	if in.Budget.Dollars != "" {
-		var selected struct {
-			Model string `json:"model"`
-		}
-		_ = json.Unmarshal(write.Execution.Settings, &selected)
-		if out.Pricing == nil || !cli.RunUsageSupported || !cli.ConfiguredUsageSupported || selected.Model == "" {
+		if out.Pricing == nil || !cli.RunUsageSupported || !cli.ConfiguredUsageSupported {
 			return out, errors.New("美元预算需要明确模型、有效价表和Runner用量采集")
 		}
 		if out.Pricing.Currency != "USD" {
 			return out, errors.New("美元预算需要USD价表")
 		}
 		for _, execution := range []runnercontract.ExecutionInput{out.Write, out.Read} {
-			_ = json.Unmarshal(execution.Settings, &selected)
+			var selected struct {
+				Model string `json:"model"`
+			}
+			if err := json.Unmarshal(execution.Settings, &selected); err != nil || selected.Model == "" {
+				return out, errors.New("美元预算需要明确 SteerAgent 和 Runner 的模型")
+			}
 			one, zero := int64(1), int64(0)
 			estimate, err := billing.Calculate(billing.Usage{RunID: "preflight", Scope: "main_session", Revision: 1, Status: "available", Finalized: true, CoverageComplete: true, PriceAt: time.Now().UTC(), Records: []billing.Record{{ID: "preflight", Model: selected.Model, Tokens: billing.Tokens{InputUncached: &one, CacheRead: &zero, CacheWrite: &zero, Output: &one}}}}, *out.Pricing)
 			if err != nil || estimate.Total == nil {
@@ -409,7 +406,11 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 				profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
 			}
 		}
-		return map[string]any{"records": views, "profiles": profiles, "default_profile": p.config.RunnerExecution.DefaultProfile}, nil
+		agent, err := executionconfig.SteerAgentSettings(p.config.RunnerExecution.SteerAgent)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"records": views, "profiles": profiles, "default_profile": p.config.RunnerExecution.DefaultProfile, "steer_agent": agent}, nil
 	}
 	id := strings.TrimPrefix(route, "/refactoring/")
 	if !ref.ValidID(id) {

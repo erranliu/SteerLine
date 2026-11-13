@@ -15,10 +15,17 @@ import (
 	"time"
 )
 
+type environmentBaseline interface {
+	readObservedBaseline(ctx context.Context, waitForCheck bool) (string, error)
+	refreshBaseline(ctx context.Context) (string, error)
+	reserveBaseline(commit string, save func() error) error
+}
+
 type environmentPort struct {
-	service *env.Service
-	config  Config
-	store   *sqlite.SQLiteStore
+	service  *env.Service
+	config   Config
+	store    *sqlite.SQLiteStore
+	baseline environmentBaseline
 }
 
 // Environment submissions use the project's lifetime, independently of the
@@ -39,17 +46,17 @@ func (p *environmentPort) observe(ctx context.Context) {
 	}
 }
 
-func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *environmentPort {
+func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, baseline environmentBaseline) *environmentPort {
 	c = bindNativeConfiguration(c, cli)
 	store.BindExecutionIdentityLookup(c.runtimeNative.Identity)
-	p := &environmentPort{config: c, store: store}
+	p := &environmentPort{config: c, store: store, baseline: baseline}
 	s := &env.Service{Project: c.Identity(), Store: store, Runner: cli, Build: cli.BuildPin(), Admit: admit}
 	p.service = s
 	s.Prepare = p.prepare
 	s.WithTarget = func(ctx context.Context, target, owner, commit string, create func() error) error {
 		selectCurrent := func() error {
-			if maintenance := p.config.runtimeMaintenance; maintenance != nil {
-				return maintenance.reserveBaseline(commit, create)
+			if p.baseline != nil {
+				return p.baseline.reserveBaseline(commit, create)
 			}
 			return create()
 		}
@@ -64,10 +71,9 @@ func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Cl
 func (p *environmentPort) git() commandRunner {
 	return commandRunner{Dir: p.config.Repository, Timeout: positiveDuration(p.config.CommandTimeout, 30*time.Second), ProcessHost: p.config.ProcessHost}
 }
-func (p *environmentPort) source(ctx context.Context) (string, error) {
-	if m := p.config.runtimeMaintenance; m != nil {
-		o, e := m.check(ctx)
-		return o.Commit, e
+func (p *environmentPort) refreshSource(ctx context.Context) (string, error) {
+	if p.baseline != nil {
+		return p.baseline.refreshBaseline(ctx)
 	}
 	c := p.config
 	g := p.git()
@@ -119,7 +125,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 		return out, e
 	}
 	if commit == "" {
-		commit, e = p.source(ctx)
+		commit, e = p.refreshSource(ctx)
 		if e != nil {
 			return out, e
 		}
@@ -203,28 +209,10 @@ func (p *environmentPort) invocationAt(ctx context.Context, commit string) ([]by
 // observedSource is query-only. The environment overview can wait for an
 // existing check so it only receives a completed baseline observation.
 func (p *environmentPort) observedSource(ctx context.Context, waitForCheck bool) (string, error) {
-	if m := p.config.runtimeMaintenance; m != nil {
-		for {
-			m.mu.Lock()
-			observation, checking := m.observation, m.checking
-			m.mu.Unlock()
-			if checking == nil {
-				if observation.Diagnostic != "" {
-					return "", errors.New(observation.Diagnostic)
-				}
-				if observation.Commit != "" {
-					return observation.Commit, nil
-				}
-				break
-			}
-			if !waitForCheck {
-				return "", errors.New("主分支环境依据观察处理中")
-			}
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-checking:
-			}
+	if p.baseline != nil {
+		commit, err := p.baseline.readObservedBaseline(ctx, waitForCheck)
+		if err != nil || commit != "" {
+			return commit, err
 		}
 	}
 	raw, err := p.git().Output(ctx, p.config.Git, "rev-parse", "--verify", "refs/remotes/"+p.config.Remote+"/"+p.config.Branch+"^{commit}")
@@ -267,11 +255,7 @@ func (p *environmentPort) admission(ctx context.Context, id, candidateCommit str
 		if !refresh {
 			return p.observedSource(ctx, false)
 		}
-		if maintenance := p.config.runtimeMaintenance; maintenance != nil {
-			observation, err := maintenance.check(ctx)
-			return observation.Commit, err
-		}
-		return p.source(ctx)
+		return p.refreshSource(ctx)
 	})
 }
 

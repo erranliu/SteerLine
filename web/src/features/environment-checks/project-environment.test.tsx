@@ -10,13 +10,20 @@ import {
   within,
 } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
-import { identity, mountFeature, testClient } from "../../test/workspace";
+import {
+  identity,
+  mountFeature,
+  snapshot,
+  testClient,
+} from "../../test/workspace";
 import { Navigate } from "react-router-dom";
 import type { EnvironmentOptions } from "./use-readiness";
 import { ProjectEnvironment } from "./project-environment";
 import { Dispatch } from "../tasks/dispatch";
 import { useOriginalRequests } from "../../app/use-original-requests";
 import { WorkspaceContext, useWorkspace } from "../../app/context";
+import { projectQueries } from "../../shared/api/queries";
+import type { DispatchObservation } from "../../shared/api/types";
 
 afterEach(() => {
   cleanup();
@@ -157,7 +164,6 @@ it("shows environment readiness directly with row actions and execution copying 
   expect(screen.getByText("检测历史").closest("details")).not.toHaveAttribute(
     "open",
   );
-  expect(screen.getByRole("heading", { name: "准备要求" })).toBeVisible();
   expect(api.get).not.toHaveBeenCalledWith("/environment", expect.anything());
   for (const text of [
     remoteMachineID,
@@ -234,7 +240,7 @@ it("copies the full detection ID and supports manual copying when clipboard acce
   expect(screen.getByRole("alert")).toHaveTextContent(record.id);
 });
 
-it("loads preparation requirements directly and excludes protocol metadata", async () => {
+it("loads preparation requirements after expansion and excludes protocol metadata", async () => {
   const { api } = fixture();
   const original = vi.mocked(api.get).getMockImplementation()!;
   vi.mocked(api.get).mockImplementation(async (path, signal) =>
@@ -247,6 +253,13 @@ it("loads preparation requirements directly and excludes protocol metadata", asy
         } as never)
       : original(path, signal),
   );
+  const summary = await screen.findByText("准备要求", { selector: "summary" });
+  expect(summary.closest("details")).not.toHaveAttribute("open");
+  expect(api.get).not.toHaveBeenCalledWith(
+    expect.stringContaining("/environment/materials"),
+    expect.anything(),
+  );
+  fireEvent.click(summary);
   expect(await screen.findByText(/准备 Git 和认证/)).toBeVisible();
   for (const text of ["hidden-key", "hidden-path", "hidden-sha"])
     expect(screen.queryByText(text, { exact: false })).not.toBeInTheDocument();
@@ -444,29 +457,44 @@ it("restores the selected scheme for the correct environment after switching pag
   );
 });
 
-it("shows the running default detection on the dispatch page and labels read failures unverified", async () => {
+it("shows the backend environment blocker on the dispatch page and drops it when the observation fails", async () => {
   const { api, client } = fixture();
   await loaded();
-  const options = structuredClone(
-    client.getQueryData<EnvironmentOptions>(optionsKey)!,
-  );
-  options.profiles[0].stage = "verifying";
+  const diagnostic = "环境未就绪：当前项目检测未就绪或原执行尚未结算";
+  const dispatch: DispatchObservation = {
+    mode: "auto",
+    revision: 1,
+    state: "waiting",
+    default_profile_id: "default",
+    default_profile_name: "默认方案",
+    environment_readiness_required: true,
+    blocker: {
+      category: "environment",
+      code: "environment_not_ready",
+      diagnostic,
+    },
+  };
   const read = vi.mocked(api.get).getMockImplementation()!;
   vi.mocked(api.get).mockImplementation(async (path, signal) =>
-    path === "/environment/options" ? (options as never) : read(path, signal),
+    path === "/dispatch" ? (dispatch as never) : read(path, signal),
   );
   cleanup();
-  mountFeature(<Dispatch />, api, client);
-  expect(await screen.findByText(/默认执行环境检测中/)).toBeVisible();
+  const observation = snapshot(api);
+  observation.connection.snapshot.page!.control.dispatch_mode = "auto";
+  mountFeature(<Dispatch />, api, client, true, { snapshot: observation });
+  expect(await screen.findByText(diagnostic, { exact: false })).toBeVisible();
   vi.mocked(api.get).mockImplementation(async (path, signal) => {
-    if (path === "/environment/options") throw new Error("read failed");
+    if (path === "/dispatch") throw new Error("read failed");
     return read(path, signal);
   });
   await act(async () => {
-    await client.refetchQueries({ queryKey: optionsKey });
+    await client.refetchQueries({
+      queryKey: projectQueries(api).dispatch(1).queryKey,
+    });
   });
-  expect(await screen.findByText(/默认执行环境待核实/)).toBeVisible();
-  expect(screen.queryByText(/默认执行环境阻断/)).not.toBeInTheDocument();
+  expect(await screen.findByText("已开启，状态待核实")).toBeVisible();
+  expect(screen.queryByText(diagnostic, { exact: false })).not.toBeInTheDocument();
+  expect(screen.getByRole("switch", { name: "自动派发" })).toBeEnabled();
 });
 
 it("stops the exact current activity even outside the history window and never starts a replacement", async () => {
@@ -791,6 +819,61 @@ it("marks every cached row unverified after a read failure instead of retaining 
   expect(
     within(environmentRow("本机 · Codex 直连")).getByText("上次状态：已就绪"),
   ).toBeVisible();
+});
+
+it("counts a failed detection detail as unverified and restores the total after recovery", async () => {
+  const detectionID = "a".repeat(32);
+  const { api, client } = fixture(
+    true,
+    undefined,
+    false,
+    "/projects/project/environment?activity=" + detectionID,
+    false,
+    false,
+    (options) => {
+      Object.assign(options.environments[0], {
+        stage: "ready",
+        status: "ready",
+      });
+    },
+  );
+  await screen.findByRole("heading", { name: "指定检测结果" });
+  await waitFor(() =>
+    expect(within(overview()).getByRole("status")).toHaveTextContent(
+      "1/1 已就绪",
+    ),
+  );
+  const key = optionsKey.slice(0, -1);
+  const read = vi.mocked(api.get).getMockImplementation()!;
+  vi.mocked(api.get).mockImplementation(async (path, signal) => {
+    if (path === "/environment/" + detectionID) throw new Error("offline");
+    return read(path, signal);
+  });
+  const refetchDetection = () =>
+    client.refetchQueries({
+      predicate: ({ queryKey }) =>
+        queryKey.at(-1) === detectionID && queryKey[3] === key[3],
+    });
+  await act(refetchDetection);
+  await screen.findByText("指定检测刷新失败，显示上次结果。");
+  expect(within(overview()).getByRole("status")).toHaveTextContent(
+    "0/1 已就绪检测中 0需要处理 0待核实 1",
+  );
+  expect(within(remoteRow()).getByText("待核实")).toBeVisible();
+  expect(
+    within(remoteRow()).getByRole("button", { name: "重新检测" }),
+  ).toBeDisabled();
+
+  vi.mocked(api.get).mockImplementation(read);
+  await act(refetchDetection);
+  await waitFor(() =>
+    expect(within(overview()).getByRole("status")).toHaveTextContent(
+      "1/1 已就绪",
+    ),
+  );
+  expect(
+    screen.queryByText("指定检测刷新失败，显示上次结果。"),
+  ).not.toBeInTheDocument();
 });
 
 it("shows disabled readiness enforcement separately from actual qualification", async () => {

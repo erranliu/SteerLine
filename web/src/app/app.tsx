@@ -7,7 +7,7 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { FolderOpen, RefreshCw } from "lucide-react";
+import { FolderOpen, Plus, RefreshCw } from "lucide-react";
 import {
   Activities,
   initialActivityUI,
@@ -20,10 +20,12 @@ import type { Identity, BrowserSession } from "../shared/api/types";
 import { WorkspaceContext } from "./context";
 import { Button } from "../shared/ui/button";
 import { ProjectMaintenance } from "../features/project-maintenance/project-maintenance";
-import { DispatchStatus } from "../features/tasks/dispatch";
+import { ProjectReadinessStatus } from "../features/project-maintenance/project-readiness-status";
+import { Dispatch, DispatchStatus } from "../features/tasks/dispatch";
 import { requiresAnswer } from "../features/runs/state";
-import { SettingsPage } from "../features/settings/settings";
+import { BillingPage, SettingsPage } from "../features/settings/settings";
 import { Operations } from "./operations";
+import { configurationPage } from "./configuration-navigation";
 import { ExecutionConfigs } from "../features/execution-configs/execution-configs";
 import { EnvironmentSummary } from "../features/environment-checks/use-readiness";
 import { ProjectEnvironment } from "../features/environment-checks/project-environment";
@@ -32,12 +34,16 @@ import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
 import { ActivityFeedbackProvider } from "../features/activities/feedback/feedback";
 import { useCandidateStarts } from "./use-candidate-starts";
+import { AddProject } from "../features/project-registration/add-project";
 const Roadmaps = lazy(() =>
   import("../features/roadmaps/roadmaps").then((module) => ({
     default: module.Roadmaps,
   })),
 );
 const RoadmapPlanning = lazy(() => import("../features/roadmaps/planning"));
+const ManualVerification = lazy(
+  () => import("../features/manual-verification/manual-verification"),
+);
 const RefactoringMaintenance = lazy(() =>
   import("../features/refactoring-maintenance/refactoring-maintenance").then(
     (module) => ({ default: module.RefactoringMaintenance }),
@@ -66,7 +72,6 @@ export function Workspace({
   home = "",
   switcher,
   configurationPending = false,
-  loadedDigest,
   connectionError,
   onRefreshConnection,
   activityControl,
@@ -79,12 +84,10 @@ export function Workspace({
   home?: string;
   switcher?: React.ReactNode;
   configurationPending?: boolean;
-  loadedDigest?: string;
   connectionError?: unknown;
   onRefreshConnection?: () => void;
 }) {
   const environmentPage = useLocation().pathname.endsWith("/environment");
-  const readingPage = useLocation().pathname.endsWith("/activities");
   const { api, identity, snapshot, page, online, diagnostic, refresh } =
     useWorkspaceConnection({
       initial,
@@ -146,6 +149,7 @@ export function Workspace({
           switcher={switcher}
           questions={counts.questions}
           dispatchStatus={<DispatchStatus />}
+          projectStatus={<ProjectReadinessStatus />}
           footer={undefined}
           connection={
             <div className="connection">
@@ -165,11 +169,6 @@ export function Workspace({
             </div>
           }
         >
-          {!environmentPage && !readingPage && (
-            <ProjectMaintenance
-              key={identity.project_id + identity.instance_id}
-            />
-          )}
           {!online && (
             <div className="notice amber" role="status">
               <strong>
@@ -214,6 +213,16 @@ export function Workspace({
           <Suspense fallback={<div className="empty">正在加载页面…</div>}>
             <Routes>
               <Route
+                path={
+                  "/projects/" + identity.project_id + "/manual-verification"
+                }
+                element={
+                  <ManualVerification
+                    key={api.home + identity.project_id + identity.instance_id}
+                  />
+                }
+              />
+              <Route
                 path={"/projects/" + identity.project_id + "/refactoring"}
                 element={<RefactoringMaintenance />}
               />
@@ -235,7 +244,11 @@ export function Workspace({
               />
               <Route
                 path={"/projects/" + identity.project_id + "/roadmap-planning"}
-                element={<RoadmapPlanning key={api.home + identity.project_id + identity.instance_id} />}
+                element={
+                  <RoadmapPlanning
+                    key={api.home + identity.project_id + identity.instance_id}
+                  />
+                }
               />
               <Route
                 path={"/projects/" + identity.project_id + "/environment"}
@@ -244,6 +257,10 @@ export function Workspace({
                     key={identity.project_id + identity.instance_id}
                   />
                 }
+              />
+              <Route
+                path={`/projects/${identity.project_id}/status`}
+                element={<ProjectMaintenance />}
               />
               <Route
                 path={"/projects/" + identity.project_id + "/tests"}
@@ -259,16 +276,7 @@ export function Workspace({
               />
               <Route
                 path={"/projects/" + identity.project_id + "/settings"}
-                element={
-                  <SettingsPage
-                    api={api}
-                    online={!!online}
-                    home={home}
-                    csrf={initial.csrf_token}
-                    loadedDigest={loadedDigest}
-                    applicationConnected={applicationConnected}
-                  />
-                }
+                element={<Dispatch />}
               />
               <Route
                 path="*"
@@ -398,12 +406,27 @@ export function App({ initial }: { initial: BrowserSession }) {
           ))}
         </select>
       </div>
+      {sessionValid &&
+        (projects.length > 0 || route.pathname.startsWith("/settings")) && (
+          <NavLink
+            className="button button-ghost project-add-link"
+            aria-label="添加已初始化项目"
+            title="添加已初始化项目"
+            to="/projects/add"
+          >
+            <Plus size={16} aria-hidden="true" />
+            <span>添加已初始化项目</span>
+          </NavLink>
+        )}
     </div>
   );
-  if (
-    route.pathname === "/settings/execution-configs" ||
-    route.pathname === "/settings"
-  )
+  const configurationProps = {
+    home,
+    csrf: session.data.csrf_token,
+    loadedDigest: catalog.data?.loaded_execution_digest,
+    applicationConnected: sessionValid && !catalog.isError,
+  };
+  if (configurationPage(route.pathname) || route.pathname === "/projects/add")
     return (
       <AppShell
         projectId={selected?.project_id}
@@ -423,25 +446,21 @@ export function App({ initial }: { initial: BrowserSession }) {
             </span>
           </div>
         }
-        footer="所有项目共享执行方案与生成并发设置"
       >
         {route.pathname === "/settings/execution-configs" ? (
-          <ExecutionConfigs
+          <ExecutionConfigs key={home} {...configurationProps} />
+        ) : route.pathname === "/settings/billing" ? (
+          <BillingPage key={home} {...configurationProps} />
+        ) : route.pathname === "/projects/add" ? (
+          <AddProject
             key={home}
-            home={home}
+            homeId={home}
             csrf={session.data.csrf_token}
-            loadedDigest={catalog.data?.loaded_execution_digest}
-            applicationConnected={sessionValid && !catalog.isError}
+            enabled={sessionValid}
+            projects={projects}
           />
         ) : (
-          <SettingsPage
-            key={home}
-            projectId={selected?.project_id}
-            home={home}
-            csrf={session.data.csrf_token}
-            loadedDigest={catalog.data?.loaded_execution_digest}
-            applicationConnected={sessionValid && !catalog.isError}
-          />
+          <SettingsPage key={home} {...configurationProps} />
         )}
       </AppShell>
     );
@@ -454,7 +473,6 @@ export function App({ initial }: { initial: BrowserSession }) {
         projectName={selected.name}
         activityControl={{ value: activityUI, change: setActivityUI }}
         configurationPending={configurationPending}
-        loadedDigest={catalog.data?.loaded_execution_digest}
         onRefreshConnection={() => {
           void session.refetch();
           void catalog.refetch();
@@ -484,7 +502,6 @@ export function App({ initial }: { initial: BrowserSession }) {
       <span className="brand-symbol">◆</span>
       <h1>SteerLine</h1>
       {switcher}
-      <NavLink to="/settings/execution-configs">执行方案配置 →</NavLink>
       <NavLink to="/settings">配置 →</NavLink>
       {!sessionValid ? (
         <p role="alert">会话已失效，请使用 steerline-web open 重新授权</p>
@@ -497,8 +514,15 @@ export function App({ initial }: { initial: BrowserSession }) {
                 : "正在核验项目连接…")
             : "项目不可访问，请重新选择"}
         </p>
+      ) : projects.length ? (
+        <p>请选择当前项目</p>
       ) : (
-        <p>{projects.length ? "请选择当前项目" : "尚无已配置项目"}</p>
+        <>
+          <p>尚无已配置项目</p>
+          <NavLink className="button" to="/projects/add">
+            添加已初始化项目
+          </NavLink>
+        </>
       )}
       {selected?.diagnostic && <p role="alert">{selected.diagnostic}</p>}
       {catalog.error && <p role="alert">{String(catalog.error)}</p>}

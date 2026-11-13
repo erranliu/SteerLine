@@ -20,6 +20,11 @@ type commandRunner struct {
 	Input       []byte
 }
 
+func (c Config) repositoryGit(ctx context.Context, args ...string) ([]byte, error) {
+	runner := commandRunner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), ProcessHost: c.ProcessHost}
+	return runner.Output(ctx, c.Git, args...)
+}
+
 type limitedBuffer struct {
 	bytes.Buffer
 	max int

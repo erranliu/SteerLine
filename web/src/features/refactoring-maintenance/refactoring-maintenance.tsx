@@ -1,3 +1,4 @@
+import type { SteerAgentConfig } from "../../shared/api/execution-configs";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
@@ -72,6 +73,7 @@ type Index = {
   records: MaintenanceRecord[];
   profiles: { id: string; name: string }[];
   default_profile: string;
+  steer_agent: SteerAgentConfig;
 };
 type StartReadiness = {
   branch: string;
@@ -119,6 +121,10 @@ export function RefactoringMaintenance() {
   const [option, setOption] = useState("");
   const [error, setError] = useState("");
   const [startError, setStartError] = useState("");
+  const [outdatedDirection, setOutdatedDirection] =
+    useState<
+      Pick<DirectionCatalogue["directions"][number], "id" | "revision">
+    >();
   const key = [
     api.home,
     identity.project_id,
@@ -136,7 +142,6 @@ export function RefactoringMaintenance() {
     queryFn: ({ signal }) =>
       api.get<DirectionCatalogue>("/refactoring/directions", signal),
     enabled: online,
-    refetchOnWindowFocus: false,
   });
   const detail = useQuery({
     queryKey: [...key, selected],
@@ -160,6 +165,7 @@ export function RefactoringMaintenance() {
       ),
     enabled: online && !working,
     retry: false,
+    staleTime: 0,
     refetchInterval: 10000,
   });
   useEffect(() => {
@@ -198,6 +204,15 @@ export function RefactoringMaintenance() {
         const reason = receipt.diagnostic ?? "操作被拒绝";
         if (starting) {
           setStartError(reason);
+          if (
+            receipt.code === "refactoring_direction_changed" &&
+            selectedDirection
+          ) {
+            setOutdatedDirection({
+              id: selectedDirection.id,
+              revision: selectedDirection.revision,
+            });
+          }
           void readiness.refetch();
           void catalogue.refetch();
           void index.refetch();
@@ -217,24 +232,37 @@ export function RefactoringMaintenance() {
   }
   const disabled = !online || busy;
   const qualification =
-    online && readiness.isSuccess ? readiness.data : undefined;
+    online && readiness.isSuccess && readiness.isFetchedAfterMount
+      ? readiness.data
+      : undefined;
   const projectReady = qualification?.project.status === "ready";
+  const lastQualification =
+    readiness.isRefetchError && readiness.isFetchedAfterMount
+      ? readiness.data
+      : undefined;
   const environmentReady = qualification?.environment === "ready";
   const environmentBypassed = qualification?.environment === "bypassed";
-  const canStart =
-    !disabled &&
-    !working &&
-    index.isSuccess &&
+  const directionOutdated =
     !!selectedDirection &&
-    catalogue.isSuccess &&
-    !catalogue.isFetching &&
-    !!selectedProfile &&
-    projectReady &&
-    (environmentReady || environmentBypassed) &&
-    !readiness.isFetching &&
-    !!(dollars || minutes || rounds);
-  const maintenanceParams = new URLSearchParams(params);
-  maintenanceParams.set("maintenance", "preparation");
+    outdatedDirection?.id === selectedDirection.id &&
+    outdatedDirection.revision === selectedDirection.revision;
+  let startBlocker = "";
+  if (!online) startBlocker = "服务未连接";
+  else if (busy || working) startBlocker = "有维护操作正在处理";
+  else if (index.isError) startBlocker = "暂时无法确认是否已有维护行动";
+  else if (!index.isSuccess) startBlocker = "正在读取维护行动";
+  else if (catalogue.isError) startBlocker = "重构方向读取失败，请刷新重试";
+  else if (directionOutdated)
+    startBlocker = "请等待新版方向提示词，查看后再开始维护";
+  else if (!selectedDirection)
+    startBlocker = catalogue.isPending ? "正在读取重构方向" : "请选择重构方向";
+  else if (!selectedProfile) startBlocker = "请选择可用的执行配置";
+  else if (readiness.isError) startBlocker = "就绪状态查询失败，请刷新重试";
+  else if (!qualification) startBlocker = "正在核实当前执行配置";
+  else if (!projectReady) startBlocker = "项目基线尚未就绪";
+  else if (!environmentReady && !environmentBypassed)
+    startBlocker = "所选运行环境尚未就绪";
+  else if (!(dollars || minutes || rounds)) startBlocker = "请至少设置一项预算";
   return (
     <div className="refactoring-page">
       <header className="page-heading">
@@ -246,9 +274,9 @@ export function RefactoringMaintenance() {
           </p>
         </div>
       </header>
-      {(error || index.error || detail.error) && (
+      {(error || index.error) && (
         <p className="notice amber" role="alert">
-          {error || String(index.error ?? detail.error)}
+          {error || String(index.error)}
         </p>
       )}
       <section className="settings-panel refactoring-panel">
@@ -262,7 +290,7 @@ export function RefactoringMaintenance() {
           hidden={working}
           onSubmit={(e) => {
             e.preventDefault();
-            if (!canStart || !selectedDirection) return;
+            if (startBlocker || !selectedDirection) return;
             void command("refactoring_start", identity.repository_identity, 1, {
               direction: selectedDirection.id,
               direction_revision: selectedDirection.revision,
@@ -309,6 +337,17 @@ export function RefactoringMaintenance() {
               无法读取重构方向：{String(catalogue.error)}
             </p>
           )}
+          {(catalogue.isError || directionOutdated) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              disabled={!online || catalogue.isFetching}
+              onClick={() => void catalogue.refetch()}
+            >
+              重新读取重构方向
+            </Button>
+          )}
           {catalogue.data?.diagnostics?.map((diagnostic) => (
             <p className="notice amber" key={diagnostic}>
               {diagnostic}
@@ -323,8 +362,14 @@ export function RefactoringMaintenance() {
             </div>
           )}
           <div className="refactoring-fields refactoring-configuration">
+            {index.data?.steer_agent && (
+              <p>
+                SteerAgent 只读决策：{index.data.steer_agent.model} /{" "}
+                {index.data.steer_agent.reasoning_effort}
+              </p>
+            )}
             <label>
-              执行配置
+              Runner 执行配置
               <select
                 required
                 value={profile}
@@ -333,7 +378,7 @@ export function RefactoringMaintenance() {
                   setStartError("");
                 }}
               >
-                <option value="">选择执行配置</option>
+                <option value="">选择 Runner 执行配置</option>
                 {index.data?.profiles.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name || p.id}
@@ -401,15 +446,17 @@ export function RefactoringMaintenance() {
           <p className={projectReady ? "muted" : "notice amber"}>
             {qualification
               ? `项目基线${projectReady ? "已就绪" : "未就绪"} · ${qualification.branch}${qualification.project.commit ? " · " + qualification.project.commit.slice(0, 12) : ""}`
-              : "项目基线待核实"}
+              : lastQualification
+                ? `项目基线待核实 · 上次结果：${lastQualification.project.status === "ready" ? "已就绪" : "未就绪"}`
+                : "项目基线待核实"}
             {!!qualification?.project.blockers.length &&
-              " · " + qualification.project.blockers.join("；")}
+              " · " + qualification.project.blockers.map((blocker) => blocker.diagnostic).join("；")}
             {!projectReady && (
               <>
                 {" "}
                 ·{" "}
-                <Link to={{ search: "?" + maintenanceParams }}>
-                  打开项目维护
+                <Link to={`/projects/${identity.project_id}/status`}>
+                  打开项目状态
                 </Link>
               </>
             )}
@@ -430,7 +477,7 @@ export function RefactoringMaintenance() {
                   ? "环境就绪检查已关闭"
                   : qualification?.reason ||
                     (readiness.isError
-                      ? "运行环境状态查询失败，请刷新重试"
+                      ? `运行环境状态查询失败，请刷新重试${lastQualification?.environment === "ready" ? " · 上次结果：已就绪" : ""}`
                       : "所选运行环境状态待核实")}
             {selectedProfile && !environmentReady && !environmentBypassed && (
               <>
@@ -446,14 +493,32 @@ export function RefactoringMaintenance() {
           </p>
           {startError && (
             <p className="notice amber" role="alert">
-              {startError}
+              上次提交结果：{startError}
             </p>
           )}
-          <Button variant="default" disabled={!canStart} type="submit">
+          {startBlocker && (
+            <p id="refactoring-start-blocker" className="muted" role="status">
+              {startBlocker}
+            </p>
+          )}
+          <Button
+            variant="default"
+            disabled={!!startBlocker}
+            aria-describedby={
+              startBlocker ? "refactoring-start-blocker" : undefined
+            }
+            type="submit"
+          >
             开始维护
           </Button>
         </form>
       </section>
+      {detail.isError && (
+        <p className="notice amber" role="alert">
+          {current ? "维护详情刷新失败，显示上次结果。" : "维护详情读取失败。"}
+          {String(detail.error)}
+        </p>
+      )}
       {current && (
         <section
           className="settings-panel refactoring-panel"
@@ -482,7 +547,7 @@ export function RefactoringMaintenance() {
                 aggressive: "激进决策",
               }[current.input.strategy]
             }{" "}
-            · 执行配置：{current.input.profile}
+            · Runner 执行配置：{current.input.profile}
           </p>
           <p>
             预算：

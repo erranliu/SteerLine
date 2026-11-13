@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/manualverification"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -138,6 +140,10 @@ func (p *roadmapPort) findPR(ctx context.Context, branch string) (*roadmapPR, er
 	for page := 1; page <= 100; page++ {
 		var list []roadmapPR
 		query := "?state=all&page=" + strconv.Itoa(page) + "&limit=50&per_page=50"
+		if p.config.PR.Kind == "command" {
+			owner, _, _ := strings.Cut(p.config.PR.Repository, "/")
+			query += "&head=" + url.QueryEscape(owner+":"+branch) + "&base=" + url.QueryEscape(p.config.Branch)
+		}
 		if e := p.provider(ctx, "GET", "repos/"+p.config.PR.Repository+"/pulls"+query, nil, &list); e != nil {
 			return nil, e
 		}
@@ -181,9 +187,33 @@ func (p *roadmapPort) publicationFiles(ctx context.Context, r roadmap.Record) (m
 			return nil, err
 		}
 		out[name] = body
+		manualName, err := manualverification.CompanionPath(d.Plan.Path)
+		if err != nil {
+			return nil, err
+		}
+		if len(d.ManualChecks) != 0 {
+			body, err := manualverification.Encode(d.ManualChecks)
+			if err != nil {
+				return nil, err
+			}
+			out[manualName] = string(body)
+		} else if old, err := p.materials.readCommittedMaterial(ctx, r.CodeCommit, manualName); err == nil {
+			owned, err := p.ownedRoadmapDocument(ctx, r.CodeCommit, manualName, old, r)
+			if err != nil {
+				return nil, err
+			}
+			if owned {
+				out[manualName] = ""
+			}
+		} else if !isMissingRoadmapFile(err) {
+			return nil, err
+		}
 		for _, a := range d.Acceptance {
 			out[a.Path] = a.Body
 		}
+	}
+	if r.Source.PlanningID != "" {
+		return out, nil
 	}
 	raw, e := json.MarshalIndent(struct {
 		Roadmap   string              `json:"roadmap_id"`
@@ -195,7 +225,7 @@ func (p *roadmapPort) publicationFiles(ctx context.Context, r roadmap.Record) (m
 		return nil, e
 	}
 	out["SteerlineFlow/Roadmap/generated/"+r.Source.ID+".json"] = string(raw) + "\n"
-	old, e := p.config.runtimeMaintenance.read(ctx, r.CodeCommit, "SteerlineFlow/Roadmap/execution-map.md")
+	old, e := p.materials.readCommittedMaterial(ctx, r.CodeCommit, "SteerlineFlow/Roadmap/execution-map.md")
 	var missing *missingCommittedFileError
 	if e != nil && !errors.As(e, &missing) {
 		return nil, e
@@ -277,8 +307,15 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 	for _, name := range keys {
 		if name != "SteerlineFlow/Roadmap/execution-map.md" {
 			var missing *missingCommittedFileError
-			if old, e := m.read(ctx, pub.Base, name); e == nil {
-				if !ownedRoadmapMetadata(name, old, *r) {
+			if old, e := p.materials.readCommittedMaterial(ctx, pub.Base, name); e == nil {
+				owned := ownedRoadmapMetadata(name, old, *r)
+				if !owned {
+					owned, e = p.ownedRoadmapDocument(ctx, pub.Base, name, old, *r)
+					if e != nil {
+						return e
+					}
+				}
+				if !owned {
 					return errors.New("拒绝覆盖已存在的无关文件：" + name)
 				}
 			} else if !errors.As(e, &missing) {
@@ -301,11 +338,23 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 		}
 	}
 	for _, name := range keys {
+		if files[name] == "" && strings.HasSuffix(name, ".manual-checks.json") {
+			if _, e = git("rm", "--ignore-unmatch", "--", name); e != nil {
+				return e
+			}
+			continue
+		}
 		if e = writeRoadmapFile(directory, name, files[name]); e != nil {
 			return e
 		}
 	}
-	if _, e = git(append([]string{"add", "--"}, keys...)...); e != nil {
+	writes := []string{}
+	for _, name := range keys {
+		if files[name] != "" || !strings.HasSuffix(name, ".manual-checks.json") {
+			writes = append(writes, name)
+		}
+	}
+	if _, e = git(append([]string{"add", "--"}, writes...)...); e != nil {
 		return e
 	}
 	staged, e := git("diff", "--cached", "--name-only", "-z")
@@ -326,12 +375,52 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 		return errors.New("文档提交未形成")
 	}
 	for name, body := range files {
-		got, e := m.read(ctx, pub.Commit, name)
+		got, e := p.materials.readCommittedMaterial(ctx, pub.Commit, name)
+		if body == "" && strings.HasSuffix(name, ".manual-checks.json") && isMissingRoadmapFile(e) {
+			continue
+		}
 		if e != nil || string(got) != body {
 			return errors.New("文档提交内容未核实：" + name)
 		}
 	}
 	return nil
+}
+
+func isMissingRoadmapFile(err error) bool {
+	var missing *missingCommittedFileError
+	return errors.As(err, &missing)
+}
+
+func (p *roadmapPort) ownedRoadmapDocument(ctx context.Context, commit, name string, body []byte, r roadmap.Record) (bool, error) {
+	index := "SteerlineFlow/Roadmap/generated/" + r.Source.ID + ".json"
+	raw, err := p.materials.readCommittedMaterial(ctx, commit, index)
+	if isMissingRoadmapFile(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var metadata struct{ Documents []roadmap.Documents }
+	if !ownedRoadmapMetadata(index, raw, r) || json.Unmarshal(raw, &metadata) != nil {
+		return false, nil
+	}
+	for _, d := range metadata.Documents {
+		for _, original := range append([]roadmap.Document{d.Spec, d.Plan}, d.Acceptance...) {
+			if original.Path == name {
+				return original.Body == string(body), nil
+			}
+		}
+		if path, err := tm.ArrangementPath(d.Plan.Path); err == nil && path == name {
+			original, err := roadmap.TestsJSON(d)
+			return err == nil && original == string(body), err
+		}
+		path, err := manualverification.CompanionPath(d.Plan.Path)
+		if err == nil && path == name && len(d.ManualChecks) != 0 {
+			original, err := manualverification.Encode(d.ManualChecks)
+			return err == nil && bytes.Equal(original, body), err
+		}
+	}
+	return false, nil
 }
 
 // Later batches may replace this source's generated index, never its original
@@ -382,9 +471,17 @@ func (p *roadmapPort) publish(ctx context.Context, r roadmap.Record, request, re
 		}
 		return p.observePublication(ctx, r)
 	}
-	source, err := p.source(ctx, r.Source.Path)
-	if err != nil {
+	if err := p.verifyCurrentTaskCard(ctx, r); err != nil {
 		return r, err
+	}
+	if r.Source.PlanningID == "" {
+		source, err := p.source(ctx, r.Source.Path)
+		if err != nil {
+			return r, err
+		}
+		if !source.SameContent(r.Source) {
+			return r, errors.New("来源已变化，请重新核对生成文档")
+		}
 	}
 	graph, err := p.graph(ctx)
 	if err != nil {
@@ -394,10 +491,14 @@ func (p *roadmapPort) publish(ctx context.Context, r roadmap.Record, request, re
 	if err != nil {
 		return r, err
 	}
-	if !source.SameContent(r.Source) || roadmap.GraphDigest(graph) != r.GraphDigest || baseline.Commit != r.CodeCommit {
+	if roadmap.GraphDigest(graph) != r.GraphDigest || baseline.Commit != r.CodeCommit {
 		return r, errors.New("来源、图材料或代码基线已变化，请重新核对生成文档")
 	}
 	p.generationMu.Lock()
+	if gateErr := p.verifyCurrentTaskCard(ctx, r); gateErr != nil {
+		p.generationMu.Unlock()
+		return r, gateErr
+	}
 	rows, gateErr := p.store.Roadmaps(ctx, p.config.Identity())
 	if gateErr != nil {
 		p.generationMu.Unlock()
@@ -441,7 +542,15 @@ func (p *roadmapPort) resumePublication(ctx context.Context, r roadmap.Record) (
 	return p.continuePublication(ctx, r)
 }
 
-func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record) (roadmap.Record, error) {
+func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record) (out roadmap.Record, err error) {
+	initialRevision := r.Revision
+	defer func() {
+		// Publishing records new local progress even when a remote result is
+		// unknown. Only a failed observation marks the provider unavailable.
+		if out.Revision > initialRevision && out.Publication != nil && out.State == "publishing" {
+			p.recordPublicationObservation(ctx, out, out, nil)
+		}
+	}()
 	var e error
 	if r.Publication.State == "preparing" {
 		if e = p.preparePublication(ctx, &r); e != nil {
@@ -457,7 +566,7 @@ func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record)
 		}
 		_, e = p.config.runtimeMaintenance.git(ctx, "push", "--force-with-lease=refs/heads/"+r.Publication.Branch+":", p.config.Remote, r.Publication.Commit+":refs/heads/"+r.Publication.Branch)
 		if e != nil {
-			return r, errors.New("原文档推送结果待核实")
+			return r, fmt.Errorf("原文档推送结果待核实：%w", e)
 		}
 		r.Publication.State = "pushed"
 		r, e = p.serviceSave(ctx, r)
@@ -491,7 +600,13 @@ func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record)
 				return r, e
 			}
 			var fact roadmapPR
-			e = p.provider(ctx, "POST", "repos/"+p.config.PR.Repository+"/pulls", map[string]any{"title": "Roadmap 文档：" + r.Source.Path, "head": r.Publication.Branch, "base": p.config.Branch, "body": "固定 Roadmap 内部身份、Spec / Plan 和依赖。正式编号仅在入 DAG 时分配。"}, &fact)
+			title := "Roadmap 文档：" + r.Source.Path
+			body := "固定 Roadmap 内部身份、Spec / Plan 和依赖。正式编号仅在入 DAG 时分配。"
+			if r.Source.PlanningID != "" {
+				title = taskDocumentTitle(r)
+				body = "固定任务的 Spec / Plan、测试安排和验收材料。正式编号仅在入 DAG 时分配。"
+			}
+			e = p.provider(ctx, "POST", "repos/"+p.config.PR.Repository+"/pulls", map[string]any{"title": title, "head": r.Publication.Branch, "base": p.config.Branch, "body": body}, &fact)
 			if e != nil {
 				return r, e
 			}
@@ -556,6 +671,12 @@ func (p *roadmapPort) observePublication(ctx context.Context, r roadmap.Record) 
 	}
 	if !fact.Merged {
 		r.State = "awaiting-merge"
+		if r.Source.PlanningID != "" {
+			r.Publication.Diagnostic = ""
+			if fact.State == "closed" {
+				r.Publication.Diagnostic = "原文档 PR 已关闭，请重新打开并合并后再核实"
+			}
+		}
 		if r.Publication.State != "merge_unknown" {
 			r.Publication.State = "pr"
 		}

@@ -123,6 +123,15 @@ func (a *Actor) RunWork(ctx context.Context, run func(context.Context) error) er
 
 func (a *Actor) InstanceID() string { return a.State.Service.InstanceID }
 
+// CheckStartProfile previews the same profile and environment gates as Start
+// using the observed environment basis without refreshing external state.
+func (a *Actor) CheckStartProfile(ctx context.Context, id string) error {
+	if _, err := a.options.Tasks.startProfile(id); err != nil {
+		return err
+	}
+	return a.options.Tasks.checkExecution(ctx, id, false)
+}
+
 // VerifyRunnerAdmission reuses the application's pinned Runner/config gate
 // without claiming a Task, starting a daemon or changing actor state.
 func (a *Actor) VerifyRunnerAdmission(ctx context.Context) error {

@@ -1,5 +1,14 @@
 [
   {
+    "id": "manual-verification.local-codex",
+    "level": "L4",
+    "suite": "manual-verification",
+    "package": "./tests/e2e/live",
+    "test": "TestManualVerificationLocalCodex",
+    "env": "live",
+    "chain": "local-codex"
+  },
+  {
     "id": "workflow.local-codex-audited",
     "level": "L4",
     "suite": "workflow",

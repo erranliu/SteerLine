@@ -135,7 +135,7 @@ func TestEnvironmentOptionsWaitForStartBaselineCheck(t *testing.T) {
 			selected := c.RunnerExecution.Profiles[0]
 			selectedKey := mustEnvironmentKey(t, selected.Execution)
 			maintenance := newProjectMaintenance(c, store)
-			p.config.runtimeMaintenance = maintenance
+			p.baseline = maintenance
 			maintenance.environmentObservation = p.observeBasis
 			_, err := maintenance.check(t.Context())
 			require(t, err)
@@ -248,10 +248,10 @@ func TestProjectEnvironmentReadinessRefreshRejectsBeforeMaterialPreparation(t *t
 	require(t, store.StartEnvironment(ctx, record, 0))
 	maintenance := newProjectMaintenance(c, store)
 	c.runtimeMaintenance = maintenance
-	p.config.runtimeMaintenance = maintenance
+	p.baseline = maintenance
 	_, err = maintenance.check(ctx)
 	require(t, err)
-	service := runnerTaskService(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")})
+	service := runnerTaskService(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, maintenance.prepare, maintenance)
 	service.Tasks.Reader = readinessTasks{c.Identity()}
 	// This owner test isolates preparation ordering; execution-wait capability
 	// validation is covered by the existing published-catalog tests.

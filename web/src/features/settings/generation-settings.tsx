@@ -92,7 +92,7 @@ export function GenerationSettings({
   return (
     <section className="settings-panel" aria-label="生成并发设置">
       {!onDirtyChange && <NavigationGuard dirty={dirty || saving} />}
-      <h2>项目维护</h2>
+      <h2>生成并发</h2>
       <p className="muted">材料与测试安排生成使用以下并发上限。</p>
       <p className="settings-scope">所有项目共享</p>
       {query.isPending && <p role="status">正在读取生成并发配置…</p>}

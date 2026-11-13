@@ -344,6 +344,7 @@ func parseOptions(args []string) (options, error) {
 		}
 		live := opts.level == "L4" && opts.e2eEnv == "live" && (opts.suite == "smoke" && opts.scenario == "smoke.local-codex" ||
 			opts.suite == "refactoring" && opts.scenario == "refactoring.local-codex" ||
+			opts.suite == "manual-verification" && opts.scenario == "manual-verification.local-codex" ||
 			opts.suite == "workflow" && opts.scenario == "workflow.local-codex-audited" ||
 			opts.suite == "testing" && opts.scenario == "testing.management-local-codex" ||
 			opts.suite == "configuration" && opts.scenario == remotetest.Discovery ||

@@ -84,6 +84,7 @@ afterEach(() => {
 function setup({
   unavailableDefault = false,
   count = 1,
+  serverLimit = false,
   firstStart = false,
   environmentReady = true,
   environmentRequired = true,
@@ -130,6 +131,7 @@ function setup({
           }) as Candidate,
       );
   const taskPage: TaskPage = {
+    authority_version: 3,
     graph_revision: 7,
     has_more: false,
     database_revision: 1,
@@ -162,10 +164,36 @@ function setup({
     commit: "base",
     total: 2,
     ready: status === "ready" ? 2 : 1,
-    blockers: status === "ready" ? [] : ["任务 #99 的材料与测试安排未就绪"],
+    blockers: status === "ready" ? [] : [{ category: "task_material", code: "task_material_unprepared", diagnostic: "任务 #99 的材料与测试安排未就绪" }],
   });
   let materials = readiness(materialsStatus);
   let materialsError: Error | undefined;
+  function taskDetails(): TaskPage {
+    if (materialsError) throw materialsError;
+    return {
+      ...taskPage,
+      tasks: taskPage.tasks.map((task) => ({
+        ...task,
+        start_eligibility: {
+          action: firstStart ? "start_task" : "start_candidate",
+          blockers: materials.status !== "ready"
+            ? [{ code: "project_not_ready", diagnostic: materials.blockers[0].diagnostic }]
+            : serverLimit
+              ? [{ code: "candidate_limit_reached", diagnostic: "当前材料版本已有五个参与候选" }]
+              : [],
+          profile_blockers: Object.fromEntries(profiles.map((profile) => [
+            profile.id,
+            profile.unavailable_reason
+              ? { code: "unsupported_capability", diagnostic: profile.unavailable_reason }
+              : environmentRequired && !environmentReady
+                ? { code: "environment_not_ready", diagnostic: "环境尚未验收" }
+                : null,
+          ])),
+          environment_readiness_required: environmentRequired,
+        },
+      })),
+    };
+  }
   vi.spyOn(api, "get").mockImplementation(
     async (path) =>
       (path === "/maintenance/readiness"
@@ -186,7 +214,7 @@ function setup({
                 generators: [],
                 default_profile_id: "default",
               }
-            : taskPage) as never,
+            : taskDetails()) as never,
   );
   const start = vi.fn().mockReturnValue("new-candidate");
   const workspace = {
@@ -216,8 +244,8 @@ function setup({
   clients.push(client);
   if (materialsStatus === "ready")
     client.setQueryData(
-      projectQueries(api).projectReadiness().queryKey,
-      materials,
+      projectQueries(api).task("38").queryKey,
+      taskDetails(),
     );
   render(
     <QueryClientProvider client={client}>
@@ -238,7 +266,7 @@ function setup({
       if (!refresh) return;
       await act(async () => {
         await client.refetchQueries({
-          queryKey: projectQueries(api).projectReadiness().queryKey,
+          queryKey: projectQueries(api).task("38").queryKey,
         });
       });
     },
@@ -297,14 +325,14 @@ it.each([
     const button = await screen.findByRole("button", { name: "手动启动" });
     await waitFor(() =>
       expect(
-        client.getQueryState(projectQueries(api).projectReadiness().queryKey)
+        client.getQueryState(projectQueries(api).task("38").queryKey)
           ?.status,
       ).toBe("success"),
     );
     expect(button).toBeDisabled();
-    expect(screen.getByRole("link", { name: "前往项目维护" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "前往项目状态" })).toHaveAttribute(
       "href",
-      "/projects/candidate-project/dag?maintenance=preparation&task=38",
+      "/projects/candidate-project/status?task=38",
     );
     fireEvent.click(button);
     expect(start).not.toHaveBeenCalled();
@@ -316,7 +344,7 @@ it("disables startup after a failed refresh even with cached ready materials and
   const button = await screen.findByRole("button", { name: "手动启动" });
   await waitFor(() => expect(button).toBeEnabled());
   await updateMaterials("ready", new Error("材料查询失败"));
-  await screen.findByText("项目未就绪（状态查询失败）");
+  await screen.findByText("任务资格查询失败");
   expect(button).toBeDisabled();
   fireEvent.click(button);
   expect(start).not.toHaveBeenCalled();
@@ -327,7 +355,7 @@ it("disables startup after a failed refresh even with cached ready materials and
 it.each(["default", "other"])(
   "opens the candidate profile picker and submits %s independently of existing candidates",
   async (profile) => {
-    const { start } = setup();
+    const { start } = setup({ count: 6 });
     fireEvent.click(
       await screen.findByRole("button", { name: "新增并行候选" }),
     );
@@ -378,11 +406,11 @@ it("lets an unavailable default be replaced before confirming a candidate", asyn
   );
 });
 
-it("keeps the five participating candidate limit", async () => {
-  const { start } = setup({ count: 5 });
+it("renders a server candidate limit even when fewer candidates appear in the UI", async () => {
+  const { start } = setup({ count: 1, serverLimit: true });
   const button = await screen.findByRole("button", { name: "新增并行候选" });
   expect(button).toBeDisabled();
-  expect(button).toHaveAttribute("title", "已达到 5 个参与候选");
+  expect(button).toHaveAttribute("title", "当前材料版本已有五个参与候选");
   fireEvent.click(button);
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   expect(start).not.toHaveBeenCalled();

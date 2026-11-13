@@ -37,7 +37,7 @@ func openProjectClient(ctx context.Context, ref productapi.ProjectRef) (*product
 
 // openServiceProjectClientWithCommands borrows the runtime's task store and
 // command actor. Closing this client cannot close project-owned resources.
-func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *taskrunner.Actor, commands func(context.Context) (productclient.TaskCommands, error), store *sqlite.SQLiteStore) (*productclient.Client, error) {
+func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *taskrunner.Actor, commands func(context.Context) (productclient.TaskCommands, error), store *sqlite.SQLiteStore, readiness projectReadinessReader, materials materialFreshnessReader) (*productclient.Client, error) {
 	absolute, err := filepath.Abs(config.ConfigPath)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func openServiceProjectClientWithCommands(ctx context.Context, config Config, se
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
-				return &clientReader{Service: query.NewService(store, bound.Identity()), ConversationService: query.NewConversationService(store, bound.Identity()), store: store, project: bound.Identity(), config: bound, executableTypes: append([]string(nil), bound.ExecutableTypes...), freshness: projectReadFreshness(bound), borrowed: true}, nil
+				return &clientReader{Service: query.NewService(store, bound.Identity()), ConversationService: query.NewConversationService(store, bound.Identity()), store: store, project: bound.Identity(), config: bound, executableTypes: append([]string(nil), bound.ExecutableTypes...), freshness: projectReadFreshness(bound), borrowed: true, startActor: service, readiness: readiness, materials: materials}, nil
 			}
 		}
 		if commands != nil {
@@ -167,7 +167,10 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 }
 
 type clientReader struct {
-	borrowed bool
+	borrowed   bool
+	startActor *taskrunner.Actor
+	readiness  projectReadinessReader
+	materials  materialFreshnessReader
 
 	query.Service
 	query.ConversationService
@@ -215,7 +218,7 @@ func (r *clientReader) ReadProject(ctx context.Context, selected string, _ produ
 		return page
 	}
 	view := snapshot.ProjectView
-	nativeObservation := applicationProjectObservation(ctx, r.config, snapshot)
+	nativeObservation := r.applicationProjectObservation(ctx, snapshot)
 	legacyConnection := connectHostServiceFromSnapshot(ctx, r.config, nativeObservation)
 	observation := productObservation(nativeObservation)
 	connection := productConnection(legacyConnection, observation)
@@ -234,26 +237,26 @@ func (r *clientReader) ReadProject(ctx context.Context, selected string, _ produ
 	return query.ProjectPage(view, selected, r.freshness, observation, connection, decisionReasons, r.executableTypes)
 }
 
-func applicationProjectObservation(ctx context.Context, config Config, snapshot storageports.ApplicationProjectSnapshot) steerline.ObservationSnapshot {
+func (r *clientReader) applicationProjectObservation(ctx context.Context, snapshot storageports.ApplicationProjectSnapshot) steerline.ObservationSnapshot {
 	sampledAt := snapshot.ProjectView.SampledAt
 	if sampledAt.IsZero() {
 		sampledAt = time.Now().UTC()
 	}
 	if snapshot.RunnerError != nil {
-		return observeHostRuntime(ctx, config, nil, snapshot.RunnerError, sampledAt)
+		return observeHostRuntime(ctx, r.config, nil, snapshot.RunnerError, sampledAt)
 	}
 	if snapshot.RunnerState.Checkpoint == nil {
-		return observeHostRuntime(ctx, config, nil, nil, sampledAt)
+		return observeHostRuntime(ctx, r.config, nil, nil, sampledAt)
 	}
 	runtimeState := taskrunner.Project(snapshot.RunnerState, *snapshot.RunnerState.Checkpoint)
-	if config.runtimeMaintenance != nil {
+	if r.materials != nil {
 		for i, c := range snapshot.RunnerState.Candidates {
 			if i < len(runtimeState.Runs) {
-				runtimeState.Runs[i].MaterialStatus = config.runtimeMaintenance.freshness(ctx, c)
+				runtimeState.Runs[i].MaterialStatus = r.materials.freshness(ctx, c)
 			}
 		}
 	}
-	return observeHostRuntime(ctx, config, &runtimeState, nil, sampledAt)
+	return observeHostRuntime(ctx, r.config, &runtimeState, nil, sampledAt)
 }
 
 func (r *clientReader) ShowTask(ctx context.Context, id string) (productapi.TaskPage, error) {
@@ -261,7 +264,11 @@ func (r *clientReader) ShowTask(ctx context.Context, id string) (productapi.Task
 	if err != nil {
 		return productapi.TaskPage{}, productReadError(err)
 	}
-	return query.TaskPage(page), nil
+	view := query.TaskPage(page)
+	if r.startActor != nil {
+		view.Tasks[0].StartEligibility = r.taskStartEligibility(ctx, page.DispatchMode, page.Tasks[0])
+	}
+	return view, nil
 }
 func (r *clientReader) ListTasks(ctx context.Context, cursor string, limit int) (productapi.TaskPage, error) {
 	page, err := r.Service.ListNativeTasks(ctx, cursor, limit)

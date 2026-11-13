@@ -22,14 +22,14 @@ func (p *planningPort) publishPlanning(ctx context.Context, task *plan.PlanningT
 		return errors.New("缺少确认的发布快照")
 	}
 	version := &pub.Versions[len(pub.Versions)-1]
-	git := p.config.runtimeMaintenance.git
+	git := p.config.repositoryGit
 	switch op.Stage {
 	case "publish_ready":
-		target, err := p.config.runtimeMaintenance.check(ctx)
+		target, err := p.mergeHistory.refreshBaseline(ctx)
 		if err != nil {
 			return err
 		}
-		if target.Commit != version.Base {
+		if target != version.Base {
 			task.Operation = nil
 			return errors.New("目标分支已更新，请 Rebase 后重新审阅")
 		}
@@ -70,11 +70,11 @@ func (p *planningPort) publishPlanning(ctx context.Context, task *plan.PlanningT
 			if observed != expected {
 				return errors.New("原发布分支已变化，推送结果待核实")
 			}
-			target, err := p.config.runtimeMaintenance.check(ctx)
+			target, rewritten, err := p.refreshBaselineWithRewrite(ctx)
 			if err != nil {
 				return err
 			}
-			if target.Rewritten || target.Commit != version.Base {
+			if rewritten || target != version.Base {
 				task.Operation, task.Review = nil, nil
 				return errors.New("目标分支已更新，请 Rebase 后重新审阅")
 			}
@@ -119,7 +119,7 @@ func (p *planningPort) preparePlanningCommit(ctx context.Context, task *plan.Pla
 		return "", err
 	}
 	root := filepath.Join(dir, "worktree")
-	git := p.config.runtimeMaintenance.git
+	git := p.config.repositoryGit
 	if _, err = git(ctx, "-c", "core.hooksPath=", "worktree", "add", "--detach", root, version.Base); err != nil {
 		return "", err
 	}
@@ -209,11 +209,11 @@ func (p *planningPort) adoptPlanningMerge(ctx context.Context, task *plan.Planni
 	if version == nil {
 		return errors.New("实际合入的 PR head 未经审阅确认")
 	}
-	target, err := p.config.runtimeMaintenance.check(ctx)
+	target, err := p.mergeHistory.refreshBaseline(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err = p.config.runtimeMaintenance.git(ctx, "merge-base", "--is-ancestor", fact.MergeCommit, target.Commit); err != nil {
+	if err = p.mergeHistory.verifyAncestor(ctx, fact.MergeCommit, target); err != nil {
 		return errors.New("合并提交尚未进入目标分支")
 	}
 	merged := *task
@@ -240,8 +240,8 @@ func (p *planningPort) handoffPlanning(ctx context.Context, task *plan.PlanningT
 	if task.SourceID != "" {
 		return nil
 	}
-	m := p.config.runtimeMaintenance
-	branch, err := m.git(ctx, "symbolic-ref", "HEAD")
+	git := p.config.repositoryGit
+	branch, err := git(ctx, "symbolic-ref", "HEAD")
 	if err != nil || strings.TrimSpace(string(branch)) != "refs/heads/"+p.config.Branch {
 		return errors.New("已合并，项目工作树未位于目标分支")
 	}
@@ -252,21 +252,21 @@ func (p *planningPort) handoffPlanning(ctx context.Context, task *plan.PlanningT
 	if source.Modified {
 		return errors.New("已合并，草稿有本地修改，待同步")
 	}
-	if _, err = m.git(ctx, "merge-base", "--is-ancestor", task.Merged, source.Head); err != nil {
+	if err = p.mergeHistory.verifyAncestor(ctx, task.Merged, source.Head); err != nil {
 		return errors.New("已合并，待同步目标分支")
 	}
-	remote, err := m.check(ctx)
-	if err != nil || remote.Commit == "" {
+	remote, err := p.mergeHistory.refreshBaseline(ctx)
+	if err != nil || remote == "" {
 		return errors.New("已合并，目标分支版本待核实")
 	}
-	if _, err = m.git(ctx, "merge-base", "--is-ancestor", source.Head, remote.Commit); err != nil {
+	if err = p.mergeHistory.verifyAncestor(ctx, source.Head, remote); err != nil {
 		return errors.New("已合并，本地目标分支有独有提交")
 	}
-	current, err := m.git(ctx, "rev-parse", "HEAD")
+	current, err := git(ctx, "rev-parse", "HEAD")
 	if err != nil || strings.TrimSpace(string(current)) != source.Head {
 		return errors.New("项目工作树已变化，待重新核实")
 	}
-	branch, err = m.git(ctx, "symbolic-ref", "HEAD")
+	branch, err = git(ctx, "symbolic-ref", "HEAD")
 	if err != nil || strings.TrimSpace(string(branch)) != "refs/heads/"+p.config.Branch {
 		return errors.New("已合并，项目工作树未位于目标分支")
 	}

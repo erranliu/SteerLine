@@ -72,6 +72,7 @@ export function useEnvironmentReadiness() {
     retry: false,
     // Loaded configuration is frozen for this project instance.
     staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
   const query = useQuery({
     queryKey: [

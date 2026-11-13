@@ -41,7 +41,7 @@ func TestTRQueryOnlyCommittedGitHistoryAndDeletion(t *testing.T) {
 	tested := commit()
 	m := newProjectMaintenance(Config{Repository: repo, Git: backend.Command{Executable: "git"}, ProcessHost: resourceprocess.New(time.Minute)}, nil)
 	m.observation = pm.Observation{Commit: tested}
-	p := &testManagementPort{maintenance: m, project: repo}
+	p := &testManagementPort{baseline: m, materials: m, project: repo}
 	ctx := context.Background()
 	path := testmanagement.RecordsPath + "/" + tested + ".json"
 	body := `{"runs":[{"at":"2026-10-23T00:00:00Z","results":[{"test_id":"old.rules","level":"L3","environment":"controlled","status":"failed","note":"actual failure"}]}]}`
@@ -96,7 +96,7 @@ func TestTRCatalogueUsesDeclaredCustomSource(t *testing.T) {
 	pmGit(t, repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "custom project source")
 	m := newProjectMaintenance(Config{Repository: repo, Git: backend.Command{Executable: "git"}, ProcessHost: resourceprocess.New(time.Minute)}, nil)
 	m.observation = pm.Observation{Commit: pmGit(t, repo, "rev-parse", "HEAD")}
-	p := &testManagementPort{maintenance: m, project: repo}
+	p := &testManagementPort{baseline: m, materials: m, project: repo}
 	raw, err := p.TestCatalogue(context.Background())
 	require(t, err)
 	if !strings.Contains(string(raw), `"path":"quality/cases.json"`) || !strings.Contains(string(raw), `"id":"custom.l2"`) || !strings.Contains(string(raw), `"current":true`) {

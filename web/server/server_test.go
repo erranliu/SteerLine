@@ -23,12 +23,13 @@ import (
 )
 
 type fakeClient struct {
-	identity    httpcontract.Identity
-	appIdentity contract.Identity
-	calls       int
-	route       string
-	envelope    httpcontract.CommandEnvelope
-	getError    error
+	identity     httpcontract.Identity
+	appIdentity  contract.Identity
+	calls        int
+	route        string
+	envelope     httpcontract.CommandEnvelope
+	registration contract.ProjectRegistration
+	getError     error
 }
 
 func (c *fakeClient) Identity() contract.Identity { return c.appIdentity }
@@ -40,15 +41,61 @@ func (c *fakeClient) Get(_ context.Context, route string, target any) error {
 	if c.getError != nil {
 		return c.getError
 	}
+	if route == contract.ProjectRegistrationPromptPath {
+		return json.Unmarshal([]byte(`{"initialization_prompt":"初始化正文","prompt":"安装目录：D:\\SteerLine 安装"}`), target)
+	}
 	return json.Unmarshal([]byte(`{"database_revision":17,"Tasks":["原正文"]}`), target)
 }
 func (c *fakeClient) Post(_ context.Context, route string, body, target any) error {
 	c.calls++
 	c.route = route
+	if route == contract.ProjectRegistrationPath {
+		c.registration = body.(contract.ProjectRegistration)
+		return json.Unmarshal([]byte(`{"commit":"checked","saved":true}`), target)
+	}
 	c.envelope = body.(httpcontract.CommandEnvelope)
 	data, _ := json.Marshal(httpcontract.CommandResponse{RequestID: c.envelope.RequestID, ProjectID: c.envelope.ProjectID, InstanceID: c.envelope.InstanceID, Action: c.envelope.Action, TargetID: c.envelope.TargetID, ExpectedVersion: c.envelope.ExpectedVersion, Original: &c.envelope, Status: "accepted"})
 	return json.Unmarshal(data, target)
 }
+
+func TestWebProjectRegistrationRequiresSessionAndCSRF(t *testing.T) {
+	s, client := fixture(t)
+	route := "/api/v2/application" + contract.ProjectRegistrationPath
+	body := `{"name":"project","confirmation":"checked"}`
+	if w := request(s, "POST", route, body, nil, ""); w.Code != 401 {
+		t.Fatal(w.Code)
+	}
+	cookie, csrf := login(t, s)
+	if w := request(s, "POST", route, body, cookie, ""); w.Code != 403 || client.calls != 0 {
+		t.Fatal(w.Code, client.calls)
+	}
+	if w := request(s, "POST", route, body, cookie, csrf); w.Code != 200 || client.calls != 1 ||
+		client.route != contract.ProjectRegistrationPath || client.registration.Confirmation != "checked" {
+		t.Fatal(w.Code, w.Body.String(), client.registration)
+	}
+	if w := request(s, "GET", "/projects/add", "", nil, ""); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+}
+
+func TestWebProjectRegistrationPromptRequiresSessionAndForwardsOriginal(t *testing.T) {
+	s, client := fixture(t)
+	const route = "/api/v2/application" + contract.ProjectRegistrationPromptPath
+	if w := request(s, "GET", route, "", nil, ""); w.Code != 401 {
+		t.Fatal(w.Code)
+	}
+	cookie, _ := login(t, s)
+	w := request(s, "GET", route, "", cookie, "")
+	var result contract.ProjectRegistrationPrompt
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || result.InitializationPrompt != "初始化正文" || result.Prompt != `安装目录：D:\SteerLine 安装` ||
+		client.route != contract.ProjectRegistrationPromptPath || client.calls != 0 {
+		t.Fatal(w.Code, w.Body.String(), client.route, client.calls)
+	}
+}
+
 func (c *fakeClient) Close() error { return nil }
 func freeAddress(t *testing.T) string {
 	t.Helper()
@@ -255,7 +302,14 @@ func TestWebOriginHostAndStaticBoundaries(t *testing.T) {
 			t.Fatalf("source policy passed: %d", w.Code)
 		}
 	}
-	for route, status := range map[string]int{"/": 200, "/projects/" + strings.Repeat("a", 64) + "/dag": 200, "/projects/" + strings.Repeat("a", 64) + "/runs": 200, "/projects/" + strings.Repeat("a", 64) + "/settings": 200, "/assets/main.js": 200, "/assets/missing.js": 404, "/auth/missing": 404, "/../secret": 400, "/assets%2fmain.js": 400} {
+	project := "/projects/" + strings.Repeat("a", 64)
+	for route, status := range map[string]int{
+		"/": 200, project + "/dag": 200, project + "/runs": 200,
+		project + "/settings": 200, project + "/status": 200,
+		"/settings/billing": 200, "/settings/missing": 404,
+		"/assets/main.js": 200, "/assets/missing.js": 404,
+		"/auth/missing": 404, "/../secret": 400, "/assets%2fmain.js": 400,
+	} {
 		w := request(s, "GET", route, "", nil, "")
 		if w.Code != status {
 			t.Fatalf("%s => %d want %d", route, w.Code, status)

@@ -2,11 +2,13 @@ package roadmap
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/roadmap/model"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 func queueID(r model.Record) string {
@@ -227,9 +229,24 @@ func (s *Service) RetryDocuments(ctx context.Context, id, key, request string, e
 			return r, err
 		}
 	}
-	g := model.Generation{ID: Token(), Key: key, CreatedAt: time.Now().UTC(), RetryRequest: request, State: "queued", Submission: "pending", Request: previous.Request}
-	g.Request.RequestID = Token()
-	// Input is intentionally byte-identical: original snapshot and target remain fixed.
+	execution, catalog, err := s.Prepare(ctx)
+	if err != nil {
+		return r, err
+	}
+	var input runnercontract.GenerateRunInput
+	if err = json.Unmarshal(previous.Request.Input, &input); err != nil {
+		return r, err
+	}
+	input.Execution = execution
+	if err = catalog.ValidateRepositoryGenerate(input); err != nil {
+		return r, err
+	}
+	payload, err := json.Marshal(input)
+	if err != nil {
+		return r, err
+	}
+	g := model.Generation{ID: Token(), Key: key, CreatedAt: time.Now().UTC(), RetryRequest: request, State: "queued", Submission: "pending",
+		Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: Token(), Input: payload}}
 	r.Generations = append(append([]model.Generation(nil), r.Generations...), g)
 	r.State, r.Diagnostic = "queued", ""
 	r, err = s.save(ctx, r)

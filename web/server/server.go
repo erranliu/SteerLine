@@ -339,6 +339,33 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		s.billingConfig(w, r, session)
 		return
 	}
+	if r.URL.Path == "/api/v2/application"+contract.ProjectRegistrationPromptPath && r.Method == "GET" && r.URL.RawQuery == "" {
+		var result contract.ProjectRegistrationPrompt
+		if err := s.options.Client.Get(r.Context(), contract.ProjectRegistrationPromptPath, &result); err != nil {
+			backendError(w, err)
+		} else {
+			writeJSON(w, 200, result)
+		}
+		return
+	}
+	if r.URL.Path == "/api/v2/application"+contract.ProjectRegistrationPath && r.Method == "POST" && r.URL.RawQuery == "" {
+		if !s.browserWrite(r) || !equal(r.Header.Get("X-CSRF-Token"), session.CSRF) {
+			fail(w, 403, "csrf_rejected", "same-origin JSON and session CSRF token required")
+			return
+		}
+		var input contract.ProjectRegistration
+		if err := decode(w, r, &input, 16<<10); err != nil {
+			fail(w, 400, "invalid_registration", err.Error())
+			return
+		}
+		var result contract.ProjectRegistrationResult
+		if err := s.options.Client.Post(r.Context(), contract.ProjectRegistrationPath, input, &result); err != nil {
+			backendError(w, err)
+		} else {
+			writeJSON(w, 200, result)
+		}
+		return
+	}
 	if (r.URL.Path == "/api/web/usage-collection" || r.URL.Path == "/api/web/usage-collection/status") && r.Method == "GET" && r.URL.RawQuery == "" {
 		var result cfg.UsageCollection
 		if err := s.options.Client.Get(r.Context(), strings.TrimPrefix(r.URL.Path, "/api/web"), &result); err != nil {
@@ -474,9 +501,17 @@ func backendError(w http.ResponseWriter, err error) {
 
 func (s *Server) Done() <-chan struct{} { return s.stopped }
 func spaPath(route string) bool {
-	if route == "/settings/execution-configs" || route == "/settings" {
+	switch route {
+	case "/settings", "/settings/execution-configs", "/settings/billing", "/projects", "/projects/add":
 		return true
 	}
 	parts := strings.Split(strings.Trim(route, "/"), "/")
-	return len(parts) == 3 && parts[0] == "projects" && len(parts[1]) == 64 && (parts[2] == "refactoring" || parts[2] == "roadmaps" || parts[2] == "roadmap-planning" || parts[2] == "tests" || parts[2] == "dag" || parts[2] == "runs" || parts[2] == "settings" || parts[2] == "environment" || parts[2] == "activities") || route == "/projects"
+	if len(parts) != 3 || parts[0] != "projects" || len(parts[1]) != 64 {
+		return false
+	}
+	switch parts[2] {
+	case "manual-verification", "refactoring", "roadmaps", "roadmap-planning", "tests", "dag", "runs", "settings", "status", "environment", "activities":
+		return true
+	}
+	return false
 }

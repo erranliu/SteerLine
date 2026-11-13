@@ -73,7 +73,7 @@ export function steerAgentLabel(a: Activity): string | undefined {
     case "continuation":
       return "对话续作";
     case "planning":
-      return "Roadmap 规划";
+      return "任务规划";
     case "maintenance":
       return "持续维护";
   }
@@ -96,6 +96,7 @@ export const activityActions = new Set([
   "start_candidate",
   "roadmap_parse",
   "roadmap_generate_documents",
+  "roadmap_task_generate",
   "roadmap_publish",
   "roadmap_admit",
   "roadmap_resume",
@@ -140,7 +141,9 @@ export function provisionalActivities(
         ? "提交维护操作"
         : e.action === "roadmap_parse"
           ? "提交 Roadmap 草稿解析"
-          : e.action === "roadmap_generate_documents"
+          : ["roadmap_generate_documents", "roadmap_task_generate"].includes(
+                e.action,
+              )
             ? "提交 Spec / Plan / 验收文档生成"
             : e.action === "roadmap_publish"
               ? "提交 Roadmap 文档发布"
@@ -169,13 +172,15 @@ export function provisionalActivities(
         kind:
           e.action === "roadmap_parse"
             ? "roadmap-source"
-            : e.action.startsWith("roadmap_")
-              ? "roadmap"
-              : e.action === "environment_start"
-                ? "environment-profile"
-                : e.action.startsWith("maintenance_")
-                  ? "maintenance"
-                  : "task",
+            : e.action === "roadmap_task_generate"
+              ? "task-planning"
+              : e.action.startsWith("roadmap_")
+                ? "roadmap"
+                : e.action === "environment_start"
+                  ? "environment-profile"
+                  : e.action.startsWith("maintenance_")
+                    ? "maintenance"
+                    : "task",
         target:
           e.action === "environment_start"
             ? String(e.payload?.profile_id || "")
@@ -218,6 +223,8 @@ export function activityDestination(project: string, activity: Activity) {
     return `${root}/roadmaps?record=${encodeURIComponent(d.target)}${activity.execution_ref?.action && activity.execution_ref.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   if (d.kind === "roadmap-source")
     return `${root}/roadmaps?source=${encodeURIComponent(d.target)}`;
+  if (d.kind === "task-planning")
+    return `${root}/roadmap-planning?task=${encodeURIComponent(d.target)}${activity.execution_ref?.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   if (d.kind === "candidate")
     return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.target)}`;
   if (d.kind === "task")
@@ -226,7 +233,7 @@ export function activityDestination(project: string, activity: Activity) {
     return `${root}/environment${d.target ? `?profile=${encodeURIComponent(d.target)}` : ""}`;
   if (d.kind === "environment")
     return `${root}/environment?activity=${encodeURIComponent(d.target)}`;
-  return `${root}/dag?maintenance=preparation&request_id=${encodeURIComponent(d.target)}#project-maintenance`;
+  return `${root}/status?request_id=${encodeURIComponent(d.target)}`;
 }
 
 export function requestDestination(e: Envelope, receipt?: Receipt) {
@@ -239,6 +246,8 @@ export function requestDestination(e: Envelope, receipt?: Receipt) {
   const record = (receipt?.roadmap || receipt?.environment) as
     { id?: string } | undefined;
   if (e.action.startsWith("roadmap_")) {
+    if (e.action === "roadmap_task_generate")
+      return `${root}/roadmap-planning?task=${encodeURIComponent(e.target_id)}&${request}`;
     if (record?.id)
       return `${root}/roadmaps?record=${encodeURIComponent(record.id)}&${request}`;
     if (e.action === "roadmap_parse")
@@ -254,9 +263,12 @@ export function requestDestination(e: Envelope, receipt?: Receipt) {
       ? `${root}/environment?activity=${encodeURIComponent(id)}&${request}`
       : undefined;
   }
-  if (e.action.startsWith("maintenance_"))
-    return `${root}/dag?maintenance=preparation&${request}#project-maintenance`;
+  if (e.action.startsWith("maintenance_")) return `${root}/status?${request}`;
   if (["start_task", "start_candidate"].includes(e.action))
     return `${root}/runs?task=${encodeURIComponent(e.target_id)}&run=${encodeURIComponent(e.request_id)}`;
   return undefined;
+}
+
+export function formatActivityTime(value?: string) {
+  return value ? new Date(value).toLocaleString("zh-CN") : "时间未记录";
 }

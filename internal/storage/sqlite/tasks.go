@@ -73,6 +73,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		return page, nativeErr("cursor_invalidated", "database revision changed between pages")
 	}
 	page.DatabaseRevision = dbRevision
+	page.DispatchMode = dispatchMode
 	if binding := s.nativeBinding; binding != nil && (binding.ProjectIdentity != project || binding.Repository != targetRepository || binding.Remote != targetRemote || binding.Branch != targetBranch) {
 		return page, nativeErr("authority_mismatch", "project binding changed after opening the query reader")
 	}
@@ -209,6 +210,18 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 			return page, nativeErr("contract_mismatch", "task contract target differs from persisted project authority")
 		}
 		detail.Candidates = append(detail.Candidates, relations.candidates[record.TaskID]...)
+		if taskID != "" {
+			var materialDigest string
+			if err = tx.QueryRowContext(ctx, `SELECT coalesce((SELECT json_extract(payload,'$.digest') FROM project_materials WHERE project_identity=? AND task_id=?),'')`, project, taskID).Scan(&materialDigest); err != nil {
+				return page, err
+			}
+			facts, err := readCandidateStartFacts(ctx, tx, project, taskID, materialDigest)
+			if err != nil {
+				return page, err
+			}
+			detail.CurrentMaterialCandidates = facts.active
+			detail.ObservedMergedCandidate = facts.merged
+		}
 		if hasDelivery {
 			detail.Delivery = &delivery
 		}

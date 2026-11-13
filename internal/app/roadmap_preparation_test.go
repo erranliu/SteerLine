@@ -20,10 +20,11 @@ import (
 
 func TestRoadmapStaticInitializationAndPublication(t *testing.T) {
 	c, head := nativeTaskFixture(t)
+	c.CommandTimeout = "30s"
 	probe := &startupCountingHost{ManagedProcessHost: c.ProcessHost}
 	c.ProcessHost = probe
 	c.runtimeMaintenance = newProjectMaintenance(c, nil)
-	p := &roadmapPort{config: c}
+	p := &roadmapPort{config: c, materials: c.runtimeMaintenance}
 	ctx := context.Background()
 	before := fixtureGit(t, c.Repository, "status", "--porcelain")
 	state := p.preparation(ctx)
@@ -95,7 +96,7 @@ func TestRoadmapStaticInitializationAndPublication(t *testing.T) {
 func TestRoadmapStaticInitializationRejectsGitOperation(t *testing.T) {
 	c, head := nativeTaskFixture(t)
 	c.runtimeMaintenance = newProjectMaintenance(c, nil)
-	p := &roadmapPort{config: c}
+	p := &roadmapPort{config: c, materials: c.runtimeMaintenance}
 	marker := fixtureGit(t, c.Repository, "rev-parse", "--git-path", "MERGE_HEAD")
 	if !filepath.IsAbs(marker) {
 		marker = filepath.Join(c.Repository, marker)
@@ -122,7 +123,7 @@ func TestRoadmapInitializationPendingReceiptReconcilesWithoutWriting(t *testing.
 			require(t, err)
 			defer store.Close()
 			c.runtimeMaintenance = newProjectMaintenance(c, store)
-			port := &roadmapPort{config: c, store: store}
+			port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store}
 			c.runtimeRoadmaps = port
 			runtime := &runtimeProjectPort{config: c, store: store}
 			if mode == "complete" || mode == "head-changed" || mode == "git-error" || mode == "query-cancelled" {
@@ -201,7 +202,7 @@ func TestRoadmapPublishedGuideMustBeValidUTF8AndBounded(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
 	ctx := context.Background()
 	c.runtimeMaintenance = newProjectMaintenance(c, nil)
-	p := &roadmapPort{config: c}
+	p := &roadmapPort{config: c, materials: c.runtimeMaintenance}
 	_, err := roadmap.PrepareStatic(c.Repository, false)
 	require(t, err)
 	for _, body := range [][]byte{{0xff}, []byte(strings.Repeat("x", roadmapmodel.MaxBytes+1))} {

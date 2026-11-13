@@ -9,21 +9,23 @@ import (
 // These values are the public CLI contract, owned by the caller. There is no
 // Go module dependency on the independently versioned Runner implementation.
 type PRFact struct {
-	URL            string     `json:"url"`
-	Provider       string     `json:"provider"`
-	Repository     string     `json:"repository"`
-	Number         int        `json:"number"`
-	BaseBranch     string     `json:"base_branch"`
-	BaseRevision   string     `json:"base_revision,omitempty"`
-	HeadRepository string     `json:"head_repository"`
-	HeadBranch     string     `json:"head_branch"`
-	HeadRevision   string     `json:"head_revision,omitempty"`
-	State          string     `json:"state"`
-	Merged         bool       `json:"merged"`
-	MergedAt       *time.Time `json:"merged_at,omitempty"`
-	MergeCommit    *string    `json:"merge_commit,omitempty"`
-	CheckedAt      time.Time  `json:"checked_at"`
-	QueryError     string     `json:"query_error,omitempty"`
+	URL                  string     `json:"url"`
+	Provider             string     `json:"provider"`
+	Repository           string     `json:"repository"`
+	Number               int        `json:"number"`
+	BaseBranch           string     `json:"base_branch"`
+	BaseRevision         string     `json:"base_revision,omitempty"`
+	HeadRepository       string     `json:"head_repository"`
+	HeadBranch           string     `json:"head_branch"`
+	HeadRevision         string     `json:"head_revision,omitempty"`
+	Draft                *bool      `json:"draft,omitempty"`
+	InitialDraftVerified bool       `json:"initial_draft_verified,omitempty"`
+	State                string     `json:"state"`
+	Merged               bool       `json:"merged"`
+	MergedAt             *time.Time `json:"merged_at,omitempty"`
+	MergeCommit          *string    `json:"merge_commit,omitempty"`
+	CheckedAt            time.Time  `json:"checked_at"`
+	QueryError           string     `json:"query_error,omitempty"`
 }
 type Final struct {
 	CommandID     string `json:"command_id"`

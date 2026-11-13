@@ -151,6 +151,8 @@ test("all environment readiness remains visible with inline actions across refre
         ],
       };
     else if (path.endsWith("/identity")) data = identity;
+    else if (path.endsWith("/maintenance/readiness"))
+      data = { status: "ready", commit: "fixture", total: 0, ready: 0, blockers: [] };
     else if (path.endsWith("/snapshot"))
       data = {
         connection: {
@@ -228,13 +230,24 @@ test("all environment readiness remains visible with inline actions across refre
     "本机 · Codex 直连",
   ]);
   await expect(page.getByLabel("运行环境", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "准备要求" })).toBeVisible();
-  await expect(
-    page.getByText("准备 Git 和 Agent 登录，再开始检测。"),
-  ).toBeVisible();
+  const materialsSummary = page.locator("summary").filter({
+    hasText: /^准备要求$/,
+  });
+  const materialsDocument = page.getByText(
+    "准备 Git 和 Agent 登录，再开始检测。",
+  );
+  await expect(materialsSummary).toBeVisible();
+  await expect(materialsDocument).toBeHidden();
+  expect(
+    reads.some((path) => path.endsWith("/environment/materials")),
+  ).toBe(false);
+  await materialsSummary.click();
+  await expect(materialsDocument).toBeVisible();
   expect(
     reads.filter((path) => path.endsWith("/environment/materials")),
   ).toHaveLength(1);
+  await materialsSummary.click();
+  await expect(materialsDocument).toBeHidden();
   await expect(
     page.getByRole("button", { name: /查看详情|收起详情|标记失效/ }),
   ).toHaveCount(0);

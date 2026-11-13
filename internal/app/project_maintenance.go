@@ -20,6 +20,12 @@ type maintenanceStore interface {
 	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
 }
+
+// committedMaterialReader reads a regular Git file at the exact supplied commit.
+type committedMaterialReader interface {
+	readCommittedMaterial(ctx context.Context, commit, path string) ([]byte, error)
+}
+
 type projectMaintenance struct {
 	environmentObservation func(context.Context, string) error
 	commitCache            map[string]cachedBaselineCommit
@@ -38,17 +44,65 @@ func newProjectMaintenance(c Config, s maintenanceStore) *projectMaintenance {
 	return m
 }
 func (m *projectMaintenance) git(ctx context.Context, args ...string) ([]byte, error) {
-	return (commandRunner{Dir: m.config.Repository, Timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), ProcessHost: m.config.ProcessHost}).Output(ctx, m.config.Git, args...)
+	return m.config.repositoryGit(ctx, args...)
 }
 
-func (m *projectMaintenance) read(ctx context.Context, commit, path string) ([]byte, error) {
+func (m *projectMaintenance) readCommittedMaterial(ctx context.Context, commit, path string) ([]byte, error) {
 	return (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
+}
+func (m *projectMaintenance) readCommittedMaterials(ctx context.Context, commit string, paths []string) (map[string][]byte, error) {
+	for _, path := range paths {
+		if err := taskmodel.ValidateFileReference(taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)}); err != nil {
+			return nil, err
+		}
+	}
+	return (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).readCommittedFiles(ctx, commit, paths)
 }
 func (m *projectMaintenance) current() pmm.Observation {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.observation
 }
+
+// readObservedBaseline can wait for the current observation, including its
+// environment revocation. An empty commit means no observation is available yet.
+func (m *projectMaintenance) readObservedBaseline(ctx context.Context, waitForCheck bool) (string, error) {
+	for {
+		m.mu.Lock()
+		observation, checking := m.observation, m.checking
+		m.mu.Unlock()
+		if checking == nil {
+			if observation.Diagnostic != "" {
+				return "", errors.New(observation.Diagnostic)
+			}
+			return observation.Commit, nil
+		}
+		if !waitForCheck {
+			return "", errors.New("主分支环境依据观察处理中")
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-checking:
+		}
+	}
+}
+
+func (m *projectMaintenance) refreshBaseline(ctx context.Context) (string, error) {
+	observation, err := m.check(ctx)
+	return observation.Commit, err
+}
+
+func (m *projectMaintenance) refreshBaselineWithRewrite(ctx context.Context) (commit string, rewritten bool, err error) {
+	observation, err := m.check(ctx)
+	return observation.Commit, observation.Rewritten, err
+}
+
+func (m *projectMaintenance) verifyAncestor(ctx context.Context, ancestor, descendant string) error {
+	_, err := m.git(ctx, "merge-base", "--is-ancestor", ancestor, descendant)
+	return err
+}
+
 func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error) {
 	m.mu.Lock()
 	if done := m.checking; done != nil {
@@ -133,6 +187,9 @@ func (m *projectMaintenance) localWorkspace(ctx context.Context) (string, error)
 	}
 	return strings.TrimSpace(string(head)) + "\n" + strings.TrimSpace(string(branch)), nil
 }
+
+var errGitOperationInProgress = errors.New("Git operation in progress")
+
 func (m *projectMaintenance) workspace(ctx context.Context) (string, error) {
 	snapshot, e := m.localWorkspace(ctx)
 	if e != nil {
@@ -141,7 +198,7 @@ func (m *projectMaintenance) workspace(ctx context.Context) (string, error) {
 	// No writes during an active merge or rebase. Git reports state paths, not guesses.
 	for _, state := range []string{"MERGE_HEAD", "REBASE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"} {
 		if _, e := m.git(ctx, "rev-parse", "--verify", state); e == nil {
-			return "", errors.New("Git operation in progress")
+			return "", errGitOperationInProgress
 		}
 	}
 	for _, state := range []string{"rebase-merge", "rebase-apply"} {
@@ -154,7 +211,7 @@ func (m *projectMaintenance) workspace(ctx context.Context) (string, error) {
 			name = filepath.Join(m.config.Repository, name)
 		}
 		if _, err = os.Stat(name); err == nil {
-			return "", errors.New("Git operation in progress")
+			return "", errGitOperationInProgress
 		} else if !os.IsNotExist(err) {
 			return "", err
 		}
@@ -168,7 +225,7 @@ func (m *projectMaintenance) workspace(ctx context.Context) (string, error) {
 }
 func (m *projectMaintenance) resolved(ctx context.Context, c taskmodel.TaskContract, commit string) (taskmodel.TaskContract, error) {
 	resolve := func(ref taskmodel.FileReference) (taskmodel.FileReference, error) {
-		b, e := m.read(ctx, commit, ref.Path)
+		b, e := m.readCommittedMaterial(ctx, commit, ref.Path)
 		if e != nil {
 			return ref, e
 		}

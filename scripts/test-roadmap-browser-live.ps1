@@ -3,13 +3,16 @@
     [Parameter(Mandatory=$true)][string]$OutRoot,
     [switch]$IndependentProcess,
     [switch]$Planning,
+    [switch]$SingleTask,
     [string]$CodexExe
 )
 $ErrorActionPreference='Stop'
+if ($Planning -and $SingleTask) { throw 'Select one planning scenario.' }
 if (!$IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
     $taskArguments=@('-SteerRunnerExe',$SteerRunnerExe,'-OutRoot',$OutRoot)
     if ($Planning) { $taskArguments+= '-Planning' }
+    if ($SingleTask) { $taskArguments+= '-SingleTask' }
     if ($CodexExe) { $taskArguments+= @('-CodexExe',$CodexExe) }
     Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $taskArguments -Timeout ([TimeSpan]::FromMinutes(30))
     return
@@ -101,6 +104,18 @@ try {
         'SteerlineFlow/Roadmap/drafts/arithmetic-roadmap.md'="# 算术 Roadmap`nT1：在已有 logic 包新增纯函数 Sum(a,b int) int 和单元测试，Sum(2,3)=5；不改变其他范围。`nT2：新增纯函数 Difference(a,b int) int，使用 Sum(a,-b) 实现并补单元测试，Difference(5,2)=3；依赖本 Roadmap 的 T1。`n本次只生成规划文档，不实现函数，不执行测试。`n"
     }
     if ($Planning) { $files['planning-conflict.txt']="original baseline`n" }
+    if ($SingleTask) {
+        $files.Remove('SteerlineFlow/Roadmap/drafts/arithmetic-roadmap.md')
+        $files['SteerlineFlow/spec/SpecGuide.md']="# 生成规范`n实际调查 logic.go 与 go.mod。按确认的单任务与已有前置生成完整中文 Spec、Plan 和验收文档，保留内部代号及固定路径。只规划在已有 logic 包新增纯函数与测试。`n"
+        $files['SteerlineFlow/testing.md']="# 测试规范`n使用现有 unit.arithmetic。实现后执行 go test ./...，验证 Sum(2,3)=5。Plan 写环境、命令和证据，结果均为未验。`n"
+        $files['SteerlineFlow/testing/test-list.json']='{"tests":[{"id":"unit.arithmetic","name":"整数加法单元测试","level":"L1","environment":"controlled","command":"go test ./...","check":"Sum(2,3)=5；当前未执行"}]}'
+        $files['SteerlineProjectGuideDoc/spec-plan-guidelines.md']="# 编写规范`nSpec 写目标、范围、接口与验收条件。Plan 写改动文件、前置交接、复用、实施和测试证据。验收包含自动验证，纯函数无需人工验收。`n"
+        $files['SteerlineFlow/spec/foundation.spec.md']="# Foundation`n保留现有 logic 包和 Go 模块，供算术任务复用。`n"
+        $files['SteerlineFlow/plans/foundation.plan.md']="# Foundation Plan`n检查现有模块和 logic 包，执行 go test ./...。`n"
+        $files['SteerlineFlow/plans/foundation.tests.json']='{"tests":["unit.arithmetic"]}'
+        $files['SteerlineFlow/testing/acceptance/foundation.md']="# Foundation 验收`n检查 logic 包与 Go 模块，执行 go test ./...。`n"
+    }
+    $files['SteerlineFlow/environment-project.json']='{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}'
     foreach($item in $files.GetEnumerator()) {
         $path=Join-Path $taskProject $item.Key
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))|Out-Null
@@ -116,9 +131,8 @@ try {
     try {$taskPort=$probe.LocalEndpoint.Port} finally {$probe.Stop()}
     Write-TaskJSON 'manifest.json' @{schema='roadmap-browser-live/v1';root=$taskRoot;repository=$taskRemote;base_branch=$taskBase;base_commit=$taskBaseCommit;web_address=('127.0.0.1:'+$taskPort);source_commit=$taskSHA;source_dirty=$taskDirty}
     Write-TaskJSON 'home\web.json' @{version=1;address=('127.0.0.1:'+$taskPort)}
-    $taskSettings=@{executable=$taskCodex;model='gpt-6.1-sol';reasoning_effort='low'}
-    if ($Planning) { $taskSettings.access_mode='full_access' }
-    Write-TaskJSON 'home\execution.json' @{version=3;max_generate_concurrency=2;runner=@{executable=$taskRunner;version=$taskVersion.version;sha256=$taskRunnerSHA};default_execution_profile='roadmap-live';execution_profiles=@(@{id='roadmap-live';name='Roadmap live';execution=@{adapter='codex-app-server';target=@{kind='local'};settings=$taskSettings};workflow=@{id='development';version=2}})}
+    $taskSettings=@{executable=$taskCodex;access_mode='full_access'}
+    Write-TaskJSON 'home\execution.json' @{version=3;max_generate_concurrency=2;steer_agent=@{model='gpt-6.1-sol';reasoning_effort='low'};runner=@{executable=$taskRunner;version=$taskVersion.version;sha256=$taskRunnerSHA};default_execution_profile='roadmap-live';execution_profiles=@(@{id='roadmap-live';name='Roadmap live';execution=@{adapter='codex-app-server';target=@{kind='local'};settings=$taskSettings};workflow=@{id='development';version=2}})}
     $query=Get-Content -LiteralPath (Join-Path $taskSource 'debug-template\home\config-source\SteerlineTest.live.json') -Raw -Encoding utf8|ConvertFrom-Json
     $query.repository=$taskProject;$query.branch=$taskBase
     $query|Add-Member -NotePropertyName shutdown_grace -NotePropertyValue '45s' -Force
@@ -128,12 +142,46 @@ try {
     Invoke-TaskNative $taskWeb @('install')|Out-File -LiteralPath (Join-Path $taskRoot 'evidence\install-web.log')
     $taskStarted=$true
     Invoke-TaskNative $taskBinary @('start','--no-open')|Out-File -LiteralPath (Join-Path $taskRoot 'evidence\start.json')
+    if ($SingleTask) {
+        function New-TaskReference([string]$Path) {
+            return [ordered]@{commit=$taskBaseCommit;path=$Path;sha256=(Get-FileHash -LiteralPath (Join-Path $taskProject $Path)).Hash.ToLowerInvariant()}
+        }
+        $contract=[ordered]@{
+            acceptance_refs=@((New-TaskReference 'SteerlineFlow/testing/acceptance/foundation.md'))
+            branch=$taskBase
+            common_refs=@()
+            contract_id='arithmetic-foundation'
+            digest=''
+            plan_ref=(New-TaskReference 'SteerlineFlow/plans/foundation.plan.md')
+            remote='origin'
+            repository=('https://github.com/'+$taskRemote+'.git')
+            spec_ref=(New-TaskReference 'SteerlineFlow/spec/foundation.spec.md')
+        }
+        $digest=[Security.Cryptography.SHA256]::Create()
+        try { $contract.digest=([BitConverter]::ToString($digest.ComputeHash($taskUTF8.GetBytes(($contract|ConvertTo-Json -Compress -Depth 15))))).Replace('-','').ToLowerInvariant() }
+        finally { $digest.Dispose() }
+        $common=Invoke-TaskNative 'git' @('-C',$taskProject,'rev-parse','--path-format=absolute','--git-common-dir')
+        $taskConfig=Join-Path $taskHome 'etc\RoadmapLive.json'
+        Write-TaskJSON 'seed-task.json' @{schema_version='task-batch/v1';project_id=([IO.Path]::GetFullPath($common).ToLowerInvariant());tasks=@(@{local_key='foundation';task_id=0;title='Arithmetic foundation';type='task';contract=$contract});dependencies=@()}
+        $seed=Join-Path $taskRoot 'seed-task.json'
+        $deadline=[DateTime]::UtcNow.AddMinutes(2)
+        while ($true) {
+            try { Invoke-TaskNative $taskBinary @('task','graph','-config',$taskConfig)|Out-Null; break }
+            catch {
+                if ([DateTime]::UtcNow -ge $deadline -or $_.Exception.Message -notmatch 'project_unavailable: starting') { throw }
+                Start-Sleep -Seconds 2
+            }
+        }
+        $valid=Invoke-TaskNative $taskBinary @('task','validate','-config',$taskConfig,'-file',$seed)|ConvertFrom-Json
+        if (!$valid.valid) { throw "Seed task validation failed: $($valid|ConvertTo-Json -Depth 15 -Compress)" }
+        Invoke-TaskNative $taskBinary @('task','create','-config',$taskConfig,'-file',$seed,'-request-id',([Guid]::NewGuid().ToString('N')),'-expected-authority-version',"$($valid.authority_version)",'-by','roadmap-live-fixture')|Out-File -LiteralPath (Join-Path $taskRoot 'evidence\seed-task.json')
+    }
     $env:STEERLINE_ROADMAP_BROWSER_ROOT=$taskRoot
     $env:STEERLINE_WEB_EVIDENCE=Join-Path $taskRoot 'evidence\browser'
     Push-Location $taskSource
     try {
         $ErrorActionPreference='Continue'
-        $taskScenario=if($Planning){'roadmap-planning-live.spec.ts'}else{'roadmap-live.spec.ts'}
+        $taskScenario=if($SingleTask){'single-task-planning-live.spec.ts'}elseif($Planning){'roadmap-planning-live.spec.ts'}else{'roadmap-live.spec.ts'}
         & npm.cmd --prefix web run test:e2e -- $taskScenario *> (Join-Path $taskRoot 'evidence\browser.log')
         $taskBrowser=$LASTEXITCODE -eq 0
         $ErrorActionPreference='Stop'

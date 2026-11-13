@@ -1,0 +1,418 @@
+.runs-page .toolbar {
+  gap: 12px 20px;
+}
+
+.runs-page .candidate-visibility input {
+  accent-color: var(--color-primary);
+}
+
+.runs-page .runs-layout {
+  grid-template-columns: 180px minmax(0, 1fr) 232px;
+  gap: 16px;
+}
+
+.runs-page .run-task-list {
+  padding: 6px;
+}
+
+.runs-page .run-task {
+  display: block;
+  margin: 0;
+  padding: 12px 9px;
+  border-width: 1px;
+  border-inline-start: 2px solid transparent;
+  overflow-wrap: anywhere;
+}
+
+.runs-page .run-task + .run-task:not(.active) {
+  border-top-color: var(--ui-line);
+}
+
+.runs-page .run-task:hover,
+.runs-page .candidate-card:hover {
+  background: var(--ui-surface);
+}
+
+.runs-page :is(.run-task, .candidate-card).active {
+  background: var(--ui-selected);
+  border-color: #466652;
+  border-inline-start-color: var(--color-primary);
+}
+
+.runs-page .run-task strong {
+  margin: 3px 0 8px;
+  font-size: var(--ui-body-size);
+}
+
+.runs-page .run-task > div {
+  flex-wrap: wrap;
+}
+
+.runs-page :is(.run-task .eyebrow, .run-task-summary, .candidate-match) {
+  font-size: var(--ui-meta-size);
+  letter-spacing: normal;
+}
+
+.runs-page .run-task .eyebrow {
+  color: var(--ui-secondary);
+}
+
+.runs-page .execution-panel {
+  padding: var(--ui-panel-padding);
+  min-width: 0;
+}
+
+.runs-page .candidate-strip {
+  gap: 8px;
+  padding: 4px 4px 12px;
+  margin: -4px -4px 14px;
+  border-color: var(--ui-line);
+}
+
+.runs-page .candidate-strip:empty {
+  display: none;
+}
+
+.runs-page .candidate-card {
+  flex: 0 0 172px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-line);
+  border-inline-width: 2px 1px;
+  border-radius: 8px;
+  background: #151f1a;
+  overflow-wrap: anywhere;
+}
+
+.runs-page .candidate-card > span:first-child {
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
+}
+
+.runs-page .candidate-card strong {
+  margin: 1px 0 6px;
+  font-size: var(--ui-body-size);
+}
+
+.runs-page .execution-statuses .status-running {
+  color: var(--color-primary);
+  background: #203b2e;
+  border-color: #3c5c49;
+}
+
+.runs-page .execution-statuses .status-running::before {
+  background: currentColor;
+  box-shadow: none;
+  animation: none;
+}
+
+.runs-page .run-overview {
+  gap: 12px 18px;
+  padding: clamp(14px, 2vw, 18px);
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  overflow-wrap: anywhere;
+}
+
+.runs-page .run-title {
+  flex: 1 1 188px;
+  min-width: 0;
+}
+
+.runs-page :is(.run-candidate-meta, .run-stage-label, .run-sampled-at) {
+  margin: 0;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
+}
+
+.runs-page .run-overview h2 {
+  margin: 3px 0 0;
+  font-size: var(--ui-detail-size);
+  line-height: 1.3;
+}
+
+.runs-page .run-stage {
+  flex: 1 1 224px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid #466652;
+}
+
+.runs-page .run-stage-name {
+  margin: 1px 0 0;
+  color: var(--color-foreground);
+  font-size: 21px;
+  line-height: 1.3;
+  font-weight: 650;
+}
+
+.runs-page .run-stage-status {
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+}
+
+.runs-page .run-sampled-at time,
+.runs-page .activity-item time {
+  font-variant-numeric: tabular-nums;
+}
+
+.runs-page .candidate-actions {
+  flex: 1 0 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.runs-page .run-overview > .muted {
+  flex-basis: 100%;
+  margin: -4px 0 0;
+}
+
+.run-section {
+  min-width: 0;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.run-section:first-of-type {
+  padding-top: 0;
+}
+
+.run-section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.run-section > h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.run-section .settings-panel {
+  margin: 12px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.run-section :is(p, summary, pre) {
+  overflow-wrap: anywhere;
+}
+
+.run-section details {
+  min-width: 0;
+  margin: 10px 0;
+}
+
+.run-section summary {
+  cursor: pointer;
+}
+
+.run-section progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--color-primary);
+}
+
+.run-section :is(.last-message, .activity-list, .final-output) > button {
+  color: var(--color-primary);
+  padding-block: 5px;
+}
+
+.run-section :is(.last-message, .activity-list, .final-output) > button:hover {
+  text-decoration: underline;
+}
+
+.runs-page .answer-panel {
+  margin: 14px 0 0;
+  padding: clamp(14px, 2vw, 20px);
+  border-radius: 10px;
+}
+
+.runs-page .answer-required {
+  border: 1px solid #756641;
+  border-inline-start: 3px solid #d6ac63;
+  background: #24271c;
+}
+
+.runs-page .answer-required .section-heading h3 {
+  color: #f0d49b;
+}
+
+.runs-page .answer-panel .section-heading {
+  margin-bottom: 8px;
+}
+
+.runs-page .answer-panel :is(h3, h4) {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.runs-page :is(.context-text, .last-message pre, .activity-item pre, .final-body article pre) {
+  max-inline-size: var(--ui-reading-width);
+  font-size: var(--ui-reading-size);
+  line-height: 1.7;
+}
+
+.runs-page .context-text {
+  margin: 6px 0;
+  color: var(--ui-secondary);
+}
+
+.runs-page .options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.runs-page .options:empty {
+  margin: 0;
+}
+
+.runs-page .options label {
+  padding: 8px 10px;
+  margin: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  font-size: var(--ui-body-size);
+}
+
+.runs-page .options label:has(input:checked) {
+  background: var(--ui-selected);
+  border-color: #6b9e83;
+}
+
+.runs-page .options small {
+  margin-top: 2px;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
+}
+
+.runs-page .answer-label {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.runs-page .answer-panel textarea {
+  margin-top: 4px;
+  border-radius: 7px;
+  font-size: var(--ui-reading-size);
+  min-height: 72px;
+  line-height: 1.55;
+}
+
+.runs-page .input-footer > span {
+  font-size: var(--ui-meta-size);
+  color: var(--ui-secondary);
+}
+
+.run-section .last-message {
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ui-surface);
+}
+
+.runs-page .last-message-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.runs-page .last-message-header p {
+  margin: 0;
+}
+
+.last-message .message-preview {
+  max-height: 10.2em;
+  overflow: hidden;
+}
+
+.run-section .activity-list {
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.run-section .activity-item {
+  position: relative;
+  grid-template-columns: 65px minmax(0, 1fr);
+  gap: 12px;
+  border: 0;
+  padding: 8px 0 8px 16px;
+  margin-inline-start: 4px;
+}
+
+.run-section .activity-item details {
+  margin: 0;
+}
+
+.run-section .activity-item:not(:last-of-type)::before {
+  content: "";
+  position: absolute;
+  inset-block: 18px -18px;
+  inset-inline-start: 0;
+  width: 1px;
+  background: #3b5748;
+}
+
+.runs-page .activity-dot {
+  position: absolute;
+  inset-block-start: 16px;
+  inset-inline-start: -2px;
+  margin: 0;
+}
+
+.runs-page .activity-item time {
+  font: inherit;
+  font-size: var(--ui-meta-size);
+  color: var(--ui-secondary);
+}
+
+.runs-page .activity-item :is(summary, strong) {
+  font-size: var(--ui-body-size);
+}
+
+@media (max-width: 1320px) {
+  .runs-page .runs-layout {
+    grid-template-columns: minmax(150px, 180px) minmax(0, 1fr);
+  }
+
+  .runs-page .runs-layout > .detail-panel {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .runs-page .runs-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .runs-page .run-task-list {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+  }
+
+  .runs-page .run-task {
+    flex: 0 0 175px;
+  }
+
+  .runs-page .run-task + .run-task:not(.active) {
+    border-top-color: transparent;
+    border-inline-start-color: var(--ui-line);
+  }
+}

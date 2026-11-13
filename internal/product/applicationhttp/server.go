@@ -66,6 +66,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if r.URL.Path == root+contract.ProjectRegistrationPath && r.Method == "POST" && r.URL.RawQuery == "" {
+		s.registerProject(w, r)
+		return
+	}
+	if r.URL.Path == root+contract.ProjectRegistrationPromptPath && r.Method == "GET" && r.URL.RawQuery == "" {
+		source, ok := s.Directory.(interface {
+			ProjectRegistrationPrompt() (contract.ProjectRegistrationPrompt, error)
+		})
+		if !ok {
+			localservice.Error(w, 503, "registration_prompt_unavailable", "project registration prompt unavailable")
+			return
+		}
+		value, err := source.ProjectRegistrationPrompt()
+		if err != nil {
+			localservice.BackendError(w, err)
+		} else {
+			localservice.JSON(w, 200, value)
+		}
+		return
+	}
 	if r.URL.Path == root+"/usage-collection/status" && r.Method == "GET" && r.URL.RawQuery == "" {
 		source, ok := s.Directory.(interface {
 			UsageCollectionStatus(context.Context) (any, error)
@@ -153,6 +173,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		httpapi.WriteProjectError(w, err)
+		return
+	}
+	localservice.JSON(w, 200, result)
+}
+
+func (s *Server) registerProject(w http.ResponseWriter, r *http.Request) {
+	port, ok := s.Directory.(interface {
+		RegisterProject(context.Context, contract.ProjectRegistration) (contract.ProjectRegistrationResult, error)
+	})
+	if !ok {
+		localservice.Error(w, 503, "registration_unavailable", "project registration unavailable")
+		return
+	}
+	body := http.MaxBytesReader(w, r.Body, 16<<10)
+	defer body.Close()
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	var request contract.ProjectRegistration
+	if err := decoder.Decode(&request); err != nil || decoder.Decode(new(any)) != io.EOF {
+		localservice.Error(w, 400, "invalid_registration", "one bounded project registration request required")
+		return
+	}
+	result, err := port.RegisterProject(r.Context(), request)
+	if err != nil {
+		localservice.BackendError(w, err)
 		return
 	}
 	localservice.JSON(w, 200, result)
