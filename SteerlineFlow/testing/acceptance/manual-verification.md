@@ -49,3 +49,7 @@ SteerLine 基线 `97590c29` 加本次工作区变更，Windows，独立 home 和
 首轮扩展真实链已验证两个合入后来源的实际 worktree 与远端结论，随后在等待关闭状态时超时，报告 `20261113T055342.473511100Z/summary.json` 确认清理完成。关闭操作已修复为在原记录上保存状态，定向 Go 测试覆盖持久化前的状态更新。 [专属测试 PR #836](https://github.com/erranliu/SteerlineTest/pull/836)
 
 修复后的 `manual-verification.local-codex` 通过，报告 `20261113T060502.616183200Z/summary.json`。Edge 在草稿阶段从页面启动并记录，API 核对旧 Head 拒绝写入、合入后两种来源的实际提交和预览、结论隔离、关闭、重新打开和再次关闭。四次 worktree 均已移除，记录一次任务交付，正式报告确认资源清理。合入后来源选择与关闭的页面操作由组件测试覆盖。 [专属测试 PR #837](https://github.com/erranliu/SteerlineTest/pull/837)
+
+## 变基后 Roadmap 回归
+
+变基后模拟 PR 创建回执丢失时，活动仍在等待核实，但真实 Git 准备及推送超过一分钟后，原观察按现有规则已过期。测试现在按读取时刻校验新鲜度，并断言观察时间仍是回执丢失前的成功观察。补测以 `32476518` 加本次测试改动运行，真实 Git 发布和准入的四个场景、CRLF checkout 和人工核验固定提交测试全部通过。原始报告位于本机 `%TEMP%/steerline-test-feedback/20261113T062631.785845100Z/summary.json`。该次运行是针对受影响用例的补测。

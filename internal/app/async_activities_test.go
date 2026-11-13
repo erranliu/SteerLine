@@ -15,16 +15,26 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-func assertRoadmapActivityState(t *testing.T, store *sqlite.SQLiteStore, project, request, state string, attention bool, observation string) {
+func readRoadmapActivity(t *testing.T, store *sqlite.SQLiteStore, project, request string) (api.AsyncActivity, time.Time) {
 	t.Helper()
-	links, err := query.ReadAsyncActivityLinks(context.Background(), store, project, "fixture", query.AsyncActivityOptions{RequestIDs: []string{request}})
+	links, err := query.ReadAsyncActivityLinks(context.Background(), store, project, "fixture", query.AsyncActivityOptions{Sources: []string{"roadmap"}, RequestIDs: []string{request}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := links.Links[request]
+	a, ok := links.Links[request]
+	if !ok {
+		t.Fatalf("roadmap activity for %s is missing: %+v", request, links.Sources)
+	}
+	return a, links.SampledAt
+}
+
+func assertRoadmapActivityState(t *testing.T, store *sqlite.SQLiteStore, project, request, state string, attention bool, observation string) api.AsyncActivity {
+	t.Helper()
+	a, _ := readRoadmapActivity(t, store, project, request)
 	if a.State != state || a.NeedsAttention != attention || a.Observation != observation {
 		t.Fatalf("roadmap activity mismatch: %+v (want %s attention=%v observation=%s)", a, state, attention, observation)
 	}
+	return a
 }
 
 func TestAsyncActivityReadUsesPublicIdentityAndNoActor(t *testing.T) {

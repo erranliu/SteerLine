@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/manualverification"
@@ -402,7 +403,10 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 		}
 	}
 	r = awaitPromotion(t, port, r, "documents-review")
-	assertRoadmapActivityState(t, store, c.Identity(), r.ID, "succeeded", true, "current")
+	reviewActivity := assertRoadmapActivityState(t, store, c.Identity(), r.ID, "succeeded", true, "current")
+	if reviewActivity.ObservedAt == nil {
+		t.Fatal("document review has no successful source observation")
+	}
 	if r.CodeCommit != code || len(r.Documents) != expectedTasks || len(r.Mapping) != 0 || len(r.Investigation) == 0 {
 		t.Fatal("unverified document result", r)
 	}
@@ -432,7 +436,17 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if e == nil || pub.Publication.State != "pr_unknown" {
 		t.Fatal("missing PR receipt was treated as applied", pub, e)
 	}
-	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
+	activity, sampledAt := readRoadmapActivity(t, store, c.Identity(), pub.ID)
+	// Losing the creation receipt leaves the last successful observation in place.
+	// Preparing and pushing real Git artifacts can take longer than its freshness window.
+	wantObservation := "current"
+	if sampledAt.Sub(*reviewActivity.ObservedAt) > time.Minute {
+		wantObservation = "stale"
+	}
+	if activity.State != "waiting" || !activity.NeedsAttention || activity.ObservedAt == nil ||
+		!activity.ObservedAt.Equal(*reviewActivity.ObservedAt) || activity.Observation != wantObservation {
+		t.Fatalf("lost PR receipt changed the previous observation: %+v (want waiting attention=true, %s at %s)", activity, wantObservation, reviewActivity.ObservedAt)
+	}
 	wrong := pub
 	wrongPublication := *pub.Publication
 	wrongPublication.Commit = strings.Repeat("0", 40)
@@ -453,6 +467,7 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if pub.State != "awaiting-admission" || pub.Publication.MergedCommit == "" {
 		t.Fatal(pub)
 	}
+	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
 	if crlf {
 		name, err := manualverification.CompanionPath(r.Documents[0].Plan.Path)
 		require(t, err)
@@ -473,7 +488,6 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 			t.Fatal("old owned manual checks were not deleted", err)
 		}
 	}
-	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
 	graph, e := store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, e)
 	if len(graph.Tasks) != seedCount {
