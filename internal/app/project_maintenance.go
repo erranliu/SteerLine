@@ -55,6 +55,36 @@ func (m *projectMaintenance) current() pmm.Observation {
 	defer m.mu.Unlock()
 	return m.observation
 }
+
+// readObservedBaseline can wait for the current observation, including its
+// environment revocation. An empty commit means no observation is available yet.
+func (m *projectMaintenance) readObservedBaseline(ctx context.Context, waitForCheck bool) (string, error) {
+	for {
+		m.mu.Lock()
+		observation, checking := m.observation, m.checking
+		m.mu.Unlock()
+		if checking == nil {
+			if observation.Diagnostic != "" {
+				return "", errors.New(observation.Diagnostic)
+			}
+			return observation.Commit, nil
+		}
+		if !waitForCheck {
+			return "", errors.New("主分支环境依据观察处理中")
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-checking:
+		}
+	}
+}
+
+func (m *projectMaintenance) refreshBaseline(ctx context.Context) (string, error) {
+	observation, err := m.check(ctx)
+	return observation.Commit, err
+}
+
 func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error) {
 	m.mu.Lock()
 	if done := m.checking; done != nil {

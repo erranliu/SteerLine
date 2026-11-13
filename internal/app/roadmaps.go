@@ -53,12 +53,12 @@ type roadmapPort struct {
 	initializationMu sync.Mutex
 	preparationMu    sync.Mutex
 	preparationCache *roadmapPreparation
-	mutateTask       func(context.Context, func(context.Context) error) error
+	taskAdmission    roadmapTaskAdmission
 }
 
-func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader) *roadmapPort {
+func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, taskAdmission roadmapTaskAdmission) *roadmapPort {
 	c = bindNativeConfiguration(c, cli)
-	p := &roadmapPort{config: c, store: store, materials: materials}
+	p := &roadmapPort{config: c, store: store, materials: materials, taskAdmission: taskAdmission}
 	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit}
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source

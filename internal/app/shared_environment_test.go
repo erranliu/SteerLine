@@ -18,7 +18,7 @@ import (
 func TestSharedEnvironmentMaterialsAndIndependentQualifications(t *testing.T) {
 	p, c, store := environmentFixture(t)
 	ctx := context.Background()
-	commit, err := p.source(ctx)
+	commit, err := p.refreshSource(ctx)
 	require(t, err)
 	local := c.RunnerExecution.Profiles[0].ID
 	seed := func(t *testing.T, profile string) (env.Record, env.Current) {

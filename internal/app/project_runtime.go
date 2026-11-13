@@ -191,7 +191,8 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if runner.environments != nil {
 		runner.environments.register(r.config)
 	}
-	r.environment = newEnvironmentPort(r.config, r.store, runner.client, nil)
+	maintenance := newProjectMaintenance(r.config, r.store)
+	r.environment = newEnvironmentPort(r.config, r.store, runner.client, nil, maintenance)
 	r.config.runtimeEnvironment = r.environment
 	if retErr = bindRunnerBuild(ctx, r.config, r.store); retErr != nil {
 		return
@@ -199,9 +200,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr = runner.validateProject(r.config); retErr != nil {
 		return
 	}
-	maintenance := newProjectMaintenance(r.config, r.store)
 	r.config.runtimeMaintenance = maintenance
-	r.environment.config.runtimeMaintenance = maintenance
 	maintenance.environmentObservation = r.environment.observeBasis
 	maintenanceDone = make(chan struct{})
 	go func() { defer close(maintenanceDone); maintenance.observe(ctx) }()
@@ -215,8 +214,8 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance)
 	r.environment.service.Admit = service.VerifyRunnerAdmission
 	r.config.runtimeTests = r.tests
-	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance)
-	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
+	taskAdmission := newRoadmapTaskCommands(r.store, r.config, service.ExecuteTaskMutation)
+	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, taskAdmission)
 	r.config.runtimeContinuationSuggestion = newContinuationSuggestionPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, maintenance)
 	if retErr = r.config.runtimeRefactoring.service.Recover(ctx); retErr != nil {

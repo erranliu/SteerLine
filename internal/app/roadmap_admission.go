@@ -12,6 +12,11 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
+type roadmapTaskAdmission interface {
+	submit(ctx context.Context, sourceID, requestID string, batch taskmodel.TaskBatchInput) (taskmodel.TaskBatchReceipt, error)
+	receipt(ctx context.Context, requestID string) (taskmodel.TaskBatchReceipt, error)
+}
+
 func (p *roadmapPort) admissionBatch(ctx context.Context, r roadmap.Record) (taskmodel.TaskBatchInput, error) {
 	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion, ProjectID: p.config.Identity(), Tasks: []taskmodel.TaskBatchTask{}, Dependencies: []taskmodel.TaskBatchEdge{}}
 	if e := roadmap.ValidateDocuments(r); e != nil {
@@ -118,23 +123,7 @@ func (p *roadmapPort) admit(ctx context.Context, r roadmap.Record, request strin
 	if e := json.Unmarshal(r.AdmissionBatch, &batch); e != nil {
 		return r, e
 	}
-	graph, e := p.store.TaskGraphSnapshot(ctx, p.config.Identity())
-	if e != nil {
-		return r, e
-	}
-	commands := NewTaskCommands(p.store, p.config)
-	taskRequest := roadmap.Digest([]byte("roadmap-admission\n" + request))[:32]
-	var receipt taskmodel.TaskBatchReceipt
-	mutate := func(ctx context.Context) error {
-		var e error
-		receipt, e = commands.AdmitRoadmap(ctx, r.Source.ID, batch, taskRequest, graph.Authority.AuthorityVersion, "local-user")
-		return e
-	}
-	if p.mutateTask != nil {
-		e = p.mutateTask(ctx, mutate)
-	} else {
-		e = mutate(ctx)
-	}
+	receipt, e := p.taskAdmission.submit(ctx, r.Source.ID, r.AdmissionRequest, batch)
 	if e != nil {
 		return r, e
 	}
@@ -195,19 +184,9 @@ func (p *roadmapPort) reconcileAdmission(ctx context.Context, r roadmap.Record) 
 	if r.AdmissionRequest == "" {
 		return r, errors.New("没有原入图请求")
 	}
-	commands := NewTaskCommands(p.store, p.config)
-	id := roadmap.Digest([]byte("roadmap-admission\n" + r.AdmissionRequest))[:32]
-	value, e := commands.ReadReceipt(ctx, id, "create_task_batch", p.config.Identity())
+	receipt, e := p.taskAdmission.receipt(ctx, r.AdmissionRequest)
 	if e != nil {
 		return r, e
-	}
-	raw, _ := json.Marshal(value)
-	var receipt taskmodel.TaskBatchReceipt
-	if e = json.Unmarshal(raw, &receipt); e != nil {
-		return r, e
-	}
-	if receipt.Status != "accepted" || receipt.RequestID != id || len(receipt.TaskIDs) == 0 {
-		return r, errors.New("原入图回执未核实")
 	}
 	r.Mapping = receipt.TaskIDs
 	r.State = "admitted"

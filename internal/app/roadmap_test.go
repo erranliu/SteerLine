@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -135,6 +136,46 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 	if len(seen) != 3 {
 		t.Fatal(seen)
 	}
+
+	t.Run("recover committed tasks before roadmap mapping", func(t *testing.T) {
+		request := strings.Repeat("a", 32)
+		id := strings.Repeat("b", 32)
+		frozen, err := json.Marshal(batch("recover", 2))
+		require(t, err)
+		pending := roadmap.Record{ID: id, Project: c.Identity(), Revision: 1, Source: roadmap.Source{ID: "recover-source"}, State: "admission-unknown", AdmissionRequest: request, AdmissionBatch: frozen}
+		require(t, store.SaveRoadmap(ctx, pending, 0))
+		lost := errors.New("actor response lost after task commit")
+		writes := 0
+		port := &roadmapPort{store: store, taskAdmission: newRoadmapTaskCommands(store, c, func(ctx context.Context, run func(context.Context) error) error {
+			writes++
+			if err := run(ctx); err != nil {
+				return err
+			}
+			return lost
+		})}
+		if _, err = port.admit(ctx, pending, request); !errors.Is(err, lost) {
+			t.Fatal("expected lost response after durable commit", err)
+		}
+		pending, err = store.Roadmap(ctx, c.Identity(), id)
+		require(t, err)
+		if pending.State != "admission-unknown" || len(pending.Mapping) != 0 {
+			t.Fatal("roadmap mapped tasks before receiving a receipt", pending)
+		}
+		originalID := roadmap.Digest([]byte("roadmap-admission\n" + request))[:32]
+		raw, err := commands.ReadReceipt(ctx, originalID, "create_task_batch", c.Identity())
+		require(t, err)
+		var original taskmodel.TaskBatchReceipt
+		require(t, json.Unmarshal(raw, &original))
+		before, err := store.TaskGraphSnapshot(ctx, c.Identity())
+		require(t, err)
+		recovered, err := port.resumeAdmission(ctx, pending)
+		require(t, err)
+		after, err := store.TaskGraphSnapshot(ctx, c.Identity())
+		require(t, err)
+		if writes != 1 || recovered.State != "admitted" || roadmap.ValueDigest(recovered.Mapping) != roadmap.ValueDigest(original.TaskIDs) || after.Authority.GraphRevision != before.Authority.GraphRevision || len(after.Tasks) != len(before.Tasks) {
+			t.Fatal("recovery changed the original mapping or repeated the write", writes, recovered.Mapping, original.TaskIDs)
+		}
+	})
 }
 
 func TestRoadmapSourceAndMissingDocumentCapability(t *testing.T) {
