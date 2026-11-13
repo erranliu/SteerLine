@@ -13,9 +13,12 @@ index 92e9f449..438e1fd2 100644
 -解析 STEERLINE_RESULT_FILE 指向的 JSON，执行其中的 instruction，使用随附 context。将单个无 BOM 的 UTF-8 JSON 对象原子写回同一文件。逐字复制原顶层 action_id 和 operation_id。outcome 字符串取 done、needs_input 或 blocked。summary、head、base、pr、question 均为字符串，缺值用空字符串。head、base 有值时填写完整提交，pr 有值时只填写完整 PR URL。no_changes 为布尔值。需要输入时，返回 needs_input 和 question。
 +读取本次维护请求的 JSON，执行 instruction 原文并使用随附 context。请求：{{.}}。最终回复只输出一个 JSON 对象。逐字复制 action_id 和 operation_id。outcome 取 done、needs_input 或 blocked。summary、head、base、pr、question 均为字符串，缺值用空字符串。head、base 使用完整提交值，pr 使用完整 PR URL。no_changes 为布尔值。需要输入时用 needs_input 和 question。发布结果未知时说明现状，避免重复发布。
 diff --git a/internal/prompts/materials/maintenance-followup.md b/internal/prompts/materials/maintenance-followup.md
-index 05a11e72..3ef93207 100644
+index 05a11e72..7941a2e4 100644
 --- a/internal/prompts/materials/maintenance-followup.md
 +++ b/internal/prompts/materials/maintenance-followup.md
+@@ -3 +3 @@
+-成果审计（mode=audit）只判断本轮切片。以 round_start 为起点核对本轮差异，保留此前已接受的改动。缺少本轮起点或对应差异时，要求 Runner 补证。PR 在收尾阶段处理。根据本轮差异、原生执行结果和验证结果，判断范围、收益和代价。本轮合格就返回 accept，由 SteerLine 进入下一阶段。证据不足时返回 execute 和本轮的补证指令。发现问题时，返回 execute 和限于同一切片的修复或撤销指令。
++成果审计（mode=audit）只判断本轮切片。以 round_start 为起点核对本轮差异，保留此前已接受的改动。补证或修复指令引用 Runner 请求里的 context.round_start，直接用 Git 读取当前 HEAD，避免在指令中重复抄写提交值。缺少本轮起点或对应差异时，要求 Runner 补证。PR 在收尾阶段处理。根据本轮差异、原生执行结果和验证结果，判断范围、收益和代价。本轮合格就返回 accept，由 SteerLine 进入下一阶段。证据不足时返回 execute 和本轮的补证指令。发现问题时，返回 execute 和限于同一切片的修复或撤销指令。
 @@ -7 +7 @@
 -实施、修复和验证仅在受管工作区内执行。为这些阶段生成的三级指令只允许本地改动、提交和验证，明确禁止推送、创建 PR 和更新 PR 正文。收尾（mode=finish）只推进已有成果，返回 execute 和三级指令，要求 Runner 检查目标分支变化、完成必要验证并回传交付结果。正文更新留给报告生成后的独立同步阶段。
 +实施、修复和验证仅在受管工作区内执行。为这些阶段生成的三级指令只允许本地改动、提交和验证，明确禁止推送、创建 PR 和更新 PR 正文。收尾（mode=finish）只推进已有成果，返回 execute 和三级指令，要求 Runner 检查目标分支变化、完成必要验证并回传交付结果。收尾只交付代码与 PR，保持原 PR 正文。
