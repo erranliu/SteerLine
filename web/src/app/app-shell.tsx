@@ -1,16 +1,18 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Activity,
-  Command,
-  FlaskConical,
   GitBranch,
   Layers,
   PanelLeftClose,
   Settings,
 } from "lucide-react";
 import { Button } from "../shared/ui/button";
+import {
+  configurationPage,
+  ConfigurationNavigation,
+} from "./configuration-navigation";
 
 export function AppShell({
   projectId,
@@ -39,22 +41,19 @@ export function AppShell({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const global = location.pathname.startsWith("/settings");
-  const title = location.pathname.endsWith("/execution-configs")
-    ? "执行方案配置"
-    : ({
-        roadmaps: "Roadmap 草稿",
-        "roadmap-planning": "任务规划",
-        dag: "任务 DAG",
-        runs: "任务执行",
-        tests: "测试管理",
-        status: "项目状态",
-        settings: "配置",
-        environment: "项目运行环境",
-        refactoring: "重构与维护",
-        activities: "活动中心",
-        add: "添加已初始化项目",
-      }[location.pathname.split("/").pop() ?? ""] ?? "规划与执行");
+  const configuration = configurationPage(location.pathname, projectId);
+  const title =
+    configuration?.title ??
+    {
+      roadmaps: "Roadmap 草稿",
+      "roadmap-planning": "任务规划",
+      dag: "任务 DAG",
+      runs: "任务执行",
+      refactoring: "重构与维护",
+      activities: "活动中心",
+      add: "添加已初始化项目",
+    }[location.pathname.split("/").pop() ?? ""] ??
+    "规划与执行";
   return (
     <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>
       <aside className="sidebar">
@@ -100,27 +99,6 @@ export function AppShell({
                 )}
               </NavLink>
               <NavLink
-                aria-label="项目运行环境"
-                to={`/projects/${projectId}/environment`}
-              >
-                <Command size={17} />
-                <span>项目运行环境</span>
-              </NavLink>
-              <NavLink
-                aria-label="项目状态"
-                to={`/projects/${projectId}/status`}
-              >
-                <GitBranch size={17} />
-                <span>项目状态</span>
-              </NavLink>
-              <NavLink
-                aria-label="测试管理"
-                to={`/projects/${projectId}/tests`}
-              >
-                <FlaskConical size={17} />
-                <span>测试管理</span>
-              </NavLink>
-              <NavLink
                 aria-label="活动中心"
                 to={`/projects/${projectId}/activities`}
               >
@@ -136,22 +114,15 @@ export function AppShell({
           )}
         </nav>
         <div className="sidebar-footer">
-          <NavLink
-            aria-label="执行方案配置"
-            title="执行方案配置"
-            to="/settings/execution-configs"
-          >
-            <Settings size={16} />
-            <span>执行方案配置</span>
-          </NavLink>
-          <NavLink
+          <Link
             aria-label="配置"
             title="配置"
-            to={projectId ? `/projects/${projectId}/settings` : "/settings"}
+            className={configuration ? "active" : undefined}
+            to={projectId ? `/projects/${projectId}/status` : "/settings"}
           >
             <Settings size={16} />
             <span>配置</span>
-          </NavLink>
+          </Link>
           {switcher}
         </div>
       </aside>
@@ -166,10 +137,19 @@ export function AppShell({
             >
               <PanelLeftClose size={17} />
             </Button>
-            <span className="breadcrumb-project" title={projectName}>
-              {global ? "设置" : projectName || "当前项目"}
+            <span
+              className="breadcrumb-project"
+              title={configuration ? undefined : projectName}
+            >
+              {configuration ? "配置" : projectName || "当前项目"}
             </span>
             <span>/</span>
+            {configuration && (
+              <>
+                <span>{configuration.section}</span>
+                <span>/</span>
+              </>
+            )}
             <strong>{title}</strong>
           </div>
           <div className="topbar-actions">
@@ -185,7 +165,14 @@ export function AppShell({
             {connection}
           </div>
         </header>
-        <main>{children}</main>
+        <div
+          className={
+            configuration ? "configuration-layout" : "workspace-layout"
+          }
+        >
+          {configuration && <ConfigurationNavigation projectId={projectId} />}
+          <main>{children}</main>
+        </div>
         {footer && <footer className="app-footer">{footer}</footer>}
       </div>
     </div>

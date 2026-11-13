@@ -72,7 +72,7 @@ export function Dispatch() {
       ref={panel}
       tabIndex={-1}
     >
-      <h2 id={`${dispatchSettingsId}-title`}>任务自动派发</h2>
+      <h1 id={`${dispatchSettingsId}-title`}>任务自动派发</h1>
       <DispatchControls />
     </section>
   );
@@ -142,7 +142,7 @@ function DispatchControls() {
                 {" "}
                 ·{" "}
                 <NavLink to="/settings/execution-configs">
-                  前往执行方案配置
+                  前往执行方案管理
                 </NavLink>
               </>
             )}

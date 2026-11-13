@@ -180,7 +180,7 @@ it("resolves an activity summary deep link to its project and preserves it throu
     return original(...args);
   });
   const target = `/projects/${a}/activities?activity=chosen`;
-  mount(target);
+  const { router } = mount(target);
   await screen.findByRole("heading", { name: "选中的活动" });
   expect(screen.getByRole("combobox", { name: "当前项目" })).toHaveValue(a);
   expect(
@@ -192,7 +192,9 @@ it("resolves an activity summary deep link to its project and preserves it throu
           String(url).includes("/body?"),
       ),
   ).toBe(false);
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await act(async () => {
+    await router.navigate("/settings/execution-configs");
+  });
   await waitFor(() =>
     expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
       "href",
@@ -448,7 +450,7 @@ it("recognizes direct roadmap routes, keeps the page when switching projects, an
         )
       : original(...args),
   );
-  mount(`/projects/${a}/roadmaps?source=draft-a`);
+  const { router } = mount(`/projects/${a}/roadmaps?source=draft-a`);
   await screen.findByRole(
     "heading",
     { name: "Roadmap 草稿" },
@@ -468,7 +470,9 @@ it("recognizes direct roadmap routes, keeps the page when switching projects, an
     { name: "Roadmap 草稿" },
     { timeout: 5000 },
   );
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await act(async () => {
+    await router.navigate("/settings/execution-configs");
+  });
   await waitFor(() =>
     expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
       "href",
@@ -530,14 +534,14 @@ it("cancels the old project's pending preload and never installs its late respon
 
 it("switches same-name projects by ID, preserving page type and dropping task selection", async () => {
   mock();
-  mount("/projects/" + a + "/settings?task=1");
-  await screen.findByText("配置", { selector: "h1" });
+  mount("/projects/" + a + "/status?task=1");
+  await screen.findByRole("heading", { name: "项目状态" });
   fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), {
     target: { value: b },
   });
   await waitFor(() =>
     expect(screen.getByTestId("location")).toHaveTextContent(
-      "/projects/" + b + "/settings",
+      "/projects/" + b + "/status",
     ),
   );
   expect(screen.getByTestId("location")).not.toHaveTextContent("task=");
@@ -801,16 +805,16 @@ it("returns from execution profiles to the same project, page, query and fragmen
   mock();
   const target = `/projects/${a}/settings?task=1#details`;
   mount(target);
-  await screen.findByRole("heading", { name: "配置" });
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
-  await screen.findByRole("heading", { name: "执行方案配置" });
+  await screen.findByRole("heading", { name: "任务自动派发" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案管理" }));
+  await screen.findByRole("heading", { name: "执行方案管理" });
   expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
     "href",
     target,
   );
   expect(screen.getByRole("link", { name: "配置" })).toHaveAttribute(
     "href",
-    `/projects/${a}/settings`,
+    `/projects/${a}/status`,
   );
   expect(screen.queryByLabelText("生成最大并发数")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
@@ -844,7 +848,7 @@ it("keeps configuration available without projects and returns to project select
       : original(...args),
   );
   mount("/settings/execution-configs");
-  await screen.findByRole("heading", { name: "执行方案配置" });
+  await screen.findByRole("heading", { name: "执行方案管理" });
   expect(
     screen.queryByRole("link", { name: "返回项目" }),
   ).not.toBeInTheDocument();
@@ -861,8 +865,8 @@ it("keeps configuration available without projects and returns to project select
 it("guards return links and browser back while an execution profile has unsaved changes", async () => {
   mock();
   const { router } = mount(`/projects/${a}/settings`);
-  await screen.findByRole("heading", { name: "配置" });
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await screen.findByRole("heading", { name: "任务自动派发" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案管理" }));
   const name = await screen.findByLabelText("配置名称");
   fireEvent.change(name, { target: { value: "未保存方案" } });
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -878,7 +882,7 @@ it("guards return links and browser back while an execution profile has unsaved 
   );
   confirm.mockReturnValue(true);
   fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
-  await screen.findByRole("heading", { name: "配置" });
+  await screen.findByRole("heading", { name: "任务自动派发" });
 });
 
 it("keeps the exact return route when browser preference storage is unavailable", async () => {
@@ -890,8 +894,8 @@ it("keeps the exact return route when browser preference storage is unavailable"
     throw new DOMException("blocked");
   });
   mount(`/projects/${a}/settings?task=4`);
-  await screen.findByRole("heading", { name: "配置" });
-  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await screen.findByRole("heading", { name: "任务自动派发" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案管理" }));
   await waitFor(() =>
     expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
       "href",

@@ -236,15 +236,10 @@ it("preloads only after connection verification, shares presentation in StrictMo
   client.clear();
 });
 
-it("removes duplicated profiles from configuration and scopes manual refresh", async () => {
+it("keeps project dispatch separate from shared configuration and scopes manual refresh", async () => {
   const client = testClient();
   const identity = { ...fixtureIdentity, project_id: "manual" };
   const api = new Api(identity, "csrf", "manual-home");
-  client.setQueryData([api.home, "execution-config"], configSnapshot);
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => Response.json(configSnapshot)),
-  );
   const other = [api.home, "another-project", "instance", "snapshot"];
   client.setQueryData(other, {});
   const refreshConnection = vi.fn();
@@ -252,7 +247,8 @@ it("removes duplicated profiles from configuration and scopes manual refresh", a
     async (path) => workspaceRead(api, path) as never,
   );
   mountWorkspace(api, client, { onRefreshConnection: refreshConnection });
-  expect(await screen.findByLabelText("生成最大并发数")).toHaveValue(5);
+  expect(await screen.findByRole("heading", { name: "任务自动派发" })).toBeVisible();
+  expect(screen.queryByLabelText("生成最大并发数")).not.toBeInTheDocument();
   expect(screen.queryByText("当前服务已加载方案")).not.toBeInTheDocument();
   expect(screen.queryByText("全局执行配置")).not.toBeInTheDocument();
   await screen.findByText("服务在线", { exact: true });

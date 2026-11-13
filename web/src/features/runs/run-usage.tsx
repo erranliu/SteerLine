@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { billingStatus } from "../../shared/api/billing";
 import { usageCollection } from "../../shared/api/usage-collection";
 import { useWorkspace } from "../../app/context";
@@ -179,7 +180,7 @@ export function RunUsage({ run }: { run: Candidate }) {
             {usage?.status === "partial" ? " · 已核实部分" : ""}
           </span>
           {view?.cost_reason === "PRICE_POLICY_NOT_CONFIGURED" && (
-            <a href="/settings#billing">未配置价表 · 打开计费设置</a>
+            <Link to="/settings/billing">未配置价表 · 打开计费设置</Link>
           )}
           <span className="usage-expand">用量与费用</span>
         </summary>

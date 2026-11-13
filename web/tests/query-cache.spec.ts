@@ -127,7 +127,7 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     facts.concurrent_tasks_requests = count(projectA, "tasks");
     console.log("web.query-cache: pending bootstrap shared by both pages");
 
-    await page.getByRole("link", { name: "配置", exact: true }).click();
+    await page.getByRole("link", { name: "任务自动派发：关闭" }).click();
     await expect(
       page.getByRole("region", { name: "任务自动派发" }),
     ).toBeVisible();
