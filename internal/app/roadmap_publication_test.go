@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,53 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
+
+type mergeHistoryFixture struct {
+	refresh func(context.Context) (string, error)
+	verify  func(context.Context, string, string) error
+}
+
+func (f mergeHistoryFixture) refreshBaseline(ctx context.Context) (string, error) {
+	return f.refresh(ctx)
+}
+
+func (f mergeHistoryFixture) verifyAncestor(ctx context.Context, ancestor, descendant string) error {
+	return f.verify(ctx, ancestor, descendant)
+}
+
+func testRoadmapVerifyMergedUsesInjectedTargetHistory(t *testing.T) {
+	ctx := t.Context()
+	const head, merged, baseline = "document-head", "merge-commit", "target-head"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"html_url":"http://%s/owner/repo/pulls/1","number":1,"merged":true,"merge_commit_sha":%q,"head":{"ref":"documents","sha":%q,"repo":{"full_name":"owner/repo"}},"base":{"ref":"main"}}`, r.Host, merged, head)
+	}))
+	defer server.Close()
+	port := &roadmapPort{config: Config{Branch: "main", PR: executionmodel.PRProviderConfig{Kind: "gitea", Repository: "owner/repo", BaseURL: server.URL}}}
+	record := roadmap.Record{State: "awaiting-merge", Publication: &roadmap.Publication{URL: server.URL + "/owner/repo/pulls/1", Branch: "documents", Commit: head}}
+	refreshErr := errors.New("environment revocation failed")
+	refreshed, checked := 0, 0
+	port.mergeHistory = mergeHistoryFixture{
+		refresh: func(context.Context) (string, error) { refreshed++; return baseline, refreshErr },
+		verify: func(_ context.Context, ancestor, descendant string) error {
+			checked++
+			if ancestor != merged || descendant != baseline {
+				t.Fatalf("ancestor check used %q and %q", ancestor, descendant)
+			}
+			return errors.New("not an ancestor")
+		},
+	}
+	if err := port.verifyMerged(ctx, &record); !errors.Is(err, refreshErr) || checked != 0 {
+		t.Fatalf("refresh error must stop ancestry verification: %v, checks=%d", err, checked)
+	}
+	refreshErr = nil
+	if err := port.verifyMerged(ctx, &record); err == nil || err.Error() != "文档合并未进入项目目标主分支" || checked != 1 {
+		t.Fatalf("unreachable merge was not rejected: %v, checks=%d", err, checked)
+	}
+	record.Publication.Commit = "different-head"
+	if err := port.verifyMerged(ctx, &record); err == nil || refreshed != 2 || checked != 1 || record.State != "awaiting-merge" || record.Publication.MergedCommit != "" {
+		t.Fatalf("invalid PR binding reached history or changed admission state: %v, record=%+v", err, record)
+	}
+}
 
 func TestRoadmapPublicationAndAdmissionWithRealGit(t *testing.T) {
 	t.Run("six-task-retry", func(t *testing.T) { roadmapPromotionChainWithDependencies(t, false, false, false, false, true) })
@@ -187,7 +235,7 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	require(t, e)
 	defer store.Close()
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
-	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store,
+	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store, mergeHistory: c.runtimeMaintenance,
 		taskAdmission: newRoadmapTaskCommands(store, c, func(ctx context.Context, run func(context.Context) error) error { return run(ctx) })}
 	configurePromotionGeneration(t, port, live)
 	if len(planned) > 0 && planned[0] {

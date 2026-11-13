@@ -17,6 +17,11 @@ type roadmapTaskAdmission interface {
 	receipt(ctx context.Context, requestID string) (taskmodel.TaskBatchReceipt, error)
 }
 
+type roadmapMergeHistory interface {
+	refreshBaseline(context.Context) (string, error)
+	verifyAncestor(ctx context.Context, ancestor, descendant string) error
+}
+
 func (p *roadmapPort) admissionBatch(ctx context.Context, r roadmap.Record) (taskmodel.TaskBatchInput, error) {
 	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion, ProjectID: p.config.Identity(), Tasks: []taskmodel.TaskBatchTask{}, Dependencies: []taskmodel.TaskBatchEdge{}}
 	if e := roadmap.ValidateDocuments(r); e != nil {
@@ -148,11 +153,11 @@ func (p *roadmapPort) verifyMerged(ctx context.Context, r *roadmap.Record) error
 	if !fact.Merged || fact.Base.Ref != p.config.Branch || fact.Head.Ref != r.Publication.Branch || fact.Head.SHA != r.Publication.Commit || fact.MergeCommit == "" {
 		return errors.New("文档 PR 尚未合并或绑定身份不符")
 	}
-	observation, e := p.config.runtimeMaintenance.check(ctx)
+	baseline, e := p.mergeHistory.refreshBaseline(ctx)
 	if e != nil {
 		return e
 	}
-	if _, e = p.config.runtimeMaintenance.git(ctx, "merge-base", "--is-ancestor", fact.MergeCommit, observation.Commit); e != nil {
+	if e = p.mergeHistory.verifyAncestor(ctx, fact.MergeCommit, baseline); e != nil {
 		return errors.New("文档合并未进入项目目标主分支")
 	}
 	files, e := p.publicationFiles(ctx, *r)

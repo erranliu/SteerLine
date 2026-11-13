@@ -85,6 +85,11 @@ func (m *projectMaintenance) refreshBaseline(ctx context.Context) (string, error
 	return observation.Commit, err
 }
 
+func (m *projectMaintenance) verifyAncestor(ctx context.Context, ancestor, descendant string) error {
+	_, err := m.git(ctx, "merge-base", "--is-ancestor", ancestor, descendant)
+	return err
+}
+
 func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error) {
 	m.mu.Lock()
 	if done := m.checking; done != nil {
