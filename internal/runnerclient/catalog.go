@@ -27,6 +27,11 @@ type RecoveryCapability struct {
 }
 
 type Capabilities struct {
+	CheckoutFastForward *struct {
+		Contract       string `json:"contract"`
+		SubmitProperty string `json:"submit_property"`
+		Workspace      string `json:"workspace"`
+	} `json:"checkout_fast_forward,omitempty"`
 	EnvironmentCheck *struct {
 		Contract       string `json:"contract"`
 		SubmitProperty string `json:"submit_property"`

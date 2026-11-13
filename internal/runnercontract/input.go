@@ -81,6 +81,7 @@ type Publication struct {
 	Settings   json.RawMessage `json:"settings"`
 }
 type EnvironmentCheckInput struct {
+	VerifyOnly     bool              `json:"verify_only,omitempty"`
 	Interpreter    string            `json:"interpreter"`
 	Script         string            `json:"script"`
 	ManifestSHA256 string            `json:"manifest_sha256"`
@@ -88,6 +89,7 @@ type EnvironmentCheckInput struct {
 }
 
 type RunInput struct {
+	FastForward            bool                   `json:"checkout_fast_forward,omitempty"`
 	EnvironmentCheck       *EnvironmentCheckInput `json:"checkout_probe,omitempty"`
 	ReuseWorktreeFromRunID string                 `json:"reuse_worktree_from_run_id,omitempty"`
 	ResultFile             *ProgressFileInput     `json:"result_file,omitempty"`
