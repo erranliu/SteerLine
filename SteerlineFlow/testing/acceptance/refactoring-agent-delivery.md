@@ -26,7 +26,7 @@ Runner 使用 #157 之前的 `8be179f29e0b9eac8572f447439a15cd7d776213`。公开
 - 已受理的冲突续作只对账原 PR。错报 PR、缺少回执或回传需要输入均不能触发重新发布。原 head 未推进时保留旧评审并阻断重评，收尾重试继续核验原 PR。明确拒绝、未执行时允许用户恢复。初次发布缺少可对账 PR 也不因需要输入而重发。
 - 平台检查状态与 head/base 一起绑定评审。评审在途或交付后发生变化时重新取证；收集差异失败也要复核后才记录证据不足。PR 差异禁用本地 Git 替换对象。
 - 提示词资产、发送的固定正文及黄金样本差异均为空，固定正文 UTF-8 字节数变化为 0。独立审核复核了检查状态接线、原 PR 对账及重发边界。
-- 审计回归覆盖原 head 未变、错误 PR、明确拒绝、已受理发布的空 PR 回执、检查变化及本地替换对象。最终维护与应用定向测试通过，Web 构建通过。分级报告位于 `C:/SteerlineDebug/wt-1851-pr-review-audit/test-results/` 下对应级别的 `20261113T092025Z-8f17b66e/summary.json`。真实 GitHub 联验为上文的 #844，审计增量以定向及受控证据核验。
+- 审计回归覆盖原 head 未变、错误 PR、明确拒绝、已受理发布的空 PR 回执、检查变化及本地替换对象。最终维护与应用定向测试、Web 构建、L1、L2 及受控 `runtime.refactoring-maintenance` L3 均通过。L3 核实同一 PR 续作及两版评审。分级报告位于 `C:/SteerlineDebug/wt-1851-pr-review-audit/test-results/` 下对应级别的 `20261113T092025Z-8f17b66e/summary.json`。真实 GitHub 联验为上文的 #844，本次审计未重跑真实 L4。
 
 前置能力验证和主体接线已完成，逐项验证范围见下文。关联 [Spec](../../spec/refactoring-agent-delivery.spec.md) · [Plan](../../plans/refactoring-agent-delivery.plan.md) · [测试选择](../../plans/refactoring-agent-delivery.tests.json)。原最小闭环验收见 [历史证据](refactoring-maintenance.md)。
 
