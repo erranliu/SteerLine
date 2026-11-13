@@ -323,10 +323,17 @@ it("opens project registration from the zero-project page and confirms only afte
   mock();
   const original = vi.mocked(fetch).getMockImplementation()!;
   const requests: Array<Record<string, string>> = [];
+  const initialization = "请按项目接入指南完成初始化。";
+  const registration = "安装目录：D:\\SteerLine 安装";
   vi.mocked(fetch).mockImplementation(async (...args) => {
     const [url, options] = args;
     if (url === "/api/v2/application/projects")
       return Response.json({ projects: [] });
+    if (url === "/api/v2/application/projects/registration/prompt")
+      return Response.json({
+        initialization_prompt: initialization,
+        prompt: registration,
+      });
     if (url === "/api/v2/application/projects/registration") {
       const input = JSON.parse(String(options?.body));
       requests.push(input);
@@ -348,6 +355,33 @@ it("opens project registration from the zero-project page and confirms only afte
   expect(
     await screen.findByRole("heading", { name: "添加已初始化项目" }),
   ).toBeVisible();
+  const initialize = screen.getByRole("button", {
+    name: "1. 复制项目初始化提示词",
+  });
+  const copy = screen.getByRole("button", { name: "2. 复制项目接入提示词" });
+  await waitFor(() => expect(initialize).toBeEnabled());
+  await waitFor(() => expect(copy).toBeEnabled());
+  const writeText = vi
+    .fn()
+    .mockResolvedValueOnce(undefined)
+    .mockRejectedValueOnce(new Error("permission denied"))
+    .mockResolvedValueOnce(undefined);
+  vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+  fireEvent.click(initialize);
+  expect(
+    await screen.findByText("已复制项目初始化提示词，可粘贴给目标项目的 Agent。"),
+  ).toBeVisible();
+  expect(writeText).toHaveBeenLastCalledWith(initialization);
+  fireEvent.click(copy);
+  expect(await screen.findByRole("textbox", { name: /手动复制/ })).toHaveValue(
+    registration,
+  );
+  fireEvent.click(copy);
+  expect(
+    await screen.findByText("已复制项目接入提示词，可粘贴给目标项目的 Agent。"),
+  ).toBeVisible();
+  expect(writeText).toHaveBeenLastCalledWith(registration);
+  expect(requests).toHaveLength(0);
   for (const [label, value] of [
     ["项目名称", "new"],
     ["服务机器上的仓库路径", "C:/Projects/new"],

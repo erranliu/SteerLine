@@ -122,6 +122,14 @@ func EnvironmentRepair(documentPath string) (string, error) {
 	}
 	return render("environment-repair", struct{ DocumentPath string }{documentPath})
 }
+func ProjectInitialization() (string, error) { return render("project-initialization", nil) }
+
+func ProjectRegistration(home string) (string, error) {
+	if home == "" {
+		return "", errors.New("installation directory is required")
+	}
+	return render("project-registration", struct{ Home string }{home})
+}
 func RoadmapParse(source, commit string) (string, error) {
 	if source == "" || commit == "" {
 		return "", errors.New("fixed roadmap source and commit are required")

@@ -41,6 +41,9 @@ func (c *fakeClient) Get(_ context.Context, route string, target any) error {
 	if c.getError != nil {
 		return c.getError
 	}
+	if route == contract.ProjectRegistrationPromptPath {
+		return json.Unmarshal([]byte(`{"initialization_prompt":"初始化正文","prompt":"安装目录：D:\\SteerLine 安装"}`), target)
+	}
 	return json.Unmarshal([]byte(`{"database_revision":17,"Tasks":["原正文"]}`), target)
 }
 func (c *fakeClient) Post(_ context.Context, route string, body, target any) error {
@@ -74,6 +77,25 @@ func TestWebProjectRegistrationRequiresSessionAndCSRF(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 }
+
+func TestWebProjectRegistrationPromptRequiresSessionAndForwardsOriginal(t *testing.T) {
+	s, client := fixture(t)
+	const route = "/api/v2/application" + contract.ProjectRegistrationPromptPath
+	if w := request(s, "GET", route, "", nil, ""); w.Code != 401 {
+		t.Fatal(w.Code)
+	}
+	cookie, _ := login(t, s)
+	w := request(s, "GET", route, "", cookie, "")
+	var result contract.ProjectRegistrationPrompt
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || result.InitializationPrompt != "初始化正文" || result.Prompt != `安装目录：D:\SteerLine 安装` ||
+		client.route != contract.ProjectRegistrationPromptPath || client.calls != 0 {
+		t.Fatal(w.Code, w.Body.String(), client.route, client.calls)
+	}
+}
+
 func (c *fakeClient) Close() error { return nil }
 func freeAddress(t *testing.T) string {
 	t.Helper()

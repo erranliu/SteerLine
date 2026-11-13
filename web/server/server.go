@@ -339,6 +339,15 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		s.billingConfig(w, r, session)
 		return
 	}
+	if r.URL.Path == "/api/v2/application"+contract.ProjectRegistrationPromptPath && r.Method == "GET" && r.URL.RawQuery == "" {
+		var result contract.ProjectRegistrationPrompt
+		if err := s.options.Client.Get(r.Context(), contract.ProjectRegistrationPromptPath, &result); err != nil {
+			backendError(w, err)
+		} else {
+			writeJSON(w, 200, result)
+		}
+		return
+	}
 	if r.URL.Path == "/api/v2/application"+contract.ProjectRegistrationPath && r.Method == "POST" && r.URL.RawQuery == "" {
 		if !s.browserWrite(r) || !equal(r.Header.Get("X-CSRF-Token"), session.CSRF) {
 			fail(w, 403, "csrf_rejected", "same-origin JSON and session CSRF token required")

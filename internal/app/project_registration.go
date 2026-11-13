@@ -35,6 +35,15 @@ func registrationError(status int, code, reason string) error {
 	return &httpclient.ClientError{Status: status, Code: code, Reason: reason}
 }
 
+func (d *ApplicationDirectory) ProjectRegistrationPrompt() (contract.ProjectRegistrationPrompt, error) {
+	initialization, err := prompts.ProjectInitialization()
+	if err != nil {
+		return contract.ProjectRegistrationPrompt{}, err
+	}
+	body, err := prompts.ProjectRegistration(d.home)
+	return contract.ProjectRegistrationPrompt{InitializationPrompt: initialization, Prompt: body}, err
+}
+
 func (d *ApplicationDirectory) RegisterProject(ctx context.Context, input contract.ProjectRegistration) (contract.ProjectRegistrationResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()

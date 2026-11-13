@@ -70,6 +70,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.registerProject(w, r)
 		return
 	}
+	if r.URL.Path == root+contract.ProjectRegistrationPromptPath && r.Method == "GET" && r.URL.RawQuery == "" {
+		source, ok := s.Directory.(interface {
+			ProjectRegistrationPrompt() (contract.ProjectRegistrationPrompt, error)
+		})
+		if !ok {
+			localservice.Error(w, 503, "registration_prompt_unavailable", "project registration prompt unavailable")
+			return
+		}
+		value, err := source.ProjectRegistrationPrompt()
+		if err != nil {
+			localservice.BackendError(w, err)
+		} else {
+			localservice.JSON(w, 200, value)
+		}
+		return
+	}
 	if r.URL.Path == root+"/usage-collection/status" && r.Method == "GET" && r.URL.RawQuery == "" {
 		source, ok := s.Directory.(interface {
 			UsageCollectionStatus(context.Context) (any, error)
