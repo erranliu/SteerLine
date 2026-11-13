@@ -179,6 +179,7 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 }
 
 func TestRoadmapSourceAndMissingDocumentCapability(t *testing.T) {
+	t.Run("merge uses injected target history", testRoadmapVerifyMergedUsesInjectedTargetHistory)
 	t.Run("public-native-projection", func(t *testing.T) {
 		r := roadmap.Record{Purpose: "documents", Generations: []roadmap.Generation{{ID: "g", State: "accepted", Submission: "started", Request: runnercontract.Request{Input: json.RawMessage(`{"secret":"private request"}`)}, Projection: &runnercontract.Run{Status: "blocked", ResumeRequired: true, Diagnostic: "native execution needs attention"}}}}
 		out := publicRoadmap(r)

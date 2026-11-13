@@ -81,8 +81,9 @@ test("Roadmap planning uses the original Codex conversation and hands off the me
     return response.json();
   };
 
-  await page.getByRole("link", { name: "Roadmap 规划", exact: true }).click();
+  await page.getByRole("link", { name: "任务规划", exact: true }).click();
   await page.getByRole("button", { name: "新建规划" }).click();
+  await page.getByLabel("规划类型").selectOption("roadmap");
   await page.getByLabel("名称", { exact: true }).fill("原生多轮规划验收");
   await page.getByLabel("草稿文件名").fill("live-planning.md");
   await page

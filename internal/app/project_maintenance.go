@@ -44,11 +44,19 @@ func newProjectMaintenance(c Config, s maintenanceStore) *projectMaintenance {
 	return m
 }
 func (m *projectMaintenance) git(ctx context.Context, args ...string) ([]byte, error) {
-	return (commandRunner{Dir: m.config.Repository, Timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), ProcessHost: m.config.ProcessHost}).Output(ctx, m.config.Git, args...)
+	return m.config.repositoryGit(ctx, args...)
 }
 
 func (m *projectMaintenance) readCommittedMaterial(ctx context.Context, commit, path string) ([]byte, error) {
 	return (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
+}
+func (m *projectMaintenance) readCommittedMaterials(ctx context.Context, commit string, paths []string) (map[string][]byte, error) {
+	for _, path := range paths {
+		if err := taskmodel.ValidateFileReference(taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)}); err != nil {
+			return nil, err
+		}
+	}
+	return (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).readCommittedFiles(ctx, commit, paths)
 }
 func (m *projectMaintenance) current() pmm.Observation {
 	m.mu.Lock()
@@ -83,6 +91,16 @@ func (m *projectMaintenance) readObservedBaseline(ctx context.Context, waitForCh
 func (m *projectMaintenance) refreshBaseline(ctx context.Context) (string, error) {
 	observation, err := m.check(ctx)
 	return observation.Commit, err
+}
+
+func (m *projectMaintenance) refreshBaselineForPush(ctx context.Context) (commit string, rewritten bool, err error) {
+	observation, err := m.check(ctx)
+	return observation.Commit, observation.Rewritten, err
+}
+
+func (m *projectMaintenance) verifyAncestor(ctx context.Context, ancestor, descendant string) error {
+	_, err := m.git(ctx, "merge-base", "--is-ancestor", ancestor, descendant)
+	return err
 }
 
 func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error) {

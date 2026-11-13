@@ -7,11 +7,25 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
+const SingleTaskPlanning = "task"
+
+func TaskCardPath(id string) string { return "SteerlineFlow/task-planning/" + id + ".json" }
+
+type TaskCard struct {
+	Goal          string   `json:"goal"`
+	Scope         string   `json:"scope"`
+	Constraints   string   `json:"constraints"`
+	Acceptance    string   `json:"acceptance"`
+	Predecessors  []string `json:"predecessors"`
+	ProvidesTests []string `json:"provides_tests"`
+}
+
 type PlanningTask struct {
 	ID            string                  `json:"id"`
 	Project       string                  `json:"project"`
 	Title         string                  `json:"title"`
 	Goal          string                  `json:"goal"`
+	Kind          string                  `json:"kind,omitempty"`
 	Path          string                  `json:"path"`
 	Base          string                  `json:"base"`
 	Revision      uint64                  `json:"revision"`

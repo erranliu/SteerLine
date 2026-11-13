@@ -31,6 +31,16 @@ type roadmapPreparationFile struct {
 	Diagnostic string `json:"diagnostic,omitempty"`
 }
 
+func (state roadmapPreparation) documentsReady() bool {
+	ready := 0
+	for _, file := range state.Files {
+		if file.Ready && (file.Path == roadmap.DocumentRulesPath || file.Path == "SteerlineFlow/spec/SpecGuide.md") {
+			ready++
+		}
+	}
+	return ready == 2
+}
+
 // A generated local file does not grant readiness until committed. Listing
 // observes fixed Git bytes without preparing files, fetching or calling a model.
 func (p *roadmapPort) preparation(ctx context.Context) roadmapPreparation {

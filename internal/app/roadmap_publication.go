@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -139,6 +140,10 @@ func (p *roadmapPort) findPR(ctx context.Context, branch string) (*roadmapPR, er
 	for page := 1; page <= 100; page++ {
 		var list []roadmapPR
 		query := "?state=all&page=" + strconv.Itoa(page) + "&limit=50&per_page=50"
+		if p.config.PR.Kind == "command" {
+			owner, _, _ := strings.Cut(p.config.PR.Repository, "/")
+			query += "&head=" + url.QueryEscape(owner+":"+branch) + "&base=" + url.QueryEscape(p.config.Branch)
+		}
 		if e := p.provider(ctx, "GET", "repos/"+p.config.PR.Repository+"/pulls"+query, nil, &list); e != nil {
 			return nil, e
 		}
@@ -206,6 +211,9 @@ func (p *roadmapPort) publicationFiles(ctx context.Context, r roadmap.Record) (m
 		for _, a := range d.Acceptance {
 			out[a.Path] = a.Body
 		}
+	}
+	if r.Source.PlanningID != "" {
+		return out, nil
 	}
 	raw, e := json.MarshalIndent(struct {
 		Roadmap   string              `json:"roadmap_id"`
@@ -463,9 +471,17 @@ func (p *roadmapPort) publish(ctx context.Context, r roadmap.Record, request, re
 		}
 		return p.observePublication(ctx, r)
 	}
-	source, err := p.source(ctx, r.Source.Path)
-	if err != nil {
+	if err := p.verifyCurrentTaskCard(ctx, r); err != nil {
 		return r, err
+	}
+	if r.Source.PlanningID == "" {
+		source, err := p.source(ctx, r.Source.Path)
+		if err != nil {
+			return r, err
+		}
+		if !source.SameContent(r.Source) {
+			return r, errors.New("来源已变化，请重新核对生成文档")
+		}
 	}
 	graph, err := p.graph(ctx)
 	if err != nil {
@@ -475,10 +491,14 @@ func (p *roadmapPort) publish(ctx context.Context, r roadmap.Record, request, re
 	if err != nil {
 		return r, err
 	}
-	if !source.SameContent(r.Source) || roadmap.GraphDigest(graph) != r.GraphDigest || baseline.Commit != r.CodeCommit {
+	if roadmap.GraphDigest(graph) != r.GraphDigest || baseline.Commit != r.CodeCommit {
 		return r, errors.New("来源、图材料或代码基线已变化，请重新核对生成文档")
 	}
 	p.generationMu.Lock()
+	if gateErr := p.verifyCurrentTaskCard(ctx, r); gateErr != nil {
+		p.generationMu.Unlock()
+		return r, gateErr
+	}
 	rows, gateErr := p.store.Roadmaps(ctx, p.config.Identity())
 	if gateErr != nil {
 		p.generationMu.Unlock()
@@ -522,7 +542,15 @@ func (p *roadmapPort) resumePublication(ctx context.Context, r roadmap.Record) (
 	return p.continuePublication(ctx, r)
 }
 
-func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record) (roadmap.Record, error) {
+func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record) (out roadmap.Record, err error) {
+	initialRevision := r.Revision
+	defer func() {
+		// Publishing records new local progress even when a remote result is
+		// unknown. Only a failed observation marks the provider unavailable.
+		if out.Revision > initialRevision && out.Publication != nil && out.State == "publishing" {
+			p.recordPublicationObservation(ctx, out, out, nil)
+		}
+	}()
 	var e error
 	if r.Publication.State == "preparing" {
 		if e = p.preparePublication(ctx, &r); e != nil {
@@ -538,7 +566,7 @@ func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record)
 		}
 		_, e = p.config.runtimeMaintenance.git(ctx, "push", "--force-with-lease=refs/heads/"+r.Publication.Branch+":", p.config.Remote, r.Publication.Commit+":refs/heads/"+r.Publication.Branch)
 		if e != nil {
-			return r, errors.New("原文档推送结果待核实")
+			return r, fmt.Errorf("原文档推送结果待核实：%w", e)
 		}
 		r.Publication.State = "pushed"
 		r, e = p.serviceSave(ctx, r)
@@ -572,7 +600,13 @@ func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record)
 				return r, e
 			}
 			var fact roadmapPR
-			e = p.provider(ctx, "POST", "repos/"+p.config.PR.Repository+"/pulls", map[string]any{"title": "Roadmap 文档：" + r.Source.Path, "head": r.Publication.Branch, "base": p.config.Branch, "body": "固定 Roadmap 内部身份、Spec / Plan 和依赖。正式编号仅在入 DAG 时分配。"}, &fact)
+			title := "Roadmap 文档：" + r.Source.Path
+			body := "固定 Roadmap 内部身份、Spec / Plan 和依赖。正式编号仅在入 DAG 时分配。"
+			if r.Source.PlanningID != "" {
+				title = taskDocumentTitle(r)
+				body = "固定任务的 Spec / Plan、测试安排和验收材料。正式编号仅在入 DAG 时分配。"
+			}
+			e = p.provider(ctx, "POST", "repos/"+p.config.PR.Repository+"/pulls", map[string]any{"title": title, "head": r.Publication.Branch, "base": p.config.Branch, "body": body}, &fact)
 			if e != nil {
 				return r, e
 			}
@@ -637,6 +671,12 @@ func (p *roadmapPort) observePublication(ctx context.Context, r roadmap.Record) 
 	}
 	if !fact.Merged {
 		r.State = "awaiting-merge"
+		if r.Source.PlanningID != "" {
+			r.Publication.Diagnostic = ""
+			if fact.State == "closed" {
+				r.Publication.Diagnostic = "原文档 PR 已关闭，请重新打开并合并后再核实"
+			}
+		}
 		if r.Publication.State != "merge_unknown" {
 			r.Publication.State = "pr"
 		}

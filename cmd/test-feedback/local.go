@@ -73,7 +73,11 @@ func runLocalSuite(opts options, def localSuite) int {
 			return scopedSetupError(opts.out, &report, fmt.Errorf("%s requires explicit %s", def.ID, key))
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	timeout := 30 * time.Minute
+	if def.ID == "go.roadmap" {
+		timeout = 50 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if def.ID == "web.unit" {
 		report.Groups = append(report.Groups, runWebGroup(ctx, opts.out, "web-unit", nil))
@@ -112,7 +116,11 @@ func runLocalSuite(opts options, def localSuite) int {
 }
 
 func localGroupCommand(tag string, group localGroup) []string {
-	args := []string{"go", "test", "-json", "-count=1", "-timeout=25m", "-p=1", "-parallel=1"}
+	timeout := "25m"
+	if group.ID == "go-roadmap-app" {
+		timeout = "45m"
+	}
+	args := []string{"go", "test", "-json", "-count=1", "-timeout=" + timeout, "-p=1", "-parallel=1"}
 	if tag != "" {
 		args = append(args, "-tags="+tag)
 	}

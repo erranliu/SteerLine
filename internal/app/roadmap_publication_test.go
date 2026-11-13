@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +25,57 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
+type mergeHistoryFixture struct {
+	refresh func(context.Context) (string, error)
+	verify  func(context.Context, string, string) error
+}
+
+func (f mergeHistoryFixture) refreshBaseline(ctx context.Context) (string, error) {
+	return f.refresh(ctx)
+}
+
+func (f mergeHistoryFixture) verifyAncestor(ctx context.Context, ancestor, descendant string) error {
+	return f.verify(ctx, ancestor, descendant)
+}
+
+func testRoadmapVerifyMergedUsesInjectedTargetHistory(t *testing.T) {
+	ctx := t.Context()
+	const head, merged, baseline = "document-head", "merge-commit", "target-head"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"html_url":"http://%s/owner/repo/pulls/1","number":1,"merged":true,"merge_commit_sha":%q,"head":{"ref":"documents","sha":%q,"repo":{"full_name":"owner/repo"}},"base":{"ref":"main"}}`, r.Host, merged, head)
+	}))
+	defer server.Close()
+	port := &roadmapPort{config: Config{Branch: "main", PR: executionmodel.PRProviderConfig{Kind: "gitea", Repository: "owner/repo", BaseURL: server.URL}}}
+	record := roadmap.Record{State: "awaiting-merge", Publication: &roadmap.Publication{URL: server.URL + "/owner/repo/pulls/1", Branch: "documents", Commit: head}}
+	refreshErr := errors.New("environment revocation failed")
+	refreshed, checked := 0, 0
+	port.mergeHistory = mergeHistoryFixture{
+		refresh: func(context.Context) (string, error) { refreshed++; return baseline, refreshErr },
+		verify: func(_ context.Context, ancestor, descendant string) error {
+			checked++
+			if ancestor != merged || descendant != baseline {
+				t.Fatalf("ancestor check used %q and %q", ancestor, descendant)
+			}
+			return errors.New("not an ancestor")
+		},
+	}
+	if err := port.verifyMerged(ctx, &record); !errors.Is(err, refreshErr) || checked != 0 {
+		t.Fatalf("refresh error must stop ancestry verification: %v, checks=%d", err, checked)
+	}
+	refreshErr = nil
+	if err := port.verifyMerged(ctx, &record); err == nil || err.Error() != "文档合并未进入项目目标主分支" || checked != 1 {
+		t.Fatalf("unreachable merge was not rejected: %v, checks=%d", err, checked)
+	}
+	record.Publication.Commit = "different-head"
+	if err := port.verifyMerged(ctx, &record); err == nil || refreshed != 2 || checked != 1 || record.State != "awaiting-merge" || record.Publication.MergedCommit != "" {
+		t.Fatalf("invalid PR binding reached history or changed admission state: %v, record=%+v", err, record)
+	}
+}
+
 func TestRoadmapPublicationAndAdmissionWithRealGit(t *testing.T) {
+	t.Run("single-task-planning", func(t *testing.T) {
+		roadmapPromotionChainWithDependencies(t, false, false, true, false, false, true)
+	})
 	t.Run("six-task-retry", func(t *testing.T) { roadmapPromotionChainWithDependencies(t, false, false, false, false, true) })
 	t.Run("draft-dependencies", func(t *testing.T) { roadmapPromotionChain(t, false) })
 	t.Run("mixed-formal-dependencies", func(t *testing.T) { roadmapPromotionChainWithDependencies(t, false, false, true) })
@@ -49,6 +100,7 @@ func roadmapPromotionChainWithLineEndings(t *testing.T, live, crlf bool) {
 
 func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool, planned ...bool) {
 	c, _ := nativeTaskFixture(t)
+	c.CommandTimeout = "30s"
 	ctx := context.Background()
 	if crlf {
 		fixtureGit(t, c.Repository, "config", "core.autocrlf", "true")
@@ -189,13 +241,14 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	require(t, e)
 	defer store.Close()
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
-	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store,
+	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store, mergeHistory: c.runtimeMaintenance,
 		taskAdmission: newRoadmapTaskCommands(store, c, func(ctx context.Context, run func(context.Context) error) error { return run(ctx) })}
 	configurePromotionGeneration(t, port, live)
 	if len(planned) > 0 && planned[0] {
 		port.service.Runner.(*promotionRunner).futureTests = true
 	}
 	sixTasks := len(planned) > 1 && planned[1]
+	single := len(planned) > 2 && planned[2]
 	if sixTasks {
 		f := port.service.Runner.(*promotionRunner)
 		f.sixTasks, f.holdDocuments = true, true
@@ -249,8 +302,10 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 		require(t, err)
 		sourceBody = string(raw)
 	}
-	require(t, os.MkdirAll(filepath.Dir(sourceFile), 0700))
-	require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	if !single {
+		require(t, os.MkdirAll(filepath.Dir(sourceFile), 0700))
+		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	}
 	preparation := port.preparation(ctx)
 	if preparation.Ready {
 		t.Fatal("fresh fixture unexpectedly prepared")
@@ -280,14 +335,18 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if crlf {
 		require(t, os.WriteFile(sourceFile, []byte(strings.ReplaceAll(sourceBody, "\n", "\r\n")), 0600))
 	}
-	source, e := port.source(ctx, sourcePath)
-	require(t, e)
+	var source roadmap.Source
+	var parsed roadmap.Record
+	if !single {
+		source, e = port.source(ctx, sourcePath)
+		require(t, e)
+		parsed = promotionAction(t, port, "roadmap_parse", source.ID, strings.Repeat("a", 32), 1, roadmapservice.ParseInput{RequestID: strings.Repeat("a", 32), Path: sourcePath, Digest: source.Digest})
+		parsed = awaitPromotion(t, port, parsed, "review")
+		assertRoadmapActivityState(t, store, c.Identity(), parsed.ID, "succeeded", true, "current")
+	}
 	if crlf && (source.Modified || source.Body == sourceBody || source.Digest != roadmap.Digest([]byte(source.Body))) {
 		t.Fatal("checkout line endings changed the source state or raw snapshot", source)
 	}
-	parsed := promotionAction(t, port, "roadmap_parse", source.ID, strings.Repeat("a", 32), 1, roadmapservice.ParseInput{RequestID: strings.Repeat("a", 32), Path: sourcePath, Digest: source.Digest})
-	parsed = awaitPromotion(t, port, parsed, "review")
-	assertRoadmapActivityState(t, store, c.Identity(), parsed.ID, "succeeded", true, "current")
 	if live && !actualProject {
 		found := false
 		for _, task := range parsed.Analysis.Tasks {
@@ -306,7 +365,9 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if sixTasks {
 		expectedTasks, expectedEdges = 6, 5
 	}
-	if formal {
+	if single {
+		expectedTasks, expectedEdges = 1, 1
+	} else if formal {
 		expectedEdges = 3
 		if len(parsed.Analysis.Tasks) != 2 || parsed.Analysis.Tasks[0].ExistingID != "" ||
 			strings.Join(parsed.Analysis.Tasks[0].Proposed.Formal, ",") != "0" ||
@@ -342,8 +403,21 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if !actualProject {
 		require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
 	}
-	r := promotionAction(t, port, "roadmap_generate_documents", parsed.ID, strings.Repeat("2", 32), parsed.Revision, struct{}{})
-	parent, e := store.Roadmap(ctx, c.Identity(), parsed.ID)
+	var r roadmap.Record
+	if single {
+		id := strings.Repeat("a", 32)
+		require(t, store.SavePlanning(ctx, c.Identity(), "", nil, roadmap.PlanningTask{
+			ID: id, Project: c.Identity(), Kind: roadmap.SingleTaskPlanning, Title: "Sum function", Path: roadmap.TaskCardPath(id), Revision: 1, Status: "ready",
+		}))
+		card := roadmap.TaskCard{Goal: "Sum integers", Scope: "Pure function", Acceptance: "Sum(2,3)=5", Predecessors: []string{"0"}}
+		r = promotionAction(t, port, taskPlanningGenerate, id, strings.Repeat("2", 32), 1, card)
+		if r.Source.PlanningID != id || len(r.Generations) != 1 {
+			t.Fatal("task card identity or single generation missing", r.Source, r.Generations)
+		}
+	} else {
+		r = promotionAction(t, port, "roadmap_generate_documents", parsed.ID, strings.Repeat("2", 32), parsed.Revision, struct{}{})
+	}
+	parent, e := store.Roadmap(ctx, c.Identity(), r.ParentID)
 	require(t, e)
 	if parent.State != "confirmed" || parent.ConfirmedDigest == "" || parent.ConfirmationRequest == "" || r.ParentID != parent.ID || r.ConfirmedDigest != parent.ConfirmedDigest {
 		t.Fatal("combined generation lost its confirmation", parent, r)
@@ -417,7 +491,7 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	view, e := port.read(ctx, "/roadmaps/"+r.ID, nil)
 	require(t, e)
 	preview, _ := json.Marshal(view)
-	if !strings.Contains(string(preview), "publication_preview") || !strings.Contains(string(preview), "execution-map.md") {
+	if !strings.Contains(string(preview), "publication_preview") || strings.Contains(string(preview), "execution-map.md") == single {
 		t.Fatal("publication preview incomplete")
 	}
 	// Change the live worktree after freezing: documents still refer to the fixed commit.
@@ -432,7 +506,19 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 		}
 		require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
 	}
-	pub, e := port.publish(ctx, r, strings.Repeat("b", 32), roadmap.ReviewDigest(r), true)
+	if single {
+		files, err := port.publicationFiles(ctx, r)
+		require(t, err)
+		if len(files) != 4 {
+			t.Fatal("single task must publish only the four document files", files)
+		}
+		for path := range files {
+			if strings.HasPrefix(path, "SteerlineFlow/Roadmap/") {
+				t.Fatal("single-task PR includes Roadmap bookkeeping", path)
+			}
+		}
+	}
+	pub, e := port.publish(ctx, r, strings.Repeat("b", 32), roadmap.ReviewDigest(r), !single)
 	if e == nil || pub.Publication.State != "pr_unknown" {
 		t.Fatal("missing PR receipt was treated as applied", pub, e)
 	}
@@ -461,6 +547,17 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 		t.Fatal("original PR was not reconciled", pub)
 	}
 	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", false, "current")
+	if single {
+		if _, err := port.admit(ctx, pub, strings.Repeat("d", 32)); err == nil || merges != 0 {
+			t.Fatal("admission or auto-merge before manual PR merge", err, merges)
+		}
+		response, err := http.Post(server.URL+"/api/v1/repos/owner/repo/pulls/1/merge", "application/json", strings.NewReader(fmt.Sprintf(`{"head_commit_id":%q,"do":"merge"}`, pub.Publication.Commit)))
+		require(t, err)
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatal("manual PR merge failed", response.StatusCode)
+		}
+	}
 	// Explicit continuation keeps the original authorization and never creates another PR.
 	pub, e = port.resumePublication(ctx, pub)
 	require(t, e)
@@ -496,10 +593,16 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if fixtureGit(t, c.Repository, "rev-parse", "HEAD") != code {
 		t.Fatal("publication changed main worktree HEAD")
 	}
-	raw, e := os.ReadFile(sourceFile)
-	require(t, e)
-	if string(raw) != sourceBody {
-		t.Fatal("source Markdown changed")
+	if single {
+		if _, err := os.Stat(sourceFile); !os.IsNotExist(err) {
+			t.Fatal("single planning must not create a Roadmap draft", err)
+		}
+	} else {
+		raw, e := os.ReadFile(sourceFile)
+		require(t, e)
+		if string(raw) != sourceBody {
+			t.Fatal("source Markdown changed")
+		}
 	}
 	// This batch is submitted once; replay after a lost HTTP receipt recovers it.
 	admitted, e := port.admit(ctx, pub, strings.Repeat("c", 32))
@@ -513,7 +616,11 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if len(graph.Tasks) != expectedTasks+seedCount || len(graph.Edges) != expectedEdges {
 		t.Fatal(graph)
 	}
-	if formal {
+	if single {
+		if graph.Edges[0].PredecessorID != "0" || graph.Edges[0].SuccessorID != admitted.Mapping["T1"] {
+			t.Fatal("selected existing DAG predecessor was not linked", graph.Edges)
+		}
+	} else if formal {
 		want := map[string]bool{"0>" + admitted.Mapping["T1"]: true, "0>" + admitted.Mapping["T2"]: true, admitted.Mapping["T1"] + ">" + admitted.Mapping["T2"]: true}
 		for _, edge := range graph.Edges {
 			key := edge.PredecessorID + ">" + edge.SuccessorID

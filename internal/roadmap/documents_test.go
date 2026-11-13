@@ -3,6 +3,7 @@ package roadmap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"os"
@@ -450,7 +451,7 @@ func TestRoadmapDocumentInvestigationSeparatesInputFiles(t *testing.T) {
 }
 
 func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
-	for _, mismatch := range []string{"digest", "size", "missing", "read_error", "changed_bytes"} {
+	for _, mismatch := range []string{"digest", "size", "missing", "read_error", "changed_bytes", "batch", "interrupted_batch"} {
 		t.Run(mismatch, func(t *testing.T) {
 			s, _, f, parent := documentSetup(t)
 			r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
@@ -471,12 +472,41 @@ func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
 			case "changed_bytes":
 				f.files["code.go"] = []byte("changed code\n")
 			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			calls := 0
+			if mismatch == "batch" || mismatch == "interrupted_batch" {
+				s.ReadCommittedFiles = func(_ context.Context, _ string, paths []string) (map[string][]byte, error) {
+					calls++
+					if mismatch == "interrupted_batch" && calls == 1 {
+						cancel()
+						return nil, context.Canceled
+					}
+					files := make(map[string][]byte, len(paths))
+					for _, path := range paths {
+						files[path] = f.files[path]
+					}
+					return files, nil
+				}
+			}
 			raw, _ := json.Marshal(out)
 			f.run.RepositorySource = source
 			f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: source, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "docs", TurnID: "docs-turn"}}
 			f.run.Final = new(f.run.ContentResult.Source)
 			f.run.Status, f.run.StopStatus = "completed", "stopped"
-			done, err := s.Observe(context.Background(), r.ID)
+			done, err := s.Observe(ctx, r.ID)
+			if mismatch == "interrupted_batch" {
+				if !errors.Is(err, context.Canceled) || done.State == "invalid" {
+					t.Fatal("interrupted verification became terminal", done.State, err)
+				}
+				done, err = s.Observe(context.Background(), r.ID)
+			}
+			if mismatch == "batch" || mismatch == "interrupted_batch" {
+				if err != nil || done.State != "documents-review" || !done.DocumentsVerified || calls == 0 {
+					t.Fatal("original Git batch was not verified", done.State, calls, err)
+				}
+				return
+			}
 			if err != nil || done.State != "invalid" || done.DocumentsVerified {
 				t.Fatal("unverified Git bytes adopted", done, err)
 			}
