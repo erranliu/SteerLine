@@ -52,6 +52,7 @@ func documentPlanningSetup(t *testing.T, confirmed bool) (*Service, *memoryRoadm
 	analysis.Tasks[0].ProvidesTests = []string{"new.content"}
 	raw, _ := json.Marshal(analysis)
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "parse", TurnID: "turn"}}
+	f.run.Final = new(f.run.ContentResult.Source)
 	f.run.StopStatus = "stopped"
 	f.run.Status = "completed"
 	r, err = s.Observe(ctx, r.ID)
@@ -229,6 +230,7 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	raw, _ := json.Marshal(out)
 	f.run.RepositorySource = source
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: source, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "docs", TurnID: "docs-turn"}}
+	f.run.Final = new(f.run.ContentResult.Source)
 	f.run.Status = "completed"
 	f.run.StopStatus = "running"
 	waiting, err := s.Observe(ctx, r.ID)
@@ -468,6 +470,7 @@ func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
 			raw, _ := json.Marshal(out)
 			f.run.RepositorySource = source
 			f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: source, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "docs", TurnID: "docs-turn"}}
+			f.run.Final = new(f.run.ContentResult.Source)
 			f.run.Status, f.run.StopStatus = "completed", "stopped"
 			done, err := s.Observe(context.Background(), r.ID)
 			if err != nil || done.State != "invalid" || done.DocumentsVerified {

@@ -14,6 +14,8 @@
 
 原始字节与摘要保留；草稿修改标记、跨阶段内容比较允许 LF/CRLF 差异。Run/结果 manifest 须匹配原仓库与上传字节，证明材料来源，不证明模型逐文件已读或结论正确。具体供给边界归[提示词治理](../prompt-governance.md)。
 
+解析和文档生成共用结构化结果接收规则。原 Run 完成并停止后，SteerLine 仅在成功的 `ContentResult` 含 JSON，且其 `Source` 与该 Run 已验证的 `Final` 完全一致时采用结果。来源缺失或错配时记录无效结果，审阅入口保持关闭。
+
 ## 文档生成与审阅
 
 确认后的解析记录派生 purpose=documents 的**独立文档记录**，parent_id 指向原解析；解析持有一个 Run；文档记录的 generations 按任务保留独立原请求、Run、session、创建时间、结果和停止义务，记录外层继续持有一次确认、审阅及发布。文档批次没有根级 Run，不混用目标。文档生成固定完整 commit/tree、原规划、SpecGuide 与测试/编写规范，能力按所选 Runner 公开 schema 校验。
