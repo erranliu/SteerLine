@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Activity,
   Command,
+  ClipboardCheck,
   FlaskConical,
   GitBranch,
   Layers,
@@ -48,6 +49,7 @@ export function AppShell({
         dag: "任务 DAG",
         runs: "任务执行",
         tests: "测试管理",
+        "manual-verification": "人工核验",
         status: "项目状态",
         settings: "配置",
         environment: "项目运行环境",
@@ -92,10 +94,7 @@ export function AppShell({
                 <GitBranch size={17} />
                 <span>任务 DAG</span>
               </NavLink>
-              <NavLink
-                aria-label="任务执行"
-                to={`/projects/${projectId}/runs`}
-              >
+              <NavLink aria-label="任务执行" to={`/projects/${projectId}/runs`}>
                 <Layers size={17} />
                 <span>任务执行</span>
                 {questions > 0 && (
@@ -122,6 +121,13 @@ export function AppShell({
               >
                 <FlaskConical size={17} />
                 <span>测试管理</span>
+              </NavLink>
+              <NavLink
+                aria-label="人工核验"
+                to={`/projects/${projectId}/manual-verification`}
+              >
+                <ClipboardCheck size={17} />
+                <span>人工核验</span>
               </NavLink>
               <NavLink
                 aria-label="活动中心"

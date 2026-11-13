@@ -3,10 +3,13 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path"
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/erranliu/SteerLine/internal/manualverification"
 )
 
 var commitPattern = regexp.MustCompile("^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
@@ -87,6 +90,21 @@ func validateDocumentContent(d Documents, paths map[string]bool, total *int) err
 		return err
 	}
 	*total += len(raw)
+	if len(d.ManualChecks) != 0 {
+		name, err := manualverification.CompanionPath(d.Plan.Path)
+		if err != nil {
+			return err
+		}
+		body, err := manualverification.Encode(d.ManualChecks)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		if paths[name] {
+			return errors.New("重复的人工核验文件：" + name)
+		}
+		paths[name] = true
+		*total += len(body)
+	}
 	if len(d.Acceptance) == 0 {
 		return errors.New("任务缺少专属验收材料")
 	}

@@ -60,6 +60,7 @@ type Documents = {
   tests: string[];
   provides_tests: string[];
   acceptance: File[];
+  manual_checks?: Record<string, unknown>;
 };
 export type RoadmapRecord = {
   generations?: {
@@ -150,9 +151,9 @@ export function Roadmaps() {
   const [params, setParams] = useSearchParams();
   const [error, setError] = useState("");
   const [documentKey, setDocumentKey] = useState(""),
-    [kind, setKind] = useState<"spec" | "plan" | "tests" | "acceptance">(
-      "spec",
-    );
+    [kind, setKind] = useState<
+      "spec" | "plan" | "tests" | "acceptance" | "manual_checks"
+    >("spec");
   const [editing, setEditing] = useState(false),
     [body, setBody] = useState("");
   const key = roadmapQueryKey(
@@ -318,9 +319,17 @@ export function Roadmaps() {
           body:
             JSON.stringify({ tests: currentDocument.tests }, null, 2) + "\n",
         }
-      : kind === "acceptance"
-        ? currentDocument?.acceptance[0]
-        : currentDocument?.[kind];
+      : kind === "manual_checks"
+        ? currentDocument?.manual_checks && {
+            path: currentDocument.plan.path.replace(
+              /\.plan\.md$/,
+              ".manual-checks.json",
+            ),
+            body: JSON.stringify(currentDocument.manual_checks, null, 2) + "\n",
+          }
+        : kind === "acceptance"
+          ? currentDocument?.acceptance[0]
+          : currentDocument?.[kind];
   const generationParent =
     record?.purpose === "documents"
       ? history.find((r) => r.id === record.parent_id)
@@ -1076,6 +1085,16 @@ export function Roadmaps() {
             >
               测试安排 JSON
             </button>
+            {!!currentDocument?.manual_checks && (
+              <button
+                onClick={() => {
+                  setKind("manual_checks");
+                  setEditing(false);
+                }}
+              >
+                人工核验 JSON
+              </button>
+            )}
             <button
               onClick={() => {
                 setKind("acceptance");
@@ -1100,7 +1119,9 @@ export function Roadmaps() {
                   rows={18}
                 />
                 <button
-                  disabled={locked || !body.trim()}
+                  disabled={
+                    locked || (kind !== "manual_checks" && !body.trim())
+                  }
                   onClick={() => {
                     void action(
                       "roadmap_edit_documents",

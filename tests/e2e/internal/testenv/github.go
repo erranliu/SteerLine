@@ -23,9 +23,9 @@ const githubRepository = "erranliu/SteerlineTest"
 
 const githubURL = "https://github.com/" + githubRepository + ".git"
 
-const githubFields = "body,url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName"
+const githubFields = "body,url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName,isDraft"
 
-const githubInfoQuery = `{body:.body,url:.url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + "/" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
+const githubInfoQuery = `{body:.body,url:.url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + "/" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,draft:.isDraft,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
 
 func (p *Project) enableGitHub() {
 	s := p.Scenario
@@ -60,7 +60,11 @@ func (p *Project) enableGitHub() {
 	s.Must(os.MkdirAll(filepath.Join(p.Repo, "SteerlineFlow", "spec"), 0700))
 	s.Must(os.MkdirAll(filepath.Join(p.Repo, "SteerlineFlow", "plans"), 0700))
 	s.register("github-base-branch", p.BaseBranch, 0)
-	query := map[string]any{"executable": gh, "args": []string{"pr", "view", "{pr_url}", "--repo", "{repository}", "--json", githubFields, "--jq", githubInfoQuery}}
+	queryOutput := githubInfoQuery
+	if s.ID == ManualVerificationLiveID {
+		queryOutput = strings.Replace(queryOutput, "{body:.body,", "{", 1)
+	}
+	query := map[string]any{"executable": gh, "args": []string{"pr", "view", "{pr_url}", "--repo", "{repository}", "--json", githubFields, "--jq", queryOutput}}
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)
 	s.Must(err)

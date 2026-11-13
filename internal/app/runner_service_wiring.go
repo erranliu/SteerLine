@@ -17,6 +17,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
@@ -71,6 +72,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		return config.prepareTestPlan(ctx, work, run)
 	}
 	service.Bridge = &runnerbridge.Bridge{Store: connection, Client: func(string) runnerbridge.CLI { return cli }}
+	service.PrepareManualChecks = config.prepareManualChecks
 	if config.runtimeMessages != nil {
 		service.Bridge.Observed = func(ctx context.Context, c runnerbridge.Candidate) {
 			bindMessageObserver(config, connection, cli, c, ctx)
@@ -170,6 +172,9 @@ func (c Config) runnerClient(ctx context.Context) (runnerclient.Client, error) {
 // newRunnerService borrows project resources; it never opens or closes them.
 func newRunnerService(config Config, host hostport.HostPort, connection *sqlite.SQLiteStore, cli runnerclient.Client, info runnerclient.ServiceInfo, maintenance *projectMaintenance) (*taskrunner.Actor, error) {
 	service := runnerTaskService(config, connection, cli, maintenance.prepare, maintenance)
+	service.ObserveManualPR = func(ctx context.Context, observation storageports.RunnerPRObservation, err error) error {
+		return connection.ObserveManualPR(ctx, config.Identity(), observation, err)
+	}
 	service.Admit = func(ctx context.Context) error {
 		if err := (appConfigVerifier{project: config.projectPath, global: config.executionPath, digest: config.configDigest}).VerifyCurrentConfig(); err != nil {
 			return err

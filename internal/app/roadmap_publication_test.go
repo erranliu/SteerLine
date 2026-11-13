@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
@@ -405,6 +406,10 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if r.CodeCommit != code || len(r.Documents) != expectedTasks || len(r.Mapping) != 0 || len(r.Investigation) == 0 {
 		t.Fatal("unverified document result", r)
 	}
+	if crlf {
+		body := `{"version":1,"launch":{"program":"node","args":["preview.cjs"]},"checks":[{"id":"M01","title":"Preview","steps":["Open it"],"expected":"It renders"}]}`
+		r = promotionAction(t, port, "roadmap_edit_documents", r.ID, strings.Repeat("8", 32), r.Revision, map[string]string{"local_key": r.Documents[0].Key, "kind": "manual_checks", "body": body})
+	}
 	view, e := port.read(ctx, "/roadmaps/"+r.ID, nil)
 	require(t, e)
 	preview, _ := json.Marshal(view)
@@ -447,6 +452,26 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	require(t, e)
 	if pub.State != "awaiting-admission" || pub.Publication.MergedCommit == "" {
 		t.Fatal(pub)
+	}
+	if crlf {
+		name, err := manualverification.CompanionPath(r.Documents[0].Plan.Path)
+		require(t, err)
+		old, err := port.materials.readCommittedMaterial(ctx, pub.Publication.MergedCommit, name)
+		require(t, err)
+		if _, err := manualverification.Decode(old); err != nil {
+			t.Fatal(err)
+		}
+		retry := r
+		retry.ID = strings.Repeat("9", 32)
+		retry.CodeCommit = pub.Publication.MergedCommit
+		retry.Documents = append([]roadmap.Documents{}, r.Documents...)
+		retry.Documents[0].ManualChecks = nil
+		retry.ConfirmedDigest = roadmap.ConfirmationDigest(retry)
+		retry.Publication = &roadmap.Publication{Base: retry.CodeCommit, Branch: "fixture/remove-old-manual-checks"}
+		require(t, port.preparePublication(ctx, &retry))
+		if _, err := port.materials.readCommittedMaterial(ctx, retry.Publication.Commit, name); !isMissingRoadmapFile(err) {
+			t.Fatal("old owned manual checks were not deleted", err)
+		}
 	}
 	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
 	graph, e := store.TaskGraphSnapshot(ctx, c.Identity())

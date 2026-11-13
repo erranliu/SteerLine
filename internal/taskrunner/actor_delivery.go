@@ -89,6 +89,9 @@ func (a *Actor) advanceAutomaticDelivery(ctx context.Context) error {
 	}
 	if result := cycle.result; result != nil {
 		cycle.result = nil
+		if observe := a.options.Tasks.ObserveManualPR; observe != nil {
+			cycle.recordFailure(observe(ctx, result.input.PR, result.err))
+		}
 		if result.err == nil {
 			deadline := result.input.PR.CheckedAt.Add(ports.AutomaticDeliveryCommitWindow)
 			if time.Now().Before(deadline) {
@@ -159,7 +162,11 @@ func (a *Actor) startAutomaticDeliveryQuery(input ports.RunnerResult, target por
 	ctx, query := a.ctx, a.options.Tasks.QueryPR
 	a.deliveryQueries.Go(func() {
 		observation, err := queryTaskPR(ctx, query, target, input.PR)
-		input.PR = observation
+		if err == nil {
+			input.PR = observation
+		} else {
+			input.PR.CheckedAt = time.Now().UTC()
+		}
 		a.workMu.Lock()
 		if ctx.Err() != nil {
 			a.workMu.Unlock()

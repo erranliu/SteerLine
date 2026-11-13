@@ -121,7 +121,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 	if id == "runtime.async-activities" {
 		timeout = 10 * time.Minute
 	}
-	if id == "testing.project-environment-readiness" || id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "testing.project-progress-local-codex" || id == "recovery.waiting-merge-restart" || id == "recovery.runner-wait-retry" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
+	if id == "testing.project-environment-readiness" || id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "testing.project-progress-local-codex" || id == "recovery.waiting-merge-restart" || id == "recovery.runner-wait-retry" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" || id == ManualVerificationLiveID {
 		timeout = 10 * time.Minute
 	}
 	if id == "workflow.local-codex-audited" {
@@ -659,7 +659,7 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 		if c.Projection == nil {
 			return false, nil
 		}
-		if (p.Scenario.ID == "smoke.local-codex" || p.Scenario.ID == "workflow.local-codex-audited") && phase != "waiting_decision" && (c.Projection.Status == "waiting_input" || c.Projection.Status == "blocked" || c.Projection.Status == "failed") {
+		if (p.Scenario.ID == "smoke.local-codex" || p.Scenario.ID == "workflow.local-codex-audited" || p.Scenario.ID == ManualVerificationLiveID) && phase != "waiting_decision" && (c.Projection.Status == "waiting_input" || c.Projection.Status == "blocked" || c.Projection.Status == "failed") {
 			p.Record("blocked", snap)
 			conversation, readErr := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, p.ProjectID, c.ID, c.RunID)
 			if readErr == nil {

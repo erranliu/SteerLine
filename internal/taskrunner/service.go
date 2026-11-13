@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -44,12 +45,14 @@ type Service struct {
 	Store                                       Store
 	Bridge                                      *runnerbridge.Bridge
 	QueryPR                                     storageports.RunnerPRQuery
+	ObserveManualPR                             func(context.Context, storageports.RunnerPRObservation, error) error
 	ResolveBase                                 func(context.Context, taskmodel.FixedWork, bool) (string, error)
 	Admit                                       func(context.Context) error
 	RunnerBuild                                 runnercontract.BuildPin
 	ReserveExecution                            func(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
 	PrepareExecution                            func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error)
 	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (json.RawMessage, error)
+	PrepareManualChecks                         func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (*manualverification.Snapshot, error)
 	CheckExecution                              func(context.Context, string, bool) error
 	mu                                          sync.Mutex
 }
@@ -162,6 +165,13 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 			return runnerbridge.Candidate{}, err
 		}
 	}
+	var manualChecks *manualverification.Snapshot
+	if s.PrepareManualChecks != nil {
+		manualChecks, err = s.PrepareManualChecks(ctx, work, &run)
+		if err != nil {
+			return runnerbridge.Candidate{}, err
+		}
+	}
 
 	run.Correlation["steerline_project"] = s.Project
 	run.Correlation["steerline_task_id"], run.Correlation["steerline_candidate_id"] = input.TaskID, input.RequestID
@@ -175,6 +185,12 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	}
 	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(profile.Input.Execution, profile.Input.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: id(), Input: raw}}
 	c.TestPlan = testPlan
+	if manualChecks != nil {
+		c.ManualChecks, err = json.Marshal(manualChecks)
+		if err != nil {
+			return runnerbridge.Candidate{}, err
+		}
+	}
 	c.Contract = work.Contract
 	c.MaterialDigest = work.MaterialDigest
 	reserve := s.Store.ReserveRunnerCandidate

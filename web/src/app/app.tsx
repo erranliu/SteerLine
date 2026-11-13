@@ -40,6 +40,9 @@ const Roadmaps = lazy(() =>
   })),
 );
 const RoadmapPlanning = lazy(() => import("../features/roadmaps/planning"));
+const ManualVerification = lazy(
+  () => import("../features/manual-verification/manual-verification"),
+);
 const RefactoringMaintenance = lazy(() =>
   import("../features/refactoring-maintenance/refactoring-maintenance").then(
     (module) => ({ default: module.RefactoringMaintenance }),
@@ -210,6 +213,16 @@ export function Workspace({
           )}
           <Suspense fallback={<div className="empty">正在加载页面…</div>}>
             <Routes>
+              <Route
+                path={
+                  "/projects/" + identity.project_id + "/manual-verification"
+                }
+                element={
+                  <ManualVerification
+                    key={api.home + identity.project_id + identity.instance_id}
+                  />
+                }
+              />
               <Route
                 path={"/projects/" + identity.project_id + "/refactoring"}
                 element={<RefactoringMaintenance />}

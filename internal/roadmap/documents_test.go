@@ -214,6 +214,7 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	}
 	out, source := documentResult(r)
 	out.Documents[0].ProvidesTests = []string{"new.content"}
+	out.Documents[0].ManualChecks = json.RawMessage(`{"version":1,"launch":{"program":"node","args":["preview.cjs"]},"checks":[{"id":"M01","title":"Review preview","steps":["Open preview"],"expected":"The result is visible"}]}`)
 	out.Documents[1].Tests = []string{"one", "new.content"}
 	source.LocalPath = s.Repository
 	readCommitted := s.ReadCommitted
@@ -245,6 +246,9 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	}
 	if !done.ObservationComplete() || len(done.Mapping) != 0 {
 		t.Fatal(done)
+	}
+	if len(done.Documents[0].ManualChecks) == 0 || len(done.Documents[1].ManualChecks) != 0 {
+		t.Fatal("optional manual checks were not preserved with their generated Plan")
 	}
 	if !readCode || len(done.Investigation) != 1 || done.Investigation[0].SHA256 != model.Digest([]byte("fixed code\n")) {
 		t.Fatal("platform did not derive original Git digest", done.Investigation)
