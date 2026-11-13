@@ -27,6 +27,11 @@ type RecoveryCapability struct {
 }
 
 type Capabilities struct {
+	EnvironmentCheck *struct {
+		Contract       string `json:"contract"`
+		SubmitProperty string `json:"submit_property"`
+		Workspace      string `json:"workspace"`
+	} `json:"checkout_probe,omitempty"`
 	WorkspaceWrite *struct {
 		Workflow        string `json:"workflow"`
 		Acquire         string `json:"acquire"`

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -156,11 +155,6 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 	}
 	input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}
 	input.ProgressFile = nil
-	instruction, err := prompts.EnvironmentInvoke(r.Prepared.Manifest.Interpreter, r.Prepared.Manifest.Script)
-	if err != nil {
-		return err
-	}
-	input.Workflow.PromptOverrides = map[string]string{"execute": instruction}
 	body, err := json.Marshal(input)
 	if err != nil {
 		return err

@@ -6658,6 +6658,11 @@
     ],
     "description": "Final-only opaque file snapshot; collected after original execution ends and producers stop. No running collection or reads on query. First seal is permanent, including failure."
   },
+  "checkout_probe": {
+    "contract": "steerrunner-checkout-probe/v1",
+    "submit_property": "checkout_probe",
+    "workspace": "existing_checkout"
+  },
   "offline_inspect": {
     "command": "inspect --offline",
     "read_only": true,

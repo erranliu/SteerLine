@@ -28,9 +28,6 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		{"testing-step", func() (string, error) {
 			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true)
 		}},
-		{"environment-invoke", func() (string, error) {
-			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/scripts/verify-environment.ps1")
-		}},
 		{"environment-repair", func() (string, error) { return EnvironmentRepair("SteerlineFlow/environment.md") }},
 		{"project-initialization", ProjectInitialization},
 		{"project-registration", func() (string, error) {
@@ -99,9 +96,7 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
 		{"missing-field", func() (string, error) { return renderText("bad", "{{.Missing}}", struct{}{}) }},
 		{"bad-snapshot", func() (string, error) { return TestingContext([]byte(`{"status":"missing"}`)) }},
 		{"missing-body", func() (string, error) { return TestingStep("", []byte(testSnapshot), true) }},
-		{"missing-entry", func() (string, error) { return EnvironmentInvoke("powershell.exe", "") }},
 		{"missing-environment-document", func() (string, error) { return EnvironmentRepair("") }},
-		{"unsupported-interpreter", func() (string, error) { return EnvironmentInvoke("other", "entry") }},
 		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md", "T1") }},
 		{"missing-roadmap-source", func() (string, error) { return RoadmapParse("", "fixed") }},
 	}

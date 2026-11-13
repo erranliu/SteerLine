@@ -80,16 +80,24 @@ type Publication struct {
 	BaseBranch string          `json:"base_branch"`
 	Settings   json.RawMessage `json:"settings"`
 }
+type EnvironmentCheckInput struct {
+	Interpreter    string            `json:"interpreter"`
+	Script         string            `json:"script"`
+	ManifestSHA256 string            `json:"manifest_sha256"`
+	Files          map[string]string `json:"files"`
+}
+
 type RunInput struct {
-	ReuseWorktreeFromRunID string             `json:"reuse_worktree_from_run_id,omitempty"`
-	ResultFile             *ProgressFileInput `json:"result_file,omitempty"`
-	ProgressFile           *ProgressFileInput `json:"progress_file,omitempty"`
-	Title                  string             `json:"title"`
-	NamePrefix             string             `json:"name_prefix,omitempty"`
-	Correlation            map[string]string  `json:"correlation,omitempty"`
-	Repository             Repository         `json:"repository"`
-	Documents              Documents          `json:"documents"`
-	Workflow               Workflow           `json:"workflow"`
-	Execution              ExecutionInput     `json:"execution"`
-	Publication            Publication        `json:"publication,omitzero"`
+	EnvironmentCheck       *EnvironmentCheckInput `json:"checkout_probe,omitempty"`
+	ReuseWorktreeFromRunID string                 `json:"reuse_worktree_from_run_id,omitempty"`
+	ResultFile             *ProgressFileInput     `json:"result_file,omitempty"`
+	ProgressFile           *ProgressFileInput     `json:"progress_file,omitempty"`
+	Title                  string                 `json:"title"`
+	NamePrefix             string                 `json:"name_prefix,omitempty"`
+	Correlation            map[string]string      `json:"correlation,omitempty"`
+	Repository             Repository             `json:"repository"`
+	Documents              Documents              `json:"documents"`
+	Workflow               Workflow               `json:"workflow"`
+	Execution              ExecutionInput         `json:"execution"`
+	Publication            Publication            `json:"publication,omitzero"`
 }

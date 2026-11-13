@@ -123,12 +123,6 @@ func TestingStep(body string, snapshot []byte, writesTests bool) (string, error)
 	}
 	return render("testing-step", struct{ Body, Context string }{body, context})
 }
-func EnvironmentInvoke(interpreter, script string) (string, error) {
-	if script == "" || (interpreter != "powershell.exe" && interpreter != "bash") {
-		return "", errors.New("fixed environment invocation is required")
-	}
-	return render("environment-invoke", struct{ Interpreter, Script string }{interpreter, script})
-}
 func EnvironmentRepair(documentPath string) (string, error) {
 	if documentPath == "" {
 		return "", errors.New("environment preparation document path is required")
