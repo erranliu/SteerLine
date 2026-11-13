@@ -187,7 +187,8 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	require(t, e)
 	defer store.Close()
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
-	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store}
+	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store,
+		taskAdmission: newRoadmapTaskCommands(store, c, func(ctx context.Context, run func(context.Context) error) error { return run(ctx) })}
 	configurePromotionGeneration(t, port, live)
 	if len(planned) > 0 && planned[0] {
 		port.service.Runner.(*promotionRunner).futureTests = true

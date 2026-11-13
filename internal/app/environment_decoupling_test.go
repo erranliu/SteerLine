@@ -274,7 +274,7 @@ func TestEnvironmentStartRejectsPendingOrSupersededBaseline(t *testing.T) {
 			ctx := context.Background()
 			p, c, store := environmentFixture(t)
 			m := newProjectMaintenance(c, nil)
-			p.config.runtimeMaintenance = m
+			p.baseline = m
 			m.environmentObservation = p.observeBasis
 			prepared, err := p.prepare(ctx, "remote")
 			require(t, err)
@@ -305,6 +305,12 @@ func TestEnvironmentStartRejectsPendingOrSupersededBaseline(t *testing.T) {
 				case <-entered:
 				case <-time.After(10 * time.Second):
 					t.Fatal("observation did not reach environment callback")
+				}
+				commit, err := p.observedSource(ctx, false)
+				if commit != "" || err == nil || !strings.Contains(err.Error(), "观察处理中") {
+					close(release)
+					<-finish
+					t.Fatalf("non-waiting read exposed a baseline during revocation: commit=%q err=%v", commit, err)
 				}
 			} else {
 				_, err = m.check(ctx)

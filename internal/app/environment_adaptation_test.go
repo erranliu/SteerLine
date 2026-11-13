@@ -60,7 +60,7 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	}
 	c.runtimeEnvironmentAdmission = &environmentAdmission{}
 	c.runtimeEnvironmentAdmission.register(c)
-	port := newEnvironmentPort(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, nil)
+	port := newEnvironmentPort(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, nil, nil)
 	c.runtimeEnvironment = port
 	return port, c, store
 }
