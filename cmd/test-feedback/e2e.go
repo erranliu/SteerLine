@@ -386,7 +386,9 @@ func runE2E(opts options) (code int) {
 	}
 	web := ""
 	activityWeb := false
+	maintenanceWeb := false
 	for _, entry := range selected {
+		maintenanceWeb = maintenanceWeb || entry.ID == "runtime.refactoring-maintenance"
 		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.main-agent-advisory" || entry.ID == "runtime.refactoring-maintenance" || entry.ID == "manual-verification.local-codex" {
 			activityWeb = true
 		}
@@ -394,7 +396,7 @@ func runE2E(opts options) (code int) {
 	if remoteInput != nil && selected[0].ID != remotetest.Environment || activityWeb {
 		web = filepath.Join(buildDir, "steerline-web.exe")
 		commands := [][]string{{"go", "build", "-tags=webui", "-o", web, "./cmd/steerline-web"}}
-		if remoteInput != nil || hasContinuationSuggestionScenario(selected) {
+		if remoteInput != nil || maintenanceWeb || hasContinuationSuggestionScenario(selected) {
 			commands = append([][]string{{"npm.cmd", "--prefix", "web", "run", "build"}}, commands...)
 		}
 		for i, args := range commands {
