@@ -2,12 +2,16 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 const SingleTaskPlanning = "task"
+
+var ErrPlanningChanged = errors.New("规划任务已变化，请刷新")
+var ErrPlanningPathOccupied = errors.New("同一路径已有活动规划任务")
 
 func TaskCardPath(id string) string { return "SteerlineFlow/task-planning/" + id + ".json" }
 

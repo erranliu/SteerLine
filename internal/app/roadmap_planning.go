@@ -21,7 +21,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 const planningRoute = "/roadmap-planning"
@@ -29,9 +28,19 @@ const planningAction = "roadmap_planning_"
 
 type planningPort struct {
 	*roadmapPort
+	store                      planningStore
+	readAdmissionMapping       func(context.Context, string, string) (map[string]string, error)
 	runner                     planningRunner
 	admit                      func(context.Context) error
 	refreshBaselineWithRewrite func(context.Context) (commit string, rewritten bool, err error)
+}
+
+type planningStore interface {
+	PlanningTask(context.Context, string, string) (roadmap.PlanningTask, error)
+	PlanningTasks(context.Context, string) ([]roadmap.PlanningTask, error)
+	PlanningReceipt(context.Context, string, string) ([]byte, error)
+	// A nonempty request commits its receipt and task changes together.
+	SavePlanning(context.Context, string, string, []byte, ...roadmap.PlanningTask) error
 }
 
 type planningRunner interface {
@@ -176,7 +185,7 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 	}
 	view := viewPlanning(task)
 	if task.Kind == roadmap.SingleTaskPlanning {
-		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		mapping, err := p.readAdmissionMapping(ctx, task.Project, task.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -214,7 +223,7 @@ func (p *planningPort) command(ctx context.Context, in httpcontract.CommandEnvel
 	}
 	durable := context.WithoutCancel(ctx)
 	err = p.store.SavePlanning(durable, p.config.Identity(), in.RequestID, raw, tasks...)
-	if errors.Is(err, sqlite.ErrPlanningChanged) || errors.Is(err, sqlite.ErrPlanningPathOccupied) {
+	if errors.Is(err, roadmap.ErrPlanningChanged) || errors.Is(err, roadmap.ErrPlanningPathOccupied) {
 		out.Status, out.Code, out.Diagnostic, out.Roadmap = "rejected", "planning_rejected", err.Error(), nil
 		raw, _ = json.Marshal(out)
 		err = p.store.SavePlanning(durable, p.config.Identity(), in.RequestID, raw)
@@ -267,7 +276,7 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 	}
 	view := viewPlanning(task)
 	if task.Kind == roadmap.SingleTaskPlanning {
-		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		mapping, err := p.readAdmissionMapping(ctx, task.Project, task.ID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -559,9 +568,13 @@ func (p *planningPort) run(ctx context.Context) {
 }
 
 func (p *planningPort) save(ctx context.Context, task *roadmap.PlanningTask) error {
+	return savePlanningTransition(ctx, p.store, task)
+}
+
+func savePlanningTransition(ctx context.Context, store planningStore, task *roadmap.PlanningTask) error {
 	next := *task
 	next.Revision++
-	if err := p.store.SavePlanning(context.WithoutCancel(ctx), task.Project, "", nil, next); err != nil {
+	if err := store.SavePlanning(context.WithoutCancel(ctx), task.Project, "", nil, next); err != nil {
 		return err
 	}
 	task.Revision = next.Revision
@@ -648,7 +661,7 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 		return p.handoffPlanning(ctx, task)
 	}
 	if task.Kind == roadmap.SingleTaskPlanning && !task.StopRequested {
-		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		mapping, err := p.readAdmissionMapping(ctx, task.Project, task.ID)
 		if err != nil {
 			return err
 		}

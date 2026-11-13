@@ -17,12 +17,11 @@ func roadmapContent(r roadmap.Record) runnerbinding.Content {
 	return runnerbinding.Content{StateDir: r.Runner.StateDir, Request: r.Request, RunID: r.RunID, InputDigest: r.InputDigest, Project: r.Project, ObjectKey: "steerline_roadmap_parse", ObjectID: r.ID, Unsubmitted: r.Submission == "pending", Rejected: r.State == "rejected" && r.RunID == ""}
 }
 
-func preparePlanningStops(ctx context.Context, c *Config, store *sqlite.SQLiteStore, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
+func preparePlanningStops(ctx context.Context, c *Config, store planningStore, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
 	tasks, err := store.PlanningTasks(ctx, c.Identity())
 	if err != nil {
 		return nil, err
 	}
-	p := planningPort{roadmapPort: &roadmapPort{store: store}}
 	var pending []runnercontract.PendingStop
 	for _, task := range tasks {
 		if (!task.StopRequested && task.Merged == "") || (task.Run == nil && task.Operation == nil) || task.Run != nil && task.Run.StopStatus == "stopped" || !runnerbinding.SameBuild(task.Build, cli.BuildPin()) {
@@ -40,7 +39,7 @@ func preparePlanningStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 				if unaccepted {
 					task.Operation, task.Status = nil, "closed"
 					task.ModelSlot = false
-					if err := p.save(ctx, &task); err != nil {
+					if err := savePlanningTransition(ctx, store, &task); err != nil {
 						return nil, err
 					}
 				}
@@ -72,7 +71,7 @@ func preparePlanningStops(ctx context.Context, c *Config, store *sqlite.SQLiteSt
 		}
 		task.Run = view.Run
 		if preparePlanningStartupRequest(&task) {
-			if err := p.save(ctx, &task); err != nil {
+			if err := savePlanningTransition(ctx, store, &task); err != nil {
 				return nil, err
 			}
 		}
