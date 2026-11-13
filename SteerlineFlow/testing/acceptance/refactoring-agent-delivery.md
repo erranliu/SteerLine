@@ -17,6 +17,8 @@
 
 Runner 使用 #157 之前的 `8be179f29e0b9eac8572f447439a15cd7d776213`。公开契约首次验证发现本地 `execute/1` 拒绝多行输入，改用单行 JSON 后 `go.runner-result` 通过。首次真实联验确认模型可返回绑定原 Run 的 JSON，第二轮审计在三级指令中抄错提交值，补证阻断且清理通过。后续规则增量要求引用 `context.round_start` 并由 Git 读取当前 HEAD，独立复核已确认正文和接线。
 
+本轮定向检查、Web 构建、L1/L2、`go.http`、`go.storage`、`go.runner-result` 及受控 `runtime.refactoring-maintenance` 均通过。定向日志在 `C:/SteerlineDebug/wt-1851-pr-review/diagnostics/final-owner-20261113T084739Z-21dc4b12/`。正式报告根为 `C:/SteerlineDebug/wt-1851-pr-review/test-results/`，L1/L2 使用 `pr-review-final-20261113T084554Z-b557806a`，L3 通过复验为 `pr-review-retry-20261113T085638Z-039b2a70`，L4 owner 见 `go.http-20261113T085245Z-8208bb7a`、`go.storage-20261113T085245Z-8208bb7a` 及 `runner-contract-retry-20261113T084333Z-47f512ec`。先前受控场景一次发现失败原生回复的阻断回执未传给审计，修复后一次超时，均确认清理。通过的受控复验覆盖失败回执、原 PR 续作、两版评审及保留 PR 正文。
+
 前置能力验证和主体接线已完成，逐项验证范围见下文。关联 [Spec](../../spec/refactoring-agent-delivery.spec.md) · [Plan](../../plans/refactoring-agent-delivery.plan.md) · [测试选择](../../plans/refactoring-agent-delivery.tests.json)。原最小闭环验收见 [历史证据](refactoring-maintenance.md)。
 
 ## 前置能力验证

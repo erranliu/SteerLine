@@ -450,12 +450,7 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 	v := query.Refactoring(r, time.Now().UTC())
 	if len(r.Reports) > 0 && r.PR != nil {
 		report := r.Reports[len(r.Reports)-1]
-		stale := report.Head != r.PR.HeadRevision || report.Base != r.PR.BaseRevision || r.PR.Merged || r.PR.State != "open"
-		if r.Phase == "delivered" && p.config.runtimeMaintenance != nil {
-			base := p.config.runtimeMaintenance.current().Commit
-			stale = stale || base != "" && base != report.Base
-		}
-		v["report_stale"] = stale
+		v["report_stale"] = report.Head != r.PR.HeadRevision || report.Base != r.PR.BaseRevision || r.PR.Merged || r.PR.State != "open"
 	}
 	return v, nil
 }
