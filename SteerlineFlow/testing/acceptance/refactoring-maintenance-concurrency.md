@@ -1,6 +1,6 @@
 # 重构与维护并发与运行环境选择验收
 
-2026-11-12 · 受控功能、候选报告修复和冲突末审 JSON 重试已验收。最新真实联验确认两条可写 Run 重叠及主行动交付，副行动报告登记阻断，未进入原 PR 冲突续作。[Spec](../../spec/refactoring-maintenance-concurrency.spec.md) · [Plan](../../plans/refactoring-maintenance-concurrency.plan.md) · [正式测试选择](../../plans/refactoring-maintenance-concurrency.tests.json)
+2026-11-13 · 变基至含 #549 和 #557 的主线。受控并发、原 PR 续作和独立合入评审已验证。新交付协议的真实双交付与冲突续作待验证。[Spec](../../spec/refactoring-maintenance-concurrency.spec.md) · [Plan](../../plans/refactoring-maintenance-concurrency.plan.md) · [正式测试选择](../../plans/refactoring-maintenance-concurrency.tests.json)
 
 环境与证据遵循[测试指南](../../testing.md#环境与证据)。受控场景在 Windows 使用独立 home、项目、数据库、Runner/provider 夹具和 Edge。真实场景使用固定独立 Runner EXE、本机 Codex 与自有远端测试分支。实际构建及执行命令在实施时固定。验收从以下最小结果判断，通过记录链接原始证据。
 
@@ -150,3 +150,15 @@ PR 分支更新至 `main` 的 `805cfcae`，SQLite schema 提升到 49，同时�
 副行动首轮发布报告称创建命令被执行策略拒绝，封存结果为 `blocked` 且 PR 字段为空。确认本轮基线上暂无 PR 后，通过公开 `refactoring_answer` 同意在原分支重试。副行动随后创建 [#810](https://github.com/erranliu/SteerlineTest/pull/810)，更正正文并最终封存新结果。两次封存的 head/base 相同，但更正结果中的 #810 与初始候选的空 PR 字段不匹配，应用以「更正报告未绑定原PR及候选head/base」阻断。证据见 `peer-before-public-answer.json`、`peer-public-answer-receipt.json`、`maintenance-peer-view.json` 和 `e2e-1.raw.log`。双交付检查中止，专用基线未推进，本轮未登记新基线或第二份报告。
 
 独立复查确认 #809、#810 均为已关闭、未合并的草稿 PR，专用基线和两个 head 分支均已删除。本轮 Runner 清理已确认。证据见 `remote-cleanup-verified.json`、`scenario.json` 和 `maintenance-live-runner-cleanup.json`。
+
+## 2026-11-13 主线变基与维护适配
+
+基线 `fd6c31f5`。并发调度、运行环境资格和列表／详情接入 #549 的首轮只读调查、Runner Final、结构化答复及独立 PR 合入评审。首次派发按 #557 当前方案核对冻结版本。原 PR 续作核对发布回执、平台当前 head/base 与 Git 祖先关系，评审保存于原行动，PR 正文保持原样。上轮真实报告记录保留于原受测版本，当前版本尚未运行真实场景。
+
+常规只读正文仍为 316 个 UTF-8 字节，可写正文仍为 589 字节。上一份同轮同阶段输出因 JSON 无效失败时，限次重试使用 628 字节的固定正文。新增 312 字节要求重新读取当前阶段材料，按该阶段 schema 将短字段置于长文本之前，并检查单一对象的边界。畸形原文留在操作历史。提示词正文、材料接线及 schema 经独立审核。[实际差异](https://github.com/erranliu/SteerLine/commit/404cda9a)
+
+| 入口 | 结果 | 相对报告根 |
+| --- | --- | --- |
+| L1、L2 | `42fe8560`，均通过；后续维护定向和 L3 覆盖 #557 接线变化 | `test-results/{L1,L2}/20261113-184544-392-rebase-556` |
+| 维护、App、存储及提示词定向 | `d5b96a9d`，97 项通过。覆盖冲突评审有效重试登记新版本及连续无效时保留首份评审 | `diagnostics/20261113-190330-982-rebase-557` |
+| `runtime.refactoring-maintenance` | `d5b96a9d`，通过并确认清理。当前 Web 构建覆盖侧栏和结构化答复、原 PR 第二份独立评审、三条 Run 重叠、第四条排队及接位 | `test-results/L3/20261113-190330-982-rebase-557` |
