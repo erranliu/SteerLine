@@ -42,15 +42,13 @@ func (c Config) runnerPublication() runnerclient.Publication {
 	return runnerclient.Publication{Provider: c.PR.Kind, Repository: c.PR.Repository, BaseBranch: c.Branch, Settings: body}
 }
 
-type taskExecutionPreparer func(context.Context, taskmodel.FixedWork, bool, func(context.Context, taskmodel.FixedWork, bool) (string, error)) (taskmodel.FixedWork, string, error)
-
-func runnerTaskService(config Config, connection taskrunner.Store, cli runnerclient.Client, prepare taskExecutionPreparer, reserver readyExecutionReserver) *taskrunner.Service {
+func runnerTaskService(config Config, connection taskrunner.Store, cli runnerclient.Client, maintenance *projectMaintenance) *taskrunner.Service {
 	policy := config.environmentPolicy
 	service := &taskrunner.Service{Project: config.Identity(), Claimant: config.Claimant, StateDir: cli.StateDir, DefaultProfile: config.RunnerExecution.DefaultProfile, Profiles: config.RunnerExecution.taskProfiles(config.Repository, config.runnerPublication()), Tasks: NewTaskService(connection, config), Store: connection}
 	service.RunnerBuild = cli.BuildPin()
 	for id, profile := range service.Profiles {
 		profile.UnavailableReason = config.runtimeCatalog.ExecutionWaitUnavailable(profile.Input.Execution)
-		if profile.UnavailableReason == "" && prepare != nil &&
+		if profile.UnavailableReason == "" && maintenance != nil &&
 			(profile.Input.Workflow.ID == "development" || profile.Input.Workflow.ID == "development-audited") {
 			if err := config.validateTestArrangementProfile(profile.Input.Execution, profile.Input.Workflow); err != nil {
 				profile.UnavailableReason = err.Error()
@@ -85,14 +83,31 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 	git := commandRunner{Dir: config.Repository, Timeout: timeout, ProcessHost: config.ProcessHost}
 	base := taskrunner.BaseResolver{Project: config.Identity(), Store: connection, Git: func(ctx context.Context, args ...string) ([]byte, error) { return git.Output(ctx, config.Git, args...) }}
 	service.ResolveBase = base.Resolve
-	if prepare != nil {
-		service.PrepareExecution = func(ctx context.Context, w taskmodel.FixedWork, candidate bool) (taskmodel.FixedWork, string, error) {
-			return prepare(ctx, w, candidate, base.Resolve)
+	if maintenance != nil {
+		service.PrepareExecution = func(ctx context.Context, w taskmodel.FixedWork, id string) (taskmodel.FixedWork, string, error) {
+			if policy.RequireReadiness() {
+				if config.runtimeEnvironment == nil {
+					return w, "", &taskmodel.Error{Code: "environment_not_ready", Message: "项目环境准备门禁不可用"}
+				}
+				if err := config.runtimeEnvironment.refreshExecutionConfiguration(ctx, id); err != nil {
+					return w, "", &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
+				}
+			}
+			observation, err := maintenance.check(ctx)
+			if err != nil {
+				return w, "", &taskmodel.Error{Code: "project_not_ready", Message: "项目未就绪：远端检查失败：" + err.Error()}
+			}
+			if policy.RequireReadiness() {
+				if _, _, err := config.runtimeEnvironment.qualifyEnvironment(ctx, id, "", func(context.Context) (string, error) {
+					return observation.Commit, nil
+				}); err != nil {
+					return w, "", &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
+				}
+			}
+			return maintenance.prepareLatest(ctx, w, observation.Commit, base.ResolveAt)
 		}
-	}
-	if reserver != nil {
 		service.ReserveExecution = func(ctx context.Context, w taskmodel.FixedWork, c runnerbridge.Candidate, candidate bool) error {
-			return reserver.reserveReadyExecution(ctx, c.BaseRevision, func() error {
+			return maintenance.reserveReadyExecution(ctx, c.BaseRevision, func() error {
 				return connection.ReserveRunnerCandidate(ctx, w, c, candidate)
 			})
 		}
@@ -171,7 +186,7 @@ func (c Config) runnerClient(ctx context.Context) (runnerclient.Client, error) {
 
 // newRunnerService borrows project resources; it never opens or closes them.
 func newRunnerService(config Config, host hostport.HostPort, connection *sqlite.SQLiteStore, cli runnerclient.Client, info runnerclient.ServiceInfo, maintenance *projectMaintenance) (*taskrunner.Actor, error) {
-	service := runnerTaskService(config, connection, cli, maintenance.prepare, maintenance)
+	service := runnerTaskService(config, connection, cli, maintenance)
 	service.ObserveManualPR = func(ctx context.Context, observation storageports.RunnerPRObservation, err error) error {
 		return connection.ObserveManualPR(ctx, config.Identity(), observation, err)
 	}

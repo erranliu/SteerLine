@@ -50,7 +50,7 @@ type Service struct {
 	Admit                                       func(context.Context) error
 	RunnerBuild                                 runnercontract.BuildPin
 	ReserveExecution                            func(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
-	PrepareExecution                            func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error)
+	PrepareExecution                            func(context.Context, taskmodel.FixedWork, string) (taskmodel.FixedWork, string, error)
 	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (json.RawMessage, error)
 	PrepareManualChecks                         func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (*manualverification.Snapshot, error)
 	CheckExecution                              func(context.Context, string, bool) error
@@ -117,13 +117,13 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if err != nil {
 		return runnerbridge.Candidate{}, err
 	}
-	if err := s.checkExecution(ctx, profileID, true); err != nil {
-		return runnerbridge.Candidate{}, err
-	}
 	var base string
 	if s.PrepareExecution != nil {
-		work, base, err = s.PrepareExecution(ctx, work, input.Candidate)
+		work, base, err = s.PrepareExecution(ctx, work, profileID)
 	} else {
+		if err := s.checkExecution(ctx, profileID, true); err != nil {
+			return runnerbridge.Candidate{}, err
+		}
 		base, err = s.ResolveBase(ctx, work, input.Candidate)
 	}
 	if err != nil {

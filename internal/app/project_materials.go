@@ -224,10 +224,7 @@ func (m *projectMaintenance) freshness(ctx context.Context, c runnerstate.Candid
 	return "current"
 }
 
-func (m *projectMaintenance) prepareLatest(ctx context.Context, w taskmodel.FixedWork, candidate bool, base func(context.Context, taskmodel.FixedWork, bool) (string, error)) (taskmodel.FixedWork, string, error) {
-	if _, e := m.check(ctx); e != nil {
-		return w, "", &taskmodel.Error{Code: "project_not_ready", Message: "项目未就绪：远端检查失败：" + e.Error()}
-	}
+func (m *projectMaintenance) prepareLatest(ctx context.Context, w taskmodel.FixedWork, commit string, base func(context.Context, taskmodel.FixedWork, string) (string, error)) (taskmodel.FixedWork, string, error) {
 	if e := m.refresh(ctx); e != nil {
 		return w, "", e
 	}
@@ -237,6 +234,9 @@ func (m *projectMaintenance) prepareLatest(ctx context.Context, w taskmodel.Fixe
 	}
 	if e = requireProjectReadiness(state.Readiness); e != nil {
 		return w, "", e
+	}
+	if state.Observation.Commit != commit {
+		return w, "", &taskmodel.Error{Code: "project_not_ready", Message: "远端版本已变化，请重新检查后创建候选"}
 	}
 	var material pmm.Material
 	for _, value := range state.Materials {
@@ -252,10 +252,7 @@ func (m *projectMaintenance) prepareLatest(ctx context.Context, w taskmodel.Fixe
 	w.Contract = material.Contract
 	w.MaterialDigest = material.Digest
 	w.FrozenTestPlan = append(json.RawMessage(nil), material.TestPlan...)
-	b, e := base(ctx, w, candidate)
-	if e == nil && b != material.Commit {
-		e = errors.New("远端版本已变化，请重新检查后创建候选")
-	}
+	b, e := base(ctx, w, commit)
 	return w, b, e
 }
 

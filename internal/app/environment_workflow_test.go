@@ -245,7 +245,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.
 			port.service.Runner = peer
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			taskService := runnerTaskService(c, store, runnerclient.Client{}, nil, nil)
+			taskService := runnerTaskService(c, store, runnerclient.Client{}, nil)
 			actor, e := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: taskService, Store: store, Host: host.NewServiceHost(host.Config{RunDir: c.RunDir, ProcessFacts: executionprocess.NewServiceFacts()}, "off", io.Discard, nil), Repository: hostcontract.Repository{Identity: c.Identity()}, Mode: "manual", Heartbeat: time.Second, Control: func(context.Context, api.ControlRequest) (api.ControlReceipt, error) {
 				return api.ControlReceipt{}, nil
 			}})
@@ -312,7 +312,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.
 				t.Fatal("environment readiness differs from complete sealed report", e)
 			}
 			probe := &environmentReserveProbe{SQLiteStore: store}
-			gate := runnerTaskService(c, probe, runnerclient.Client{}, nil, nil)
+			gate := runnerTaskService(c, probe, runnerclient.Client{}, nil)
 			profile, e := c.RunnerExecution.Profile("remote", "")
 			require(t, e)
 			input, _ := json.Marshal(runnercontract.RunInput{Execution: profile.Execution})

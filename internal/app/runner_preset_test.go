@@ -326,7 +326,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	require(t, os.WriteFile(filepath.Join(r.runner.client.StateDir, "idle-run-fixture.json"), mustJSON(map[string]any{"run": public, "command": map[string]any{"request_id": "sl-submit-" + requestID, "command_id": "frozen-submit-command", "command": "submit", "run_id": public.RunID, "receipt_status": "accepted", "action_status": "completed"}}), 0600))
 	// Reserve through the actual caller service; the idle peer supplies only an
 	// existing stopped Run observation, never a model or business execution.
-	service := runnerTaskService(r.config, r.store, r.runner.client, m.prepare, m)
+	service := runnerTaskService(r.config, r.store, r.runner.client, m)
 	candidate, err := service.Start(ctx, taskrunner.Start{RequestID: requestID, TaskID: "1", TaskVersion: 1, GraphRevision: graph.Authority.GraphRevision, Explicit: true})
 	require(t, err)
 	require(t, os.WriteFile(filepath.Join(r.runner.client.StateDir, "idle-run-fixture.json"), mustJSON(map[string]any{"run": public, "command": map[string]any{"request_id": candidate.Submit.RequestID, "command_id": "frozen-submit-command", "command": "submit", "run_id": public.RunID, "receipt_status": "accepted", "action_status": "completed"}}), 0600))

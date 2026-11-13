@@ -110,7 +110,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 				_, _, _, materialErr = p.invocationAt(ctx, commit)
 			} else if record.Status() == "ready" {
 				var err error
-				prepared, err = p.materialAt(ctx, id, commit)
+				prepared, err = p.basisAt(ctx, id, commit)
 				materialErr, basis = err, prepared.Inputs
 			}
 		}

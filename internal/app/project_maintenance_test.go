@@ -199,7 +199,7 @@ func TestPMSGitArrangementFreshnessAndCandidateVersions(t *testing.T) {
 		t.Fatal(first)
 	}
 	work := taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contract}
-	fixed, base, err := m.prepare(ctx, work, false, func(context.Context, taskmodel.FixedWork, bool) (string, error) { return m.current().Commit, nil })
+	fixed, base, err := m.prepareLatest(ctx, work, m.current().Commit, func(context.Context, taskmodel.FixedWork, string) (string, error) { return m.current().Commit, nil })
 	require(t, err)
 	run := callerTestRun()
 	snapshot, err := m.config.prepareTestPlan(ctx, fixed, &run)
@@ -519,6 +519,8 @@ func TestPMReservationRejectsPendingEnvironmentObservation(t *testing.T) {
 	// Preflight approved this baseline before a new observation began.
 	reservations := 0
 	require(t, m.reserveBaseline(before.Commit, func() error { reservations++; return nil }))
+	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "new baseline")
+	pmGit(t, m.config.Repository, "push", "origin", "main")
 	entered, release := make(chan struct{}), make(chan struct{})
 	m.environmentObservation = func(context.Context, string) error { close(entered); <-release; return nil }
 	finished := make(chan error, 1)
@@ -534,7 +536,7 @@ func TestPMReservationRejectsPendingEnvironmentObservation(t *testing.T) {
 	if err == nil || reservations != 1 {
 		t.Fatal("pending observation admitted an old preflight", err, reservations)
 	}
-	require(t, m.reserveBaseline(before.Commit, func() error { reservations++; return nil }))
+	require(t, m.reserveBaseline(m.current().Commit, func() error { reservations++; return nil }))
 }
 
 func TestPMSMaterialReadinessDoesNotDependOnGenerationProfiles(t *testing.T) {
