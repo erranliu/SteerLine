@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+重构与维护并发与运行环境选择（2026-11-12，已实现，受控通过，真实交付整链未通过）。[Spec](refactoring-maintenance-concurrency.spec.md) · [Plan](../plans/refactoring-maintenance-concurrency.plan.md) · [测试选择](../plans/refactoring-maintenance-concurrency.tests.json) · [专属验收](../testing/acceptance/refactoring-maintenance-concurrency.md)
+
 Roadmap 规划分页与原生会话（2026-11-11，已实现，真实浏览器链通过）。[Spec](roadmap-planning.spec.md) · [Plan](../plans/roadmap-planning.plan.md) · [测试选择](../plans/roadmap-planning.tests.json) · [专属验收](../testing/acceptance/roadmap-planning-workspace.md)。基于 Runner `conversation/2` 和 worktree 写入租约，规划任务在原会话内持续改稿，SteerLine 负责 Rebase、冲突核验及审阅后发布。回归和人工体验状态见验收记录。
 
 重构与维护最小闭环（2026-11-11，已实现，隔离真实联验通过）。[Spec](refactoring-maintenance.spec.md) · [Plan](../plans/refactoring-maintenance.plan.md) · [测试选择](../plans/refactoring-maintenance.tests.json) · [验收记录](../testing/acceptance/refactoring-maintenance.md)

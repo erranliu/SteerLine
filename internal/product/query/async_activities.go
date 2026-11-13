@@ -221,6 +221,8 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 	case "refactoring":
 		var r struct {
 			ID, Project, Phase, Summary, Diagnostic string
+			DirectionName                           string `json:"direction_name"`
+			EnvironmentName                         string `json:"environment_name"`
 			Revision                                uint64
 			CreatedAt                               time.Time  `json:"created_at"`
 			UpdatedAt                               time.Time  `json:"updated_at"`
@@ -235,6 +237,11 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		a.Kind = "steer_agent"
 		a.SteerAgent = &api.SteerAgentClassification{Type: "maintenance", Operation: "refactoring"}
 		a.Title = "重构与维护"
+		for _, title := range []string{r.DirectionName, r.EnvironmentName} {
+			if title != "" {
+				a.Title += " · " + title
+			}
+		}
 		a.Revision = r.Revision
 		a.CreatedAt = activityTime(r.CreatedAt)
 		a.ObservedAt = activityTime(r.UpdatedAt)
@@ -246,6 +253,10 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		a.Phase = r.Phase
 		a.State = "running"
 		switch r.Phase {
+		case "queued":
+			a.State = "queued"
+		case "submission_unknown":
+			a.State = "unknown"
 		case "waiting_input":
 			a.State = "waiting"
 			a.NeedsAttention = true

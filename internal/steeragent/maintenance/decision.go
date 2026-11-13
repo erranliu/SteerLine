@@ -33,7 +33,12 @@ func AcceptReview(raw []byte) (Review, error) {
 	return review, nil
 }
 
-func Instruction() (string, error) { return prompts.MaintenanceDecision() }
+func Instruction(retryJSON bool) (string, error) {
+	if retryJSON {
+		return prompts.MaintenanceDecisionJSONRetry()
+	}
+	return prompts.MaintenanceDecision()
+}
 
 func Accept(raw []byte, mode string) (Decision, error) {
 	var d Decision

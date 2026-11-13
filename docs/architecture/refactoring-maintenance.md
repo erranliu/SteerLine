@@ -4,7 +4,7 @@
 
 ## 总体选择
 
-新增一个独立的维护业务模块，沿用现有项目运行时、产品端口、SQLite、配置和 Runner 客户端。一个项目同时推进一个维护行动，由后台 worker 串行处理；页面只提交用户操作和读取结果。
+新增一个独立的维护业务模块，沿用现有项目运行时、产品端口、SQLite、配置和 Runner 客户端。每个项目独立分配三个推进名额，后台并发推进已获名额的行动。同一行动的 Runner 操作串行结算。SQLite 事务保护占位、版本和首次派发资格，页面提交用户操作并读取保存结果。并发边界见[并发 Spec](../../SteerlineFlow/spec/refactoring-maintenance-concurrency.spec.md)。
 
 `internal/refactoring` 是唯一业务 owner；其中 `model` 子包仅保存纯值与预算规则，供 SQLite 和查询读取，避免存储反向依赖 worker 或 Runner 客户端。`internal/steeragent/maintenance` 只做纯提示词供给与决策校验；只读工具由明确派生的 Runner generate 执行。`internal/app` 组装现有 Runner、项目就绪、计费与 PR 只读核验，SQLite 只负责事务保存。没有新建通用 Agent 引擎、插件系统或调度服务。
 

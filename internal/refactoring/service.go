@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -21,7 +22,7 @@ import (
 type Store interface {
 	Refactoring(context.Context, string, string) (model.Record, error)
 	Refactorings(context.Context, string) ([]model.Record, error)
-	SaveRefactoring(context.Context, model.Record, uint64, *model.Command) error
+	SaveRefactoring(context.Context, model.Record, uint64, *model.Command, ...env.Admission) error
 	RefactoringCommand(context.Context, string, string) ([]byte, []byte, error)
 }
 type Runner interface {
@@ -36,7 +37,9 @@ type Service struct {
 	Prepare              func(context.Context, model.Start) (model.Frozen, error)
 	Reserve              func(context.Context, string, func() error) error
 	Admit                func(context.Context) error
+	Qualify              func(context.Context, model.Record) (env.Admission, error)
 	Verify               func(context.Context, model.Record, model.Result) (*runnercontract.PRFact, string, error)
+	VerifyConflictBase   func(context.Context, model.Record, runnercontract.PRFact) error
 	ReviewDiff           func(context.Context, model.Record, runnercontract.PRFact) (string, error)
 	InvestigationPath    func(string) (string, error)
 	Investigate          func(context.Context, model.Record, string) error
@@ -49,7 +52,6 @@ type Service struct {
 	Now           func() time.Time
 	mu            sync.Mutex
 	advance       sync.Mutex
-	dispatch      sync.Mutex
 	reviewChecked map[string]time.Time
 }
 
@@ -59,18 +61,28 @@ func (s *Service) now() time.Time {
 	}
 	return time.Now().UTC()
 }
-func (s *Service) save(ctx context.Context, r *model.Record, cmd *model.Command) error {
+func (s *Service) save(ctx context.Context, r *model.Record, cmd *model.Command, proof ...env.Admission) error {
 	expected := r.Revision
 	r.Revision++
 	r.UpdatedAt = s.now()
-	if err := s.Store.SaveRefactoring(ctx, *r, expected, cmd); err != nil {
+	if !r.Unsettled() {
+		if !r.Active() || r.Phase == "waiting_input" {
+			r.Slot = false
+			r.WaitReason = ""
+			r.Pause(r.UpdatedAt)
+		}
+		if !r.Active() && r.FinishedAt == nil {
+			r.FinishedAt = &r.UpdatedAt
+		}
+	}
+	if err := s.Store.SaveRefactoring(ctx, *r, expected, cmd, proof...); err != nil {
 		r.Revision = expected
 		return err
 	}
 	if s.Queue != nil {
 		for _, o := range r.Operations {
 			if o.Content(*r).WorkflowID == "generate" {
-				s.Queue.UpdateContent(s.Project, "refactoring:"+o.ID, o.CreatedAt, o.State == "submitted", o.Settled())
+				s.Queue.UpdateContent(s.Project, "refactoring:"+o.ID, o.CreatedAt, o.State == "submitted", o.Settled() || !r.Slot)
 			}
 		}
 	}
@@ -119,13 +131,29 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		if e = in.Validate(); e != nil {
 			return model.Record{}, e
 		}
+		if s.Admit != nil {
+			if e = s.Admit(ctx); e != nil {
+				return model.Record{}, e
+			}
+		}
 		f, e := s.Prepare(ctx, *in)
 		if e != nil {
 			return model.Record{}, e
 		}
 		now := s.now()
-		r := model.Record{ID: c.ID, Project: s.Project, Input: *in, Frozen: f, Phase: "first", CreatedAt: now, ActiveSince: &now, Operations: []model.Operation{}, Answers: []model.Answer{}, Reports: []model.Report{}}
-		create := func() error { s.mu.Lock(); defer s.mu.Unlock(); return s.save(ctx, &r, &c) }
+		r := model.Record{ID: c.ID, Project: s.Project, Input: *in, Frozen: f, Phase: "first", CreatedAt: now, EnqueuedAt: now, Operations: []model.Operation{}, Answers: []model.Answer{}, Reports: []model.Report{}}
+		create := func() error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if replay, found, err := s.replay(ctx, c); found {
+				r = replay
+				return err
+			}
+			if f.Environment != nil {
+				return s.save(ctx, &r, &c, *f.Environment)
+			}
+			return s.save(ctx, &r, &c)
+		}
 		if s.Reserve != nil {
 			e = s.Reserve(ctx, f.Repository.BaseRevision, create)
 		} else {
@@ -133,8 +161,6 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		}
 		return r, e
 	}
-	s.dispatch.Lock()
-	defer s.dispatch.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r, found, err := s.replay(ctx, c); found {
@@ -156,8 +182,15 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		r.Phase = "stopping"
 		r.Pause(s.now())
 		r.Question = nil
+		r.WaitReason = ""
+		if n := len(r.Operations); n > 0 && r.Operations[n-1].State == "pending" {
+			r.Operations[n-1].State = "cancelled"
+		}
+		if !r.Unsettled() {
+			r.Phase = "stopped"
+		}
 	case "refactoring_finish":
-		if r.Phase == "delivered" || r.StopRequested && r.Phase != "stopped" {
+		if !r.CanFinish() {
 			return r, errors.New("当前行动不可收尾")
 		}
 		if !r.Active() && uncertainPublication(r) {
@@ -184,13 +217,11 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		if r.Phase == "waiting_input" {
 			r.Phase = closingPhase(r)
 			r.Question = nil
-			now := s.now()
-			r.ActiveSince = &now
+			r.EnqueuedAt = s.now()
 		}
 		if !r.Active() {
 			r.StopRequested = false
-			now := s.now()
-			r.ActiveSince = &now
+			r.EnqueuedAt = s.now()
 			r.Phase = closingPhase(r)
 		}
 		r.FinishRequested = true
@@ -212,8 +243,7 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		r.Answers = append(r.Answers, model.Answer{QuestionID: c.QuestionID, Option: *chosen, Note: c.Note})
 		r.Phase = r.Question.Mode
 		r.Question = nil
-		now := s.now()
-		r.ActiveSince = &now
+		r.EnqueuedAt = s.now()
 	case "refactoring_review":
 		if !r.CanReview() {
 			return r, errors.New("当前行动不可重新评审")
@@ -221,8 +251,7 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		r.Phase = "report"
 		r.StopRequested = false
 		r.FinishedAt = nil
-		now := s.now()
-		r.ActiveSince = &now
+		r.EnqueuedAt = s.now()
 	case "refactoring_conflict":
 		if r.Phase != "delivered" || r.PR == nil || r.PR.Merged || r.PR.State == "closed" {
 			return r, errors.New("原PR不允许冲突续作")
@@ -230,22 +259,31 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		if s.Verify == nil {
 			return r, errors.New("缺少原PR核验")
 		}
+		s.mu.Unlock()
 		pr, _, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
+		s.mu.Lock()
 		if err != nil {
 			return r, err
 		}
 		if pr.Merged || !strings.EqualFold(pr.State, "open") {
 			return r, errors.New("原 PR 已关闭或合并")
 		}
+		current, err := s.Store.Refactoring(ctx, s.Project, r.ID)
+		if err != nil {
+			return r, err
+		}
+		if current.Revision != r.Revision {
+			return r, model.ErrConflict
+		}
 		r.PR = pr
+		r.ConflictPending = true
 		r.Phase = "finish"
 		r.FinishRequested = true
 		r.StopRequested = false
 		r.Candidate = nil
 		r.WriteKind = "conflict"
 		r.FinishedAt = nil
-		now := s.now()
-		r.ActiveSince = &now
+		r.EnqueuedAt = s.now()
 	default:
 		return r, errors.New("不支持的维护操作")
 	}
@@ -254,95 +292,6 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 	return r, e
 }
 
-// Tick does bounded bookkeeping; all external calls happen outside the state lock.
-func (s *Service) Tick(ctx context.Context) error {
-	s.advance.Lock()
-	defer s.advance.Unlock()
-	rows, e := s.Store.Refactorings(ctx, s.Project)
-	if e != nil {
-		return e
-	}
-	var cleanupErr error
-	for _, r := range rows {
-		if s.ReleaseInvestigation != nil {
-			for i, o := range r.Operations {
-				if o.Settled() && o.Investigation != "" {
-					if e = s.ReleaseInvestigation(o.ID); e != nil {
-						cleanupErr = errors.Join(cleanupErr, e)
-						continue
-					}
-					_, e = s.update(ctx, r.ID, func(current *model.Record) error {
-						current.Operations[i].Investigation = ""
-						return nil
-					})
-					return e
-				}
-			}
-		}
-		if !r.Active() {
-			continue
-		}
-		if e = s.tick(ctx, r); e != nil {
-			_, _ = s.update(context.WithoutCancel(ctx), r.ID, func(current *model.Record) error { current.Diagnostic = e.Error(); return nil })
-			return e
-		}
-		return cleanupErr
-	}
-	if s.Verify != nil && ctx.Err() == nil {
-		for _, r := range rows {
-			if r.Phase != "delivered" || r.PR == nil || r.PR.Merged || r.PR.State != "open" || s.now().Sub(s.reviewChecked[r.ID]) < time.Minute {
-				continue
-			}
-			if s.reviewChecked == nil {
-				s.reviewChecked = make(map[string]time.Time)
-			}
-			s.reviewChecked[r.ID] = s.now()
-			pr, checks, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
-			checksChanged := len(r.Reports) > 0 && r.Reports[len(r.Reports)-1].Checks != checks
-			if err == nil && (checksChanged || !matchesVersion(r.PR, pr.URL, pr.HeadRevision, pr.BaseRevision) || pr.State != r.PR.State || pr.Merged != r.PR.Merged) {
-				_, err = s.update(ctx, r.ID, func(current *model.Record) error {
-					if current.Revision != r.Revision {
-						return nil
-					}
-					current.PR = pr
-					if pr.State == "open" && !pr.Merged {
-						current.Phase = "report"
-						now := s.now()
-						current.ActiveSince = &now
-						current.FinishedAt = nil
-					}
-					return nil
-				})
-				return errors.Join(cleanupErr, err)
-			}
-			break
-		}
-	}
-	if s.ReadCost != nil {
-		for _, r := range rows {
-			if r.Frozen.Pricing == nil {
-				continue
-			}
-			for i, op := range r.Operations {
-				if op.State != "complete" || op.Cost.Complete || s.now().Sub(op.Cost.ObservedAt) <= 30*time.Second {
-					continue
-				}
-				cost, err := s.ReadCost(ctx, r, op)
-				if err != nil {
-					cost = op.Cost
-					cost.Diagnostic = err.Error()
-				}
-				cost.ObservedAt = s.now()
-				_, err = s.update(ctx, r.ID, func(current *model.Record) error {
-					current.Operations[i].Cost = cost
-					return nil
-				})
-				return errors.Join(cleanupErr, err)
-			}
-		}
-	}
-	return cleanupErr
-}
 func (s *Service) tick(ctx context.Context, r model.Record) error {
 	if len(r.Operations) > 0 {
 		o := r.Operations[len(r.Operations)-1]
@@ -436,65 +385,101 @@ func (s *Service) tick(ctx context.Context, r model.Record) error {
 }
 
 func (s *Service) submit(ctx context.Context, r model.Record, o model.Operation) error {
-	s.dispatch.Lock()
-	defer s.dispatch.Unlock()
-	current, err := s.Store.Refactoring(ctx, r.Project, r.ID)
-	if err != nil {
-		return err
-	}
-	if n := len(current.Operations); n == 0 || current.Operations[n-1].ID != o.ID || current.Operations[n-1].State != "pending" {
-		return nil
-	}
-	r = current
-	if r.StopRequested {
-		_, e := s.update(ctx, r.ID, func(r *model.Record) error {
-			last := &r.Operations[len(r.Operations)-1]
-			if last.ID == o.ID && last.State == "pending" {
-				last.State = "cancelled"
-			}
-			return nil
-		})
-		return e
-	}
-	if o.Content(r).WorkflowID == "generate" && s.Queue != nil {
-		key := "refactoring:" + o.ID
-		s.Queue.UpdateContent(s.Project, key, o.CreatedAt, false, false)
-		if !s.Queue.AcquireContent(s.Project, key) {
-			return nil
-		}
-	}
-	if o.Investigation != "" {
-		if err := s.Investigate(ctx, r, o.ID); err != nil {
+	if s.Admit != nil {
+		if err := s.Admit(ctx); err != nil {
 			_, saveErr := s.update(ctx, r.ID, func(current *model.Record) error {
 				last := &current.Operations[len(current.Operations)-1]
-				if last.ID != o.ID || last.State != "pending" || current.StopRequested {
-					return nil
+				if last.ID == o.ID && last.State == "pending" && !current.StopRequested {
+					last.State = "cancelled"
+					current.Phase = "blocked"
+					current.Diagnostic = err.Error()
 				}
-				last.State = "rejected"
-				last.Feedback = err.Error()
-				s.block(current, err.Error())
 				return nil
 			})
 			return saveErr
 		}
 	}
-	var send bool
-	_, e := s.update(ctx, r.ID, func(r *model.Record) error {
-		last := &r.Operations[len(r.Operations)-1]
-		if last.ID == o.ID && last.State == "pending" && !r.StopRequested {
-			last.State = "submitted"
-			send = true
+	if r.ConflictPending {
+		fact, _, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
+		if err == nil && (fact.Merged || !strings.EqualFold(fact.State, "open")) {
+			_, err = s.update(ctx, r.ID, func(current *model.Record) error {
+				last := &current.Operations[len(current.Operations)-1]
+				if last.ID == o.ID && last.State == "pending" && !current.StopRequested {
+					last.State = "cancelled"
+					current.Phase = "delivered"
+					current.ConflictPending = false
+					current.Diagnostic = model.ErrPRClosed.Error()
+					if fact != nil {
+						current.PR = fact
+					}
+				}
+				return nil
+			})
+			return err
 		}
-		return nil
-	})
-	if e != nil || !send {
-		if s.Queue != nil && o.Content(r).WorkflowID == "generate" {
-			s.Queue.UpdateContent(s.Project, "refactoring:"+o.ID, o.CreatedAt, false, true)
+		if err != nil {
+			return err
 		}
-		return e
+		if fact.HeadRevision != r.PR.HeadRevision {
+			_, err = s.update(ctx, r.ID, func(current *model.Record) error {
+				last := &current.Operations[len(current.Operations)-1]
+				if last.ID == o.ID && last.State == "pending" && !current.StopRequested {
+					last.State = "cancelled"
+					s.block(current, "排队期间原 PR 的 head 已变化，请重新核对原交付")
+				}
+				return nil
+			})
+			return err
+		}
+		if fact.BaseRevision != r.PR.BaseRevision {
+			_, err = s.update(ctx, r.ID, func(current *model.Record) error {
+				last := &current.Operations[len(current.Operations)-1]
+				if last.ID == o.ID && last.State == "pending" && !current.StopRequested {
+					last.State = "cancelled"
+					current.PR = fact
+					current.Phase = "finish"
+					current.PendingPrompt = ""
+					current.Diagnostic = "目标基线已变化，重新准备原 PR 续作"
+				}
+				return nil
+			})
+			return err
+		}
+	}
+	var proof []env.Admission
+	if !r.Authorized && s.Qualify != nil {
+		qualification, err := s.Qualify(ctx, r)
+		if err != nil {
+			return s.deferFirstDispatch(ctx, r.ID, o.ID, err)
+		}
+		proof = append(proof, qualification)
+	}
+	send, err := s.markSubmitted(ctx, r.ID, o, proof)
+	if errors.Is(err, model.ErrEnvironmentChanged) {
+		return s.deferFirstDispatch(ctx, r.ID, o.ID, err)
+	}
+	if err != nil || !send {
+		return err
+	}
+	if o.Investigation != "" {
+		if err := s.Investigate(ctx, r, o.ID); err != nil {
+			_, saveErr := s.update(context.WithoutCancel(ctx), r.ID, func(current *model.Record) error {
+				last := &current.Operations[len(current.Operations)-1]
+				if last.ID != o.ID || last.State != "submitted" {
+					return nil
+				}
+				last.State = "rejected"
+				last.Feedback = err.Error()
+				if !current.StopRequested {
+					s.block(current, err.Error())
+				}
+				return nil
+			})
+			return saveErr
+		}
 	}
 	receipt, callErr := s.Runner.Submit(ctx, o.Request)
-	_, e = s.update(context.WithoutCancel(ctx), r.ID, func(r *model.Record) error {
+	_, e := s.update(context.WithoutCancel(ctx), r.ID, func(r *model.Record) error {
 		last := &r.Operations[len(r.Operations)-1]
 		if last.ID != o.ID {
 			return errors.New("原维护输入被替换")
@@ -549,6 +534,15 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 		last := &r.Operations[len(r.Operations)-1]
 		if last.ID != o.ID {
 			return model.ErrConflict
+		}
+		if !r.StopRequested && (last.Run == nil || run.Revision > last.Run.Revision) {
+			if run.ExecutionWait != nil && run.ExecutionWait.Stage == "queue" && run.StopStatus != "stopped" {
+				r.WaitReason = model.WaitRunnerCapacity
+				r.Pause(observationTime(run.ExecutionWait.StartedAt, s.now()))
+			} else if r.WaitReason == model.WaitRunnerCapacity {
+				r.WaitReason = ""
+				r.Resume(observationTime(run.UpdatedAt, s.now()))
+			}
 		}
 		last.ObserveRun(run)
 		if binding.WorkflowID == "execute" {
@@ -657,15 +651,13 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 	}
 	var latest *runnercontract.PRFact
 	var latestChecks string
+	var conflictBaseErr error
 	if o.Purpose == "report" && decisionSucceeded && !r.StopRequested {
 		latest, latestChecks, e = s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
 		if e != nil {
 			return e
 		}
-		if s.reviewChecked == nil {
-			s.reviewChecked = make(map[string]time.Time)
-		}
-		s.reviewChecked[r.ID] = s.now()
+		conflictBaseErr = s.verifyConflictReviewBase(ctx, r, *latest)
 	}
 	_, e = s.update(ctx, r.ID, func(r *model.Record) error {
 		last := &r.Operations[len(r.Operations)-1]
@@ -687,6 +679,10 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			return nil
 		}
 		if r.StopRequested {
+			return nil
+		}
+		if conflictBaseErr != nil {
+			s.block(r, conflictBaseErr.Error())
 			return nil
 		}
 		if !decisionSucceeded {
@@ -740,7 +736,12 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 
 func retryableDecisionOutput(result *runnercontract.ContentResult) bool {
 	return result != nil && result.Status == "failed" &&
-		(result.Diagnostic == "human_input_required" || strings.HasPrefix(result.Diagnostic, "invalid_json:"))
+		(result.Diagnostic == "human_input_required" || invalidDecisionJSON(result))
+}
+
+func invalidDecisionJSON(result *runnercontract.ContentResult) bool {
+	return result != nil && result.Status == "failed" &&
+		(result.Diagnostic == "invalid_json" || strings.HasPrefix(result.Diagnostic, "invalid_json:"))
 }
 
 func (s *Service) observeWorkspaceGit(ctx context.Context, runID string) *runnercontract.WorkspaceGit {
@@ -838,6 +839,9 @@ func (s *Service) revoke(ctx context.Context, offline bool) error {
 					r.Operations[i].State = "cancelled"
 				}
 			}
+			if !r.Unsettled() {
+				r.Phase = "stopped"
+			}
 			return nil
 		})
 		if e != nil {
@@ -850,25 +854,5 @@ func (s *Service) Close(ctx context.Context) error {
 	if e := s.revoke(ctx, false); e != nil {
 		return e
 	}
-	for {
-		rows, e := s.Store.Refactorings(ctx, s.Project)
-		if e != nil {
-			return e
-		}
-		active := false
-		for _, r := range rows {
-			active = active || r.Active() && r.Phase != "waiting_input"
-		}
-		if !active {
-			return nil
-		}
-		if e = s.Tick(ctx); e != nil {
-			return e
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
+	return s.run(ctx, true)
 }

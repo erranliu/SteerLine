@@ -109,7 +109,7 @@ func RunnerCLI(args []string) (bool, error) {
 	case "version", "capabilities", "service":
 		os.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "caller-fixture-v1")
 		return protocol.RunRunnerServiceFixture(), nil
-	case "progress-file", "result-file", "submit", "inspect", "open-native-session", "events", "observe", "reply", "resume", "stop":
+	case "progress-file", "result-file", "workspace-git", "submit", "inspect", "open-native-session", "events", "observe", "reply", "resume", "stop":
 	default:
 		return false, nil
 	}
@@ -144,7 +144,7 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	var request runnercontract.Request
 	var id any
-	if args[0] != "progress-file" && args[0] != "result-file" && args[0] != "inspect" && args[0] != "events" && args[0] != "observe" && args[0] != "open-native-session" {
+	if args[0] != "progress-file" && args[0] != "result-file" && args[0] != "workspace-git" && args[0] != "inspect" && args[0] != "events" && args[0] != "observe" && args[0] != "open-native-session" {
 		if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
 			return true, err
 		}
@@ -190,6 +190,24 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	s.Calls = append(s.Calls, strings.Join(args[:1], " "))
 	runID := argument(args, "--run-id")
+	if args[0] == "workspace-git" {
+		runID := argument(args, "--run-id")
+		run, exists := s.Runs[runID]
+		if !exists || run.Correlation["steerline_refactoring"] == "" || run.Execution.Workspace == "" {
+			return respond(nil, "run_not_found")
+		}
+		head, err := Git(context.Background(), run.Execution.Workspace, "rev-parse", "HEAD")
+		if err != nil {
+			return true, err
+		}
+		status, err := Git(context.Background(), run.Execution.Workspace, "status", "--porcelain")
+		if err != nil {
+			return true, err
+		}
+		clean := strings.TrimSpace(status) == ""
+		head = strings.TrimSpace(head)
+		return respond(runnercontract.WorkspaceGit{RunID: runID, Commit: &head, Clean: &clean, ObservedAt: time.Now().UTC(), Verified: true}, "")
+	}
 	if args[0] == "result-file" {
 		result, ok := s.Results[runID]
 		if !ok {

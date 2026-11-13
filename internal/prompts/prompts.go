@@ -86,7 +86,8 @@ func MaintenanceStrategy(strategy string) ([]byte, error) {
 func MaintenanceDirection(id string) ([]byte, error) {
 	return files.ReadFile("materials/refactoring-directions/" + id + ".md")
 }
-func MaintenanceDecision() (string, error) { return render("maintenance-decision", nil) }
+func MaintenanceDecision() (string, error)          { return render("maintenance-decision", false) }
+func MaintenanceDecisionJSONRetry() (string, error) { return render("maintenance-decision", true) }
 func MaintenanceExecute(request []byte) (string, error) {
 	return render("maintenance-execute", string(request))
 }

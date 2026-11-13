@@ -20,6 +20,7 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		render func() (string, error)
 	}{
 		{"maintenance-decision", MaintenanceDecision},
+		{"maintenance-decision-json-retry", MaintenanceDecisionJSONRetry},
 		{"maintenance-execute", func() (string, error) {
 			return MaintenanceExecute([]byte(`{"action_id":"a","operation_id":"o","instruction":"用户原文 {{.Ignore}}\r\n下一行  "}`))
 		}},

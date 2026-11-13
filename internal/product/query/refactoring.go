@@ -42,10 +42,50 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 		}
 		breakdown[key] = map[string]any{"amount": value, "complete": full}
 	}
+	out := RefactoringSummary(r, now)
+	out["cost_breakdown"] = breakdown
+	out["input"] = r.Input
+	out["direction_prompt"] = r.Frozen.Direction.Prompt
+	out["source_commit"] = r.Frozen.Repository.BaseRevision
+	out["source_branch"] = r.Frozen.Repository.BaseBranch
+	out["question"] = r.Question
+	out["operations"] = ops
+	out["reports"] = r.Reports
+	out["pr"] = r.PR
+	out["amount"] = amount
+	out["cost_complete"] = complete
+	out["untracked"] = []string{"subagents", "tool_internal_models", "unobserved_provider_calls"}
+	return out
+}
+
+func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 	wallEnd := now
 	if r.FinishedAt != nil {
 		wallEnd = *r.FinishedAt
 	}
-	wallSeconds := wallEnd.Sub(r.CreatedAt).Seconds()
-	return map[string]any{"cost_breakdown": breakdown, "wall_seconds": wallSeconds, "id": r.ID, "revision": r.Revision, "input": r.Input, "direction_name": r.Frozen.Direction.Name, "direction_prompt": r.Frozen.Direction.Prompt, "phase": r.Phase, "round": r.Round, "source_commit": r.Frozen.Repository.BaseRevision, "source_branch": r.Frozen.Repository.BaseBranch, "summary": r.Summary, "diagnostic": r.Diagnostic, "question": r.Question, "operations": ops, "reports": r.Reports, "pr": r.PR, "elapsed_seconds": r.Elapsed(now).Seconds(), "amount": amount, "cost_complete": complete, "untracked": []string{"subagents", "tool_internal_models", "unobserved_provider_calls"}, "created_at": r.CreatedAt, "updated_at": r.UpdatedAt, "active": r.Active(), "can_finish": r.Phase == "stopped" || r.Phase == "blocked" || r.Active() && !r.FinishRequested && !r.StopRequested, "can_stop": r.Active() && !r.StopRequested, "can_review": r.CanReview(), "can_conflict": r.Phase == "delivered" && r.PR != nil && !r.PR.Merged && r.PR.State == "open"}
+	phase := r.DisplayPhase()
+	wait := ""
+	switch r.WaitReason {
+	case refactoring.WaitSharedCapacity:
+		wait = "等待共享生成容量"
+	case refactoring.WaitRunnerCapacity:
+		wait = "等待 Runner 容量"
+	case refactoring.WaitEnvironment:
+		wait = "运行环境资格待核实"
+	default:
+		if phase == "queued" {
+			wait = "等待项目推进名额"
+		}
+	}
+	return map[string]any{
+		"id": r.ID, "revision": r.Revision, "direction_name": r.Frozen.Direction.Name,
+		"environment_name": r.Frozen.EnvironmentName, "profile_name": r.Frozen.ProfileName,
+		"phase": phase, "round": r.Round, "slot": r.Slot, "wait_reason": wait,
+		"summary": r.Summary, "diagnostic": r.Diagnostic, "enqueued_at": r.EnqueuedAt,
+		"elapsed_seconds": r.Elapsed(now).Seconds(), "wall_seconds": wallEnd.Sub(r.CreatedAt).Seconds(),
+		"created_at": r.CreatedAt, "updated_at": r.UpdatedAt, "active": r.Active(),
+		"can_finish": r.CanFinish(), "can_stop": r.Active() && !r.StopRequested,
+		"can_review":   r.CanReview(),
+		"can_conflict": r.Phase == "delivered" && r.PR != nil && !r.PR.Merged && r.PR.State == "open",
+	}
 }

@@ -118,7 +118,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 	}
 	// Two independently prepared projects: observation-only, then explicit UI
 	// submissions. This is a scenario budget, never a production owner timeout.
-	if id == "runtime.async-activities" {
+	if id == "runtime.async-activities" || id == "runtime.refactoring-maintenance" {
 		timeout = 10 * time.Minute
 	}
 	if id == "testing.project-environment-readiness" || id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "testing.project-progress-local-codex" || id == "recovery.waiting-merge-restart" || id == "recovery.runner-wait-retry" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" || id == ManualVerificationLiveID {

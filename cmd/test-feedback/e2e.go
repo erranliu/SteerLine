@@ -629,9 +629,8 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 	minutes := 0
 	for _, entry := range entries {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
-		// Heavy isolation/native restart has a 10m body; its parent must not
-		// cut the selected scene at the ordinary 6m package bound.
-		if entry.ID == "runtime.async-activities" || entry.ID == "testing.project-environment-readiness" || entry.ID == "configuration.execution-profiles" || entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.runner-wait-retry" || entry.ID == "runtime.project-maintenance" {
+		// Longer controlled scenarios get a 10m body and independent cleanup.
+		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.refactoring-maintenance" || entry.ID == "testing.project-environment-readiness" || entry.ID == "configuration.execution-profiles" || entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.runner-wait-retry" || entry.ID == "runtime.project-maintenance" {
 			minutes += 12
 		} else {
 			minutes += 6
@@ -728,12 +727,14 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				Audit            bool `json:"independent_audit"`
 				Direction        bool `json:"direction_template"`
 				Browser          bool
+				Overlap          int    `json:"overlapping_controlled_runs"`
+				Queued           string `json:"queued_action"`
 			}
 			raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "refactoring-proof.json"))
 			if err != nil {
 				return err
 			}
-			if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Original || !proof.Audit || !proof.Browser || !proof.Direction {
+			if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Original || !proof.Audit || !proof.Browser || !proof.Direction || proof.Overlap != 3 || proof.Queued == "" {
 				return errors.New("maintenance evidence incomplete")
 			}
 		}
@@ -766,6 +767,8 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 					Report           bool   `json:"review_matches_pr_version"`
 					PRBodyUnchanged  bool   `json:"pr_body_unchanged"`
 					Conflict         bool   `json:"conflict_audit"`
+					Overlap          bool   `json:"native_overlap"`
+					ParallelPR       string `json:"parallel_pr"`
 					Head, Base       string
 				}
 				raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "refactoring-live-proof.json"))

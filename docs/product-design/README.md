@@ -39,7 +39,7 @@
 
 | 方案 | 当前限制 |
 | --- | --- |
-| [重构与维护](refactoring-maintenance.md) | 单页最小流程，支持单方向、每项目一个在途行动、默认谨慎与 1 轮、预算耗尽自动收尾、PR 报告及手动冲突续作 |
+| [重构与维护](refactoring-maintenance.md) | 选择已就绪运行环境，每项目默认并发三条行动，超额排队。默认谨慎与 1 轮，预算耗尽自动收尾，支持 PR 报告及手动冲突续作 |
 | [对话续作：给定上下文提示词建议](main-agent.md) | 原“主 Agent”的现有建议能力；明确待答自动接入 Runner generate，本地只读生成、活动与查看/复制；未部署 |
 | [添加、核验与登记](project-onboarding.md#拟议添加流程) | 角色清单及 PS-01–PS-07；完整 UI、核验器和正式登记尚未实现 |
 | [项目准备提示词](project-onboarding-prompt.md) | 用户自行复制使用；不触发产品 Agent、纳管或 Task |

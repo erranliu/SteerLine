@@ -38,12 +38,16 @@ func RefactoringLive(s *Scenario) {
 	s.Must(os.WriteFile(filepath.Join(native, "auth.json"), auth, 0600))
 	p.Driver.NativeHome = native
 	files := map[string]string{
-		"AGENTS.md": "# Isolated maintenance fixture\nMaintenance may change only alpha.cjs and beta.cjs. Preserve the calculate exports and their behavior. The validation entry point is node check.cjs. Keep existing checks and project materials intact.\n",
+		"AGENTS.md": "# Isolated maintenance fixture\nMaintenance may change only the files in the action’s explicit scope among alpha.cjs, beta.cjs and gamma.cjs. Preserve the calculate exports and their behavior. The validation entry point is node check.cjs. Keep existing checks and project materials intact.\n",
 		"alpha.cjs": "exports.calculate = function(values) { let result = 0; for (let i = 0; i < values.length; i++) { if (values[i] > 0) { result = result + values[i]; } else { result = result; } } return result; };\n",
 		"beta.cjs":  "exports.calculate = function(values) { const output = []; for (let i=0;i<values.length;i++) { if (values[i] !== null) { if (values[i] !== undefined) { output.push(values[i]); } } } return output; };\n",
+		"gamma.cjs": "exports.calculate = function (value) { if (value > 0) { return true; } else { return false; } };\n",
 		"check.cjs": `const assert = require('node:assert/strict');
 const a = require('./alpha.cjs');
 const b = require('./beta.cjs');
+const g = require('./gamma.cjs');
+assert.equal(g.calculate(2), true);
+assert.equal(g.calculate(0), false);
 assert.equal(a.calculate([-1, 0, 2, 3]), 5);
 assert.equal(a.calculate([]), 0);
 assert.equal(a.calculate(['1', -1]), '01');
@@ -77,13 +81,13 @@ console.log('checks passed');
 		}
 		tree := filepath.Join(s.Output, stage+"-tree")
 		s.Must(os.MkdirAll(tree, 0700))
-		for _, file := range []string{"alpha.cjs", "beta.cjs", "check.cjs"} {
+		for _, file := range []string{"alpha.cjs", "beta.cjs", "gamma.cjs", "check.cjs"} {
 			body := p.git(p.Repo, "show", report.Head+":"+file)
 			compact := strings.Join(strings.Fields(body), "")
 			if file == "alpha.cjs" && strings.Contains(compact, "result=result;") || file == "beta.cjs" && strings.Count(compact, "if(") > 1 {
 				s.t.Fatalf("%s still contains the original redundancy in %s", stage, file)
 			}
-			if concurrent && file != "check.cjs" && !strings.Contains(body, "// Concurrent task change: retain this comment.") {
+			if concurrent && (file == "alpha.cjs" || file == "beta.cjs") && !strings.Contains(body, "// Concurrent task change: retain this comment.") {
 				s.t.Fatalf("%s lost the concurrent change in %s", stage, file)
 			}
 			s.Must(os.WriteFile(filepath.Join(tree, file), []byte(body+"\n"), 0600))
@@ -143,11 +147,28 @@ console.log('checks passed');
 		s.Must(client.Post(s.Context, prefix+"/commands", request, &response))
 		return id, response
 	}
-	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, ref.Start{Direction: "simplify", DirectionRevision: directionRevision, Requirements: "完成两个独立切片。第一轮只简化 alpha.cjs，含该轮审计需要的任何补证和修复。第一轮验收后，第二轮只简化 beta.cjs，保留第一轮已验收的改动。两轮均保留 calculate 导出及行为并运行 node check.cjs。最终提交须同时包含两文件的简化，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。", Profile: "local-codex", Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
+	var start ref.Start
+	s.Wait("native maintenance qualification", func() (bool, error) {
+		var view maintenanceReadiness
+		if err := client.Get(s.Context, prefix+"/refactoring/readiness", &view); err != nil {
+			return false, err
+		}
+		var ready bool
+		start, ready = view.bind(ref.Start{Direction: "simplify", DirectionRevision: directionRevision, Requirements: "完成两个独立切片。第一轮只简化 alpha.cjs，含该轮审计需要的任何补证和修复。第一轮验收后，第二轮只简化 beta.cjs，保留第一轮已验收的改动。两轮均保留 calculate 导出及行为并运行 node check.cjs。最终提交须同时包含两文件的简化，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。", Profile: "local-codex", Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
+		return ready, nil
+	})
+	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, start)
 	if started.Status != "applied" {
 		s.t.Fatalf("refactoring_start: %s", started.Diagnostic)
 	}
-	var view struct {
+	peer := start
+	peer.Requirements = "只简化 gamma.cjs 的冗余布尔分支，保留 calculate 导出及行为。验证 node check.cjs，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。"
+	peer.Budget.Rounds = 1
+	peerID, started := post("refactoring_start", identity.RepositoryIdentity, 1, peer)
+	if started.Status != "applied" {
+		s.t.Fatalf("parallel refactoring_start: %s", started.Diagnostic)
+	}
+	type deliveryView struct {
 		ID                string
 		Revision          uint64
 		Phase, Diagnostic string
@@ -164,7 +185,65 @@ console.log('checks passed');
 			Cost                     ref.Cost
 		}
 	}
-	defer func() { s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-view.json"), view)) }()
+	var view, second deliveryView
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_ = client.Get(ctx, prefix+"/refactoring/"+peerID, &second)
+		s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-peer-view.json"), second))
+		s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-view.json"), view))
+	}()
+	currentRun := func(action string) (string, error) {
+		var state struct{ Operations []ref.Operation }
+		err := client.Get(s.Context, prefix+"/refactoring/"+action, &state)
+		if err != nil || len(state.Operations) == 0 {
+			return "", err
+		}
+		return state.Operations[len(state.Operations)-1].RunID, nil
+	}
+	type sample struct {
+		Run        *runnercontract.Run
+		ObservedAt time.Time
+	}
+	observe := func(id string) (sample, error) {
+		cmd := exec.CommandContext(s.Context, s.Run.Runner, "inspect", "--state-dir", runnerstatepath.Directory(p.Home), "--run-id", id, "--json")
+		cmd.Env = p.Driver.Environment(os.Environ())
+		raw, err := cmd.Output()
+		var result struct {
+			Data struct{ Run *runnercontract.Run }
+		}
+		if err == nil {
+			err = json.Unmarshal(raw, &result)
+		}
+		return sample{Run: result.Data.Run, ObservedAt: time.Now().UTC()}, err
+	}
+	var overlap []sample
+	s.Wait("two overlapping native maintenance turns", func() (bool, error) {
+		a, err := currentRun(id)
+		if err != nil || a == "" {
+			return false, err
+		}
+		b, err := currentRun(peerID)
+		if err != nil || b == "" {
+			return false, err
+		}
+		samples := make([]sample, 0, 3)
+		for _, runID := range []string{a, b, a} {
+			item, err := observe(runID)
+			if err != nil || item.Run == nil || item.Run.Status != "running" || item.Run.Final != nil || item.Run.Execution.SessionID == "" {
+				return false, err
+			}
+			samples = append(samples, item)
+		}
+		if samples[0].Run.Execution.SessionID == samples[1].Run.Execution.SessionID ||
+			samples[0].Run.Execution.SessionID != samples[2].Run.Execution.SessionID ||
+			samples[0].Run.Correlation["steerline_refactoring"] != id || samples[1].Run.Correlation["steerline_refactoring"] != peerID {
+			return false, nil
+		}
+		overlap = samples
+		return true, nil
+	})
+	s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-native-overlap.json"), overlap))
 	captured := map[string]bool{}
 	wait := func(reports int) {
 		s.Wait("native maintenance delivery", func() (bool, error) {
@@ -195,6 +274,21 @@ console.log('checks passed');
 	initial := view.Reports[0]
 	originalBody := verifyPR(original, initial)
 	verifyTree(initial, "initial", false)
+	s.Wait("parallel native maintenance delivery", func() (bool, error) {
+		err := client.Get(s.Context, prefix+"/refactoring/"+peerID, &second)
+		if err == nil && (second.Phase == "blocked" || second.Phase == "waiting_input" || second.Phase == "stopped") {
+			s.t.Fatalf("parallel maintenance interrupted: %s %s", second.Phase, second.Diagnostic)
+		}
+		return err == nil && second.Phase == "delivered" && second.PR != nil && len(second.Reports) == 1, err
+	})
+	if second.PR.URL == original || second.Reports[0].Base != baseline {
+		s.t.Fatal("parallel action did not publish independently")
+	}
+	verifyPR(second.PR.URL, second.Reports[0])
+	p.git(p.Repo, "fetch", "--quiet", "origin", second.Reports[0].Head)
+	if changed := p.git(p.Repo, "diff", "--name-only", baseline, second.Reports[0].Head); strings.TrimSpace(changed) != "gamma.cjs" {
+		s.t.Fatalf("parallel action exceeded its scope: %q", changed)
+	}
 	// Advance the owned base with an overlapping replacement; the original PR must be updated.
 	for _, name := range []string{"alpha.cjs", "beta.cjs"} {
 		body := strings.ReplaceAll(strings.ReplaceAll(files[name], "let result = 0", "let result = Number(0)"), "const output = [];", "const output = Array();")
@@ -243,18 +337,25 @@ console.log('checks passed');
 	raw, e := p.gh(s.Context, "pr", "list", "--repo", githubRepository, "--base", p.BaseBranch, "--state", "all", "--limit", "2", "--json", "url")
 	s.Must(e)
 	s.Must(json.Unmarshal(raw, &prs))
-	if len(prs) != 1 || prs[0].URL != original {
-		s.t.Fatal("maintenance must publish exactly one original PR")
+	if len(prs) != 2 || (prs[0].URL != original || prs[1].URL != second.PR.URL) && (prs[1].URL != original || prs[0].URL != second.PR.URL) {
+		s.t.Fatal("each maintenance action must publish exactly its original PR")
 	}
 	reader, e := sqlite.OpenSQLiteReader(p.Database)
 	s.Must(e)
 	defer reader.Close()
 	records, e := reader.Refactorings(s.Context, p.ProjectID)
 	s.Must(e)
-	if len(records) != 1 {
-		s.t.Fatal("one action required")
+	if len(records) != 2 {
+		s.t.Fatal("two isolated actions required")
 	}
-	r := records[0]
+	r, other := records[0], records[1]
+	if r.ID != id {
+		r, other = other, r
+	}
+	otherCost, _ := other.CostTotal()
+	if other.ID != peerID || r.ID != id || other.Identity == "" || other.Identity == r.Identity || other.Workspace == r.Workspace || other.PR == nil || r.PR == nil || other.PR.HeadBranch == r.PR.HeadBranch || otherCost == nil {
+		s.t.Fatal("parallel action did not bind its own worktree, branch, PR and costs")
+	}
 	latest, origin, identityKey, workspace, branch := "", "", "", "", ""
 	writes := 0
 	closingSeen := false
@@ -293,7 +394,7 @@ console.log('checks passed');
 	if amount == nil {
 		s.t.Fatal("missing observed reference usage")
 	}
-	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-live-proof.json"), map[string]any{"rounds": r.Round, "executes": writes, "same_workspace": true, "workspace_git": gitFacts, "original_pr": original, "review_matches_pr_version": true, "pr_body_unchanged": true, "conflict_audit": true, "verified_both_trees": true, "amount": amount, "cost_complete": complete, "pricing": "declared fixture reference rates", "head": last.Head, "base": last.Base}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-live-proof.json"), map[string]any{"rounds": r.Round, "executes": writes, "same_workspace": true, "workspace_git": gitFacts, "original_pr": original, "parallel_pr": second.PR.URL, "parallel_amount": otherCost, "native_overlap": true, "review_matches_pr_version": true, "pr_body_unchanged": true, "conflict_audit": true, "verified_both_trees": true, "amount": amount, "cost_complete": complete, "pricing": "declared fixture reference rates", "head": last.Head, "base": last.Base}))
 	s.Must(s.FinishBody())
 }
 

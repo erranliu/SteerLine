@@ -43,6 +43,12 @@ test("maintenance report, history and refresh remain observational", async ({
     page.getByRole("heading", { name: "重构与维护", exact: true }),
   ).toBeVisible();
   if (!id) {
+    const opener = page.getByRole("button", { name: "新建维护行动" });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("dialog", { name: "新建维护行动" }),
+    ).toBeVisible();
     const start = page.getByRole("button", { name: "开始维护", exact: true });
     await expect(start).toBeEnabled();
     await expect(page.getByLabel("决策策略")).toHaveValue("cautious");
@@ -69,9 +75,21 @@ test("maintenance report, history and refresh remain observational", async ({
       fullPage: true,
     });
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await start.click();
+    const [startResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/commands") &&
+          response.request().method() === "POST" &&
+          response.request().postDataJSON()?.action === "refactoring_start",
+        { timeout: 120_000 },
+      ),
+      start.click(),
+    ]);
+    expect(startResponse.ok()).toBe(true);
     await expect(
-      page.getByRole("heading", { name: "等待决策", exact: true }),
+      page
+        .getByRole("region", { name: "维护详情" })
+        .getByText("待答复", { exact: true }),
     ).toBeVisible();
     expect(commands).toEqual(["refactoring_start"]);
     expect(startRequest).toBeTruthy();
@@ -83,7 +101,7 @@ test("maintenance report, history and refresh remain observational", async ({
     return;
   }
   if (e.STEERLINE_MAINTENANCE_MODE === "answer") {
-    await expect(page.getByRole("heading", { name: "等待决策", exact: true })).toBeVisible();
+    await expect(page.getByText("是否保留公共接口？", { exact: true })).toBeVisible();
     await expect(page.getByText("维持兼容", { exact: true })).toBeVisible();
     const submit = page.getByRole("button", { name: "答复并继续" });
     await expect(submit).toBeDisabled();
@@ -95,7 +113,9 @@ test("maintenance report, history and refresh remain observational", async ({
     return;
   }
   await expect(
-    page.getByRole("heading", { name: "已交付", exact: true }),
+    page
+      .getByRole("region", { name: "维护详情" })
+      .getByText("已交付", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "PR 合入评审 2" })).toBeVisible();
   const detail = page.getByRole("region", { name: "维护详情" });
@@ -111,6 +131,10 @@ test("maintenance report, history and refresh remain observational", async ({
   await expect(page.getByRole("heading", { name: "PR 合入评审 2" })).toBeVisible();
   expect(commands).toEqual([]);
   await page.setViewportSize({ width: 375, height: 900 });
+  await page.getByRole("button", { name: "返回行动列表" }).click();
+  await expect(page.getByRole("region", { name: "行动列表" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "PR 合入评审 2" })).toBeVisible();
   await page.screenshot({
     path: join(out, "maintenance-mobile.png"),
     fullPage: true,

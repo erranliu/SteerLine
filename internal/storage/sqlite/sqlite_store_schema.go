@@ -57,8 +57,8 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 
 var nativeTaskSchema = []string{
 	`CREATE TABLE manual_verifications (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id))`,
-	`CREATE TABLE refactoring_actions (project_identity TEXT NOT NULL, action_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), active INTEGER NOT NULL CHECK(active IN (0,1)), payload BLOB NOT NULL, PRIMARY KEY(project_identity,action_id))`,
-	`CREATE UNIQUE INDEX refactoring_one_active ON refactoring_actions(project_identity) WHERE active=1`,
+	`CREATE TABLE refactoring_actions (project_identity TEXT NOT NULL, action_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), slot INTEGER NOT NULL CHECK(slot IN (0,1)), payload BLOB NOT NULL, PRIMARY KEY(project_identity,action_id))`,
+	`CREATE INDEX refactoring_slots ON refactoring_actions(project_identity) WHERE slot=1`,
 	`CREATE TABLE reading_fields (seq INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, source TEXT NOT NULL, source_id TEXT NOT NULL, item_id TEXT NOT NULL, origin TEXT NOT NULL, origin_id TEXT NOT NULL, field TEXT NOT NULL, role TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL, preview TEXT NOT NULL, body_bytes INTEGER NOT NULL, body_sha256 TEXT NOT NULL, at TEXT NOT NULL, state TEXT NOT NULL, run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, session_id TEXT NOT NULL, turn_id TEXT NOT NULL, group_name TEXT NOT NULL, UNIQUE(project_identity,source,source_id,item_id))`,
 	`CREATE INDEX reading_fields_page ON reading_fields(project_identity,source,source_id,seq)`,
 	`CREATE INDEX reading_fields_preview ON reading_fields(project_identity,source,source_id,role,seq DESC)`,

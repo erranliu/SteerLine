@@ -180,7 +180,13 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 		}
 		input = runnercontract.RunInput{Title: "重构与维护 · " + o.Purpose, NamePrefix: "maintenance", Correlation: correlation, Repository: r.Frozen.Repository, Documents: r.Frozen.Documents, Execution: r.Frozen.Write, Workflow: runnercontract.Workflow{ID: "execute", Version: 1, PromptOverrides: map[string]string{"execute": body}}, ReuseWorktreeFromRunID: r.LatestOwner}
 	} else {
-		body, err := decision.Instruction()
+		retryJSON := false
+		if n := len(r.Operations); n > 0 {
+			prior := r.Operations[n-1]
+			retryJSON = prior.State == "complete" && prior.Purpose == r.Phase && prior.Round == r.Round &&
+				prior.Run != nil && invalidDecisionJSON(prior.Run.ContentResult)
+		}
+		body, err := decision.Instruction(retryJSON)
 		if err != nil {
 			return o, err
 		}

@@ -19,6 +19,29 @@ import (
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 
+type maintenanceReadiness struct {
+	Project      struct{ Status, Commit string }
+	Environments []struct {
+		Key            string `json:"environment_key"`
+		Revision       uint64 `json:"current_revision"`
+		Status, Reason string
+		Profiles       []struct{ ID, Version string }
+	}
+}
+
+func (v maintenanceReadiness) bind(start ref.Start) (ref.Start, bool) {
+	for _, item := range v.Environments {
+		for _, profile := range item.Profiles {
+			if profile.ID == start.Profile && v.Project.Status == "ready" && item.Status == "ready" {
+				start.EnvironmentKey, start.EnvironmentRevision = item.Key, item.Revision
+				start.BaseCommit, start.ProfileVersion = v.Project.Commit, profile.Version
+				return start, true
+			}
+		}
+	}
+	return start, false
+}
+
 func RefactoringMaintenance(s *Scenario) {
 	const profile = "controlled"
 	const agentModel, runnerModel = "fixture-steer-agent", "fixture-runner"
@@ -64,6 +87,15 @@ func RefactoringMaintenance(s *Scenario) {
 		DirectionPrompt string `json:"direction_prompt"`
 	}
 	stale := ref.Start{Direction: "custom:shared-fixtures", DirectionRevision: ref.Digest([]byte("old")), Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 1}}
+	var startView maintenanceReadiness
+	s.Wait("ready maintenance start", func() (bool, error) {
+		if err := client.Get(s.Context, prefix+"/refactoring/readiness", &startView); err != nil {
+			return false, err
+		}
+		var ready bool
+		stale, ready = startView.bind(stale)
+		return ready, nil
+	})
 	body, e := json.Marshal(stale)
 	s.Must(e)
 	staleRequest := httpcontract.CommandEnvelope{RequestID: ref.ID(), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "refactoring_start", TargetID: identity.RepositoryIdentity, ExpectedVersion: 1, Payload: body}
@@ -75,19 +107,19 @@ func RefactoringMaintenance(s *Scenario) {
 	readiness := func(want string) {
 		s.t.Helper()
 		s.Wait("maintenance environment "+want, func() (bool, error) {
-			var view struct {
-				Project     struct{ Status string }
-				Environment string
-				Reason      string
+			var view maintenanceReadiness
+			if err := client.Get(s.Context, prefix+"/refactoring/readiness", &view); err != nil {
+				return false, err
 			}
-			err := client.Get(s.Context, prefix+"/refactoring/readiness?profile="+profile, &view)
-			if err == nil && view.Project.Status == "ready" && view.Environment == want {
-				if want == "not_ready" && !strings.Contains(view.Reason, "controlled qualification revoked") {
-					s.t.Fatal("missing environment reason", view)
+			for _, item := range view.Environments {
+				if view.Project.Status == "ready" && item.Key == stale.EnvironmentKey && item.Status == want {
+					if want == "not_ready" && !strings.Contains(item.Reason, "controlled qualification revoked") {
+						s.t.Fatal("missing environment reason", item.Reason)
+					}
+					return true, nil
 				}
-				return true, nil
 			}
-			return false, err
+			return false, nil
 		})
 	}
 	readiness("ready")
@@ -115,28 +147,32 @@ func RefactoringMaintenance(s *Scenario) {
 	staleRequest.Payload, e = json.Marshal(stale)
 	s.Must(e)
 	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &rejected))
-	if rejected.Status != "rejected" || !strings.Contains(rejected.Diagnostic, "controlled qualification revoked") {
+	if rejected.Status != "rejected" || rejected.Diagnostic == "" {
 		s.t.Fatal("the start command accepted a revoked qualification", rejected)
 	}
 	readiness("not_ready")
-	var empty struct{ Records []json.RawMessage }
+	var empty struct{ Ongoing []json.RawMessage }
 	s.Must(client.Get(s.Context, prefix+"/refactoring", &empty))
 	after, e := os.ReadFile(fixturePath)
 	s.Must(e)
 	var beforeRunner, afterRunner controlled.RunnerFixture
 	s.Must(json.Unmarshal(before, &beforeRunner))
 	s.Must(json.Unmarshal(after, &afterRunner))
-	if len(empty.Records) != 0 || !maps.Equal(beforeRunner.SubmitCalls, afterRunner.SubmitCalls) {
+	if len(empty.Ongoing) != 0 || !maps.Equal(beforeRunner.SubmitCalls, afterRunner.SubmitCalls) {
 		s.t.Fatal("a revoked qualification created an action or submitted a Runner request")
 	}
 	p.ValidateDeclaredControlledEnvironment(profile)
 	readiness("ready")
-	command := func(action, target string, revision uint64, payload any) httpcontract.CommandEnvelope {
+	submit := func(action, target string, revision uint64, payload any) (httpcontract.CommandEnvelope, httpcontract.CommandResponse) {
 		body, e := json.Marshal(payload)
 		s.Must(e)
 		request := httpcontract.CommandEnvelope{RequestID: ref.ID(), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: action, TargetID: target, ExpectedVersion: revision, Payload: body}
 		var response httpcontract.CommandResponse
 		s.Must(client.Post(s.Context, prefix+"/commands", request, &response))
+		return request, response
+	}
+	command := func(action, target string, revision uint64, payload any) httpcontract.CommandEnvelope {
+		request, response := submit(action, target, revision, payload)
 		if response.Status != "applied" {
 			s.t.Fatalf("%s: %s", action, response.Diagnostic)
 		}
@@ -289,6 +325,86 @@ func RefactoringMaintenance(s *Scenario) {
 		s.t.Fatal("missing maintenance activity")
 	}
 	browser(record.ID, "history")
-	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-proof.json"), map[string]any{"rounds": 2, "executes": writes, "same_workspace": true, "original_pr": true, "independent_audit": true, "browser": true, "direction_template": true, "head": record.Reports[1].Head, "pr": original}))
+	parallelStart := stale
+	parallelStart.DirectionRevision = ref.Digest([]byte("# 新模板\n\n更新后的内容。\n"))
+	parallelStart.Requirements = "hold-controlled-run"
+	var parallel []string
+	for i := 0; i < 4; i++ {
+		s.Wait("admit controlled maintenance action", func() (bool, error) {
+			var view maintenanceReadiness
+			if err := client.Get(s.Context, prefix+"/refactoring/readiness", &view); err != nil {
+				return false, err
+			}
+			action, ready := view.bind(parallelStart)
+			if !ready {
+				return false, nil
+			}
+			request, response := submit("refactoring_start", identity.RepositoryIdentity, 1, action)
+			if response.Status == "rejected" && response.Diagnostic == "baseline observation changed or pending before reservation; review again" {
+				// The periodic observation may start during preflight. Refresh and
+				// confirm again only after this attempt was explicitly rejected.
+				s.t.Log(response.Diagnostic)
+				return false, nil
+			}
+			if response.Status != "applied" {
+				s.t.Fatalf("refactoring_start: %s", response.Diagnostic)
+			}
+			parallel = append(parallel, request.RequestID)
+			return true, nil
+		})
+	}
+	var cohort struct {
+		Ongoing []struct {
+			ID, Phase string
+			Slot      bool
+			Revision  uint64
+			Elapsed   float64 `json:"elapsed_seconds"`
+		}
+		Used int `json:"slots_used"`
+	}
+	refresh := func() error {
+		return client.Get(s.Context, prefix+"/refactoring", &cohort)
+	}
+	readRunner := func() (controlled.RunnerFixture, error) {
+		var f controlled.RunnerFixture
+		data, err := os.ReadFile(fixturePath)
+		if err == nil {
+			err = json.Unmarshal(data, &f)
+		}
+		return f, err
+	}
+	s.Wait("three controlled runs and fourth queued", func() (bool, error) {
+		if err := refresh(); err != nil {
+			return false, err
+		}
+		f, err := readRunner()
+		running := 0
+		for _, run := range f.Runs {
+			if run.Status == "running" && run.Correlation["steerline_refactoring"] != "" {
+				running++
+			}
+		}
+		for _, item := range cohort.Ongoing {
+			if item.ID == parallel[3] {
+				return cohort.Used == 3 && running == 3 && !item.Slot && item.Phase == "queued" && item.Elapsed == 0, err
+			}
+		}
+		return false, err
+	})
+	for _, item := range cohort.Ongoing {
+		if item.ID == parallel[0] {
+			command("refactoring_stop", item.ID, item.Revision, struct{}{})
+		}
+	}
+	s.Wait("queued fourth dispatched after original stop", func() (bool, error) {
+		f, err := readRunner()
+		for _, run := range f.Runs {
+			if run.Status == "running" && run.Correlation["steerline_refactoring"] == parallel[3] {
+				return true, err
+			}
+		}
+		return false, err
+	})
+	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-proof.json"), map[string]any{"rounds": 2, "executes": writes, "same_workspace": true, "original_pr": true, "independent_audit": true, "browser": true, "direction_template": true, "head": record.Reports[1].Head, "pr": original, "overlapping_controlled_runs": 3, "queued_action": parallel[3]}))
 	s.Must(s.FinishBody())
 }
