@@ -8,12 +8,15 @@ import (
 	nativefixture "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -157,8 +160,10 @@ func TestEnvironmentOptionsWaitForStartBaselineCheck(t *testing.T) {
 			assertStage(before, "ready", "")
 			if tc.stage == "stale" {
 				require(t, os.WriteFile(filepath.Join(c.Repository, "go.mod"), []byte("module changed.invalid\n"), 0600))
-				commitEnvironmentMaterials(t, c)
+			} else {
+				require(t, os.WriteFile(filepath.Join(c.Repository, "unrelated.md"), []byte("new notes"), 0600))
 			}
+			commitEnvironmentMaterials(t, c)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			entered, release := make(chan struct{}), make(chan struct{})
@@ -239,6 +244,7 @@ func (r readinessTasks) TaskContract(context.Context, string, taskmodel.TaskReco
 	return taskmodel.TaskContract{}, nil
 }
 func TestProjectEnvironmentReadinessRefreshRejectsBeforeMaterialPreparation(t *testing.T) {
+	t.Run("unchanged basis uses one fetch through reservation", testTaskStartReusesEnvironmentBasis)
 	p, c, store := environmentFixture(t)
 	ctx := context.Background()
 	fixtureGit(t, c.Repository, "push", "origin", "HEAD:refs/heads/environment-validation")
@@ -249,9 +255,10 @@ func TestProjectEnvironmentReadinessRefreshRejectsBeforeMaterialPreparation(t *t
 	maintenance := newProjectMaintenance(c, store)
 	c.runtimeMaintenance = maintenance
 	p.baseline = maintenance
+	maintenance.environmentObservation = p.observeBasis
 	_, err = maintenance.check(ctx)
 	require(t, err)
-	service := runnerTaskService(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, maintenance.prepare, maintenance)
+	service := runnerTaskService(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, maintenance)
 	service.Tasks.Reader = readinessTasks{c.Identity()}
 	// This owner test isolates preparation ordering; execution-wait capability
 	// validation is covered by the existing published-catalog tests.
@@ -259,9 +266,9 @@ func TestProjectEnvironmentReadinessRefreshRejectsBeforeMaterialPreparation(t *t
 	selected.UnavailableReason = ""
 	service.Profiles["remote"] = selected
 	preparedCalls := 0
-	service.PrepareExecution = func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error) {
+	service.PrepareTestPlan = func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (json.RawMessage, error) {
 		preparedCalls++
-		return taskmodel.FixedWork{}, "", errors.New("must not prepare")
+		return nil, errors.New("must not prepare")
 	}
 	require(t, service.CheckExecution(ctx, "remote", false))
 	require(t, os.WriteFile(filepath.Join(c.Repository, "go.mod"), []byte("module changed.invalid/fixture\n"), 0600))
@@ -282,6 +289,80 @@ func TestProjectEnvironmentReadinessRefreshRejectsBeforeMaterialPreparation(t *t
 	require(t, err)
 	if len(candidates) != 0 || preparedCalls != 0 {
 		t.Fatal("unprepared tick created work")
+	}
+}
+
+type taskStartGitProbe struct {
+	executionbackend.ManagedProcessHost
+	fetches, environmentReads int
+}
+
+func (p *taskStartGitProbe) StartManaged(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
+	if slices.Contains(cmd.Args, "fetch") {
+		p.fetches++
+	}
+	if slices.Contains(cmd.Args, "ls-tree") && slices.Contains(cmd.Args, env.DocumentPath()) {
+		p.environmentReads++
+	}
+	return p.ManagedProcessHost.StartManaged(cmd)
+}
+
+func testTaskStartReusesEnvironmentBasis(t *testing.T) {
+	ctx := t.Context()
+	p, c, store := environmentFixture(t)
+	prepareStoppedRunRepository(t, c)
+	var caps runnerclient.Capabilities
+	require(t, json.Unmarshal(mustJSON(nativefixture.RunnerServiceCapabilities("unit-fixture")), &caps))
+	catalog, err := runnerclient.CompileCatalog(caps)
+	require(t, err)
+	c.runtimeCatalog = catalog
+	fixtureGit(t, c.Repository, "push", "origin", "main")
+	commit := fixtureGit(t, c.Repository, "rev-parse", "HEAD")
+	ref := func(path string) taskmodel.FileReference {
+		body, err := os.ReadFile(filepath.Join(c.Repository, path))
+		require(t, err)
+		return taskmodel.FileReference{Path: path, Commit: commit, SHA256: taskPayloadDigest(body)}
+	}
+	spec, plan := ref("SteerlineFlow/spec/task.spec.md"), ref("SteerlineFlow/plans/task.plan.md")
+	contract := taskmodel.TaskContract{ContractID: "single-refresh", Repository: "https://github.com/owner/repo.git", Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, CommonRefs: []taskmodel.FileReference{}, AcceptanceRefs: []taskmodel.FileReference{spec}}
+	contract.Digest, err = taskmodel.ContractDigest(contract)
+	require(t, err)
+	graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
+	require(t, err)
+	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion, ProjectID: c.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "task", TaskID: 1, Type: "task", Title: "Single refresh", Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
+	_, err = NewTaskCommands(store, c).CreateTaskBatch(ctx, mustJSON(batch), env.ID(), graph.Authority.AuthorityVersion, "fixture")
+	require(t, err)
+	graph, err = store.TaskGraphSnapshot(ctx, c.Identity())
+	require(t, err)
+
+	probe := &taskStartGitProbe{ManagedProcessHost: c.ProcessHost}
+	c.ProcessHost, p.config.ProcessHost = probe, probe
+	profile := c.RunnerExecution.DefaultProfile
+	record := seedDetectedEnvironment(t, p, profile)
+	maintenance := newProjectMaintenance(c, store)
+	p.baseline, maintenance.environmentObservation = maintenance, p.observeBasis
+	_, err = maintenance.check(ctx)
+	require(t, err)
+	// A new commit needs one basis read even when its changes are unrelated.
+	require(t, os.WriteFile(filepath.Join(c.Repository, "notes.md"), []byte("unrelated"), 0600))
+	next := commitEnvironmentMaterials(t, c)
+	probe.fetches, probe.environmentReads = 0, 0
+	_, err = maintenance.check(ctx)
+	require(t, err)
+	if probe.fetches != 1 || probe.environmentReads != 1 {
+		t.Fatalf("new baseline: fetches=%d environment reads=%d", probe.fetches, probe.environmentReads)
+	}
+
+	c.Claimant = "fixture"
+	service := runnerTaskService(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, maintenance)
+	probe.fetches, probe.environmentReads = 0, 0
+	start := taskrunnerStartForReadiness()
+	start.ProfileID = profile
+	start.GraphRevision = graph.Authority.GraphRevision
+	candidate, err := service.Start(ctx, start)
+	require(t, err)
+	if probe.fetches != 1 || probe.environmentReads != 0 || candidate.BaseRevision != next || candidate.Environment == nil || candidate.Environment.ActivityID != record.ID {
+		t.Fatalf("start: fetches=%d environment reads=%d base=%s qualification=%+v", probe.fetches, probe.environmentReads, candidate.BaseRevision, candidate.Environment)
 	}
 }
 

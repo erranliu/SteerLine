@@ -71,7 +71,7 @@ func TestDeveloperReadinessService(t *testing.T) {
 	c.RunnerExecution.Developer.SkipEnvironmentReadiness = true
 	c.resolveCapabilities()
 	probe := &environmentReserveProbe{SQLiteStore: store}
-	service := runnerTaskService(c, probe, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, nil, nil)
+	service := runnerTaskService(c, probe, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, nil)
 	if err := service.CheckExecution(ctx, "remote", true); (err == nil) != developerconfig.Available {
 		t.Fatal("service ignored build policy", err)
 	}
@@ -82,10 +82,10 @@ func TestDeveloperReadinessService(t *testing.T) {
 	c.RunnerExecution.Developer.SkipEnvironmentReadiness = false
 	require(t, service.CheckExecution(ctx, "remote", false))
 	// Later consumers of the same loaded config share its frozen capability.
-	unmodified := runnerTaskService(c, probe, runnerclient.Client{}, nil, nil)
+	unmodified := runnerTaskService(c, probe, runnerclient.Client{}, nil)
 	require(t, unmodified.CheckExecution(ctx, "remote", false))
 	c.resolveCapabilities()
-	strict := runnerTaskService(c, probe, runnerclient.Client{}, nil, nil)
+	strict := runnerTaskService(c, probe, runnerclient.Client{}, nil)
 	if err := strict.CheckExecution(ctx, "remote", false); err == nil {
 		t.Fatal("default did not restore gate")
 	}
@@ -94,7 +94,7 @@ func TestDeveloperReadinessService(t *testing.T) {
 	selected.UnavailableReason = ""
 	service.Profiles["remote"] = selected
 	preparing := errors.New("reached material preparation")
-	service.PrepareExecution = func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error) {
+	service.PrepareExecution = func(context.Context, taskmodel.FixedWork, string) (taskmodel.FixedWork, string, error) {
 		return taskmodel.FixedWork{}, "", preparing
 	}
 	if _, err := service.Start(ctx, taskrunnerStartForReadiness()); !errors.Is(err, preparing) {

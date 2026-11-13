@@ -34,7 +34,7 @@ func TestProjectPolicySlotsPinnedCatalogAndRequestBytes(t *testing.T) {
 	require(t, err)
 	after := callerTestRun()
 	after.Repository.BaseRevision = commit
-	service := runnerTaskService(c, nil, runnerclient.Client{}, nil, nil)
+	service := runnerTaskService(c, nil, runnerclient.Client{}, nil)
 	_, err = service.PrepareTestPlan(context.Background(), work, &after)
 	require(t, err)
 	oldBody, newBody := mustJSON(before), mustJSON(after)

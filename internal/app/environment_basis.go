@@ -22,6 +22,7 @@ func confirmedEnvironmentBasisError(err error) bool {
 }
 
 func (p *environmentPort) observeBasis(ctx context.Context, commit string) error {
+	ctx = materialReads(ctx)
 	if p.store == nil {
 		return nil
 	}
@@ -42,7 +43,7 @@ func (p *environmentPort) observeBasis(ctx context.Context, commit string) error
 		if current.ActivityID == "" || current.Invalidated {
 			continue
 		}
-		material, err := p.materialAt(ctx, profile.ID, commit)
+		material, err := p.basisAt(ctx, profile.ID, commit)
 		if err != nil && !confirmedEnvironmentBasisError(err) {
 			return err
 		}

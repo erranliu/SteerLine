@@ -34,6 +34,7 @@ type projectMaintenance struct {
 	mu                     sync.Mutex
 	observation            pmm.Observation
 	checking               chan struct{}
+	basisPending           bool
 }
 
 func newProjectMaintenance(c Config, s maintenanceStore) *projectMaintenance {
@@ -61,9 +62,9 @@ func (m *projectMaintenance) current() pmm.Observation {
 func (m *projectMaintenance) readObservedBaseline(ctx context.Context, waitForCheck bool) (string, error) {
 	for {
 		m.mu.Lock()
-		observation, checking := m.observation, m.checking
+		observation, checking, basisPending := m.observation, m.checking, m.basisPending
 		m.mu.Unlock()
-		if checking == nil {
+		if checking == nil || !basisPending {
 			if observation.Diagnostic != "" {
 				return "", errors.New(observation.Diagnostic)
 			}
@@ -113,6 +114,7 @@ func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error)
 
 	before := m.observation
 	m.checking = make(chan struct{})
+	m.basisPending = before.Commit == "" || before.Diagnostic != ""
 	done := m.checking
 	m.mu.Unlock()
 	o := before
@@ -128,9 +130,14 @@ func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error)
 			o.Previous = before.Commit
 			o.LastSuccess = o.CheckedAt
 			o.Rewritten = false
-			if before.Commit != "" && before.Commit != o.Commit {
-				_, a := m.git(ctx, "merge-base", "--is-ancestor", before.Commit, o.Commit)
-				o.Rewritten = a != nil
+			if before.Commit != o.Commit {
+				m.mu.Lock()
+				m.basisPending = true
+				m.mu.Unlock()
+				if before.Commit != "" {
+					_, a := m.git(ctx, "merge-base", "--is-ancestor", before.Commit, o.Commit)
+					o.Rewritten = a != nil
+				}
 			}
 		}
 	}
@@ -149,6 +156,7 @@ func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error)
 	}
 	m.observation = o
 	m.checking = nil
+	m.basisPending = false
 	close(done)
 	m.mu.Unlock()
 	return o, e
@@ -250,10 +258,6 @@ func (m *projectMaintenance) resolved(ctx context.Context, c taskmodel.TaskContr
 	c.Digest, e = taskmodel.ContractDigest(c)
 	return c, e
 }
-func (m *projectMaintenance) prepare(ctx context.Context, w taskmodel.FixedWork, candidate bool, base func(context.Context, taskmodel.FixedWork, bool) (string, error)) (taskmodel.FixedWork, string, error) {
-	return m.prepareLatest(ctx, w, candidate, base)
-}
-
 func (m *projectMaintenance) view(ctx context.Context, mode, plan string) (any, error) {
 	return m.baselineView(ctx)
 }

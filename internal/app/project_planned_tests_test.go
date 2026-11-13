@@ -92,16 +92,16 @@ func plannedTestsWaitWithoutBlockingProviderAndRequireDeliveredDefinitions(t *te
 		t.Fatal(preparation)
 	}
 	calls := 0
-	basePrepare := func(context.Context, taskmodel.FixedWork, bool) (string, error) {
+	basePrepare := func(context.Context, taskmodel.FixedWork, string) (string, error) {
 		calls++
 		return m.current().Commit, nil
 	}
-	_, _, err = m.prepareLatest(ctx, taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contracts["101"]}, false, basePrepare)
+	_, _, err = m.prepareLatest(ctx, taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contracts["101"]}, m.current().Commit, basePrepare)
 	require(t, err)
 	if calls != 1 {
 		t.Fatal("provider cannot start")
 	}
-	_, _, err = m.prepareLatest(ctx, taskmodel.FixedWork{Record: store.graph.Tasks[1], Contract: store.contracts["102"]}, false, basePrepare)
+	_, _, err = m.prepareLatest(ctx, taskmodel.FixedWork{Record: store.graph.Tasks[1], Contract: store.contracts["102"]}, m.current().Commit, basePrepare)
 	if err == nil || calls != 1 {
 		t.Fatal("waiting consumer started")
 	}
@@ -135,7 +135,7 @@ func plannedTestsWaitWithoutBlockingProviderAndRequireDeliveredDefinitions(t *te
 	require(t, err)
 	require(t, m.refresh(ctx))
 	var frozen taskmodel.FixedWork
-	_, _, err = m.prepareLatest(ctx, taskmodel.FixedWork{Record: store.graph.Tasks[1], Contract: store.contracts["102"]}, false, func(_ context.Context, w taskmodel.FixedWork, _ bool) (string, error) {
+	_, _, err = m.prepareLatest(ctx, taskmodel.FixedWork{Record: store.graph.Tasks[1], Contract: store.contracts["102"]}, m.current().Commit, func(_ context.Context, w taskmodel.FixedWork, _ string) (string, error) {
 		frozen = w
 		return m.current().Commit, nil
 	})
