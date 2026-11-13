@@ -5,8 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
@@ -17,6 +19,41 @@ import (
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
+
+func TestProjectRuntimeAuxiliaryObserverAdvancesAfterTimeout(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		var calls []string
+		progressErr := errors.New("progress unavailable")
+		roadmapErr := errors.New("roadmap unavailable")
+		observe := auxiliaryObserver(func(observation context.Context) error {
+			if observation == ctx {
+				calls = append(calls, "progress started")
+				<-observation.Done()
+				calls = append(calls, "progress finished")
+				return progressErr
+			}
+			calls = append(calls, "progress retried")
+			return progressErr
+		}, func(context.Context) error {
+			calls = append(calls, "roadmap")
+			return roadmapErr
+		})
+		if err := observe(ctx); !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, progressErr) || errors.Is(err, roadmapErr) {
+			t.Fatalf("expected progress failure and deadline, got %v", err)
+		}
+		if want := []string{"progress started", "progress finished"}; !slices.Equal(calls, want) {
+			t.Fatalf("calls after timeout = %v, want %v", calls, want)
+		}
+		if err := observe(context.Background()); !errors.Is(err, roadmapErr) || !errors.Is(err, progressErr) {
+			t.Fatalf("expected both observation failures, got %v", err)
+		}
+		if want := []string{"progress started", "progress finished", "roadmap", "progress retried"}; !slices.Equal(calls, want) {
+			t.Fatalf("calls after retry = %v, want %v", calls, want)
+		}
+	})
+}
 
 type lifecycleLog struct {
 	closed int

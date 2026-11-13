@@ -107,7 +107,7 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 		return result, err
 	}
 	read := func(path string) ([]byte, error) {
-		body, e := m.read(ctx, commit, path)
+		body, e := m.readCommittedMaterial(ctx, commit, path)
 		if e != nil && isRetryableMaterialRead(e) {
 			result.Status = "unknown"
 		}
@@ -278,7 +278,7 @@ func (m *projectMaintenance) candidateDocuments(ctx context.Context, id string) 
 	refs = append(refs, c.Contract.AcceptanceRefs...)
 	arrangementPath, _ := testmodel.ArrangementPath(c.Contract.PlanRef.Path)
 	refs = append(refs, taskmodel.FileReference{Path: arrangementPath, Commit: c.BaseRevision})
-	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, c.BaseRevision, path) })
+	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.readCommittedMaterial(ctx, c.BaseRevision, path) })
 	if readErr != nil {
 		return nil, readErr
 	}
@@ -291,11 +291,11 @@ func (m *projectMaintenance) candidateDocuments(ctx context.Context, id string) 
 			continue
 		}
 		seen[r.Path] = true
-		before, err := m.read(ctx, r.Commit, r.Path)
+		before, err := m.readCommittedMaterial(ctx, r.Commit, r.Path)
 		if err != nil {
 			return nil, err
 		}
-		after, err := m.read(ctx, latest.Commit, r.Path)
+		after, err := m.readCommittedMaterial(ctx, latest.Commit, r.Path)
 		f := file{Path: r.Path, Before: string(before), After: string(after)}
 		if err != nil {
 			f.Diagnostic = err.Error()
@@ -404,7 +404,7 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 	refs = append(refs, latest.Contract.AcceptanceRefs...)
 	arrangementPath, _ := testmodel.ArrangementPath(latest.Contract.PlanRef.Path)
 	refs = append(refs, taskmodel.FileReference{Path: arrangementPath})
-	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, latest.Commit, path) })
+	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.readCommittedMaterial(ctx, latest.Commit, path) })
 	if readErr != nil {
 		return nil, readErr
 	}
@@ -417,7 +417,7 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 			continue
 		}
 		seen[ref.Path] = true
-		body, err := m.read(ctx, latest.Commit, ref.Path)
+		body, err := m.readCommittedMaterial(ctx, latest.Commit, ref.Path)
 		d := document{Path: ref.Path, Body: string(body)}
 		if err != nil {
 			d.Diagnostic = err.Error()

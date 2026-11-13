@@ -70,12 +70,12 @@ func (p *roadmapPort) preparation(ctx context.Context) roadmapPreparation {
 		{"SteerlineFlow/spec/SpecGuide.md", nil},
 	} {
 		file := roadmapPreparationFile{Path: item.path}
-		body, err := m.read(ctx, state.Commit, item.path)
+		body, err := p.materials.readCommittedMaterial(ctx, state.Commit, item.path)
 		if err == nil {
 			if publishedErr != nil {
 				err = errors.New("尚未核实目标分支，请在项目维护中检查更新")
 			} else {
-				fixed, readErr := m.read(ctx, state.PublishedCommit, item.path)
+				fixed, readErr := p.materials.readCommittedMaterial(ctx, state.PublishedCommit, item.path)
 				if readErr != nil {
 					err = readErr
 				} else if !prompts.SameRules(body, fixed) {

@@ -199,30 +199,30 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr = runner.validateProject(r.config); retErr != nil {
 		return
 	}
-	r.config.runtimeMaintenance = newProjectMaintenance(r.config, r.store)
-	r.environment.config.runtimeMaintenance = r.config.runtimeMaintenance
-	r.config.runtimeMaintenance.environmentObservation = r.environment.observeBasis
+	maintenance := newProjectMaintenance(r.config, r.store)
+	r.config.runtimeMaintenance = maintenance
+	r.environment.config.runtimeMaintenance = maintenance
+	maintenance.environmentObservation = r.environment.observeBasis
 	maintenanceDone = make(chan struct{})
-	go func() { defer close(maintenanceDone); r.config.runtimeMaintenance.observe(ctx) }()
+	go func() { defer close(maintenanceDone); maintenance.observe(ctx) }()
 	hostPort := host.NewServiceHost(r.hostConfig, "off", r.log, serviceActivityFormatter{})
 	var service *taskrunner.Actor
-	service, retErr = newRunnerService(r.config, hostPort, r.store, runner.client, runner.info)
+	service, retErr = newRunnerService(r.config, hostPort, r.store, runner.client, runner.info, maintenance)
 	if retErr != nil {
 		return
 	}
 	instance := service.InstanceID()
-	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance)
 	r.environment.service.Admit = service.VerifyRunnerAdmission
 	r.config.runtimeTests = r.tests
-	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance)
 	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
-	r.tests.roadmaps = r.config.runtimeRoadmaps
 	r.config.runtimeContinuationSuggestion = newContinuationSuggestionPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
-	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, maintenance)
 	if retErr = r.config.runtimeRefactoring.service.Recover(ctx); retErr != nil {
 		return
 	}
-	service.ObserveAuxiliary = r.tests.observe
+	service.ObserveAuxiliary = auxiliaryObserver(r.tests.progress.ObserveNext, r.config.runtimeRoadmaps.service.ObserveNext)
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
 		if action == "stop_candidate" {
@@ -265,7 +265,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 			}
 			if preparationDone == nil {
 				preparationDone = make(chan struct{})
-				go func() { defer close(preparationDone); r.config.runtimeMaintenance.runPreparation(ctx) }()
+				go func() { defer close(preparationDone); maintenance.runPreparation(ctx) }()
 			}
 			if environmentDone == nil {
 				environmentDone = make(chan struct{})
@@ -280,6 +280,24 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	}}
 	retErr = host.RunService(ctx, actor, r.hostConfig, "manual")
 	return
+}
+
+// The project actor calls the observer serially with its shared observation budget.
+func auxiliaryObserver(stages ...func(context.Context) error) func(context.Context) error {
+	next := 0
+	return func(ctx context.Context) error {
+		var failures []error
+		for range stages {
+			if ctx.Err() != nil {
+				break
+			}
+			stage := stages[next]
+			// Advance before the call so a timeout cannot starve the next stage.
+			next = (next + 1) % len(stages)
+			failures = append(failures, stage(ctx))
+		}
+		return errors.Join(append(failures, ctx.Err())...)
+	}
 }
 
 // close is the sole final resource closer, including partial startup failures.

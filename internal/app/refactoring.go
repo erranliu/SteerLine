@@ -25,17 +25,15 @@ import (
 )
 
 type refactoringPort struct {
-	config  Config
-	store   *sqlite.SQLiteStore
-	service *refactoring.Service
+	config    Config
+	store     *sqlite.SQLiteStore
+	service   *refactoring.Service
+	materials committedMaterialReader
 }
 
-func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *refactoringPort {
-	p := &refactoringPort{config: c, store: store}
-	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReadCost: p.cost, Queue: c.runtimeGenerations}
-	p.service.Reserve = func(ctx context.Context, commit string, save func() error) error {
-		return c.runtimeMaintenance.reserveReadyExecution(ctx, commit, save)
-	}
+func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, reserver readyExecutionReserver) *refactoringPort {
+	p := &refactoringPort{config: c, store: store, materials: materials}
+	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReadCost: p.cost, Queue: c.runtimeGenerations, Reserve: reserver.reserveReadyExecution}
 	return p
 }
 func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen, error) {
@@ -101,7 +99,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	}
 	// These are real existing references, not generated maintenance Spec/Plan.
 	var entry model.ProjectEntry
-	entryBody, e := m.read(ctx, observation.Commit, "SteerlineFlow/environment-project.json")
+	entryBody, e := p.materials.readCommittedMaterial(ctx, observation.Commit, "SteerlineFlow/environment-project.json")
 	if e != nil {
 		return out, e
 	}
@@ -114,7 +112,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	}
 	requirementsPath := entry.Requirements[0]
 	for _, path := range []string{requirementsPath, entry.TestingCatalogue} {
-		if _, e = m.read(ctx, observation.Commit, path); e != nil {
+		if _, e = p.materials.readCommittedMaterial(ctx, observation.Commit, path); e != nil {
 			return out, e
 		}
 	}

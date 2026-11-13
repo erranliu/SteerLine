@@ -18,19 +18,18 @@ type testManagementStore interface {
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
 type testManagementPort struct {
-	nextObservation int // auxiliary stages are serialized by the project actor
-	historyMu       sync.Mutex
-	history         *testmanagement.RecordSnapshot
-	project         string
-	store           testManagementStore
-	progress        *testmanagement.ProgressService
-	maintenance     *projectMaintenance
-	roadmaps        *roadmapPort
+	historyMu   sync.Mutex
+	history     *testmanagement.RecordSnapshot
+	project     string
+	store       testManagementStore
+	progress    *testmanagement.ProgressService
+	maintenance *projectMaintenance
+	materials   committedMaterialReader
 }
 
-func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error) *testManagementPort {
+func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader) *testManagementPort {
 	c = bindNativeConfiguration(c, cli)
-	return &testManagementPort{project: c.Identity(), store: store, maintenance: c.runtimeMaintenance, progress: &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}}
+	return &testManagementPort{project: c.Identity(), store: store, maintenance: c.runtimeMaintenance, materials: materials, progress: &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}}
 }
 func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.RawMessage, error) {
 	c, err := p.store.Candidate(ctx, p.project, id)
@@ -76,22 +75,4 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 	}
 	v := testmanagement.ProgressView(s, progress)
 	return encode(v)
-}
-
-func (p *testManagementPort) observe(ctx context.Context) error {
-	stages := []func(context.Context) error{p.progress.ObserveNext}
-	if p.roadmaps != nil {
-		stages = append(stages, p.roadmaps.service.ObserveNext)
-	}
-	var failures []error
-	for range stages {
-		if ctx.Err() != nil {
-			return errors.Join(append(failures, ctx.Err())...)
-		}
-		index := p.nextObservation % len(stages)
-		// Advance before the call so a timeout cannot starve the next stage.
-		p.nextObservation = (index + 1) % len(stages)
-		failures = append(failures, stages[index](ctx))
-	}
-	return errors.Join(append(failures, ctx.Err())...)
 }

@@ -17,6 +17,11 @@ type maintenanceState struct {
 	Readiness   pm.Readiness
 }
 
+// readyExecutionReserver rechecks readiness and saves under the original baseline lock.
+type readyExecutionReserver interface {
+	reserveReadyExecution(ctx context.Context, commit string, save func() error) error
+}
+
 // Both the UI and every new execution use this projection. It never fetches,
 // prepares documents, generates tests or changes existing candidates.
 func (m *projectMaintenance) readinessState(ctx context.Context) (maintenanceState, error) {

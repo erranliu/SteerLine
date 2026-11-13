@@ -20,7 +20,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
@@ -47,6 +46,7 @@ type roadmapPort struct {
 	planning         *planningPort
 	config           Config
 	store            *sqlite.SQLiteStore
+	materials        committedMaterialReader
 	service          *roadmapservice.Service
 	publicationMu    sync.Mutex
 	generationMu     sync.Mutex
@@ -56,19 +56,16 @@ type roadmapPort struct {
 	mutateTask       func(context.Context, func(context.Context) error) error
 }
 
-func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *roadmapPort {
+func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader) *roadmapPort {
 	c = bindNativeConfiguration(c, cli)
-	p := &roadmapPort{config: c, store: store}
+	p := &roadmapPort{config: c, store: store, materials: materials}
 	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit}
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source
 	p.service.Graph = p.graph
 	p.service.Prepare = c.prepareSteerAgentGeneration
 	p.service.PrepareDocuments = p.documentContext
-	p.service.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
-		reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
-		return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
-	}
+	p.service.ReadCommitted = materials.readCommittedMaterial
 	return p
 }
 func (p *roadmapPort) source(ctx context.Context, relative string) (roadmap.Source, error) {
@@ -84,7 +81,7 @@ func (p *roadmapPort) source(ctx context.Context, relative string) (roadmap.Sour
 	if e != nil {
 		return source, e
 	}
-	committed, readErr := m.read(ctx, source.Head, relative)
+	committed, readErr := p.materials.readCommittedMaterial(ctx, source.Head, relative)
 	source.Modified = readErr != nil || !roadmap.SameMarkdown(committed, []byte(source.Body))
 	return source, nil
 }
@@ -106,7 +103,7 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 		if e != nil {
 			return nil, e
 		}
-		spec, e := p.config.runtimeMaintenance.read(ctx, observation.Commit, contract.SpecRef.Path)
+		spec, e := p.materials.readCommittedMaterial(ctx, observation.Commit, contract.SpecRef.Path)
 		if e != nil {
 			return nil, fmt.Errorf("已有任务 #%s 的 Spec 无法读取: %w", t.TaskID, e)
 		}

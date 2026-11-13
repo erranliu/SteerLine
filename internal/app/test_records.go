@@ -54,7 +54,7 @@ func (p *testManagementPort) recordSnapshot(ctx context.Context) (testmanagement
 		if err != nil {
 			return snapshot, fmt.Errorf("%s: %w", name, err)
 		}
-		raw, err := p.maintenance.read(ctx, commit, name)
+		raw, err := p.materials.readCommittedMaterial(ctx, commit, name)
 		if err != nil {
 			return snapshot, err
 		}
@@ -111,11 +111,11 @@ func (p *testManagementPort) TestCatalogue(ctx context.Context) (json.RawMessage
 	}
 	out.Commit = p.maintenance.current().Commit
 	seen := map[string]bool{}
-	projectEntry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return p.maintenance.read(ctx, out.Commit, path) })
+	projectEntry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return p.materials.readCommittedMaterial(ctx, out.Commit, path) })
 	var raw []byte
 	if err == nil {
 		out.Path = projectEntry.TestingCatalogue
-		raw, err = p.maintenance.read(ctx, out.Commit, projectEntry.TestingCatalogue)
+		raw, err = p.materials.readCommittedMaterial(ctx, out.Commit, projectEntry.TestingCatalogue)
 	}
 	if err != nil {
 		out.Diagnostic = err.Error()
