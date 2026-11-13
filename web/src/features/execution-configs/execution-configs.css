@@ -1,12 +1,12 @@
 .execution-config-app {
-  --sl-bg: #101614;
-  --sl-panel: #152019;
-  --sl-rail: #17221c;
-  --sl-text: #e5ede8;
-  --sl-muted: #8faaa0;
-  --sl-line: #293630;
-  --sl-blue: #78d7b5;
-  --sl-blue-bg: #223e30;
+  --sl-bg: var(--color-background);
+  --sl-panel: var(--ui-panel);
+  --sl-rail: var(--ui-surface);
+  --sl-text: var(--color-foreground);
+  --sl-muted: var(--ui-secondary);
+  --sl-line: var(--ui-line);
+  --sl-accent: var(--color-primary);
+  --sl-selected: var(--ui-selected);
   --sl-good: #86d5aa;
   --sl-good-bg: #213c30;
   --sl-warn: #efc47c;
@@ -16,7 +16,7 @@
   color: var(--sl-text);
   min-width: 0;
 }
-.execution-config-app .sl-host-heading { font-size: 12px; color: var(--sl-muted); padding: 12px; margin: 0; overflow-wrap: anywhere; }
+.execution-config-app .sl-host-heading { font-size: 13px; color: var(--sl-muted); padding: 12px; margin: 0; overflow-wrap: anywhere; }
 .execution-config-app * {
   box-sizing: border-box;
 }
@@ -42,29 +42,24 @@
 }
 .execution-config-app .sl-page-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 22px;
-}
-.execution-config-app .sl-eyebrow {
-  font-size: 10px;
-  color: var(--sl-muted);
-  letter-spacing: 1.6px;
-  margin-bottom: 5px;
+  margin-bottom: var(--ui-gap);
 }
 .execution-config-app h1 {
-  font-size: 25px;
-  line-height: 1.4;
+  font-size: var(--ui-title-size);
+  line-height: 1.2;
   letter-spacing: -0.6px;
   margin: 0 0 6px;
-  font-weight: 600;
+  font-weight: 650;
 }
 .execution-config-app p {
   margin: 0;
 }
 .execution-config-app .sl-caption {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--sl-muted);
 }
 .execution-config-app .sl-button {
@@ -73,9 +68,9 @@
   justify-content: center;
   gap: 6px;
   padding: 8px 11px;
-  border-radius: 6px;
-  font-size: 12px;
-  white-space: nowrap;
+  border-radius: 7px;
+  min-height: 36px;
+  font-size: var(--ui-body-size);
   border: 1px solid var(--sl-line);
   background: var(--sl-panel);
 }
@@ -83,9 +78,12 @@
   background: var(--sl-rail);
 }
 .execution-config-app .sl-button.primary {
-  background: var(--sl-blue);
-  border-color: var(--sl-blue);
+  background: var(--sl-accent);
+  border-color: var(--sl-accent);
   color: #10281c;
+}
+.execution-config-app .sl-button.primary:hover:not(:disabled) {
+  background: #9fe9c6;
 }
 .execution-config-app .sl-button.quiet {
   border-color: transparent;
@@ -99,7 +97,7 @@
   display: grid;
   grid-template-columns: 208px minmax(0, 1fr);
   border: 1px solid var(--sl-line);
-  border-radius: 9px;
+  border-radius: var(--ui-panel-radius);
   background: var(--sl-panel);
   min-height: 594px;
   overflow: hidden;
@@ -114,7 +112,7 @@
   display: flex;
   justify-content: space-between;
   padding: 0 9px 12px;
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
   color: var(--sl-muted);
 }
 .execution-config-app .sl-profile {
@@ -131,11 +129,12 @@
 }
 .execution-config-app .sl-profile.selected {
   border-color: #365b47;
-  background: var(--sl-blue-bg);
+  border-inline-start: 2px solid var(--sl-accent);
+  background: var(--sl-selected);
 }
 .execution-config-app .sl-profile-name {
-  font-weight: 500;
-  font-size: 12px;
+  font-weight: 600;
+  font-size: var(--ui-body-size);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -144,7 +143,7 @@
   overflow-wrap: anywhere;
 }
 .execution-config-app .sl-profile-meta {
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
   color: var(--sl-muted);
   display: flex;
   align-items: center;
@@ -159,7 +158,7 @@
 .execution-config-app .sl-tag {
   display: inline-flex;
   align-items: center;
-  font-size: 10px;
+  font-size: var(--ui-meta-size);
   font-weight: 400;
   padding: 1px 5px;
   border-radius: 4px;
@@ -179,11 +178,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .execution-config-app .sl-editor-head h2 {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--ui-section-size);
+  font-weight: 600;
   margin: 0;
 }
 .execution-config-app .sl-editor-head .sl-button {
@@ -207,7 +207,7 @@
   margin-bottom: 17px;
 }
 .execution-config-app .sl-field label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
 }
 .execution-config-app .sl-field input,
@@ -218,13 +218,13 @@
   border: 1px solid var(--sl-line);
   background: var(--sl-panel);
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 7px;
   height: 37px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .execution-config-app .sl-field input:focus,
 .execution-config-app .sl-field select:focus {
-  outline: 2px solid var(--sl-blue);
+  outline: 2px solid var(--sl-accent);
   outline-offset: 1px;
 }
 .execution-config-app .sl-row {
@@ -236,15 +236,15 @@
   height: 37px;
   padding: 8px 10px;
   border: 1px solid var(--sl-line);
-  border-radius: 6px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: 13px;
   background: var(--sl-bg);
 }
 .execution-config-app .sl-help {
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
   color: var(--sl-muted);
   line-height: 1.6;
 }
@@ -252,15 +252,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   border: 1px solid var(--sl-line);
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 9px 10px;
   margin: 0 0 17px;
   background: var(--sl-bg);
 }
 .execution-config-app .sl-query strong {
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
   font-weight: 500;
   display: flex;
   gap: 6px;
@@ -268,13 +269,13 @@
 }
 .execution-config-app .sl-query small {
   display: block;
-  font-size: 10px;
+  font-size: var(--ui-meta-size);
   color: var(--sl-muted);
   margin-top: 3px;
 }
 .execution-config-app .sl-query .sl-button {
   padding: 4px 5px;
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
 }
 .execution-config-app .sl-dot {
   display: inline-block;
@@ -292,7 +293,7 @@
   border-radius: 7px;
   background: var(--sl-warn-bg);
   color: var(--sl-warn);
-  font-size: 12px;
+  font-size: 13px;
   margin-bottom: 17px;
   display: flex;
   align-items: flex-start;
@@ -305,7 +306,7 @@
   font-weight: 500;
 }
 .execution-config-app .sl-alert p {
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
   margin-top: 3px;
 }
 .execution-config-app .sl-alert .sl-button {
@@ -318,25 +319,25 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   margin: 3px 0 17px;
 }
 .execution-config-app .sl-check input {
   width: 14px;
   height: 14px;
   margin: 0;
-  accent-color: var(--sl-blue);
+  accent-color: var(--sl-accent);
 }
 .execution-config-app .sl-advanced {
   border-top: 1px solid var(--sl-line);
   padding-top: 14px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .execution-config-app summary {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
   list-style: none;
   color: var(--sl-muted);
 }
@@ -361,7 +362,7 @@
   background: var(--sl-panel);
 }
 .execution-config-app .sl-footer-note {
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
   color: var(--sl-muted);
 }
 .execution-config-app .sl-footer-note.dirty {
@@ -375,7 +376,7 @@
   margin-top: 14px;
   flex-wrap: wrap;
   color: var(--sl-muted);
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
 }
 .execution-config-app .sl-code {
   margin-top: 14px;
@@ -384,13 +385,13 @@
 }
 .execution-config-app pre {
   font:
-    11px/1.6 Consolas,
+    13px/1.7 Consolas,
     monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 0;
   padding: 12px;
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--sl-bg);
   color: var(--sl-muted);
 }
@@ -398,7 +399,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
   color: var(--sl-good);
 }
 .execution-config-app .sl-status.pending {
@@ -408,7 +409,7 @@
   display: block;
 }
 .execution-config-app .sl-toast {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--sl-good);
   padding-top: 12px;
   min-height: 18px;
@@ -424,9 +425,6 @@
 @media (max-width: 620px) {
   .execution-config-app .sl-page-head {
     gap: 10px;
-  }
-  .execution-config-app h1 {
-    font-size: 21px;
   }
   .execution-config-app .sl-workspace {
     grid-template-columns: 1fr;
@@ -448,7 +446,7 @@
     margin: 0;
   }
   .execution-config-app .sl-profile-meta {
-    font-size: 11px;
+    font-size: var(--ui-meta-size);
   }
   .execution-config-app .sl-editor-head,
   .execution-config-app .sl-form,
@@ -496,7 +494,7 @@
 }
 .execution-config-app .sl-model-note .sl-button {
   padding: 0;
-  font-size: 11px;
+  font-size: var(--ui-meta-size);
 }
 .execution-config-app .sl-scope {
   margin-top: -10px;

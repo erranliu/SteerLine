@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
+import { Button } from "../../shared/ui/button";
 import "./planning.css";
 
 type Change = {
@@ -229,7 +230,8 @@ export default function RoadmapPlanning() {
     <section className="planning-page" aria-label="Roadmap 规划">
       <header className="planning-header">
         <h1>Roadmap 规划</h1>
-        <button
+        <Button
+          variant="default"
           disabled={!online || !list.data?.available}
           onClick={() => {
             setCreating(true);
@@ -237,15 +239,15 @@ export default function RoadmapPlanning() {
           }}
         >
           新建规划
-        </button>
-        <button
+        </Button>
+        <Button
           disabled={
             sending || !list.data?.tasks.some((item) => item.can_rebase)
           }
           onClick={() => void act("rebase_all", {}, true)}
         >
           全部 Rebase
-        </button>
+        </Button>
       </header>
       {error && <p role="alert">{error}</p>}
       {(list.error || detail.error) && (
@@ -290,7 +292,7 @@ export default function RoadmapPlanning() {
             </Link>
           ))}
         </nav>
-        <main>
+        <div className="planning-detail">
           {creating ? (
             <form
               onSubmit={(event) => {
@@ -591,7 +593,7 @@ export default function RoadmapPlanning() {
                 : "创建规划任务，开始与 SteerAgent 讨论。"}
             </p>
           )}
-        </main>
+        </div>
       </div>
     </section>
   );

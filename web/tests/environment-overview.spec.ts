@@ -151,6 +151,8 @@ test("all environment readiness remains visible with inline actions across refre
         ],
       };
     else if (path.endsWith("/identity")) data = identity;
+    else if (path.endsWith("/maintenance/readiness"))
+      data = { status: "ready", commit: "fixture", total: 0, ready: 0, blockers: [] };
     else if (path.endsWith("/snapshot"))
       data = {
         connection: {

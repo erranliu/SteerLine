@@ -76,12 +76,16 @@ function getConversation(
 export function ActivityConversation({ activity }: { activity: Activity }) {
   const [open, setOpen] = useState(false);
   return (
-    <>
-      <Button aria-expanded={open} onClick={() => setOpen(!open)}>
+    <div className="reading-conversation">
+      <Button
+        variant={open || activity.needs_attention ? "outline" : "default"}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
         {open ? "收起对话" : "查看对话"}
       </Button>
       {open && <ConversationPanel activity={activity} />}
-    </>
+    </div>
   );
 }
 
@@ -295,7 +299,9 @@ function Conversation({
               : "reading-interaction"
           }
         >
-          <small>{message.role === "user" ? "用户" : "助手"}</small>
+          <strong className="reading-role">
+            {message.role === "user" ? "用户" : "助手"}
+          </strong>
           {message.body_cursor && first ? (
             <ConversationBody
               key={JSON.stringify([

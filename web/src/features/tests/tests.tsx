@@ -178,11 +178,19 @@ export function Tests() {
           {!suites.length && <p className="empty">没有符合条件的测试集</p>}
         </aside>
         <div className="test-runs">
-          <div className="button-row">
-            <Button variant="ghost" onClick={() => setView("runs")}>
+          <div className="segmented test-view-switch" role="group" aria-label="测试详情视图">
+            <Button
+              variant="ghost"
+              aria-pressed={view === "runs"}
+              onClick={() => setView("runs")}
+            >
               执行记录
             </Button>
-            <Button variant="ghost" onClick={() => setView("definition")}>
+            <Button
+              variant="ghost"
+              aria-pressed={view === "definition"}
+              onClick={() => setView("definition")}
+            >
               测试定义
             </Button>
           </div>

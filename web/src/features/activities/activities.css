@@ -12,7 +12,7 @@
   display: inline-flex;
   gap: 0.25rem;
   align-items: center;
-  color: #a35b13;
+  color: #e7bf77;
   font-size: 0.75rem;
 }
 .activity-drawer {
@@ -39,7 +39,7 @@
 }
 .activity-drawer h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--ui-section-size);
   overflow-wrap: anywhere;
 }
 .activity-drawer header button {
@@ -78,8 +78,9 @@
   overflow-anchor: auto;
 }
 .activity-card {
-  border: 1px solid var(--color-border, #293630);
-  border-radius: 0.6rem;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-panel);
   margin-top: 0.75rem;
   padding: 0.85rem;
   overflow-wrap: anywhere;
@@ -89,12 +90,12 @@
   display: block;
 }
 .activity-card small {
-  color: var(--color-muted, #8faaa0);
-  font-size: 0.75rem;
+  color: var(--ui-secondary);
+  font-size: var(--ui-meta-size);
 }
 .activity-card p {
   margin: 0.45rem 0;
-  font-size: 0.85rem;
+  font-size: var(--ui-body-size);
 }
 .activity-card details {
   font-size: 0.8rem;

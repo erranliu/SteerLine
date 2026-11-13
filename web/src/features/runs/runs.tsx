@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { ArrowUpRight, Layers } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useWorkspace } from "../../app/context";
 import type { CandidateStart } from "../../app/use-candidate-starts";
 import type {
@@ -52,6 +52,7 @@ import { ResolvePRConflict } from "./resolve-pr-conflict";
 import { RunUsage } from "./run-usage";
 import { RejectedStart } from "./rejected-start";
 import { ContinuationSuggestion } from "./continuation-suggestion";
+import "./runs.css";
 
 function candidateExecutionState(state: string) {
   if (state === "running") return state;
@@ -105,32 +106,57 @@ function CandidateDetail({
   stopApplied?: boolean;
 }) {
   const { api, online, send, busy, snapshot } = useWorkspace();
-  const caps = snapshot?.connection.snapshot.page?.service.capabilities ?? [];
+  const observation = snapshot?.connection.snapshot;
+  const caps = observation?.page?.service.capabilities ?? [];
   const nativeUnavailable = nativeSessionReason(run, online, caps);
   const answerVisible = !!run.decision && (!stopApplied || !participating(run));
+  const stale =
+    !online || !!observation?.error || !!observation?.page?.service.error;
+  const sampledAt = observation?.sampled_at;
+  const observedAt = sampledAt ? new Date(sampledAt) : undefined;
   return (
     <>
       <section className="run-section" aria-label="当前进度">
-        <div className="candidate-heading">
-          <div>
-            <div className="eyebrow">
+        <div className="candidate-heading run-overview">
+          <div className="run-title">
+            <p className="run-candidate-meta">
               候选 C{run.candidate_number || "—"} ·{" "}
               {run.execution_profile?.name || run.agent}
-            </div>
+            </p>
             <h2>{run.title}</h2>
-            <div className="actions">
+          </div>
+          <div className="run-stage">
+            <div>
+              <p className="run-stage-label">当前阶段</p>
+              <p className="run-stage-name">{currentStage(run)}</p>
+            </div>
+            <div className="run-stage-status">
               <CandidateStatuses
                 run={run}
                 states={candidateStatuses(run, task)}
               />
-              <span className="muted">{currentStage(run)}</span>
+              {observedAt && Number.isFinite(observedAt.getTime()) && (
+                <p className="run-sampled-at">
+                  {stale ? "上次已知" : "状态观察于"}{" "}
+                  <time
+                    dateTime={sampledAt}
+                    title={observedAt.toLocaleString("zh-CN", {
+                      hour12: false,
+                    })}
+                  >
+                    {stale
+                      ? observedAt.toLocaleString("zh-CN", { hour12: false })
+                      : observedAt.toLocaleTimeString("zh-CN", { hour12: false })}
+                  </time>
+                </p>
+              )}
             </div>
           </div>
           <div className="actions candidate-actions">
-            <CopyExecutionInfo run={run} />
-            <ResolvePRConflict run={run} />
-            {stopControl}
             <Button
+              variant={
+                !answerVisible && !nativeUnavailable ? "default" : "outline"
+              }
               disabled={!!nativeUnavailable || busy}
               title={nativeUnavailable || (busy ? "正在处理上一项操作" : "")}
               onClick={() =>
@@ -146,9 +172,12 @@ function CandidateDetail({
               在 {run.host === "orca" ? "Orca" : "Codex"} 中查看{" "}
               <ArrowUpRight size={14} />
             </Button>
+            <CopyExecutionInfo run={run} />
+            <ResolvePRConflict run={run} />
+            {stopControl}
           </div>
+          {nativeUnavailable && <p className="muted">{nativeUnavailable}</p>}
         </div>
-        {nativeUnavailable && <p className="muted">{nativeUnavailable}</p>}
         {answerVisible && (
           <Answer
             key={draftKey(
@@ -167,12 +196,8 @@ function CandidateDetail({
         {preparationWait(run) && (
           <ExecutionWaitSummary
             wait={preparationWait(run)!}
-            stale={
-              !online ||
-              !!snapshot?.connection.snapshot.error ||
-              !!snapshot?.connection.snapshot.page?.service.error
-            }
-            sampledAt={snapshot?.connection.snapshot.sampled_at}
+            stale={stale}
+            sampledAt={sampledAt}
           />
         )}
         {run.runner_delivery &&
@@ -247,15 +272,7 @@ function CandidateDetail({
       </section>
       <section className="run-section" aria-label="交付结果">
         <h3>交付结果</h3>
-        <DeliverySummary
-          run={run}
-          task={task}
-          stale={
-            !online ||
-            !!snapshot?.connection.snapshot.error ||
-            !!snapshot?.connection.snapshot.page?.service.error
-          }
-        />
+        <DeliverySummary run={run} task={task} stale={stale} />
         <FinalOutput key={run.execution_id + "/" + run.attempt_id} run={run} />
         <RunUsage key={run.run_id + "/" + run.execution_id} run={run} />
       </section>
@@ -494,12 +511,9 @@ export function Runs() {
       )
     );
   return (
-    <>
+    <div className="runs-page">
       <div className="page-heading">
-        <div>
-          <h1>任务执行</h1>
-        </div>
-        <Layers className="heading-icon" size={30} />
+        <h1>任务执行</h1>
       </div>
       <div className="toolbar">
         <div className="segmented execution-filters" aria-label="候选状态筛选">
@@ -545,7 +559,7 @@ export function Runs() {
         </div>
       </div>
       <div className="runs-layout">
-        <aside className="run-task-list">
+        <aside className="run-task-list" aria-label="任务列表">
           {tasks.isPending && <div className="empty">正在读取正式任务…</div>}
           {tasks.data?.tasks.length === 0 && (
             <div className="empty">还没有正式任务</div>
@@ -741,6 +755,6 @@ export function Runs() {
           )}
         </aside>
       </div>
-    </>
+    </div>
   );
 }

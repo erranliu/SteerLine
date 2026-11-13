@@ -42,7 +42,6 @@ export function SettingsPage({
       />
       <div className="page-heading">
         <div>
-          <div className="eyebrow">SETTINGS</div>
           <h1>配置</h1>
           <p>管理全局配置，准备和验收项目运行环境。</p>
         </div>

@@ -69,9 +69,9 @@ export function LastMessage({
   }, [sample?.text, expanded]);
   return (
     <section className="last-message notice" aria-label="最近消息">
-      <strong>最后一条消息</strong>
-      {sample ? (
-        <>
+      <div className="last-message-header">
+        <strong>最后一条消息</strong>
+        {sample && (
           <p className="muted">
             <time dateTime={sample.observed_at}>
               观察于{" "}
@@ -81,6 +81,10 @@ export function LastMessage({
             </time>{" "}
             · {age(sample.observed_at, now)}
           </p>
+        )}
+      </div>
+      {sample ? (
+        <>
           <pre ref={body} className={expanded ? "" : "message-preview"}>
             {answerVisible &&
             [

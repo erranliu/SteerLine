@@ -104,7 +104,7 @@ export function AddProject({
       className="settings-panel project-registration"
       aria-labelledby="add-project-title"
     >
-      <h2 id="add-project-title">添加已初始化项目</h2>
+      <h1 id="add-project-title">添加已初始化项目</h1>
       <p className="muted">
         先按所采用版本的
         <a
