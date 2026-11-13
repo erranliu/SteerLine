@@ -163,7 +163,7 @@ func ContinuationSuggestionAdvisory(s *Scenario) {
 	// No browser or manual generation before the first settled suggestion.
 	firstID := find("ready")
 	first := wait(firstID, "ready")
-	if !first.Settled || first.Prompt != script.Results["ready"].Prompt || first.Context == nil || len(first.Context.Materials) < 3 {
+	if !first.Settled || first.Prompt != script.Results["ready"].Prompt || first.Context == nil || len(first.Context.Materials) != 1 || first.Context.Materials[0].ID != "question" {
 		s.t.Fatal("automatic frozen result incomplete", first)
 	}
 	firstActivity := activity(firstID)

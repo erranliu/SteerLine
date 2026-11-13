@@ -74,8 +74,11 @@ test("owned advisory navigation, context, copy and cancellation", async ({
     panel.getByRole("heading", { name: "原问题", exact: true }),
   ).toBeVisible();
   await expect(
-    panel.getByText("Controlled task", { exact: false }).first(),
+    panel.locator("pre").filter({ hasText: "原题-" }),
   ).toBeVisible();
+  await expect(panel.getByText("Controlled task", { exact: false })).toHaveCount(
+    0,
+  );
   expect(await panel.getByRole("textbox").count()).toBe(0);
   for (const name of [
     "提交此澄清回答",

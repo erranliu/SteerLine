@@ -173,6 +173,8 @@ func TestContinuationSuggestionConfigurationFreezesAtPreparation(t *testing.T) {
 
 func TestContinuationSuggestionAdvisorySourceIsExplicitAndFreezesOwnerFacts(t *testing.T) {
 	c := runnerstate.Candidate{ID: strings.Repeat("a", 32), TaskID: "1", Participation: "active", BaseRevision: "fixed", ContractDigest: "contract", Projection: &runnercontract.Run{Revision: 7, Execution: runnercontract.Execution{AttemptID: "attempt"}, Question: &runnercontract.Question{ID: "question", Text: "Conflicting acceptance requirements"}, Controls: runnercontract.Controls{CanReply: true, Reason: "waiting for native answer"}}}
+	c.TestPlan = json.RawMessage(`{"note":"prior test arrangement"}`)
+	c.Projection.Final = &runnercontract.Final{Verified: true, Text: "prior verification report"}
 	s, ok := materialAdviceSource(c)
 	if !ok || s.Occurrence != "attempt:question" || len(s.Facts) != 1 {
 		t.Fatal(s, ok)
@@ -257,6 +259,7 @@ func TestContinuationSuggestionAdvisoryPersistedQuestionAutomaticallyGeneratesWi
 	candidate.Projection.Execution.AttemptID = "real-owner-attempt"
 	candidate.Projection.Question = &runnercontract.Question{ID: "real-owner-question", Text: "请确认这一项任务的验收依据", AllowFreeText: true}
 	candidate.Projection.Controls.CanReply = true
+	candidate.Projection.Final = &runnercontract.Final{Verified: true, Text: "prior verification report"}
 	require(t, store.SaveCandidate(ctx, candidate, candidate.Revision-1, nil))
 	raw, e := os.ReadFile("../runnerclient/testdata/content-capabilities.json")
 	require(t, e)
@@ -282,7 +285,7 @@ func TestContinuationSuggestionAdvisoryPersistedQuestionAutomaticallyGeneratesWi
 	for {
 		record, err := port.service.Get(ctx, id)
 		if err == nil && record.Complete() {
-			if record.State != "ready" || record.Suggestion == nil || record.Request == nil || len(record.Request.Context.Materials) < 3 {
+			if record.State != "ready" || record.Suggestion == nil || record.Request == nil || len(record.Request.Context.Materials) != 1 || record.Request.Context.Materials[0].ID != "question" {
 				t.Fatal(record)
 			}
 			break
@@ -302,8 +305,16 @@ func TestContinuationSuggestionAdvisoryPersistedQuestionAutomaticallyGeneratesWi
 	}
 	record, e := port.service.Get(ctx, id)
 	require(t, e)
-	if !strings.Contains(record.PreparedText, candidate.Projection.Question.Text) || !strings.Contains(record.PreparedText, "Frozen implementation plan") {
-		t.Fatal("real frozen owner materials absent")
+	var sent runnercontract.GenerateRunInput
+	require(t, json.Unmarshal(fake.request.Input, &sent))
+	instruction := sent.Generate.Instruction
+	if instruction != record.PreparedText || !strings.Contains(instruction, candidate.Projection.Question.Text) {
+		t.Fatal("Runner did not receive the frozen original question")
+	}
+	for _, extra := range []string{"Frozen implementation plan", "prior verification report"} {
+		if strings.Contains(instruction, extra) {
+			t.Fatal("unexpected material in Runner answer suggestion", extra)
+		}
 	}
 	before := fake.inspects
 	_, e = port.read(ctx, "/main-agent/"+id, nil)

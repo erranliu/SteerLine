@@ -20,6 +20,8 @@ SteerAgent 全局配置（2026-11-12）。[验收记录](steer-agent-configurati
 
 候选答复投递和等待状态（2026-11-12）。[修复、提示词正文差异与验证](candidate-answer-delivery.md)
 
+候选回答建议只使用原问题（2026-11-13）。[提示词差异和验证](candidate-reply-prompt.md)
+
 普通任务运行期间重检项目环境（2026-11-11）。[并行实测与准入回归](environment-recheck-with-running-tasks.md)
 
 项目运行环境表内检测（2026-11-11）。[实现与验证](project-environment-inline-checks.md)
