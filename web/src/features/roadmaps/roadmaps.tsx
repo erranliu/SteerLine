@@ -1,7 +1,7 @@
 import type { SteerAgentConfig } from "../../shared/api/execution-configs";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { SafeLink } from "../../shared/ui/status";
 import type { Envelope } from "../../shared/api/types";
@@ -29,6 +29,7 @@ import { OperationResult } from "../activities/operation-result";
 
 export type RoadmapSource = {
   id: string;
+  planning_id?: string;
   path: string;
   body: string;
   digest: string;
@@ -143,7 +144,14 @@ export const roadmapQueryKey = (
   project: string,
   instance: string,
 ) => [home, "roadmaps", project, instance];
-export function Roadmaps() {
+export function Roadmaps({
+  planning,
+}: {
+  planning?: {
+    id: string;
+    cardForm: (disabled: boolean, confirmed?: RoadmapTask) => React.ReactNode;
+  };
+} = {}) {
   const { api, identity, online, submit, requests, pendingRequests } =
     useWorkspace();
   const feedback = useActivityFeedback();
@@ -169,7 +177,10 @@ export function Roadmaps() {
   });
   const value = list.data,
     sourceID =
-      value?.records.find((r) => r.id === params.get("record"))?.source.id ||
+      planning?.id ||
+      value?.records.find(
+        (r) => !r.source.planning_id && r.id === params.get("record"),
+      )?.source.id ||
       params.get("source") ||
       value?.sources[0]?.id ||
       "";
@@ -181,11 +192,17 @@ export function Roadmaps() {
       value?.sources.find((s) => s.id === sourceID)?.digest,
     ],
     queryFn: () => api.get<RoadmapSource>("/roadmaps/sources/" + sourceID),
-    enabled: online && !!sourceID,
+    enabled: online && !!sourceID && !planning,
     retry: false,
   });
   const history = (value?.records || [])
-    .filter((r) => r.source.id === sourceID)
+    .filter(
+      (r) =>
+        r.source.id === sourceID &&
+        (planning
+          ? r.source.planning_id === planning.id
+          : !r.source.planning_id),
+    )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
   const currentSummary = currentRoadmapRecord(history);
   const currentID = currentSummary?.id || "";
@@ -219,7 +236,7 @@ export function Roadmaps() {
   const belongs = (e: Envelope) =>
     e.project_id === identity.project_id &&
     e.instance_id === identity.instance_id &&
-    (e.action === "roadmap_parse"
+    (e.action === "roadmap_parse" || e.action === "roadmap_task_generate"
       ? e.target_id === sourceID
       : history.some((r) => r.id === e.target_id));
   const inFlight = () =>
@@ -234,6 +251,7 @@ export function Roadmaps() {
   const titles: Record<string, string> = {
     roadmap_parse: "正在提交解析…",
     roadmap_generate_documents: "正在提交文档生成…",
+    roadmap_task_generate: "正在确认任务卡并提交文档生成…",
     roadmap_retry_documents: "正在提交单项重生成…",
     roadmap_publish: "正在提交文档发布…",
     roadmap_admit: "正在提交入图…",
@@ -300,7 +318,7 @@ export function Roadmaps() {
     !!source.data &&
     roadmapSourceChanged(currentDetail.data.source, source.data);
   function returnToCurrent() {
-    setParams({ source: sourceID });
+    setParams(planning ? { task: planning.id } : { source: sourceID });
     setEditing(false);
     setError("");
   }
@@ -367,7 +385,9 @@ export function Roadmaps() {
       if (result?.status === "rejected")
         setError(result.diagnostic || "原操作待核实");
       if (!viewingHistory && params.has("record"))
-        setParams({ source: sourceID }, { replace: true });
+        setParams(planning ? { task: planning.id } : { source: sourceID }, {
+          replace: true,
+        });
       await Promise.all([
         list.refetch({ cancelRefetch: false }),
         ...(currentID ? [currentDetail.refetch({ cancelRefetch: false })] : []),
@@ -403,6 +423,16 @@ export function Roadmaps() {
     publicationPending ||
     !value?.documents_available ||
     !value?.preparation.ready;
+  const materialsReady = planning
+    ? [
+        "SteerlineFlow/Roadmap/document-rules.md",
+        "SteerlineFlow/spec/SpecGuide.md",
+      ].every((path) =>
+        value?.preparation.files.some(
+          (file) => file.path === path && file.ready,
+        ),
+      )
+    : value?.preparation.ready;
   const generateDisabled =
     locked ||
     !generationParent ||
@@ -410,9 +440,9 @@ export function Roadmaps() {
     publicationPending ||
     stale ||
     !["review", "confirmed"].includes(generationParent.state) ||
-    !!generationParent.analysis?.questions.length ||
+    !!generationParent.analysis?.questions?.length ||
     !value?.documents_available ||
-    !value?.preparation.ready;
+    !materialsReady;
   const mainAction = roadmapNextAction(
     current,
     currentStale && !hasPending && !publicationPending,
@@ -425,7 +455,9 @@ export function Roadmaps() {
   const guidance = ["blocked", "documents-blocked"].includes(
     current?.state || "",
   )
-    ? "请按下方待澄清问题在外部补充草稿，再重新解析任务与依赖。"
+    ? planning
+      ? "请根据待澄清问题更新任务卡并重新确认。"
+      : "请按下方待澄清问题在外部补充草稿，再重新解析任务与依赖。"
     : currentStale
       ? "草稿已修改，当前流程保留原快照。采用新内容需重新解析和确认。"
       : mainAction === "generate"
@@ -433,7 +465,9 @@ export function Roadmaps() {
           ? "请核对下方任务范围、原有依赖与拟议依赖；确认后立即生成逐任务 Spec / Plan 和验收材料。"
           : "任务与依赖已确认，可重试生成逐任务 Spec / Plan 和验收材料。"
         : mainAction === "publish"
-          ? "请审阅下方完整文档与发布差异。发布会创建文档 PR 并按展示内容合并。"
+          ? planning
+            ? "请审阅下方完整文档与发布差异。发布后可在仓库中合并文档 PR。"
+            : "请审阅下方完整文档与发布差异。发布会创建文档 PR 并按展示内容合并。"
           : mainAction === "admit"
             ? "文档合并已核实。入图将创建正式任务并分配编号；自动派发开启时，就绪任务可能启动。"
             : mainAction === "dag"
@@ -442,29 +476,50 @@ export function Roadmaps() {
                 ? "沿原请求核实结果，暂不重新提交。"
                 : mainAction === "wait"
                   ? "当前内容请求正在处理，结果将在此更新。"
-                  : "解析草稿，核对任务范围、已有正式任务和依赖。";
+                  : planning
+                    ? "请核对任务卡和前置，确认后生成文档。"
+                    : "解析草稿，核对任务范围、已有正式任务和依赖。";
+  const linkedPlanning =
+    !planning &&
+    value?.records.find((r) => r.id === params.get("record"))?.source
+      .planning_id;
+  if (linkedPlanning) {
+    const target = new URLSearchParams(params);
+    target.set("task", linkedPlanning);
+    return (
+      <Navigate
+        replace
+        to={`/projects/${identity.project_id}/roadmap-planning?${target}`}
+      />
+    );
+  }
   return (
-    <section className="roadmaps-page" aria-label="Roadmap 草稿">
-      <header className="page-header">
-        <div>
-          <h1>Roadmap 草稿</h1>
-          <p>
-            读取 Markdown → 确认任务依赖并生成 Spec / Plan → 审阅文档 → 发布合并
-            → 入 DAG 时分配编号
-          </p>
-        </div>
-        <button
-          disabled={!online}
-          onClick={() => {
-            void list.refetch();
-            void source.refetch();
-            void detail.refetch();
-            void currentDetail.refetch();
-          }}
-        >
-          刷新 Markdown 与观察
-        </button>
-      </header>
+    <section
+      className="roadmaps-page"
+      aria-label={planning ? "文档与入图" : "Roadmap 草稿"}
+    >
+      {!planning && (
+        <header className="page-header">
+          <div>
+            <h1>Roadmap 草稿</h1>
+            <p>
+              读取 Markdown → 确认任务依赖并生成 Spec / Plan → 审阅文档 →
+              发布合并 → 入 DAG 时分配编号
+            </p>
+          </div>
+          <button
+            disabled={!online}
+            onClick={() => {
+              void list.refetch();
+              void source.refetch();
+              void detail.refetch();
+              void currentDetail.refetch();
+            }}
+          >
+            刷新 Markdown 与观察
+          </button>
+        </header>
+      )}
       {error && (
         <p className="notice amber" role="alert">
           {error}
@@ -483,7 +538,7 @@ export function Roadmaps() {
           连接待核实 · 以下为最后观察，暂不能提交操作。
         </p>
       )}
-      {value && !value.preparation.ready && (
+      {value && !materialsReady && (
         <section aria-label="Roadmap 静态材料初始化" className="notice">
           <h2>先准备项目静态材料</h2>
           <p>
@@ -491,11 +546,17 @@ export function Roadmaps() {
             自动提供，无需手写 JSON。
           </p>
           <ul>
-            {value.preparation.files.map((file) => (
-              <li key={file.path}>
-                {file.path} · {file.ready ? "固定提交可读取" : "未就绪"}
-              </li>
-            ))}
+            {value.preparation.files
+              .filter(
+                (file) =>
+                  !planning ||
+                  file.path !== "SteerlineFlow/Roadmap/parse-rules.md",
+              )
+              .map((file) => (
+                <li key={file.path}>
+                  {file.path} · {file.ready ? "固定提交可读取" : "未就绪"}
+                </li>
+              ))}
           </ul>
           <p>
             {value.preparation.local_ready
@@ -526,36 +587,46 @@ export function Roadmaps() {
       )}
       <section
         className="roadmaps-progress"
-        aria-label="当前草稿转正进度"
+        aria-label={planning ? "当前任务转正进度" : "当前草稿转正进度"}
         aria-busy={sending.length > 0 || (!!current && contentPending(current))}
       >
         <div className="roadmaps-progress-heading">
           <h2>
-            {source.data?.path.split("/").at(-1) || "选择草稿"} · 当前流程
+            {planning
+              ? "文档与入图"
+              : `${source.data?.path.split("/").at(-1) || "选择草稿"} · 当前流程`}
           </h2>
           <strong role="status">
-            {flowReason || (list.isPending ? "读取进度中" : progress.label)}
+            {flowReason ||
+              (list.isPending
+                ? "读取进度中"
+                : planning && !current
+                  ? "待确认任务卡"
+                  : progress.label)}
           </strong>
         </div>
         <ol aria-label="转正阶段" className="roadmaps-steps">
-          {roadmapSteps.map((step, index) => (
-            <li
-              key={step}
-              className={
-                index < progress.step
-                  ? "complete"
-                  : index === progress.step
-                    ? "current"
-                    : ""
-              }
-              aria-current={index === progress.step ? "step" : undefined}
-            >
-              <span aria-hidden="true">
-                {index < progress.step ? "✓" : index + 1}
-              </span>
-              {step}
-            </li>
-          ))}
+          {roadmapSteps.map(
+            (step, index) =>
+              (!planning || index > 0) && (
+                <li
+                  key={step}
+                  className={
+                    index < progress.step
+                      ? "complete"
+                      : index === progress.step
+                        ? "current"
+                        : ""
+                  }
+                  aria-current={index === progress.step ? "step" : undefined}
+                >
+                  <span aria-hidden="true">
+                    {index < progress.step ? "✓" : index + 1}
+                  </span>
+                  {step}
+                </li>
+              ),
+          )}
         </ol>
         <p>{guidance}</p>
         {!viewingHistory && copyRequest && (!record || flowReason) && (
@@ -592,7 +663,19 @@ export function Roadmaps() {
           </div>
         ) : (
           <div className="roadmaps-actions">
-            {mainAction === "parse" && (
+            {planning &&
+              (mainAction === "parse" ||
+                mainAction === "generate" ||
+                mainAction === "publish") && (
+                <details open={!current || mainAction === "parse"}>
+                  <summary>{current ? "重新确认任务卡" : "确认任务卡"}</summary>
+                  {planning.cardForm(
+                    locked || !value?.documents_available || !materialsReady,
+                    record?.analysis?.tasks[0],
+                  )}
+                </details>
+              )}
+            {mainAction === "parse" && !planning && (
               <button
                 className="roadmaps-primary"
                 disabled={parseDisabled}
@@ -671,11 +754,14 @@ export function Roadmaps() {
                   record &&
                   void action("roadmap_publish", record.id, record.revision, {
                     review_digest: record.review_digest || "",
-                    merge: true,
+                    merge: !planning,
                   })
                 }
               >
-                {actionLabel("roadmap_publish", "确认发布并合并文档")}
+                {actionLabel(
+                  "roadmap_publish",
+                  planning ? "确认发布文档 PR" : "确认发布并合并文档",
+                )}
               </button>
             )}
             {mainAction === "admit" && (
@@ -687,13 +773,20 @@ export function Roadmaps() {
                   void action("roadmap_admit", record.id, record.revision)
                 }
               >
-                {actionLabel("roadmap_admit", "正式入 DAG · 分配编号")}
+                {actionLabel(
+                  "roadmap_admit",
+                  planning ? "加入 DAG" : "正式入 DAG · 分配编号",
+                )}
               </button>
             )}
             {mainAction === "dag" && (
               <Link
                 className="roadmaps-primary"
-                to={"/projects/" + identity.project_id + "/dag"}
+                to={
+                  planning && record?.formal_mapping.T1
+                    ? dag(record.formal_mapping.T1)
+                    : "/projects/" + identity.project_id + "/dag"
+                }
               >
                 查看正式任务 DAG
               </Link>
@@ -821,7 +914,9 @@ export function Roadmaps() {
               ? "历史记录"
               : record.purpose === "documents"
                 ? "本次文档生成"
-                : "本次解析"}{" "}
+                : planning
+                  ? "本次任务确认"
+                  : "本次解析"}{" "}
             · {roadmapProgress(record).label}
           </h2>
           {record && (
@@ -870,124 +965,128 @@ export function Roadmaps() {
           sourceID={sourceID}
         />
       )}
-      <div className="roadmaps-grid">
-        <aside className="roadmaps-library">
-          <h2>仓库 Markdown</h2>
-          <p>草稿在外部维护，无需配套 JSON。</p>
-          {value?.sources.map((s) => (
-            <button
-              key={s.id}
-              className={s.id === sourceID ? "active" : ""}
-              onClick={() => {
-                setParams({ source: s.id });
-                setEditing(false);
-                setError("");
-              }}
-            >
-              <strong>{s.path.split("/").at(-1)}</strong>
-              <span>{s.path}</span>
-              <span className="roadmaps-source-status">
-                {
-                  roadmapProgress(
-                    currentRoadmapRecord(
-                      (value?.records || [])
-                        .filter((r) => r.source.id === s.id)
-                        .map((r) => (r.id === current?.id ? current : r)),
-                    ),
-                  ).label
-                }
-              </span>
-              {s.diagnostic && <span>{s.diagnostic}</span>}
-            </button>
-          ))}
-          {value?.sources.length === 0 && (
-            <p>drafts 目录下暂无 Markdown 草稿。</p>
-          )}
-        </aside>
-        <article className="roadmaps-document">
-          <h2>{source.data?.path.split("/").at(-1) || "选择草稿"}</h2>
-          <p className="muted">{source.data?.path}</p>
-          <p>
-            来源：
-            {source.data?.modified
-              ? "工作树内容（含未提交变化）"
-              : "工作树文件"}
-          </p>
-          <textarea
-            aria-label="Markdown 原文 · 只读"
-            readOnly
-            value={source.data?.body || ""}
-            rows={16}
-          />
-          {stale && (
-            <p className="notice amber">
-              来源已变化，旧解析保持原快照。采用新内容前请重新解析和确认。
-            </p>
-          )}
-        </article>
-        <aside className="roadmaps-controls">
-          <h2>当前流程与历史</h2>
-          <p>解析和文档生成按同一次规划关联。历史仅供查看。</p>
-          <details open={viewingHistory}>
-            <summary>历史记录（{history.length}）</summary>
-            <label>
-              查看历史记录
-              <select
-                value={historicalID || ""}
-                onChange={(e) => {
-                  setParams(
-                    e.target.value
-                      ? { source: sourceID, record: e.target.value }
-                      : { source: sourceID },
-                  );
+      {!planning && (
+        <div className="roadmaps-grid">
+          <aside className="roadmaps-library">
+            <h2>仓库 Markdown</h2>
+            <p>草稿在外部维护，无需配套 JSON。</p>
+            {value?.sources.map((s) => (
+              <button
+                key={s.id}
+                className={s.id === sourceID ? "active" : ""}
+                onClick={() => {
+                  setParams({ source: s.id });
                   setEditing(false);
                   setError("");
                 }}
               >
-                <option value="">当前流程</option>
-                {history.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.purpose === "documents" ? "文档生成 · " : "任务解析 · "}
-                    {new Date(r.created_at).toLocaleString()} ·{" "}
-                    {roadmapProgress(r).label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {record?.parent_id && (
-              <p>
-                关联的任务解析：
-                {history.find((r) => r.id === record.parent_id)?.created_at ||
-                  record.parent_id}
+                <strong>{s.path.split("/").at(-1)}</strong>
+                <span>{s.path}</span>
+                <span className="roadmaps-source-status">
+                  {
+                    roadmapProgress(
+                      currentRoadmapRecord(
+                        (value?.records || [])
+                          .filter((r) => r.source.id === s.id)
+                          .map((r) => (r.id === current?.id ? current : r)),
+                      ),
+                    ).label
+                  }
+                </span>
+                {s.diagnostic && <span>{s.diagnostic}</span>}
+              </button>
+            ))}
+            {value?.sources.length === 0 && (
+              <p>drafts 目录下暂无 Markdown 草稿。</p>
+            )}
+          </aside>
+          <article className="roadmaps-document">
+            <h2>{source.data?.path.split("/").at(-1) || "选择草稿"}</h2>
+            <p className="muted">{source.data?.path}</p>
+            <p>
+              来源：
+              {source.data?.modified
+                ? "工作树内容（含未提交变化）"
+                : "工作树文件"}
+            </p>
+            <textarea
+              aria-label="Markdown 原文 · 只读"
+              readOnly
+              value={source.data?.body || ""}
+              rows={16}
+            />
+            {stale && (
+              <p className="notice amber">
+                来源已变化，旧解析保持原快照。采用新内容前请重新解析和确认。
               </p>
             )}
-          </details>
-          <details>
-            <summary>重新解析与生成方案</summary>
-            {value?.steer_agent && (
+          </article>
+          <aside className="roadmaps-controls">
+            <h2>当前流程与历史</h2>
+            <p>解析和文档生成按同一次规划关联。历史仅供查看。</p>
+            <details open={viewingHistory}>
+              <summary>历史记录（{history.length}）</summary>
+              <label>
+                查看历史记录
+                <select
+                  value={historicalID || ""}
+                  onChange={(e) => {
+                    setParams(
+                      e.target.value
+                        ? { source: sourceID, record: e.target.value }
+                        : { source: sourceID },
+                    );
+                    setEditing(false);
+                    setError("");
+                  }}
+                >
+                  <option value="">当前流程</option>
+                  {history.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.purpose === "documents"
+                        ? "文档生成 · "
+                        : "任务解析 · "}
+                      {new Date(r.created_at).toLocaleString()} ·{" "}
+                      {roadmapProgress(r).label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {record?.parent_id && (
+                <p>
+                  关联的任务解析：
+                  {history.find((r) => r.id === record.parent_id)?.created_at ||
+                    record.parent_id}
+                </p>
+              )}
+            </details>
+            <details>
+              <summary>重新解析与生成方案</summary>
+              {value?.steer_agent && (
+                <p>
+                  SteerAgent：{value.steer_agent.model} /{" "}
+                  {value.steer_agent.reasoning_effort}
+                </p>
+              )}
               <p>
-                SteerAgent：{value.steer_agent.model} /{" "}
-                {value.steer_agent.reasoning_effort}
+                重新解析会开始新一轮规划，已有记录保留。正式编号仅在入图时分配。
+              </p>
+              <button disabled={parseDisabled} onClick={() => void parse()}>
+                {actionLabel("roadmap_parse", "重新解析草稿")}
+              </button>
+            </details>
+            {viewingHistory && (
+              <p>
+                历史状态：
+                {record ? roadmapProgress(record).label : "读取历史记录中"}
               </p>
             )}
-            <p>
-              重新解析会开始新一轮规划，已有记录保留。正式编号仅在入图时分配。
-            </p>
-            <button disabled={parseDisabled} onClick={() => void parse()}>
-              {actionLabel("roadmap_parse", "重新解析草稿")}
-            </button>
-          </details>
-          {viewingHistory && (
-            <p>
-              历史状态：
-              {record ? roadmapProgress(record).label : "读取历史记录中"}
-            </p>
-          )}
-          {viewingHistory && !history.some((r) => r.id === historicalID) && (
-            <p role="alert">当前草稿中未找到该历史记录，请返回当前流程。</p>
-          )}
-        </aside>
-      </div>
+            {viewingHistory && !history.some((r) => r.id === historicalID) && (
+              <p role="alert">当前草稿中未找到该历史记录，请返回当前流程。</p>
+            )}
+          </aside>
+        </div>
+      )}
       {analysis && (
         <section className="roadmaps-section" id="roadmap-dependencies">
           <h2>任务与依赖</h2>
@@ -1015,9 +1114,13 @@ export function Roadmaps() {
             />
           )}
           <details className="roadmaps-review-basis">
-            <summary>重叠检查与解析依据</summary>
+            <summary>{planning ? "任务卡原文" : "重叠检查与解析依据"}</summary>
             <p>{analysis.overlap}</p>
-            <p>来源：{record?.source.path}</p>
+            {planning ? (
+              <pre>{record?.source.body}</pre>
+            ) : (
+              <p>来源：{record?.source.path}</p>
+            )}
           </details>
         </section>
       )}
@@ -1037,7 +1140,7 @@ export function Roadmaps() {
             ))}
           </details>
         )}
-        {!!record?.documents.length && (
+        {!!record?.documents?.length && (
           <div>
             <div className="roadmaps-actions">
               {record.documents.map((d) => (
@@ -1162,8 +1265,10 @@ export function Roadmaps() {
             Task、依赖、编号与来源映射整批提交。
           </p>
           <p className="notice amber">
-            “发布并合并”会创建文档 PR
-            并按已展示内容合并；不强制绕过保护规则。项目若已开启自动派发，新任务入图且满足前置后可能启动。
+            {planning
+              ? "请在仓库中合并文档 PR。"
+              : "“发布并合并”会创建文档 PR 并按已展示内容合并；不强制绕过保护规则。"}
+            项目若已开启自动派发，新任务入图且满足前置后可能启动。
           </p>
           {record.publication && (
             <p>
@@ -1177,7 +1282,7 @@ export function Roadmaps() {
             <table>
               <thead>
                 <tr>
-                  <th>Roadmap / 内部代号</th>
+                  <th>{planning ? "任务" : "Roadmap / 内部代号"}</th>
                   <th>正式编号</th>
                 </tr>
               </thead>
@@ -1237,11 +1342,14 @@ export function RoadmapTaskSource({ task }: { task: string }) {
         to={
           "/projects/" +
           identity.project_id +
-          "/roadmaps?source=" +
-          record.source.id
+          (record.source.planning_id
+            ? "/roadmap-planning?task=" + record.source.planning_id
+            : "/roadmaps?source=" + record.source.id)
         }
       >
-        {record.source.path.split("/").at(-1)} / {ref}
+        {record.source.planning_id
+          ? record.source.path
+          : `${record.source.path.split("/").at(-1)} / ${ref}`}
       </Link>
     </p>
   ) : null;

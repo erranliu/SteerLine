@@ -43,6 +43,10 @@ type planningRunner interface {
 type planningView struct {
 	ID         string                    `json:"id"`
 	Title      string                    `json:"title"`
+	Kind       string                    `json:"kind,omitempty"`
+	Goal       string                    `json:"goal,omitempty"`
+	Card       *roadmap.TaskCard         `json:"card,omitempty"`
+	DAGTaskID  string                    `json:"dag_task_id,omitempty"`
 	Path       string                    `json:"path"`
 	Revision   uint64                    `json:"revision"`
 	Status     string                    `json:"status"`
@@ -59,7 +63,15 @@ type planningView struct {
 }
 
 func viewPlanning(task roadmap.PlanningTask) planningView {
-	view := planningView{ID: task.ID, Title: task.Title, Path: task.Path, Revision: task.Revision, Status: task.Status, Diagnostic: task.Diagnostic, Body: task.Body, SourceID: task.SourceID, Busy: task.Operation != nil, Conflict: task.Conflict, Review: task.Review}
+	view := planningView{ID: task.ID, Title: task.Title, Kind: task.Kind, Path: task.Path, Revision: task.Revision, Status: task.Status, Diagnostic: task.Diagnostic, Body: task.Body, SourceID: task.SourceID, Busy: task.Operation != nil, Conflict: task.Conflict, Review: task.Review}
+	if task.Kind == roadmap.SingleTaskPlanning {
+		view.Goal = task.Goal
+		view.Body = ""
+		var card roadmap.TaskCard
+		if decodeStrictJSON([]byte(task.Body), &card) == nil {
+			view.Card = &card
+		}
+	}
 	if task.Publication != nil {
 		view.PR = task.Publication.URL
 	}
@@ -87,7 +99,7 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		for _, task := range tasks {
 			if task.SourceID == "" {
 				view := viewPlanning(task)
-				view.Body, view.Review, view.Question = "", nil, nil
+				view.Body, view.Goal, view.Card, view.Review, view.Question = "", "", nil, nil, nil
 				list = append(list, view)
 			}
 		}
@@ -146,10 +158,34 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		}
 		return page, nil
 	}
+	if tail == "predecessors" && len(values) == 0 && task.Kind == roadmap.SingleTaskPlanning {
+		graph, err := p.store.TaskGraphSnapshot(ctx, task.Project)
+		if err != nil {
+			return nil, err
+		}
+		options := []roadmap.Existing{}
+		for _, node := range graph.Tasks {
+			if node.Status != "discarded" {
+				options = append(options, roadmap.Existing{ID: node.TaskID, Title: node.Title, Status: node.Status})
+			}
+		}
+		return options, nil
+	}
 	if tail != "" || len(values) != 0 {
 		return nil, roadmap.ErrNotFound
 	}
-	return viewPlanning(task), nil
+	view := viewPlanning(task)
+	if task.Kind == roadmap.SingleTaskPlanning {
+		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		if err != nil {
+			return nil, err
+		}
+		view.DAGTaskID = mapping["T1"]
+		if view.DAGTaskID != "" {
+			view.CanMessage, view.CanRebase, view.Question = false, false, nil
+		}
+	}
+	return view, nil
 }
 
 func (p *planningPort) receipt(ctx context.Context, id string) (*httpcontract.CommandResponse, error) {
@@ -233,6 +269,15 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		return nil, nil, errors.New("任务状态已变化或原操作未结算")
 	}
 	view := viewPlanning(task)
+	if task.Kind == roadmap.SingleTaskPlanning {
+		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(mapping) != 0 {
+			return nil, nil, errors.New("任务已正式入图")
+		}
+	}
 	switch in.Action {
 	case planningAction + "message", planningAction + "resolve":
 		var input struct {
@@ -299,7 +344,7 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		}
 		schedulePlanning(&task, "abort", task.Conflict.Target)
 	case planningAction + "review":
-		if !view.CanRebase || task.Body == "" || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
+		if task.Kind == roadmap.SingleTaskPlanning || !view.CanRebase || task.Body == "" || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
 			return nil, nil, errors.New("当前草稿无法审阅")
 		}
 		schedulePlanning(&task, "review", "")
@@ -311,7 +356,7 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		if err := decodeStrictJSON(in.Payload, &input); err != nil {
 			return nil, nil, err
 		}
-		if !view.CanRebase || task.Review == nil || task.Review.Digest != input.Digest || len(input.Paths) == 0 {
+		if task.Kind == roadmap.SingleTaskPlanning || !view.CanRebase || task.Review == nil || task.Review.Digest != input.Digest || len(input.Paths) == 0 {
 			return nil, nil, errors.New("审阅版本已变化")
 		}
 		schedulePlanning(&task, "publish", "")
@@ -349,12 +394,23 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 		Title string `json:"title"`
 		Goal  string `json:"goal"`
 		File  string `json:"file"`
+		Kind  string `json:"kind"`
 	}
 	if err := decodeStrictJSON(in.Payload, &input); err != nil {
 		return roadmap.PlanningTask{}, err
 	}
-	if len(input.Title) > 240 || len(input.Goal) > 65536 || strings.TrimSpace(input.Title) == "" || strings.TrimSpace(input.Goal) == "" || !validPlanningFileName(input.File) {
-		return roadmap.PlanningTask{}, errors.New("需要任务名称、目标及有效的 Markdown 文件名")
+	if len(input.Title) > 240 || len(input.Goal) > 65536 || strings.TrimSpace(input.Title) == "" || strings.TrimSpace(input.Goal) == "" {
+		return roadmap.PlanningTask{}, errors.New("需要规划名称与目标")
+	}
+	if input.Kind == "roadmap" {
+		input.Kind = ""
+	}
+	if input.Kind == "" && !validPlanningFileName(input.File) || input.Kind == roadmap.SingleTaskPlanning && input.File != "" || input.Kind != "" && input.Kind != roadmap.SingleTaskPlanning {
+		return roadmap.PlanningTask{}, errors.New("规划类型或草稿文件名无效")
+	}
+	id := in.RequestID
+	if !roadmap.IDPattern.MatchString(id) {
+		return roadmap.PlanningTask{}, errors.New("invalid planning request ID")
 	}
 	if err := p.admit(ctx); err != nil {
 		return roadmap.PlanningTask{}, err
@@ -373,7 +429,12 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 		return roadmap.PlanningTask{}, err
 	}
 	path := roadmap.Root + input.File
-	entries, err := p.config.runtimeMaintenance.git(ctx, "ls-tree", "-r", "--name-only", "-z", obs.Commit, "--", strings.TrimSuffix(roadmap.Root, "/"))
+	directory := strings.TrimSuffix(roadmap.Root, "/")
+	if input.Kind == roadmap.SingleTaskPlanning {
+		path = roadmap.TaskCardPath(id)
+		directory = "SteerlineFlow/task-planning"
+	}
+	entries, err := p.config.runtimeMaintenance.git(ctx, "ls-tree", "-r", "--name-only", "-z", obs.Commit, "--", directory)
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
@@ -387,18 +448,20 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 		return roadmap.PlanningTask{}, err
 	}
 	rules, err := prompts.RoadmapPlanningRules()
+	if input.Kind == roadmap.SingleTaskPlanning {
+		rules, err = prompts.TaskPlanningRules()
+	}
 	if err != nil || len(rules) == 0 {
 		return roadmap.PlanningTask{}, errors.New("规划规则文件缺失")
-	}
-	id := in.RequestID
-	if !roadmap.IDPattern.MatchString(id) {
-		return roadmap.PlanningTask{}, errors.New("invalid planning request ID")
 	}
 	material, err := safePlanningPath(p.config.RunDir, "roadmap-planning/"+id+"/rules.md")
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
 	instruction, err := prompts.RoadmapPlanning(material, path, input.Goal)
+	if input.Kind == roadmap.SingleTaskPlanning {
+		instruction, err = prompts.TaskPlanning(material, path, input.Goal)
+	}
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
@@ -416,7 +479,7 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 		return roadmap.PlanningTask{}, err
 	}
 	submit := runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: roadmaps.Token(), Input: raw}
-	return roadmap.PlanningTask{ID: id, Project: p.config.Identity(), Title: input.Title, Goal: input.Goal, Path: path, Base: obs.Commit, Revision: 1, Status: "starting", Build: p.runner.BuildPin(), Submission: submit, Material: material, MaterialSHA: roadmap.Digest(rules), Operation: &roadmap.PlanningOperation{Kind: "submit", Stage: "runner", Command: "submit", Request: &submit, QueuedAt: time.Now().UTC()}}, nil
+	return roadmap.PlanningTask{ID: id, Project: p.config.Identity(), Title: input.Title, Goal: input.Goal, Kind: input.Kind, Path: path, Base: obs.Commit, Revision: 1, Status: "starting", Build: p.runner.BuildPin(), Submission: submit, Material: material, MaterialSHA: roadmap.Digest(rules), Operation: &roadmap.PlanningOperation{Kind: "submit", Stage: "runner", Command: "submit", Request: &submit, QueuedAt: time.Now().UTC()}}, nil
 }
 
 func storePlanningMaterial(filePath string, rules []byte) error {
@@ -579,6 +642,13 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 		schedulePlanningClose(task)
 		return p.handoffPlanning(ctx, task)
 	}
+	if task.Kind == roadmap.SingleTaskPlanning && !task.StopRequested {
+		mapping, err := p.store.RoadmapMapping(ctx, task.Project, task.ID)
+		if err != nil {
+			return err
+		}
+		task.StopRequested = len(mapping) != 0
+	}
 	if task.StopRequested {
 		schedulePlanningClose(task)
 		return nil
@@ -586,6 +656,8 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 	if task.Run != nil && task.Run.Controls.CanMessage && task.Conflict == nil {
 		if raw, err := roadmaps.ReadRegular(task.Run.Execution.Workspace, task.Path); err == nil {
 			task.Body = string(raw)
+		} else if task.Kind == roadmap.SingleTaskPlanning {
+			task.Body = ""
 		}
 		task.Status = "ready"
 		if task.Publication != nil && task.Publication.URL != "" {

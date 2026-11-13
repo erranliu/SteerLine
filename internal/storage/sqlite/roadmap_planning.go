@@ -87,7 +87,8 @@ func (s *SQLiteStore) SavePlanning(ctx context.Context, project, request string,
 	}
 	defer tx.Rollback()
 	for _, task := range tasks {
-		if task.Project != project || !roadmap.IDPattern.MatchString(task.ID) || !roadmap.SourcePath(task.Path) || task.Revision == 0 {
+		validPath := task.Kind == "" && roadmap.SourcePath(task.Path) || task.Kind == roadmap.SingleTaskPlanning && task.Path == roadmap.TaskCardPath(task.ID)
+		if task.Project != project || !roadmap.IDPattern.MatchString(task.ID) || !validPath || task.Revision == 0 {
 			return errors.New("invalid planning task identity")
 		}
 		raw, err := json.Marshal(task)

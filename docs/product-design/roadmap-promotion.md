@@ -1,6 +1,8 @@
 # Roadmap 读取、解析与入图
 
-当前 Web 读取 SteerlineFlow/Roadmap/drafts/ 下普通 UTF-8 Markdown，提供解析、确认任务依赖并生成文档、审阅、发布与正式入图。草稿可以在 SteerLine 外维护，也可通过「Roadmap 规划」在独立 worktree 改稿并审阅发布。规划 PR 合入且项目工作树能读取对应来源后，从稳定链接进入本流程。[Roadmap 规划 Spec](../../SteerlineFlow/spec/roadmap-planning.spec.md)
+「任务规划」支持规划单个任务或 Roadmap。Roadmap 草稿可在独立 worktree 改稿并审阅发布，也可在 SteerLine 外维护。规划 PR 合入且项目工作树能读取对应来源后，原链接进入「Roadmap 草稿」。该页读取 `SteerlineFlow/Roadmap/drafts/` 下的 UTF-8 Markdown，提供任务解析、依赖确认、文档生成、审阅、发布与入图。[Roadmap 规划 Spec](../../SteerlineFlow/spec/roadmap-planning.spec.md)
+
+单任务在同一规划详情页讨论和编辑任务卡，只从当前项目 DAG 选择已有任务作为前置。确认任务卡会固定内容、依赖和代码基线，接入同一文档生成、审阅、发布及入图流程。单任务的 PR 包含 Spec、Plan、测试安排与验收文档。用户在仓库合并文档 PR，SteerLine 核实后开放「加入 DAG」，并在入图事务内分配编号。正式任务回链到原规划详情。
 
 完整项目添加仍是[后续方案](project-onboarding.md)。
 

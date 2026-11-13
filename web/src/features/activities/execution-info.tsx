@@ -23,6 +23,7 @@ export type ExecutionInfo = {
 export const operationNames: Record<string, string> = {
   roadmap_parse: "Roadmap 解析",
   roadmap_generate_documents: "Spec / Plan 生成",
+  roadmap_task_generate: "确认任务卡并生成 Spec / Plan",
   roadmap_retry_documents: "单任务文档重生成",
   roadmap_publish: "Roadmap 文档发布",
   roadmap_admit: "Roadmap 入图",

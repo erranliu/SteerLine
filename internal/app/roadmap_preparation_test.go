@@ -20,6 +20,7 @@ import (
 
 func TestRoadmapStaticInitializationAndPublication(t *testing.T) {
 	c, head := nativeTaskFixture(t)
+	c.CommandTimeout = "30s"
 	probe := &startupCountingHost{ManagedProcessHost: c.ProcessHost}
 	c.ProcessHost = probe
 	c.runtimeMaintenance = newProjectMaintenance(c, nil)

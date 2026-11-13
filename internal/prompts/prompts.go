@@ -43,6 +43,19 @@ func RoadmapParseRules() ([]byte, error)    { return files.ReadFile("materials/r
 func RoadmapDocumentRules() ([]byte, error) { return files.ReadFile("materials/roadmap-documents.md") }
 func RoadmapSpecGuide() ([]byte, error)     { return files.ReadFile("materials/roadmap-spec-guide.md") }
 func RoadmapPlanningRules() ([]byte, error) { return files.ReadFile("materials/roadmap-planning.md") }
+func TaskPlanningRules() ([]byte, error)    { return files.ReadFile("materials/task-planning.md") }
+func TaskPlanning(rules, card, goal string) (string, error) {
+	if rules == "" || card == "" || strings.TrimSpace(goal) == "" {
+		return "", errors.New("fixed planning rules, card path and user goal are required")
+	}
+	return render("task-planning", struct{ Rules, Card, Goal string }{rules, card, goal})
+}
+func TaskPlanningDocuments(commit, key string) (string, error) {
+	if commit == "" || key == "" {
+		return "", errors.New("fixed commit and task key are required")
+	}
+	return render("task-planning-documents", struct{ Commit, Key string }{commit, key})
+}
 func RoadmapPlanning(rules, draft, goal string) (string, error) {
 	if rules == "" || draft == "" || strings.TrimSpace(goal) == "" {
 		return "", errors.New("fixed planning rules, draft path and user goal are required")

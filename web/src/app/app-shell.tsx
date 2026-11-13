@@ -44,7 +44,7 @@ export function AppShell({
     ? "执行方案配置"
     : ({
         roadmaps: "Roadmap 草稿",
-        "roadmap-planning": "Roadmap 规划",
+        "roadmap-planning": "任务规划",
         dag: "任务 DAG",
         runs: "任务执行",
         tests: "测试管理",
@@ -68,11 +68,11 @@ export function AppShell({
           {projectId ? (
             <>
               <NavLink
-                aria-label="Roadmap 规划"
+                aria-label="任务规划"
                 to={"/projects/" + projectId + "/roadmap-planning"}
               >
                 <GitBranch size={17} />
-                <span>Roadmap 规划</span>
+                <span>任务规划</span>
               </NavLink>
               <NavLink
                 aria-label="重构与维护"
@@ -92,10 +92,7 @@ export function AppShell({
                 <GitBranch size={17} />
                 <span>任务 DAG</span>
               </NavLink>
-              <NavLink
-                aria-label="任务执行"
-                to={`/projects/${projectId}/runs`}
-              >
+              <NavLink aria-label="任务执行" to={`/projects/${projectId}/runs`}>
                 <Layers size={17} />
                 <span>任务执行</span>
                 {questions > 0 && (
