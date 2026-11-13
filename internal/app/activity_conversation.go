@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/activityconversation"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
@@ -58,6 +59,17 @@ func conversationTarget(key, label, runID string, run *runnercontract.Run, state
 	return target
 }
 
+func conversationManifest(facts activityconversation.Facts) activityConversations {
+	list := activityConversations{Targets: make([]activityConversationTarget, 0, len(facts.Runs)), Diagnostic: facts.Diagnostic}
+	for _, run := range facts.Runs {
+		list.Targets = append(list.Targets, conversationTarget(run.Key, run.Label, run.RunID, run.Projection, run.StateDir))
+	}
+	if operation := facts.Operation; operation != nil {
+		list.Operation = &activityConversationOperation{Label: operation.Label, RequestID: operation.RequestID, Status: operation.Status, Diagnostic: operation.Diagnostic}
+	}
+	return list
+}
+
 func (t activityConversationTarget) state(cli *runnerclient.Client) string {
 	if t.State != "available" {
 		return t.State
@@ -92,25 +104,23 @@ func (p *runtimeProjectPort) readActivityConversation(ctx context.Context, activ
 	if err != nil {
 		return fail(404, "activity_not_found", "找不到原活动")
 	}
-	resolve := activityConversationSources[source]
+	resolve := p.conversationReaders[source]
 	if resolve == nil {
 		return fail(503, "reading_unavailable", "活动对话来源暂不可读")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
-	list, err := resolve(ctx, p.store, project, id)
+	facts, err := resolve(ctx, project, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fail(404, "activity_not_found", "找不到原活动")
 	}
 	if err != nil {
 		return fail(503, "reading_unavailable", "无法核实原活动的对话")
 	}
+	list := conversationManifest(facts)
 	cli := p.config.runtimeRunner
 	if session == "" {
 		list.ActivityID = activity
-		if list.Targets == nil {
-			list.Targets = []activityConversationTarget{}
-		}
 		for i := range list.Targets {
 			list.Targets[i].State = list.Targets[i].state(cli)
 		}

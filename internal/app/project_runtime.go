@@ -240,7 +240,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr != nil {
 		return
 	}
-	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance, readingBodies: runner.readingBodies, readiness: maintenance}
+	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance, readingBodies: runner.readingBodies, readiness: maintenance, conversationReaders: newActivityConversationReaders(r.store)}
 	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -367,14 +367,15 @@ type runtimeProjectPort struct {
 	actor    *taskrunner.Actor
 	instance string
 	*httpapi.Server
-	product       *productclient.Client
-	config        Config
-	store         taskStorage
-	stopping      atomic.Bool
-	users         sync.RWMutex
-	readingOnce   sync.Once
-	readingBodies *query.ReadingBodyCache
-	readiness     projectReadinessReader
+	product             *productclient.Client
+	config              Config
+	store               taskStorage
+	stopping            atomic.Bool
+	users               sync.RWMutex
+	readingOnce         sync.Once
+	readingBodies       *query.ReadingBodyCache
+	readiness           projectReadinessReader
+	conversationReaders map[string]activityConversationReader
 }
 
 func (p *runtimeProjectPort) StopAccepting() { p.stopping.Store(true) }
