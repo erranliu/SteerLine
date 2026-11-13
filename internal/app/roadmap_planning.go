@@ -29,8 +29,9 @@ const planningAction = "roadmap_planning_"
 
 type planningPort struct {
 	*roadmapPort
-	runner planningRunner
-	admit  func(context.Context) error
+	runner                 planningRunner
+	admit                  func(context.Context) error
+	refreshBaselineForPush func(context.Context) (commit string, rewritten bool, err error)
 }
 
 type planningRunner interface {

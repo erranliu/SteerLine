@@ -46,7 +46,10 @@ func planningGitFixture(t *testing.T) (*planningPort, roadmap.PlanningTask, stri
 	require(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	config.runtimeMaintenance = newProjectMaintenance(config, store)
-	port := &planningPort{roadmapPort: &roadmapPort{config: config, store: store, materials: config.runtimeMaintenance}}
+	port := &planningPort{
+		roadmapPort:            &roadmapPort{config: config, store: store, materials: config.runtimeMaintenance, mergeHistory: config.runtimeMaintenance},
+		refreshBaselineForPush: config.runtimeMaintenance.refreshBaselineForPush,
+	}
 	task := roadmap.PlanningTask{ID: strings.Repeat("a", 32), Project: config.Identity(), Revision: 1,
 		Title: "Planning", Path: roadmap.Root + "new.md", Base: base, Material: filepath.Join(root, "rules.md"),
 		Run: &runnercontract.Run{RunID: "run", WorkspaceOriginRunID: "run", WorkspaceIdentity: "workspace",
@@ -133,6 +136,7 @@ func TestRoadmapPlanningRebaseAndConflictContinuation(t *testing.T) {
 
 func TestRoadmapPlanningSelectedPublicationAndHandoff(t *testing.T) {
 	t.Run("lost create receipt and original PR update", testPlanningPublicationReplay)
+	t.Run("unknown push after target rewrite back to reviewed base", testPlanningPushAfterTargetRewrite)
 	ctx := context.Background()
 	port, task, remote := planningGitFixture(t)
 	worker := task.Run.Execution.Workspace
@@ -151,6 +155,7 @@ func TestRoadmapPlanningSelectedPublicationAndHandoff(t *testing.T) {
 	}
 	task.Operation = &roadmap.PlanningOperation{Kind: "publish", Digest: task.Review.Digest, Selected: []string{task.Path, "selected.md"}}
 	require(t, port.capturePlanningReview(ctx, &task))
+	port.config.runtimeMaintenance = nil
 	version := &task.Publication.Versions[0]
 	head, err := port.preparePlanningCommit(ctx, &task, version)
 	require(t, err)
@@ -206,6 +211,7 @@ func TestRoadmapPlanningSelectedPublicationAndHandoff(t *testing.T) {
 func testPlanningPublicationReplay(t *testing.T) {
 	ctx := context.Background()
 	port, task, remote := planningGitFixture(t)
+	port.config.runtimeMaintenance = nil
 	worker := task.Run.Execution.Workspace
 	writePlanningFixture(t, worker, task.Path, "# First approved draft\n")
 	writePlanningFixture(t, worker, "keep-local.txt", "never selected\n")
@@ -273,6 +279,38 @@ func testPlanningPublicationReplay(t *testing.T) {
 	providerMu.Unlock()
 	if count != 1 || task.Publication.URL != url || task.Publication.Head == head || len(task.Publication.Versions) != 2 {
 		t.Fatal("reviewed update did not reuse the original PR")
+	}
+}
+
+func testPlanningPushAfterTargetRewrite(t *testing.T) {
+	ctx := context.Background()
+	port, task, remote := planningGitFixture(t)
+	port.config.runtimeMaintenance = nil
+	writePlanningFixture(t, task.Run.Execution.Workspace, task.Path, "# Approved draft\n")
+	task.Operation = &roadmap.PlanningOperation{Kind: "review"}
+	require(t, port.capturePlanningReview(ctx, &task))
+	task.Operation = &roadmap.PlanningOperation{Kind: "publish", Digest: task.Review.Digest, Selected: []string{task.Path}}
+	require(t, port.capturePlanningReview(ctx, &task))
+	version := &task.Publication.Versions[0]
+	head, err := port.preparePlanningCommit(ctx, &task, version)
+	require(t, err)
+	version.Head = head
+	task.Operation.Stage = "push_unknown"
+	require(t, port.store.SavePlanning(ctx, task.Project, "", nil, task))
+
+	pmGit(t, port.config.Repository, "push", remote, head+":refs/heads/main")
+	target, err := port.mergeHistory.refreshBaseline(ctx)
+	require(t, err)
+	if target != head {
+		t.Fatalf("expected to observe the advanced target, got %s", target)
+	}
+	pmGit(t, remote, "update-ref", "refs/heads/main", version.Base, head)
+	if err := port.publishPlanning(ctx, &task); err == nil || task.Operation != nil || task.Review != nil {
+		t.Fatalf("rewrite back to the reviewed base must invalidate the push and review: %v", err)
+	}
+	ref := "refs/heads/" + task.Publication.Branch
+	if observed := pmGit(t, port.config.Repository, "ls-remote", "--refs", "origin", ref); observed != "" {
+		t.Fatalf("recovery pushed to %s after the rewrite: %s", ref, observed)
 	}
 }
 
