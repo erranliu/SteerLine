@@ -636,6 +636,7 @@ func (f *planningSubmitFixture) Call(_ context.Context, _ string, _ []string, re
 
 func TestRoadmapPlanningMaterialSendAndOriginalRecovery(t *testing.T) {
 	t.Run("create at refreshed target", testPlanningCreateAtRefreshedTarget)
+	t.Run("task card uses the original session and settles only the planning turn", testTaskCardPlanningTurn)
 	ctx := context.Background()
 	file := filepath.Join(t.TempDir(), "rules.md")
 	rules := []byte("fixed rules")
@@ -667,6 +668,66 @@ func TestRoadmapPlanningMaterialSendAndOriginalRecovery(t *testing.T) {
 	require(t, err)
 	if task.Run == nil || task.Run.RunID != "run" || task.Operation != nil || fixture.sent != nil {
 		t.Fatal("accepted original was not reconciled")
+	}
+}
+
+func testTaskCardPlanningTurn(t *testing.T) {
+	ctx := context.Background()
+	port, task, _ := planningGitFixture(t)
+	task.Kind, task.Path = roadmap.SingleTaskPlanning, roadmap.TaskCardPath(task.ID)
+	task.Material = ""
+	task.Goal = "Discuss a release"
+	task.Run.Controls.CanMessage = true
+	task.Run.WorkspaceWrite = &runnercontract.WorkspaceWrite{Owner: "runner"}
+	task.Run.Execution.TurnID = "discussion"
+	port.store = &planningStoreFixture{task: mustJSON(task)}
+	port.readAdmissionMapping = func(context.Context, string, string) (map[string]string, error) { return nil, nil }
+	oldCard := `{"goal":"Old","scope":"Scope","constraints":"","acceptance":"Check"}`
+	newCard := `{"goal":"New","scope":"Scope","constraints":"","acceptance":"Check"}`
+	writePlanningFixture(t, task.Run.Execution.Workspace, task.Path, oldCard)
+	in := httpcontract.CommandEnvelope{Action: planningAction + taskCardOperation, TargetID: task.ID, ExpectedVersion: task.Revision, Payload: []byte(`{}`)}
+	rows, _, err := port.prepare(ctx, in)
+	require(t, err)
+	task = rows[0]
+	if task.Operation.Previous != "discussion" || task.Operation.Command != "message" || !viewPlanning(task).PlanningCard {
+		t.Fatalf("task card operation did not bind the original turn: %+v", task.Operation)
+	}
+	var control struct{ Text string }
+	require(t, json.Unmarshal(task.Operation.Request.Input, &control))
+	if !strings.Contains(control.Text, task.Material) || !strings.Contains(control.Text, task.Path) || strings.Contains(control.Text, task.Goal) {
+		t.Fatalf("unexpected follow-up instruction: %q", control.Text)
+	}
+	receipt := &runnercontract.Command{Command: "message", ActionStatus: "completed"}
+	finished, err := finishTaskCardPlanning(&task, receipt)
+	require(t, err)
+	if finished || task.Operation == nil {
+		t.Fatal("accepted message was treated as completed before the new turn")
+	}
+	task.Run.Execution.TurnID = "planning"
+	task.Run.Execution.NativeOutcome = "succeeded"
+	if _, err = finishTaskCardPlanning(&task, receipt); err == nil || task.Body != "" {
+		t.Fatal("file from discussion was incorrectly adopted as a new task card")
+	}
+	task.Operation = rows[0].Operation
+	writePlanningFixture(t, task.Run.Execution.Workspace, task.Path, newCard)
+	finished, err = finishTaskCardPlanning(&task, receipt)
+	require(t, err)
+	if !finished || task.Body != newCard || task.CardVersion != 1 {
+		t.Fatal("completed planning turn did not adopt the new card")
+	}
+	task.Operation = &roadmap.PlanningOperation{Kind: taskCardOperation, Previous: "planning"}
+	task.Run.Execution.TurnID = "replanning"
+	task.Run.Execution.NativeOutcome = "failed"
+	writePlanningFixture(t, task.Run.Execution.Workspace, task.Path, oldCard)
+	if _, err = finishTaskCardPlanning(&task, receipt); err == nil || task.Body != newCard || task.CardVersion != 1 {
+		t.Fatal("a failed turn replaced the verified card")
+	}
+	task.Operation = rows[0].Operation
+	fixture := &planningSubmitFixture{}
+	port.runner = fixture
+	require(t, os.Remove(task.Material))
+	if _, err = port.runPlanningControl(ctx, &task); err == nil || fixture.sent != nil || task.Operation != nil || task.Body != newCard {
+		t.Fatal("a missing rules file sent an instruction, held the original session busy or replaced the card")
 	}
 }
 
@@ -705,9 +766,11 @@ func testPlanningCreateAtRefreshedTarget(t *testing.T) {
 		}
 	}
 	cardID := strings.Repeat("c", 32)
+	discussID := strings.Repeat("d", 32)
 	for _, tc := range []struct{ id, payload, kind, path string }{
 		{strings.Repeat("b", 32), `{"title":"Planning","goal":"Plan a release","file":"fresh.md"}`, "", roadmap.Root + "fresh.md"},
 		{cardID, `{"title":"Planning","goal":"Plan a release","kind":"task"}`, roadmap.SingleTaskPlanning, roadmap.TaskCardPath(cardID)},
+		{discussID, `{"title":"Planning","goal":"  Discuss a release\r\n","kind":"task","discuss":true}`, roadmap.SingleTaskPlanning, roadmap.TaskCardPath(discussID)},
 	} {
 		in.RequestID = tc.id
 		in.Payload = []byte(tc.payload)
@@ -720,6 +783,12 @@ func testPlanningCreateAtRefreshedTarget(t *testing.T) {
 		require(t, json.Unmarshal(created[0].Submission.Input, &submission))
 		if submission.Repository.BaseRevision != target {
 			t.Fatalf("Runner submission did not use the frozen target: %+v", submission.Repository)
+		}
+		if tc.id == discussID && (submission.Conversation.Instruction != "  Discuss a release\r\n" || created[0].Material != "" || viewPlanning(created[0]).PlanningCard) {
+			t.Fatal("discussion creation changed the first message or injected planning rules")
+		}
+		if tc.id == cardID && (!strings.Contains(submission.Conversation.Instruction, "Plan a release") || !strings.Contains(submission.Conversation.Instruction, tc.path) || !viewPlanning(created[0]).PlanningCard) {
+			t.Fatal("direct creation did not start a planning turn")
 		}
 	}
 }

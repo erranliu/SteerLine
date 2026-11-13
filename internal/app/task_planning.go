@@ -11,9 +11,54 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmaps "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 const taskPlanningGenerate = "roadmap_task_generate"
+
+func finishTaskCardPlanning(task *roadmap.PlanningTask, receipt *runnercontract.Command) (bool, error) {
+	run := task.Run
+	if run.Status == "blocked" && run.ResumeRequired && run.Controls.CanResume {
+		task.Operation = nil
+		task.Status = run.Status
+		return false, fmt.Errorf("原规划会话受阻：%s", run.Diagnostic)
+	}
+	if receipt.ActionStatus == "failed" || receipt.ReceiptStatus == "rejected" || run.Closed || run.StopStatus == "stopped" {
+		task.Operation = nil
+		if task.Body == "" && run.Closed {
+			task.Status = "closed"
+		}
+		if receipt.Error != nil {
+			return false, receipt.Error
+		}
+		return false, errors.New("任务卡规划轮次未完成")
+	}
+	if !run.Controls.CanMessage || run.Execution.TurnID == "" || run.Execution.TurnID == task.Operation.Previous {
+		return false, nil
+	}
+	previousFile := task.Operation.Digest
+	task.Operation = nil
+	task.Status = "ready"
+	if run.Execution.NativeOutcome != "succeeded" {
+		return false, errors.New("任务卡规划轮次未成功，原任务卡仍可查看")
+	}
+	raw, err := roadmaps.ReadRegular(run.Execution.Workspace, task.Path)
+	if err != nil || !validTaskCard(string(raw)) || (string(raw) != task.Body && roadmap.Digest(raw) == previousFile) {
+		return false, errors.New("本轮未生成完整任务卡，请补充后重新规划")
+	}
+	if task.Body != string(raw) {
+		task.Body = string(raw)
+		task.CardVersion++
+	}
+	task.Diagnostic = ""
+	return true, nil
+}
+
+func validTaskCard(body string) bool {
+	var card roadmap.TaskCard
+	return decodeStrictJSON([]byte(body), &card) == nil && strings.TrimSpace(card.Goal) != "" &&
+		strings.TrimSpace(card.Scope) != "" && strings.TrimSpace(card.Acceptance) != ""
+}
 
 // confirmTaskCard supplies the same confirmed input as Roadmap parsing, from
 // the fields and formal predecessors that the user reviewed in the task card.
@@ -26,7 +71,7 @@ func (p *roadmapPort) confirmTaskCard(ctx context.Context, in httpcontract.Comma
 	if err != nil {
 		return roadmap.Record{}, err
 	}
-	if task.Kind != roadmap.SingleTaskPlanning || task.Revision != in.ExpectedVersion || task.Operation != nil || task.Conflict != nil || task.Status != "ready" && task.Status != "closed" {
+	if task.Kind != roadmap.SingleTaskPlanning || !validTaskCard(task.Body) || task.Revision != in.ExpectedVersion || task.Operation != nil || task.Conflict != nil || task.Status != "ready" && task.Status != "closed" {
 		return roadmap.Record{}, errors.New("任务卡已变化或规划操作尚未结算，请刷新后确认")
 	}
 	baseline, err := p.config.runtimeMaintenance.check(ctx)
@@ -69,7 +114,23 @@ func taskCardRecord(task roadmap.PlanningTask, card roadmap.TaskCard, graph []ro
 	if len(body) > 256<<10 {
 		return roadmap.Record{}, errors.New("任务卡超过大小上限")
 	}
-	source := roadmap.Source{ID: task.ID, PlanningID: task.ID, Path: task.Title, Body: body, Digest: roadmap.Digest([]byte(body)), Head: commit}
+	source := roadmap.Source{ID: task.ID, PlanningID: task.ID, CardVersion: task.CardVersion, Path: task.Title, Body: body, Digest: roadmap.Digest([]byte(body)), Head: commit}
+	var generated roadmap.TaskCard
+	if err := decodeStrictJSON([]byte(task.Body), &generated); err == nil {
+		for _, field := range []struct{ name, generated, confirmed string }{
+			{"goal", generated.Goal, card.Goal},
+			{"scope", generated.Scope, card.Scope},
+			{"constraints", generated.Constraints, card.Constraints},
+			{"acceptance", generated.Acceptance, card.Acceptance},
+		} {
+			if field.generated != field.confirmed {
+				if source.CardEdits == nil {
+					source.CardEdits = make(map[string]string)
+				}
+				source.CardEdits[field.name] = field.confirmed
+			}
+		}
+	}
 	deps := roadmap.Dependencies{Local: []string{}, Formal: append([]string{}, card.Predecessors...)}
 	slices.Sort(deps.Formal)
 	if len(slices.Compact(slices.Clone(deps.Formal))) != len(deps.Formal) {

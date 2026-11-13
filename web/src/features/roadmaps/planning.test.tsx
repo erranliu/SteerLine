@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -8,7 +9,8 @@ import {
   within,
 } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { expect, test, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, test, vi } from "vitest";
 import RoadmapPlanning from "./planning";
 
 const workspace = vi.hoisted(() => ({
@@ -18,6 +20,53 @@ const workspace = vi.hoisted(() => ({
   submit: vi.fn(),
 }));
 vi.mock("../../app/context", () => ({ useWorkspace: () => workspace }));
+afterEach(cleanup);
+
+test.each([
+  ["开始沟通", true],
+  ["直接规划任务", undefined],
+])("creates a single-task planning session via %s", async (label, discuss) => {
+  const user = userEvent.setup();
+  workspace.api.get.mockResolvedValue({ available: true, tasks: [] });
+  workspace.api.envelope.mockImplementation(
+    (action, target, revision, payload) => ({
+      action,
+      target,
+      revision,
+      payload,
+    }),
+  );
+  workspace.submit.mockResolvedValue({ status: "applied" });
+  workspace.submit.mockClear();
+  const client = new QueryClient();
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <RoadmapPlanning />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  const create = screen.getByRole("button", { name: "新建规划" });
+  await waitFor(() => expect(create).toBeEnabled());
+  await user.click(create);
+  await user.type(screen.getByLabelText("名称"), "Task");
+  await user.type(screen.getByLabelText("规划目标"), " Discuss first ");
+  await user.click(screen.getByRole("button", { name: label }));
+  await waitFor(() =>
+    expect(workspace.submit).toHaveBeenCalledWith({
+      action: "roadmap_planning_create",
+      target: "project",
+      revision: 1,
+      payload: {
+        title: "Task",
+        kind: "task",
+        file: "",
+        goal: " Discuss first ",
+        ...(discuss ? { discuss } : {}),
+      },
+    }),
+  );
+});
 
 test("confirms an existing DAG predecessor and admits only after verified merge on the same page", async () => {
   workspace.submit.mockClear();
@@ -27,12 +76,11 @@ test("confirms an existing DAG predecessor and admits only after verified merge 
     title: "One task",
     status: "ready",
     revision: 2,
-    card: {
-      goal: "Goal",
-      scope: "Scope",
-      constraints: "",
-      acceptance: "Acceptance",
-    },
+    can_message: true,
+    card_version: 0,
+    card: undefined as
+      | { goal: string; scope: string; constraints: string; acceptance: string }
+      | undefined,
   };
   const record = {
     id: "documents",
@@ -58,7 +106,7 @@ test("confirms an existing DAG predecessor and admits only after verified merge 
     if (url.endsWith("/predecessors"))
       return [{ id: "7", title: "Existing task" }];
     if (url.endsWith("/history")) return { entries: [] };
-    if (url.endsWith("/single")) return task;
+    if (url.endsWith("/single")) return { ...task };
     if (url.endsWith("/documents")) return { ...record };
     if (url === "/roadmaps")
       return {
@@ -83,6 +131,16 @@ test("confirms an existing DAG predecessor and admits only after verified merge 
     }),
   );
   workspace.submit.mockImplementation(async (request) => {
+    if (request.action === "roadmap_planning_plan_task") {
+      task.card_version++;
+      task.revision++;
+      task.card = {
+        goal: "Goal",
+        scope: "Scope " + task.card_version,
+        constraints: "Generated constraint",
+        acceptance: "Acceptance",
+      };
+    }
     if (request.action === "roadmap_task_generate") generated = true;
     if (request.action === "roadmap_publish") {
       record.state = "awaiting-merge";
@@ -116,16 +174,50 @@ test("confirms an existing DAG predecessor and admits only after verified merge 
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  const start = await screen.findByRole("button", { name: "开始规划任务" });
+  expect(screen.queryByRole("form", { name: "任务卡" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "文档与入图" })).toBeNull();
+  fireEvent.click(start);
   fireEvent.click(await screen.findByLabelText("#7 Existing task"));
-  fireEvent.click(
-    screen.getByRole("button", { name: "确认并生成 Spec / Plan" }),
+  fireEvent.change(screen.getByLabelText("约束"), {
+    target: { value: "My constraint" },
+  });
+  fireEvent.change(screen.getByLabelText("消息"), {
+    target: { value: " Refine scope " },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "发送" }));
+  const replan = screen.getByRole("button", { name: "重新规划任务" });
+  await waitFor(() => expect(replan).toBeEnabled());
+  fireEvent.click(replan);
+  await screen.findByRole("button", { name: "采用新版任务卡" });
+  expect(screen.getByLabelText("范围")).toHaveValue("Scope 2");
+  expect(screen.getByLabelText("约束")).toHaveValue("My constraint");
+  expect(screen.getByLabelText("#7 Existing task")).toBeChecked();
+  expect(workspace.submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "roadmap_planning_message",
+      target: task.id,
+      payload: { text: " Refine scope " },
+    }),
   );
+  expect(workspace.submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "roadmap_planning_plan_task",
+      target: task.id,
+      payload: {},
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "确认任务卡并生成文档" }));
   await waitFor(() =>
     expect(workspace.submit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "roadmap_task_generate",
         target: task.id,
-        payload: expect.objectContaining({ predecessors: ["7"] }),
+        payload: expect.objectContaining({
+          predecessors: ["7"],
+          constraints: "My constraint",
+          scope: "Scope 2",
+        }),
       }),
     ),
   );

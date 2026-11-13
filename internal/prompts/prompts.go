@@ -45,8 +45,8 @@ func RoadmapSpecGuide() ([]byte, error)     { return files.ReadFile("materials/r
 func RoadmapPlanningRules() ([]byte, error) { return files.ReadFile("materials/roadmap-planning.md") }
 func TaskPlanningRules() ([]byte, error)    { return files.ReadFile("materials/task-planning.md") }
 func TaskPlanning(rules, card, goal string) (string, error) {
-	if rules == "" || card == "" || strings.TrimSpace(goal) == "" {
-		return "", errors.New("fixed planning rules, card path and user goal are required")
+	if rules == "" || card == "" {
+		return "", errors.New("fixed planning rules and card path are required")
 	}
 	return render("task-planning", struct{ Rules, Card, Goal string }{rules, card, goal})
 }
