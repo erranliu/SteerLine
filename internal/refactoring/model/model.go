@@ -22,6 +22,7 @@ import (
 var ErrNotFound = errors.New("维护行动不存在")
 var ErrConflict = errors.New("维护版本或推进名额冲突，请刷新")
 var ErrEnvironmentChanged = errors.New("运行环境资格已变化，请重新核实")
+var ErrQualificationUnverified = errors.New("运行环境资格待重新核实")
 var ErrPRClosed = errors.New("原PR已关闭或合并")
 
 const Concurrency = 3

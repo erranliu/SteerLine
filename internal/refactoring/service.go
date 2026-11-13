@@ -38,6 +38,7 @@ type Service struct {
 	Reserve              func(context.Context, string, func() error) error
 	Admit                func(context.Context) error
 	Qualify              func(context.Context, model.Record) (env.Admission, error)
+	Authorize            func(context.Context, model.Record, func() error) error
 	Verify               func(context.Context, model.Record, model.Result) (*runnercontract.PRFact, string, error)
 	VerifyConflictBase   func(context.Context, model.Record, runnercontract.PRFact) error
 	ReviewDiff           func(context.Context, model.Record, runnercontract.PRFact) (string, error)
@@ -454,8 +455,19 @@ func (s *Service) submit(ctx context.Context, r model.Record, o model.Operation)
 		}
 		proof = append(proof, qualification)
 	}
-	send, err := s.markSubmitted(ctx, r.ID, o, proof)
-	if errors.Is(err, model.ErrEnvironmentChanged) {
+	var send bool
+	mark := func() error {
+		var err error
+		send, err = s.markSubmitted(ctx, r.ID, o, proof)
+		return err
+	}
+	var err error
+	if !r.Authorized && s.Authorize != nil {
+		err = s.Authorize(ctx, r, mark)
+	} else {
+		err = mark()
+	}
+	if errors.Is(err, model.ErrEnvironmentChanged) || errors.Is(err, model.ErrQualificationUnverified) {
 		return s.deferFirstDispatch(ctx, r.ID, o.ID, err)
 	}
 	if err != nil || !send {

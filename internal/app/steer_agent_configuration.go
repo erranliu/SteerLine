@@ -14,15 +14,7 @@ func (c Config) resolveSteerAgentExecution(ctx context.Context, workflow runnerc
 	if err != nil {
 		return runnercontract.ExecutionInput{}, err
 	}
-	resolved, err := c.runtimeNative.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{
-		Operation:     "compose",
-		BaseExecution: executionconfig.SteerAgentBase(c.executionConfig(ctx).Profiles),
-		Workflow:      workflow,
-		Selection: &runnercontract.ExecutionSelection{
-			Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex",
-			Model: &settings.Model, ReasoningEffort: &settings.ReasoningEffort, AccessMode: accessMode,
-		},
-	})
+	resolved, err := c.runtimeNative.Resolve(ctx, steerAgentConfiguration(c.executionConfig(ctx).Profiles, settings, workflow, accessMode))
 	if err != nil {
 		return runnercontract.ExecutionInput{}, err
 	}
@@ -31,6 +23,18 @@ func (c Config) resolveSteerAgentExecution(ctx context.Context, workflow runnerc
 		return runnercontract.ExecutionInput{}, errors.New("Runner 未返回所选的 SteerAgent 模型和思考强度")
 	}
 	return *resolved.Execution, nil
+}
+
+func steerAgentConfiguration(profiles []RunnerProfile, settings executionconfig.SteerAgent, workflow runnercontract.Workflow, accessMode string) runnercontract.ExecutionConfigurationRequest {
+	return runnercontract.ExecutionConfigurationRequest{
+		Operation:     "compose",
+		BaseExecution: executionconfig.SteerAgentBase(profiles),
+		Workflow:      workflow,
+		Selection: &runnercontract.ExecutionSelection{
+			Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex",
+			Model: &settings.Model, ReasoningEffort: &settings.ReasoningEffort, AccessMode: accessMode,
+		},
+	}
 }
 
 func (c Config) prepareSteerAgentGeneration(ctx context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {

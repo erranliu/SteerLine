@@ -28,6 +28,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
@@ -46,6 +47,7 @@ func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Cl
 			return c.reserveCurrentProfiles(ctx, save)
 		})
 	}
+	p.service.Authorize = p.authorizeFirst
 	return p
 }
 
@@ -399,6 +401,23 @@ func refactoringProfileVersion(profile RunnerProfile) string {
 	return runnercontract.ConfigurationValueDigest(profile)
 }
 
+func (p *refactoringPort) authorizeFirst(ctx context.Context, r ref.Record, save func() error) error {
+	c := p.config
+	ctx = c.withProfiles(ctx)
+	profile, err := c.executionConfig(ctx).Profile(r.Input.Profile, "")
+	if err != nil || refactoringProfileVersion(profile) != r.Input.ProfileVersion {
+		return ref.ErrEnvironmentChanged
+	}
+	if err := c.reserveCurrentProfiles(ctx, save); err != nil {
+		var stale *taskmodel.Error
+		if errors.As(err, &stale) && stale.Code == "stale_profile" {
+			return fmt.Errorf("%w：%v", ref.ErrQualificationUnverified, err)
+		}
+		return err
+	}
+	return nil
+}
+
 func (p *refactoringPort) qualifyFirst(ctx context.Context, r ref.Record) (env.Admission, error) {
 	c := p.config
 	ctx = c.withProfiles(ctx)
@@ -493,14 +512,7 @@ func (p *refactoringPort) readiness(ctx context.Context) (any, error) {
 		return out, nil
 	}
 	out.SteerAgent = agent
-	read, readErr := c.runtimeNative.Lookup(runnercontract.ExecutionConfigurationRequest{
-		Operation: "compose", BaseExecution: executionconfig.SteerAgentBase(c.RunnerExecution.Profiles),
-		Workflow: runnercontract.Workflow{ID: "generate", Version: 1},
-		Selection: &runnercontract.ExecutionSelection{
-			Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex",
-			Model: &agent.Model, ReasoningEffort: &agent.ReasoningEffort, AccessMode: "read_only",
-		},
-	})
+	read, readErr := c.runtimeNative.Lookup(steerAgentConfiguration(current.Profiles, agent, runnercontract.Workflow{ID: "generate", Version: 1}, "read_only"))
 	ctx = materialReads(ctx)
 	for _, item := range c.runtimeEnvironment.configurationOptions(ctx).Environments {
 		v := refactoringEnvironmentView{Key: item.Key, Name: item.Name, Target: item.Target, Agent: item.Agent, Status: "unverified", Profiles: []refactoringProfileView{}}

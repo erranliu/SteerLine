@@ -4,7 +4,7 @@
 
 ## 1. 基线与边界
 
-原调查基线为 `40d710fb`，当前实现基于 `07a5c769`。维护业务仍归 `internal/refactoring`，项目运行时管理生命周期，Runner 拥有实际执行和工作区。采用 [#549 的交付契约](../spec/refactoring-agent-delivery.spec.md)，复用首轮只读调查、可写 Runner Final、PR 版本核验和独立合入评审。适配共享容量、计费、并发名额和首次派发资格。当前版本的真实并发需重新取证。
+原调查基线为 `40d710fb`，本轮变基到 `fd6c31f5`。维护业务仍归 `internal/refactoring`，项目运行时管理生命周期，Runner 拥有实际执行和工作区。采用 [#549 的交付契约](../spec/refactoring-agent-delivery.spec.md)，复用首轮只读调查、可写 Runner Final、PR 版本核验和独立合入评审。按 #557 的执行方案快照核对受理与首次派发，已派发的行动继续使用其冻结配置。当前版本的真实并发需重新取证。
 
 ## 2. 实施顺序
 
