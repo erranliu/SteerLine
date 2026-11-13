@@ -215,7 +215,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.environment.service.Admit = service.VerifyRunnerAdmission
 	r.config.runtimeTests = r.tests
 	taskAdmission := newRoadmapTaskCommands(r.store, r.config, service.ExecuteTaskMutation)
-	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, taskAdmission, maintenance)
+	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, taskAdmission, maintenance, maintenance.refreshBaselineForPush)
 	r.config.runtimeContinuationSuggestion = newContinuationSuggestionPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, maintenance)
 	if retErr = r.config.runtimeRefactoring.service.Recover(ctx); retErr != nil {

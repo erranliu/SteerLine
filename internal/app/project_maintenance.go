@@ -44,7 +44,7 @@ func newProjectMaintenance(c Config, s maintenanceStore) *projectMaintenance {
 	return m
 }
 func (m *projectMaintenance) git(ctx context.Context, args ...string) ([]byte, error) {
-	return (commandRunner{Dir: m.config.Repository, Timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), ProcessHost: m.config.ProcessHost}).Output(ctx, m.config.Git, args...)
+	return m.config.repositoryGit(ctx, args...)
 }
 
 func (m *projectMaintenance) readCommittedMaterial(ctx context.Context, commit, path string) ([]byte, error) {
@@ -83,6 +83,11 @@ func (m *projectMaintenance) readObservedBaseline(ctx context.Context, waitForCh
 func (m *projectMaintenance) refreshBaseline(ctx context.Context) (string, error) {
 	observation, err := m.check(ctx)
 	return observation.Commit, err
+}
+
+func (m *projectMaintenance) refreshBaselineForPush(ctx context.Context) (commit string, rewritten bool, err error) {
+	observation, err := m.check(ctx)
+	return observation.Commit, observation.Rewritten, err
 }
 
 func (m *projectMaintenance) verifyAncestor(ctx context.Context, ancestor, descendant string) error {

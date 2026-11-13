@@ -57,10 +57,10 @@ type roadmapPort struct {
 	mergeHistory     roadmapMergeHistory
 }
 
-func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, taskAdmission roadmapTaskAdmission, mergeHistory roadmapMergeHistory) *roadmapPort {
+func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, taskAdmission roadmapTaskAdmission, mergeHistory roadmapMergeHistory, refreshBaselineForPush func(context.Context) (commit string, rewritten bool, err error)) *roadmapPort {
 	c = bindNativeConfiguration(c, cli)
 	p := &roadmapPort{config: c, store: store, materials: materials, taskAdmission: taskAdmission, mergeHistory: mergeHistory}
-	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit}
+	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit, refreshBaselineForPush: refreshBaselineForPush}
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source
 	p.service.Graph = p.graph
@@ -70,11 +70,10 @@ func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client
 	return p
 }
 func (p *roadmapPort) source(ctx context.Context, relative string) (roadmap.Source, error) {
-	m := p.config.runtimeMaintenance
-	if m == nil {
+	if p.materials == nil {
 		return roadmap.Source{}, errors.New("project Git unavailable")
 	}
-	head, e := m.git(ctx, "rev-parse", "--verify", "HEAD^{commit}")
+	head, e := p.config.repositoryGit(ctx, "rev-parse", "--verify", "HEAD^{commit}")
 	if e != nil {
 		return roadmap.Source{}, e
 	}
