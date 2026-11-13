@@ -392,6 +392,56 @@ it("polls the requested detection ID and shows a later blocked observation", asy
   expect(send).not.toHaveBeenCalled();
 });
 
+it("replaces unconfirmed submission guidance with a history note after the original Run is confirmed", async () => {
+  const { api, client, record } = fixture(
+    true,
+    undefined,
+    false,
+    `/projects/project/environment?activity=${"a".repeat(32)}`,
+  );
+  const original =
+    "request_outcome_unknown: Inspect or retry the original request ID and unchanged input";
+  const historyNote = "首次提交时未能确认回执，随后确认已受理。";
+  const get = vi.mocked(api.get).getMockImplementation()!;
+  let confirmed = false;
+  vi.mocked(api.get).mockImplementation(async (path, signal) => {
+    if (path !== `/environment/${record.id}`) return get(path, signal);
+    return {
+      ...record,
+      state: confirmed ? "ready" : "running",
+      status: confirmed ? "ready" : "not_ready",
+      diagnostic: confirmed ? "环境检测通过" : `首次提交：${original}`,
+      rounds: [
+        {
+          number: 1,
+          submission: confirmed ? "accepted" : "unknown",
+          submission_diagnostic: original,
+        },
+      ],
+    } as never;
+  });
+  const detail = within(
+    await screen.findByRole("region", { name: "指定检测详情" }),
+  );
+  const refreshDetail = () =>
+    act(async () => {
+      await client.refetchQueries({
+        queryKey: [...optionsKey.slice(0, -1), "requested-record", record.id],
+      });
+    });
+  await refreshDetail();
+  expect(await detail.findByText(`首次提交：${original}`)).toBeVisible();
+  expect(detail.queryByText(historyNote)).not.toBeInTheDocument();
+  confirmed = true;
+  await refreshDetail();
+  expect(await detail.findByText("环境检测通过")).toBeVisible();
+  expect(detail.getByText(historyNote)).toBeVisible();
+  expect(screen.queryByText(/Inspect or retry/)).not.toBeInTheDocument();
+  await openHistory();
+  await screen.findByRole("link", { name: "查看检测结果" });
+  expect(screen.getAllByText(historyNote)).toHaveLength(1);
+});
+
 it("requires a scheme selection only for shared environments without a default", async () => {
   const { client, send } = fixture();
   await loaded();

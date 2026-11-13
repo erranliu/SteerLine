@@ -108,7 +108,8 @@ func testEnvironmentObserverSubmission(t *testing.T, shutdown bool) {
 	} else if peer.submits != 1 || saved.Rounds[0].Submission != "accepted" {
 		t.Fatal("six-second submission did not finish under its own budget", saved, peer.submits)
 	}
-	// Both the detail and history DTOs retain the first cause alongside reads.
+	// Both DTOs expose the current observation. The detail also keeps the first
+	// cause after the submission is confirmed.
 	saved.Diagnostic = "request_not_found"
 	if saved.Rounds[0].SubmissionDiagnostic == "" {
 		saved.Rounds[0].SubmissionDiagnostic = "original submit timed out"
@@ -122,11 +123,22 @@ func testEnvironmentObserverSubmission(t *testing.T, shutdown bool) {
 		require(t, err)
 		raw, err := json.Marshal(view)
 		require(t, err)
-		if !strings.Contains(string(raw), original) || !strings.Contains(string(raw), "request_not_found") {
-			t.Fatal("public diagnostic lost one of the causes", string(raw))
+		detail := route != "/environment"
+		if strings.Contains(string(raw), original) != (detail || shutdown) || !strings.Contains(string(raw), "request_not_found") {
+			t.Fatal("incorrect submission or observation diagnostic", string(raw))
 		}
-		if route != "/environment" && !strings.Contains(string(raw), `"submission_diagnostic"`) {
-			t.Fatal("detail omitted separate submission cause", string(raw))
+		if detail {
+			var projection struct {
+				Diagnostic string `json:"diagnostic"`
+				Rounds     []struct {
+					SubmissionDiagnostic string `json:"submission_diagnostic"`
+				} `json:"rounds"`
+			}
+			require(t, json.Unmarshal(raw, &projection))
+			if len(projection.Rounds) != 1 || projection.Rounds[0].SubmissionDiagnostic != original ||
+				strings.Contains(projection.Diagnostic, original) != shutdown {
+				t.Fatal("detail did not preserve the original cause separately", string(raw))
+			}
 		}
 	}
 }

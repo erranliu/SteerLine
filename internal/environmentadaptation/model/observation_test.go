@@ -50,9 +50,20 @@ func TestProjectEnvironmentDiagnosticKeepsOwnedCauses(t *testing.T) {
 		t.Fatal(r.DiagnosticText())
 	}
 	r.Diagnostic = "observation unavailable"
+	r.Rounds[0].Submission = "unknown"
 	r.Rounds[0].SubmissionDiagnostic = "original submit timeout"
 	if text := r.DiagnosticText(); !strings.Contains(text, r.Diagnostic) || !strings.Contains(text, r.Rounds[0].SubmissionDiagnostic) {
 		t.Fatal("owned diagnostic overwritten by Run", text)
+	}
+	r.Rounds[0].RunID = "original-run"
+	r.Diagnostic = r.Rounds[0].SubmissionDiagnostic
+	if r.DiagnosticText() != r.Rounds[0].Diagnostic {
+		t.Fatal("verified Run binding retained a stale submission warning", r.DiagnosticText())
+	}
+	r.Rounds[0].Submission = "accepted"
+	r.Diagnostic = "observation unavailable"
+	if r.DiagnosticText() != r.Diagnostic {
+		t.Fatal("confirmed submission obscured the current diagnostic", r.DiagnosticText())
 	}
 	r.State, r.Kind = "ready", "adaptation"
 	r.Rounds[0].Settled = true

@@ -17,6 +17,12 @@ export type DetectionRecord = {
   blocked?: boolean;
   timed_out?: boolean;
   diagnostic: string;
+  rounds?: {
+    number: number;
+    submission: string;
+    run_id?: string;
+    submission_diagnostic?: string;
+  }[];
 };
 const recordState: { [key: string]: string } = {
   ready: "已通过",
@@ -33,6 +39,34 @@ export const recordLabel = (record: DetectionRecord) =>
     : record.blocked
       ? "检测阻断"
       : recordState[record.state] || "结果待核实";
+
+export function DetectionSubmissionHistory({
+  record,
+}: {
+  record: DetectionRecord;
+}) {
+  return record.rounds?.map((round) => {
+    const original = round.submission_diagnostic;
+    if (!original || original === record.diagnostic) return null;
+    const outcome =
+      round.submission === "accepted" || round.run_id
+        ? "已受理"
+        : round.submission === "rejected"
+          ? "已拒绝"
+          : round.submission === "cancelled"
+            ? "已取消"
+            : undefined;
+    if (!outcome) return null;
+    const history = original.startsWith("request_outcome_unknown:")
+      ? `首次提交时未能确认回执，随后确认${outcome}。`
+      : `首次提交记录：${original}（随后确认${outcome}）`;
+    return (
+      <p className="muted" key={round.number}>
+        {history}
+      </p>
+    );
+  });
+}
 
 export function DetectionID({
   id,

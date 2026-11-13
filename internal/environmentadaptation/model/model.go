@@ -192,23 +192,27 @@ func (r Record) Status() string {
 	return "not_ready"
 }
 
-// DiagnosticText keeps the first submit failure visible alongside later reads.
-// A recovered ready result keeps its normal explanation; the original failure
-// remains in the round's durable submission_diagnostic for inspection.
+// DiagnosticText includes the first submit failure while its receipt is unconfirmed.
+// The original failure remains in submission_diagnostic for the detail view.
 func (r Record) DiagnosticText() string {
 	diagnostic := r.Diagnostic
 	if r.Status() != "ready" && len(r.Rounds) > 0 {
 		round := r.Rounds[len(r.Rounds)-1]
+		original := round.SubmissionDiagnostic
+		unconfirmed := round.Submission == "unknown" && round.RunID == "" && !round.Settled
+		if !unconfirmed && round.Submission != "rejected" && diagnostic == original {
+			diagnostic = ""
+		}
 		if strings.TrimSpace(diagnostic) == "" {
 			diagnostic = round.Diagnostic
 		}
 		if strings.TrimSpace(diagnostic) == "" && round.Run != nil {
 			diagnostic = round.Run.Diagnostic
 		}
-	}
-	if r.Status() != "ready" && len(r.Rounds) > 0 {
-		original := r.Rounds[len(r.Rounds)-1].SubmissionDiagnostic
-		if original != "" && original != diagnostic {
+		if unconfirmed && original != "" {
+			if strings.TrimSpace(diagnostic) == "" || diagnostic == original {
+				return "首次提交：" + original
+			}
 			return "首次提交：" + original + "；当前观察：" + diagnostic
 		}
 	}
