@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +27,7 @@ import (
 
 const planningRoute = "/roadmap-planning"
 const planningAction = "roadmap_planning_"
+const taskCardOperation = "plan_task"
 
 type planningPort struct {
 	*roadmapPort
@@ -50,25 +53,27 @@ type planningRunner interface {
 }
 
 type planningView struct {
-	ID         string                    `json:"id"`
-	Title      string                    `json:"title"`
-	Kind       string                    `json:"kind,omitempty"`
-	Goal       string                    `json:"goal,omitempty"`
-	Card       *roadmap.TaskCard         `json:"card,omitempty"`
-	DAGTaskID  string                    `json:"dag_task_id,omitempty"`
-	Path       string                    `json:"path"`
-	Revision   uint64                    `json:"revision"`
-	Status     string                    `json:"status"`
-	Diagnostic string                    `json:"diagnostic,omitempty"`
-	Body       string                    `json:"body,omitempty"`
-	SourceID   string                    `json:"source_id,omitempty"`
-	PR         string                    `json:"pr,omitempty"`
-	Busy       bool                      `json:"busy"`
-	CanMessage bool                      `json:"can_message"`
-	CanRebase  bool                      `json:"can_rebase"`
-	Question   *runnercontract.Question  `json:"question,omitempty"`
-	Conflict   *roadmap.PlanningConflict `json:"conflict,omitempty"`
-	Review     *roadmap.PlanningReview   `json:"review,omitempty"`
+	ID           string                    `json:"id"`
+	Title        string                    `json:"title"`
+	Kind         string                    `json:"kind,omitempty"`
+	Goal         string                    `json:"goal,omitempty"`
+	Card         *roadmap.TaskCard         `json:"card,omitempty"`
+	CardVersion  uint64                    `json:"card_version,omitempty"`
+	PlanningCard bool                      `json:"planning_card,omitempty"`
+	DAGTaskID    string                    `json:"dag_task_id,omitempty"`
+	Path         string                    `json:"path"`
+	Revision     uint64                    `json:"revision"`
+	Status       string                    `json:"status"`
+	Diagnostic   string                    `json:"diagnostic,omitempty"`
+	Body         string                    `json:"body,omitempty"`
+	SourceID     string                    `json:"source_id,omitempty"`
+	PR           string                    `json:"pr,omitempty"`
+	Busy         bool                      `json:"busy"`
+	CanMessage   bool                      `json:"can_message"`
+	CanRebase    bool                      `json:"can_rebase"`
+	Question     *runnercontract.Question  `json:"question,omitempty"`
+	Conflict     *roadmap.PlanningConflict `json:"conflict,omitempty"`
+	Review       *roadmap.PlanningReview   `json:"review,omitempty"`
 }
 
 func viewPlanning(task roadmap.PlanningTask) planningView {
@@ -76,6 +81,8 @@ func viewPlanning(task roadmap.PlanningTask) planningView {
 	if task.Kind == roadmap.SingleTaskPlanning {
 		view.Goal = task.Goal
 		view.Body = ""
+		view.CardVersion = task.CardVersion
+		view.PlanningCard = task.Operation != nil && task.Operation.Kind == taskCardOperation
 		var card roadmap.TaskCard
 		if decodeStrictJSON([]byte(task.Body), &card) == nil {
 			view.Card = &card
@@ -89,10 +96,14 @@ func viewPlanning(task roadmap.PlanningTask) planningView {
 		view.CanRebase = task.Conflict == nil && task.Run.WorkspaceWrite != nil && task.Run.WorkspaceWrite.CanAcquire
 	}
 	if task.Run != nil && task.Merged == "" && !task.StopRequested && task.Run.Controls.CanReply &&
-		(task.Operation == nil || task.Operation.Kind == "resolve" && task.Operation.Answer == nil) {
+		(task.Operation == nil || planningOperationCanAnswer(task.Operation)) {
 		view.Question = task.Run.Question
 	}
 	return view
+}
+
+func planningOperationCanAnswer(op *roadmap.PlanningOperation) bool {
+	return op.Answer == nil && (op.Kind == "resolve" || op.Kind == taskCardOperation)
 }
 
 func (p *planningPort) read(ctx context.Context, route string, values url.Values) (any, error) {
@@ -150,9 +161,10 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		var page struct {
 			RunID   string `json:"run_id"`
 			Entries []struct {
-				Role   string `json:"role"`
-				Text   string `json:"text,omitempty"`
-				Result *struct {
+				RequestCommandID string `json:"request_command_id"`
+				Role             string `json:"role"`
+				Text             string `json:"text,omitempty"`
+				Result           *struct {
 					Text string `json:"text,omitempty"`
 				} `json:"result,omitempty"`
 			} `json:"entries"`
@@ -162,8 +174,30 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		if json.Unmarshal(res.Data, &page) != nil || page.RunID != task.Run.RunID {
 			return nil, errors.New("原规划对话身份无法核实")
 		}
-		if values.Get("after") == "" && len(page.Entries) > 0 && page.Entries[0].Role == "user" {
-			page.Entries[0].Text = task.Goal
+		task, err = p.store.PlanningTask(ctx, p.config.Identity(), id)
+		if err != nil {
+			return nil, err
+		}
+		if task.Run == nil || task.Run.RunID != page.RunID {
+			return nil, errors.New("原规划对话身份无法核实")
+		}
+		cursor := values.Get("after")
+		index, cursorErr := strconv.Atoi(strings.TrimPrefix(cursor, page.RunID+":"))
+		firstPage := cursor == "" || cursorErr == nil && index == 0
+		var pending struct{ Text string }
+		if op := task.Operation; op != nil && op.Kind == taskCardOperation && op.Command == "message" && op.Request != nil && op.Result == "" {
+			_ = json.Unmarshal(op.Request.Input, &pending)
+		}
+		for i := range page.Entries {
+			entry := &page.Entries[i]
+			if entry.Role != "user" {
+				continue
+			}
+			if i == 0 && firstPage {
+				entry.Text, entry.Result = task.Goal, nil
+			} else if slices.Contains(task.PlanningCommands, entry.RequestCommandID) || pending.Text != "" && entry.Text == pending.Text {
+				entry.Role, entry.Text, entry.Result = "planning", "", nil
+			}
 		}
 		return page, nil
 	}
@@ -270,8 +304,8 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 	if err != nil {
 		return nil, nil, err
 	}
-	answeringResolution := in.Action == planningAction+"answer" && task.Operation != nil && task.Operation.Kind == "resolve" && task.Operation.Answer == nil
-	if task.Revision != in.ExpectedVersion || task.Operation != nil && !answeringResolution || task.Merged != "" || task.StopRequested || task.Run == nil {
+	answeringOperation := in.Action == planningAction+"answer" && task.Operation != nil && planningOperationCanAnswer(task.Operation)
+	if task.Revision != in.ExpectedVersion || task.Operation != nil && !answeringOperation || task.Merged != "" || task.StopRequested || task.Run == nil {
 		return nil, nil, errors.New("任务状态已变化或原操作未结算")
 	}
 	view := viewPlanning(task)
@@ -285,6 +319,25 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		}
 	}
 	switch in.Action {
+	case planningAction + taskCardOperation:
+		if task.Kind != roadmap.SingleTaskPlanning || !view.CanMessage || task.Conflict != nil || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
+			return nil, nil, errors.New("原会话当前无法规划任务卡")
+		}
+		if task.Material == "" {
+			if err := p.freezePlanningRules(&task); err != nil {
+				return nil, nil, err
+			}
+		}
+		instruction, err := prompts.TaskPlanning(task.Material, task.Path, "")
+		if err != nil {
+			return nil, nil, err
+		}
+		schedulePlanning(&task, taskCardOperation, "")
+		if raw, err := roadmaps.ReadRegular(task.Run.Execution.Workspace, task.Path); err == nil {
+			task.Operation.Digest = roadmap.Digest(raw)
+		}
+		task.Operation.Previous = task.Run.Execution.TurnID
+		planControl(task.Operation, "message", task.Run.Revision, map[string]any{"text": instruction})
 	case planningAction + "message", planningAction + "resolve":
 		var input struct {
 			Text string `json:"text"`
@@ -323,7 +376,7 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 			return nil, nil, errors.New("原问题已变化或答案为空")
 		}
 		body := map[string]any{"kind": "answer", "question_id": input.QuestionID, "text": input.Text}
-		if answeringResolution {
+		if answeringOperation {
 			var answer roadmap.PlanningOperation
 			planControl(&answer, "reply", task.Run.Revision, body)
 			task.Operation.Answer = answer.Request
@@ -405,10 +458,11 @@ func planControl(op *roadmap.PlanningOperation, command string, revision uint64,
 
 func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelope) (roadmap.PlanningTask, error) {
 	var input struct {
-		Title string `json:"title"`
-		Goal  string `json:"goal"`
-		File  string `json:"file"`
-		Kind  string `json:"kind"`
+		Title   string `json:"title"`
+		Goal    string `json:"goal"`
+		File    string `json:"file"`
+		Kind    string `json:"kind"`
+		Discuss bool   `json:"discuss,omitempty"`
 	}
 	if err := decodeStrictJSON(in.Payload, &input); err != nil {
 		return roadmap.PlanningTask{}, err
@@ -421,6 +475,9 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 	}
 	if input.Kind == "" && !validPlanningFileName(input.File) || input.Kind == roadmap.SingleTaskPlanning && input.File != "" || input.Kind != "" && input.Kind != roadmap.SingleTaskPlanning {
 		return roadmap.PlanningTask{}, errors.New("规划类型或草稿文件名无效")
+	}
+	if input.Discuss && input.Kind != roadmap.SingleTaskPlanning {
+		return roadmap.PlanningTask{}, errors.New("沟通入口仅用于单任务规划")
 	}
 	id := in.RequestID
 	if !roadmap.IDPattern.MatchString(id) {
@@ -461,23 +518,22 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
-	rules, err := prompts.RoadmapPlanningRules()
-	if input.Kind == roadmap.SingleTaskPlanning {
-		rules, err = prompts.TaskPlanningRules()
-	}
-	if err != nil || len(rules) == 0 {
-		return roadmap.PlanningTask{}, errors.New("规划规则文件缺失")
-	}
-	material, err := safePlanningPath(p.config.RunDir, "roadmap-planning/"+id+"/rules.md")
-	if err != nil {
-		return roadmap.PlanningTask{}, err
-	}
-	instruction, err := prompts.RoadmapPlanning(material, path, input.Goal)
-	if input.Kind == roadmap.SingleTaskPlanning {
-		instruction, err = prompts.TaskPlanning(material, path, input.Goal)
-	}
-	if err != nil {
-		return roadmap.PlanningTask{}, err
+	task := roadmap.PlanningTask{ID: id, Project: p.config.Identity(), Title: input.Title, Goal: input.Goal, Kind: input.Kind,
+		Path: path, Base: baseline, Revision: 1, Status: "starting", Build: p.runner.BuildPin()}
+	instruction, kind := input.Goal, "submit"
+	if !input.Discuss {
+		if err := p.freezePlanningRules(&task); err != nil {
+			return roadmap.PlanningTask{}, err
+		}
+		if input.Kind == roadmap.SingleTaskPlanning {
+			kind = taskCardOperation
+			instruction, err = prompts.TaskPlanning(task.Material, path, input.Goal)
+		} else {
+			instruction, err = prompts.RoadmapPlanning(task.Material, path, input.Goal)
+		}
+		if err != nil {
+			return roadmap.PlanningTask{}, err
+		}
 	}
 	request := runnercontract.ConversationRunInput{Title: input.Title, Correlation: map[string]string{"steerline_planning": id}, Workflow: workflow, Execution: execution,
 		Repository:   runnercontract.Repository{URL: strings.TrimSpace(string(remote)), LocalPath: p.config.Repository, Remote: p.config.Remote, BaseBranch: p.config.Branch, BaseRevision: baseline},
@@ -489,11 +545,30 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
-	if err = storePlanningMaterial(material, rules); err != nil {
-		return roadmap.PlanningTask{}, err
-	}
 	submit := runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: roadmaps.Token(), Input: raw}
-	return roadmap.PlanningTask{ID: id, Project: p.config.Identity(), Title: input.Title, Goal: input.Goal, Kind: input.Kind, Path: path, Base: baseline, Revision: 1, Status: "starting", Build: p.runner.BuildPin(), Submission: submit, Material: material, MaterialSHA: roadmap.Digest(rules), Operation: &roadmap.PlanningOperation{Kind: "submit", Stage: "runner", Command: "submit", Request: &submit, QueuedAt: time.Now().UTC()}}, nil
+	task.Submission = submit
+	task.Operation = &roadmap.PlanningOperation{Kind: kind, Stage: "runner", Command: "submit", Request: &submit, QueuedAt: time.Now().UTC()}
+	return task, nil
+}
+
+func (p *planningPort) freezePlanningRules(task *roadmap.PlanningTask) error {
+	readRules := prompts.RoadmapPlanningRules
+	if task.Kind == roadmap.SingleTaskPlanning {
+		readRules = prompts.TaskPlanningRules
+	}
+	rules, err := readRules()
+	if err != nil || len(rules) == 0 {
+		return errors.New("规划规则文件缺失")
+	}
+	material, err := safePlanningPath(p.config.RunDir, "roadmap-planning/"+task.ID+"/rules.md")
+	if err != nil {
+		return err
+	}
+	if err := storePlanningMaterial(material, rules); err != nil {
+		return err
+	}
+	task.Material, task.MaterialSHA = material, roadmap.Digest(rules)
+	return nil
 }
 
 func storePlanningMaterial(filePath string, rules []byte) error {
@@ -599,7 +674,8 @@ func (p *planningPort) tick(ctx context.Context, task roadmap.PlanningTask) {
 	if err != nil && ctx.Err() == nil {
 		task.Diagnostic = err.Error()
 	}
-	releaseSlot := task.ModelSlot && task.Operation == nil && (task.Run == nil || task.Run.Controls.CanMessage || task.Run.StopStatus == "stopped")
+	releaseSlot := task.ModelSlot && task.Operation == nil && (task.Run == nil || task.Run.Controls.CanMessage || task.Run.StopStatus == "stopped" ||
+		task.Kind == roadmap.SingleTaskPlanning && task.Run.Status == "blocked" && task.Run.Controls.CanResume)
 	if releaseSlot {
 		task.ModelSlot = false
 	}
@@ -672,10 +748,10 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 		return nil
 	}
 	if task.Run != nil && task.Run.Controls.CanMessage && task.Conflict == nil {
-		if raw, err := roadmaps.ReadRegular(task.Run.Execution.Workspace, task.Path); err == nil {
-			task.Body = string(raw)
-		} else if task.Kind == roadmap.SingleTaskPlanning {
-			task.Body = ""
+		if task.Kind != roadmap.SingleTaskPlanning {
+			if raw, err := roadmaps.ReadRegular(task.Run.Execution.Workspace, task.Path); err == nil {
+				task.Body = string(raw)
+			}
 		}
 		task.Status = "ready"
 		if task.Publication != nil && task.Publication.URL != "" {
@@ -724,12 +800,16 @@ func (p *planningPort) runPlanningControl(ctx context.Context, task *roadmap.Pla
 			}
 			return true, nil
 		}
-		if op.Command == "submit" {
-			if _, err := safePlanningPath(filepath.Dir(task.Material), filepath.Base(task.Material)); err != nil {
-				return false, err
-			}
+		if op.Kind == taskCardOperation || op.Command == "submit" && task.Kind != roadmap.SingleTaskPlanning {
+			_, pathErr := safePlanningPath(filepath.Dir(task.Material), filepath.Base(task.Material))
 			raw, err := roadmaps.ReadRegular(filepath.Dir(task.Material), filepath.Base(task.Material))
-			if err != nil || roadmap.Digest(raw) != task.MaterialSHA {
+			if pathErr != nil || err != nil || roadmap.Digest(raw) != task.MaterialSHA {
+				if op.Kind == taskCardOperation {
+					task.Operation = nil
+					if op.Command == "submit" {
+						task.Status = "failed"
+					}
+				}
 				return false, errors.New("固定规划规则文件不可读或已变化")
 			}
 		}
@@ -782,12 +862,28 @@ func (p *planningPort) runPlanningControl(ctx context.Context, task *roadmap.Pla
 		return false, nil
 	}
 	if err = verifyPlanningRun(task, result.Run); err != nil {
+		if result.Run == nil && op.Kind == taskCardOperation && result.Command != nil && result.Command.SubmitRejected() && result.Command.RequestID == op.Request.RequestID {
+			task.Operation = nil
+			task.Status = "failed"
+			return false, result.Command.Error
+		}
 		return false, err
 	}
 	if result.Command == nil || result.Command.Command != op.Command {
 		return false, errors.New("原 Runner 操作不匹配")
 	}
 	task.Run = result.Run
+	if op.Kind == taskCardOperation {
+		if op.Command == "message" && result.Command.CommandID != "" && !slices.Contains(task.PlanningCommands, result.Command.CommandID) {
+			task.PlanningCommands = append(task.PlanningCommands, result.Command.CommandID)
+			op.Result = result.Command.CommandID
+		}
+		if task.StopRequested {
+			task.Operation = nil
+			return true, nil
+		}
+		return finishTaskCardPlanning(task, result.Command)
+	}
 	switch op.Command {
 	case "workspace acquire":
 		if result.Command.ActionStatus != "completed" || task.Run.WorkspaceWrite == nil || task.Run.WorkspaceWrite.Owner != "steerline" || task.Run.WorkspaceWrite.LeaseID != result.Command.CommandID {
@@ -887,10 +983,18 @@ func (p *planningPort) advancePlanningOperation(ctx context.Context, task *roadm
 }
 
 func schedulePlanningClose(task *roadmap.PlanningTask) {
-	if task.Operation == nil && task.Run != nil && task.Run.StopStatus != "stopped" && task.Run.WorkspaceWrite != nil && task.Run.WorkspaceWrite.Owner == "runner" && task.Run.Controls.CanClose {
-		task.Operation = &roadmap.PlanningOperation{Kind: "close"}
-		planControl(task.Operation, "close", task.Run.Revision, nil)
+	if task.Operation != nil || task.Run == nil || task.Run.StopStatus == "stopped" || task.Run.WorkspaceWrite == nil || task.Run.WorkspaceWrite.Owner != "runner" {
+		return
 	}
+	command := "close"
+	if !task.Run.Controls.CanClose {
+		if task.Kind != roadmap.SingleTaskPlanning || !task.StopRequested || !task.Run.Controls.CanStop {
+			return
+		}
+		command = "stop"
+	}
+	task.Operation = &roadmap.PlanningOperation{Kind: "close"}
+	planControl(task.Operation, command, task.Run.Revision, nil)
 }
 
 // The project observer is drained before this runs. Runner only accepts

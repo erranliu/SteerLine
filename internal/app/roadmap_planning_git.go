@@ -256,8 +256,10 @@ func (p *planningPort) checkPlanningRebase(ctx context.Context, task *roadmap.Pl
 		return errors.New("Rebase 未到达原目标，保留现场供核对")
 	}
 	task.Base, task.Status, task.Conflict, task.Review = target, "ready", nil, nil
-	if body, err := roadmaps.ReadRegular(root, task.Path); err == nil {
-		task.Body = string(body)
+	if task.Kind != roadmap.SingleTaskPlanning {
+		if body, err := roadmaps.ReadRegular(root, task.Path); err == nil {
+			task.Body = string(body)
+		}
 	}
 	return nil
 }

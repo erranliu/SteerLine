@@ -93,13 +93,44 @@
   align-items: center;
   justify-content: start;
 }
-.planning-detail [aria-label="当前任务转正进度"] .roadmaps-actions > details {
-  flex-basis: 100%;
+.planning-create-actions,
+.planning-card-action,
+.planning-composer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.planning-card-action {
+  margin-top: 12px;
+}
+.planning-composer {
+  align-items: end;
+}
+.planning-composer label {
+  flex: 1 1 180px;
+}
+.planning-view-switch {
+  display: none;
 }
 .planning-content {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+.single-task-content {
+  grid-template-columns: minmax(0, 1fr);
+}
+.single-task-content:has(.planning-task-card) {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+}
+.planning-task-card {
+  border-inline-start: 1px solid var(--ui-line);
+  padding-inline-start: 16px;
+}
+.planning-system-message,
+.planning-card-update p {
+  color: var(--ui-secondary);
 }
 .planning-content pre,
 .planning-markdown,
@@ -135,5 +166,24 @@
   .planning-content,
   .planning-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 960px) {
+  .single-task-content:has(.planning-task-card) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .planning-view-switch {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .single-task-content[data-view="chat"] .planning-task-card,
+  .single-task-content[data-view="card"] .planning-conversation {
+    display: none;
+  }
+  .planning-task-card {
+    border-inline-start: 0;
+    padding-inline-start: 0;
   }
 }

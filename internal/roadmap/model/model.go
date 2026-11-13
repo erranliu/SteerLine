@@ -27,14 +27,16 @@ const Root = "SteerlineFlow/Roadmap/drafts/"
 const MaxBytes = 2 << 20
 
 type Source struct {
-	PlanningID string `json:"planning_id,omitempty"`
-	ID         string `json:"id"`
-	Path       string `json:"path"`
-	Body       string `json:"body"`
-	Digest     string `json:"digest"`
-	Head       string `json:"head"`
-	Modified   bool   `json:"modified"`
-	Diagnostic string `json:"diagnostic,omitempty"`
+	PlanningID  string            `json:"planning_id,omitempty"`
+	CardVersion uint64            `json:"card_version,omitempty"`
+	CardEdits   map[string]string `json:"card_edits,omitempty"`
+	ID          string            `json:"id"`
+	Path        string            `json:"path"`
+	Body        string            `json:"body"`
+	Digest      string            `json:"digest"`
+	Head        string            `json:"head"`
+	Modified    bool              `json:"modified"`
+	Diagnostic  string            `json:"diagnostic,omitempty"`
 }
 type Existing struct {
 	ID             string   `json:"id"`

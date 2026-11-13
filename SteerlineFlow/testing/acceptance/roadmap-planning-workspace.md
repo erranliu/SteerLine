@@ -19,6 +19,25 @@ Runner #146（`2de536cb`）已合入。自动项的命令、时点和证据要�
 
 ## 提示词交付和独立审核
 
+### 单任务先沟通与重新规划
+
+单任务将规划提示词从首次创建拆到显式规划动作。直接规划在首轮绑定用户目标，原会话的重新规划只引用固定规则和任务卡路径。规则正文把原先的「已明确的内容及时写入任务卡」改为「任务卡只在收到规划指令时生成或更新」。关键决定仍通过对话向用户询问。
+
+| 实际正文 | UTF-8 字节前 → 后 |
+| --- | --- |
+| [规划短模板](../../../internal/prompts/task-planning.md) | 123 → 196 |
+| [固定规则文件](../../../internal/prompts/materials/task-planning.md) | 527 → 629 |
+| [直接规划实际正文](../../../internal/prompts/testdata/task-planning.golden.md) | 147 → 201 |
+| [原会话规划实际正文](../../../internal/prompts/testdata/task-planning-followup.golden.md) | 0 → 156 |
+
+独立审核复核了完整 Git 正文差异和实际发送位置。修正后复审通过，覆盖规则文件校验、原请求与会话绑定、对话历史分页、受阻额度释放和 Rebase 保留已生成任务卡。`go test ./internal/prompts -count=1 -v`、提示词源码边界测试和差异检查通过。
+
+基于 `07a5c769` 的工作区通过 L1、L2、单任务后端定向验证、两份 Web 测试文件共 47 项及生产 Web 构建。Edge 受控检查验证宽屏出卡后自动展开、窄屏提示与切换，以及再次规划保留手工字段和 DAG 前置。L1 与 L2 原报告在系统临时目录 `steerline-test-feedback/20261113T101103.280883800Z/summary.json` 和 `steerline-test-feedback/20261113T101124.967381100Z/summary.json`。
+
+Roadmap Go 专项首次执行在丢失 PR 回执的观察时间断言失败，未修改的 `07a5c769` 复现。发布过程保存本地进度，测试现核对观察时间推进和远端仍待核实。修正后 `TestRoadmapPublicationAndAdmissionWithRealGit/single-task-planning` 通过，覆盖本地 Git、PR 夹具和入图。完整专项修正后未重跑。真实 Runner 与文档 PR 的浏览器场景已同步新流程，待用真实环境复验。
+
+### Roadmap 创建与冲突续作
+
 本功能新增两条固定短指令和一份固定规则，供原生会话建立和冲突续作使用。以下文件为从空正文新增的完整差异。
 
 | 实际正文 | UTF-8 字节前 → 后 | 业务用途 |

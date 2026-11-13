@@ -30,6 +30,10 @@ import { OperationResult } from "../activities/operation-result";
 export type RoadmapSource = {
   id: string;
   planning_id?: string;
+  card_version?: number;
+  card_edits?: Partial<
+    Record<"goal" | "scope" | "constraints" | "acceptance", string>
+  >;
   path: string;
   body: string;
   digest: string;
@@ -150,7 +154,11 @@ export function Roadmaps({
 }: {
   planning?: {
     id: string;
-    cardForm: (disabled: boolean, confirmed?: RoadmapTask) => React.ReactNode;
+    workspace: (
+      disabled: boolean,
+      confirmed?: RoadmapTask,
+      source?: RoadmapSource,
+    ) => React.ReactNode;
   };
 } = {}) {
   const { api, identity, online, submit, requests, pendingRequests } =
@@ -502,7 +510,19 @@ export function Roadmaps({
       />
     );
   }
-  return (
+  const workspace = planning?.workspace(
+    locked ||
+      hasPending ||
+      publicationPending ||
+      current?.state === "admitted" ||
+      !value?.documents_available ||
+      !materialsReady,
+    record?.analysis?.tasks[0],
+    record?.source,
+  );
+  const showProgress =
+    !planning || history.length > 0 || !!flowReason || !!historicalID;
+  const progressPanel = showProgress && (
     <section
       className="roadmaps-page"
       aria-label={planning ? "文档与入图" : "Roadmap 草稿"}
@@ -672,18 +692,6 @@ export function Roadmaps({
           </div>
         ) : (
           <div className="roadmaps-actions">
-            {planning &&
-              (mainAction === "parse" ||
-                mainAction === "generate" ||
-                mainAction === "publish") && (
-                <details open={!current || mainAction === "parse"}>
-                  <summary>{current ? "重新确认任务卡" : "确认任务卡"}</summary>
-                  {planning.cardForm(
-                    locked || !value?.documents_available || !materialsReady,
-                    record?.analysis?.tasks[0],
-                  )}
-                </details>
-              )}
             {mainAction === "parse" && !planning && (
               <button
                 className="roadmaps-primary"
@@ -1334,6 +1342,12 @@ export function Roadmaps({
         </section>
       )}
     </section>
+  );
+  return (
+    <>
+      {workspace}
+      {progressPanel}
+    </>
   );
 }
 
