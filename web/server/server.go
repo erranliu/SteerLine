@@ -501,9 +501,17 @@ func backendError(w http.ResponseWriter, err error) {
 
 func (s *Server) Done() <-chan struct{} { return s.stopped }
 func spaPath(route string) bool {
-	if route == "/settings/execution-configs" || route == "/settings" || route == "/projects/add" {
+	switch route {
+	case "/settings", "/settings/execution-configs", "/settings/billing", "/projects", "/projects/add":
 		return true
 	}
 	parts := strings.Split(strings.Trim(route, "/"), "/")
-	return len(parts) == 3 && parts[0] == "projects" && len(parts[1]) == 64 && (parts[2] == "manual-verification" || parts[2] == "refactoring" || parts[2] == "roadmaps" || parts[2] == "roadmap-planning" || parts[2] == "tests" || parts[2] == "dag" || parts[2] == "runs" || parts[2] == "settings" || parts[2] == "environment" || parts[2] == "activities") || route == "/projects"
+	if len(parts) != 3 || parts[0] != "projects" || len(parts[1]) != 64 {
+		return false
+	}
+	switch parts[2] {
+	case "manual-verification", "refactoring", "roadmaps", "roadmap-planning", "tests", "dag", "runs", "settings", "status", "environment", "activities":
+		return true
+	}
+	return false
 }

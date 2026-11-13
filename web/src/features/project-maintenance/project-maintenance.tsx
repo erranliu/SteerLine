@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
-import { SafeLink } from "../../shared/ui/status";
+import { SafeLink, short } from "../../shared/ui/status";
 import { testPreparationNames as names } from "../tasks/use-test-readiness";
 import type { ProjectReadiness } from "../../shared/api/types";
 import { projectBlockerLabel } from "./project-readiness-status";
@@ -223,6 +223,11 @@ export function ProjectMaintenance() {
   return (
     <section aria-label="项目状态" className="settings-panel maintenance-panel">
       <h1>项目状态</h1>
+      <p className="path">{identity.repository_identity}</p>
+      <p className="muted">
+        项目 {short(identity.project_id)} · 服务实例{" "}
+        {short(identity.instance_id)}
+      </p>
       <div>
         {!verified && (
           <p className="notice amber">

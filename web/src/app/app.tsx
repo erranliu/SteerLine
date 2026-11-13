@@ -21,10 +21,11 @@ import { WorkspaceContext } from "./context";
 import { Button } from "../shared/ui/button";
 import { ProjectMaintenance } from "../features/project-maintenance/project-maintenance";
 import { ProjectReadinessStatus } from "../features/project-maintenance/project-readiness-status";
-import { DispatchStatus } from "../features/tasks/dispatch";
+import { Dispatch, DispatchStatus } from "../features/tasks/dispatch";
 import { requiresAnswer } from "../features/runs/state";
-import { SettingsPage } from "../features/settings/settings";
+import { BillingPage, SettingsPage } from "../features/settings/settings";
 import { Operations } from "./operations";
+import { configurationPage } from "./configuration-navigation";
 import { ExecutionConfigs } from "../features/execution-configs/execution-configs";
 import { EnvironmentSummary } from "../features/environment-checks/use-readiness";
 import { ProjectEnvironment } from "../features/environment-checks/project-environment";
@@ -71,7 +72,6 @@ export function Workspace({
   home = "",
   switcher,
   configurationPending = false,
-  loadedDigest,
   connectionError,
   onRefreshConnection,
   activityControl,
@@ -84,7 +84,6 @@ export function Workspace({
   home?: string;
   switcher?: React.ReactNode;
   configurationPending?: boolean;
-  loadedDigest?: string;
   connectionError?: unknown;
   onRefreshConnection?: () => void;
 }) {
@@ -277,16 +276,7 @@ export function Workspace({
               />
               <Route
                 path={"/projects/" + identity.project_id + "/settings"}
-                element={
-                  <SettingsPage
-                    api={api}
-                    online={!!online}
-                    home={home}
-                    csrf={initial.csrf_token}
-                    loadedDigest={loadedDigest}
-                    applicationConnected={applicationConnected}
-                  />
-                }
+                element={<Dispatch />}
               />
               <Route
                 path="*"
@@ -430,11 +420,13 @@ export function App({ initial }: { initial: BrowserSession }) {
         )}
     </div>
   );
-  if (
-    route.pathname === "/settings/execution-configs" ||
-    route.pathname === "/settings" ||
-    route.pathname === "/projects/add"
-  )
+  const configurationProps = {
+    home,
+    csrf: session.data.csrf_token,
+    loadedDigest: catalog.data?.loaded_execution_digest,
+    applicationConnected: sessionValid && !catalog.isError,
+  };
+  if (configurationPage(route.pathname) || route.pathname === "/projects/add")
     return (
       <AppShell
         projectId={selected?.project_id}
@@ -454,19 +446,11 @@ export function App({ initial }: { initial: BrowserSession }) {
             </span>
           </div>
         }
-        footer={
-          route.pathname !== "/projects/add" &&
-          "所有项目共享执行方案与生成并发设置"
-        }
       >
         {route.pathname === "/settings/execution-configs" ? (
-          <ExecutionConfigs
-            key={home}
-            home={home}
-            csrf={session.data.csrf_token}
-            loadedDigest={catalog.data?.loaded_execution_digest}
-            applicationConnected={sessionValid && !catalog.isError}
-          />
+          <ExecutionConfigs key={home} {...configurationProps} />
+        ) : route.pathname === "/settings/billing" ? (
+          <BillingPage key={home} {...configurationProps} />
         ) : route.pathname === "/projects/add" ? (
           <AddProject
             key={home}
@@ -476,14 +460,7 @@ export function App({ initial }: { initial: BrowserSession }) {
             projects={projects}
           />
         ) : (
-          <SettingsPage
-            key={home}
-            projectId={selected?.project_id}
-            home={home}
-            csrf={session.data.csrf_token}
-            loadedDigest={catalog.data?.loaded_execution_digest}
-            applicationConnected={sessionValid && !catalog.isError}
-          />
+          <SettingsPage key={home} {...configurationProps} />
         )}
       </AppShell>
     );
@@ -496,7 +473,6 @@ export function App({ initial }: { initial: BrowserSession }) {
         projectName={selected.name}
         activityControl={{ value: activityUI, change: setActivityUI }}
         configurationPending={configurationPending}
-        loadedDigest={catalog.data?.loaded_execution_digest}
         onRefreshConnection={() => {
           void session.refetch();
           void catalog.refetch();
@@ -526,7 +502,6 @@ export function App({ initial }: { initial: BrowserSession }) {
       <span className="brand-symbol">◆</span>
       <h1>SteerLine</h1>
       {switcher}
-      <NavLink to="/settings/execution-configs">执行方案配置 →</NavLink>
       <NavLink to="/settings">配置 →</NavLink>
       {!sessionValid ? (
         <p role="alert">会话已失效，请使用 steerline-web open 重新授权</p>

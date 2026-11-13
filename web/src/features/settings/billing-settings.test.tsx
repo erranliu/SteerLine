@@ -69,7 +69,7 @@ function mount(conflict = false) {
 }
 it("creates a manual price version offline with explicit rates and a create-only precondition", async () => {
   const writes = mount();
-  await screen.findByRole("button", { name: "添加模型费率" });
+  fireEvent.click(await screen.findByRole("button", { name: "创建价表" }));
   fireEvent.change(screen.getByLabelText("价格来源"), {
     target: { value: "synthetic fixture" },
   });
@@ -91,10 +91,11 @@ it("creates a manual price version offline with explicit rates and a create-only
   expect(writes[0].headers.get("X-CSRF-Token")).toBe("csrf");
   expect(writes[0].policy.rules[0].rates.cache_read_per_million).toBe("0.2");
   expect(screen.getByRole("combobox", { name: "价表版本" })).toHaveValue("new");
+  expect(screen.getByRole("rowheader", { name: /model/ })).toBeVisible();
 });
 it("retains a conflicting draft until the user reloads", async () => {
   const writes = mount(true);
-  await screen.findByLabelText("价格来源");
+  fireEvent.click(await screen.findByRole("button", { name: "创建价表" }));
   fireEvent.change(screen.getByLabelText("价格来源"), {
     target: { value: "my draft" },
   });
@@ -112,7 +113,7 @@ it("retains a conflicting draft until the user reloads", async () => {
 
 it("cancels an older background read before publishing a saved version", async () => {
   const writes = mount();
-  await screen.findByLabelText("价格来源");
+  fireEvent.click(await screen.findByRole("button", { name: "创建价表" }));
   const client = clients[clients.length - 1];
   let finish!: (value: Response) => void;
   let signal: AbortSignal | undefined;
@@ -143,5 +144,6 @@ it("cancels an older background read before publishing a saved version", async (
   });
   expect(writes).toHaveLength(1);
   expect(screen.getByRole("combobox", { name: "价表版本" })).toHaveValue("new");
+  fireEvent.click(screen.getByRole("button", { name: "编辑价表" }));
   expect(screen.getByLabelText("价格来源")).toHaveValue("new authority");
 });

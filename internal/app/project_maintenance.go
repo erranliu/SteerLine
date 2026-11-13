@@ -93,7 +93,7 @@ func (m *projectMaintenance) refreshBaseline(ctx context.Context) (string, error
 	return observation.Commit, err
 }
 
-func (m *projectMaintenance) refreshBaselineForPush(ctx context.Context) (commit string, rewritten bool, err error) {
+func (m *projectMaintenance) refreshBaselineWithRewrite(ctx context.Context) (commit string, rewritten bool, err error) {
 	observation, err := m.check(ctx)
 	return observation.Commit, observation.Rewritten, err
 }

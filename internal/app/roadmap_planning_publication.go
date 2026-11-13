@@ -70,7 +70,7 @@ func (p *planningPort) publishPlanning(ctx context.Context, task *plan.PlanningT
 			if observed != expected {
 				return errors.New("原发布分支已变化，推送结果待核实")
 			}
-			target, rewritten, err := p.refreshBaselineForPush(ctx)
+			target, rewritten, err := p.refreshBaselineWithRewrite(ctx)
 			if err != nil {
 				return err
 			}

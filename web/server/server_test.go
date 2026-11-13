@@ -302,7 +302,14 @@ func TestWebOriginHostAndStaticBoundaries(t *testing.T) {
 			t.Fatalf("source policy passed: %d", w.Code)
 		}
 	}
-	for route, status := range map[string]int{"/": 200, "/projects/" + strings.Repeat("a", 64) + "/dag": 200, "/projects/" + strings.Repeat("a", 64) + "/runs": 200, "/projects/" + strings.Repeat("a", 64) + "/settings": 200, "/assets/main.js": 200, "/assets/missing.js": 404, "/auth/missing": 404, "/../secret": 400, "/assets%2fmain.js": 400} {
+	project := "/projects/" + strings.Repeat("a", 64)
+	for route, status := range map[string]int{
+		"/": 200, project + "/dag": 200, project + "/runs": 200,
+		project + "/settings": 200, project + "/status": 200,
+		"/settings/billing": 200, "/settings/missing": 404,
+		"/assets/main.js": 200, "/assets/missing.js": 404,
+		"/auth/missing": 404, "/../secret": 400, "/assets%2fmain.js": 400,
+	} {
 		w := request(s, "GET", route, "", nil, "")
 		if w.Code != status {
 			t.Fatalf("%s => %d want %d", route, w.Code, status)
