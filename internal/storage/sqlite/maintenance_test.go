@@ -57,7 +57,7 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 			require(t, s.SaveMaterial(ctx, project, other))
 		}
 		input.Workflow.PromptOverrides = map[string]string{"implement.execute": testPromptContext(t, candidate.TestPlan)}
-		input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"tests":["one"]}`))}
+		input.ResultFile = &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"tests":["one"]}`))}
 		candidate.Submit.Input, _ = json.Marshal(input)
 		if i < 2 {
 			// The chosen task is ready, but another unfinished task changes

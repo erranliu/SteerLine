@@ -67,7 +67,7 @@ func TestRefactoringReadingUsesOriginalPublicFields(t *testing.T) {
 				RunID: "run", Run: &runnercontract.Run{RunID: "run", Final: final},
 				Result: &m.Result{Summary: "操作结果"}},
 		},
-		Answers: []m.Answer{{QuestionID: "q", Text: "用户回答"}},
+		Answers: []m.Answer{{QuestionID: "q", Option: m.QuestionOption{ID: "keep", Label: "保留公共接口"}, Note: "用户补充"}},
 	}
 	if err := s.SaveRefactoring(ctx, r, 0, nil); err != nil {
 		t.Fatal(err)
@@ -78,8 +78,8 @@ func TestRefactoringReadingUsesOriginalPublicFields(t *testing.T) {
 	read := func(attempt string) {
 		t.Helper()
 		page, err := s.ReadReadingWindow(ctx, "p", "refactoring", r.ID, 0, 0, 10)
-		if err != nil || len(page.Records) != 3 {
-			t.Fatalf("expected only the reply, result, and answer: %+v, %v", page, err)
+		if err != nil || len(page.Records) != 4 {
+			t.Fatalf("expected the reply, result, answer option, and note: %+v, %v", page, err)
 		}
 		item := page.Records[0]
 		if item.Role != "assistant" || item.RunID != "run" || item.AttemptID != attempt || item.Group != "操作 1" || len(item.Preview) >= item.Bytes ||
@@ -89,6 +89,13 @@ func TestRefactoringReadingUsesOriginalPublicFields(t *testing.T) {
 		body, err := s.ReadReadingBody(ctx, "p", "refactoring", r.ID, item.ID, item.Bytes)
 		if err != nil || body != final.Text {
 			t.Fatalf("did not read the original reply: %v", err)
+		}
+		for i, want := range []string{r.Answers[0].Option.Label, r.Answers[0].Note} {
+			item := page.Records[i+2]
+			body, err := s.ReadReadingBody(ctx, "p", "refactoring", r.ID, item.ID, item.Bytes)
+			if err != nil || item.Role != "user" || body != want {
+				t.Fatalf("did not read the original answer field: item=%+v body=%q err=%v", item, body, err)
+			}
 		}
 	}
 	read("attempt-1")

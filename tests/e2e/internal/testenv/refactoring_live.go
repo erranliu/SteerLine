@@ -1,15 +1,19 @@
 package testenv
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/erranliu/SteerLine/internal/billing"
 	"github.com/erranliu/SteerLine/internal/billingconfig"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -90,19 +94,25 @@ console.log('checks passed');
 		s.Must(err)
 		s.Must(controlled.Write(filepath.Join(s.Output, stage+"-report.json"), report))
 	}
-	verifyPR := func(url string, report ref.Report) {
+	verifyPR := func(url string, report ref.Report) string {
 		var pr struct {
-			Body  string
-			Head  string `json:"headRefOid"`
-			Base  string `json:"baseRefName"`
-			Draft bool   `json:"isDraft"`
+			Body    string
+			Head    string `json:"headRefOid"`
+			BaseOID string `json:"baseRefOid"`
+			Base    string `json:"baseRefName"`
+			Draft   bool   `json:"isDraft"`
 		}
-		raw, err := p.gh(s.Context, "pr", "view", url, "--repo", githubRepository, "--json", "body,headRefOid,baseRefName,isDraft")
+		number := strings.TrimPrefix(url, "https://github.com/"+githubRepository+"/pull/")
+		if number == url || number == "" {
+			s.t.Fatal("maintenance PR escaped the test repository")
+		}
+		raw, err := p.gh(s.Context, githubMaintenancePRArgs(number, `.data.repository.pullRequest | {body,headRefOid,baseRefName,baseRefOid:.baseRef.target.oid,isDraft}`)...)
 		s.Must(err)
 		s.Must(json.Unmarshal(raw, &pr))
-		if pr.Body != report.Body || pr.Head != report.Head || pr.Base != p.BaseBranch || !pr.Draft {
-			s.t.Fatal("draft PR and report source mismatch")
+		if report.Body == "" || report.Recommendation == "" || pr.Head != report.Head || pr.BaseOID != report.Base || pr.Base != p.BaseBranch || !pr.Draft {
+			s.t.Fatal("draft PR and review version mismatch")
 		}
+		return pr.Body
 	}
 	project, e := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
 	s.Must(e)
@@ -133,7 +143,7 @@ console.log('checks passed');
 		s.Must(client.Post(s.Context, prefix+"/commands", request, &response))
 		return id, response
 	}
-	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, ref.Start{Direction: "simplify", DirectionRevision: directionRevision, Requirements: "每轮只简化 alpha.cjs 或 beta.cjs 一个文件，完成两个独立切片；保留 calculate 导出及行为。验证 node check.cjs，不能修改检查或项目材料。交付一个 draft PR，报告原样放入原 PR 正文。", Profile: "local-codex", Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
+	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, ref.Start{Direction: "simplify", DirectionRevision: directionRevision, Requirements: "完成两个独立切片。第一轮只简化 alpha.cjs，含该轮审计需要的任何补证和修复。第一轮验收后，第二轮只简化 beta.cjs，保留第一轮已验收的改动。两轮均保留 calculate 导出及行为并运行 node check.cjs。最终提交须同时包含两文件的简化，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。", Profile: "local-codex", Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
 	if started.Status != "applied" {
 		s.t.Fatalf("refactoring_start: %s", started.Diagnostic)
 	}
@@ -146,6 +156,7 @@ console.log('checks passed');
 		PR                *struct{ URL string }
 		Question          *ref.Question
 		Operations        []struct {
+			ID                       string
 			Purpose, State, Feedback string
 			Round                    int
 			RunID                    string `json:"run_id"`
@@ -154,9 +165,22 @@ console.log('checks passed');
 		}
 	}
 	defer func() { s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-view.json"), view)) }()
+	captured := map[string]bool{}
 	wait := func(reports int) {
 		s.Wait("native maintenance delivery", func() (bool, error) {
 			e := client.Get(s.Context, prefix+"/refactoring/"+id, &view)
+			if e == nil {
+				for _, op := range view.Operations {
+					if op.State != "complete" || op.RunID == "" || captured[op.RunID] ||
+						(op.Purpose != "publish" && op.Purpose != "conflict") {
+						continue
+					}
+					if err := captureMaintenanceFinal(s.Context, p, id, op.ID, op.Purpose, op.RunID); err != nil {
+						return false, err
+					}
+					captured[op.RunID] = true
+				}
+			}
 			if e == nil && (view.Phase == "blocked" || view.Phase == "waiting_input" || view.Phase == "stopped") {
 				s.t.Fatalf("native maintenance needs decision: %s %+v", view.Diagnostic, view.Question)
 			}
@@ -169,7 +193,7 @@ console.log('checks passed');
 	}
 	original := view.PR.URL
 	initial := view.Reports[0]
-	verifyPR(original, initial)
+	originalBody := verifyPR(original, initial)
 	verifyTree(initial, "initial", false)
 	// Advance the owned base with an overlapping replacement; the original PR must be updated.
 	for _, name := range []string{"alpha.cjs", "beta.cjs"} {
@@ -208,10 +232,12 @@ console.log('checks passed');
 		s.t.Fatal("original PR/round changed")
 	}
 	last := view.Reports[len(view.Reports)-1]
-	if last.Base != advanced || !strings.Contains(last.Body, "冲突") {
+	if last.Base != advanced || last.Head == initial.Head {
 		s.t.Fatal("report/platform source mismatch")
 	}
-	verifyPR(original, last)
+	if verifyPR(original, last) != originalBody {
+		s.t.Fatal("review changed the PR body")
+	}
 	verifyTree(last, "conflict", true)
 	var prs []struct{ URL string }
 	raw, e := p.gh(s.Context, "pr", "list", "--repo", githubRepository, "--base", p.BaseBranch, "--state", "all", "--limit", "2", "--json", "url")
@@ -267,6 +293,35 @@ console.log('checks passed');
 	if amount == nil {
 		s.t.Fatal("missing observed reference usage")
 	}
-	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-live-proof.json"), map[string]any{"rounds": r.Round, "executes": writes, "same_workspace": true, "workspace_git": gitFacts, "original_pr": original, "report_matches_pr": true, "conflict_audit": true, "verified_both_trees": true, "amount": amount, "cost_complete": complete, "pricing": "declared fixture reference rates", "head": last.Head, "base": last.Base}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-live-proof.json"), map[string]any{"rounds": r.Round, "executes": writes, "same_workspace": true, "workspace_git": gitFacts, "original_pr": original, "review_matches_pr_version": true, "pr_body_unchanged": true, "conflict_audit": true, "verified_both_trees": true, "amount": amount, "cost_complete": complete, "pricing": "declared fixture reference rates", "head": last.Head, "base": last.Base}))
 	s.Must(s.FinishBody())
+}
+
+// Save the public final reply associated with the original writable Run.
+func captureMaintenanceFinal(ctx context.Context, p *Project, action, operation, purpose, runID string) error {
+	if !ref.ValidID(action) || !ref.ValidID(operation) || !ref.ValidID(runID) {
+		return fmt.Errorf("invalid maintenance final identity")
+	}
+	selection, err := driver.RunnerSelection(p.Scenario.Run.Runner)
+	if err != nil {
+		return err
+	}
+	client, _, err := selection.Open(ctx, runnerstatepath.Directory(p.Home), 20*time.Second)
+	if err != nil {
+		return err
+	}
+	view, err := client.Inspect(ctx, "run-id", runID)
+	if err != nil {
+		return err
+	}
+	run := view.Run
+	if run == nil || run.RunID != runID || run.Correlation["steerline_refactoring"] != action ||
+		run.Correlation["refactoring_operation"] != operation || run.StopStatus != "stopped" {
+		return fmt.Errorf("unverified maintenance final identity")
+	}
+	dir := filepath.Join(p.Scenario.Output, "maintenance-finals")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	return controlled.Write(filepath.Join(dir, operation+".json"), map[string]any{"action_id": action, "operation_id": operation, "purpose": purpose, "run_id": runID, "final": run.Final})
 }

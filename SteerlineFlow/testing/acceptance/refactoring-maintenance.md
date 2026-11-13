@@ -53,7 +53,7 @@ RM-A11 不要求将测试 PR 合入业务主线。专用测试 base、PR 状态�
 | --- | --- | --- | --- |
 | [maintenance-decision.md](../../../internal/prompts/maintenance-decision.md) | 0→180 | 179 | 引用完整冻结文件，限定只读决策返回格式 |
 | [maintenance-execute.md](../../../internal/prompts/maintenance-execute.md) | 0→548 | 547 | 明确 Runner 可写身份及原结果文件交接，保留操作身份 |
-| [maintenance.md](../../../internal/prompts/materials/maintenance.md) | 0→3876 | 完整文件供给 | 五方向、三策略、独立审计、收尾、费用范围、冲突收益、原 PR 与完整提交绑定；交付后不合并 |
+| 当时的 `internal/prompts/materials/maintenance.md` | 0→3876 | 完整文件供给 | 五方向、三策略、独立审计、收尾、费用范围、冲突收益、原 PR 与完整提交绑定；交付后不合并 |
 
 首次实现规则 SHA-256 为 `ba643f9a5bd00e48c10bad3ab5c81d15f3d22e9461b87970c114b1a2eb4b9063`。两个短模板黄金与实际渲染逐字一致。实际请求测试验证完整 rules、原提示词 CRLF/结尾空格、来源互斥及报告 as-of。独立审计批准正文、文件供给、消费与对应测试变化。
 

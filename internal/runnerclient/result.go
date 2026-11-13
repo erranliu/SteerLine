@@ -116,20 +116,16 @@ func (c *Catalog) ValidateEnvironmentExecution(e runnercontract.ExecutionInput) 
 	if err := c.ValidateResult(); err != nil {
 		return err
 	}
-	contains := func(values []string, want string) bool {
-		for _, v := range values {
-			if v == want {
-				return true
-			}
-		}
-		return false
-	}
 	support := c.Capabilities.ResultFile.Supported
-	if !contains(support.Workflows, "execute/1") || !contains(support.Adapters, e.Adapter) || !contains(support.TargetKinds, e.Target.Kind) {
+	if !slices.Contains(support.Workflows, "execute/1") || !slices.Contains(support.Adapters, e.Adapter) || !slices.Contains(support.TargetKinds, e.Target.Kind) {
 		return errors.New("Runner未公布execute/1的目标执行及结果封存能力")
 	}
+	return c.validateExecuteFinal(e)
+}
+
+func (c *Catalog) validateExecuteFinal(e runnercontract.ExecutionInput) error {
 	for _, w := range c.Capabilities.Workflows {
-		if w.ID == "execute" && w.Version == 1 && contains(w.SupportedAdapters, e.Adapter) {
+		if w.ID == "execute" && w.Version == 1 && slices.Contains(w.SupportedAdapters, e.Adapter) {
 			s, ok := w.States["execute"]
 			closed, terminal := w.States["closed"]
 			if ok && s.Kind == "execute" && s.Contract == "final" && terminal && closed.Kind == "terminal" && !w.AuditModelRequired && len(w.States) == 2 {

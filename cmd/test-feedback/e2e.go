@@ -763,7 +763,8 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 					Rounds, Executes int
 					Same             bool   `json:"same_workspace"`
 					PR               string `json:"original_pr"`
-					Report           bool   `json:"report_matches_pr"`
+					Report           bool   `json:"review_matches_pr_version"`
+					PRBodyUnchanged  bool   `json:"pr_body_unchanged"`
 					Conflict         bool   `json:"conflict_audit"`
 					Head, Base       string
 				}
@@ -771,7 +772,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				if err != nil {
 					return err
 				}
-				if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Report || !proof.Conflict || proof.PR == "" || proof.Head == "" || proof.Base == "" {
+				if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Report || !proof.PRBodyUnchanged || !proof.Conflict || proof.PR == "" || proof.Head == "" || proof.Base == "" {
 					return errors.New("native maintenance proof incomplete")
 				}
 				continue

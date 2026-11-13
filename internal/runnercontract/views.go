@@ -14,6 +14,7 @@ type PRFact struct {
 	Repository           string     `json:"repository"`
 	Number               int        `json:"number"`
 	BaseBranch           string     `json:"base_branch"`
+	BaseRevision         string     `json:"base_revision,omitempty"`
 	HeadRepository       string     `json:"head_repository"`
 	HeadBranch           string     `json:"head_branch"`
 	HeadRevision         string     `json:"head_revision,omitempty"`

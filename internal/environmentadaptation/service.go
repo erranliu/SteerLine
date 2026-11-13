@@ -154,7 +154,7 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 	if err != nil {
 		return err
 	}
-	input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}
+	input.ResultFile = &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}
 	input.ProgressFile = nil
 	instruction, err := prompts.EnvironmentInvoke(r.Prepared.Manifest.Interpreter, r.Prepared.Manifest.Script)
 	if err != nil {

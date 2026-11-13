@@ -90,6 +90,7 @@ export const activityActions = new Set([
   "refactoring_stop",
   "refactoring_answer",
   "refactoring_conflict",
+  "refactoring_review",
   "environment_start",
   "maintenance_check",
   "start_task",

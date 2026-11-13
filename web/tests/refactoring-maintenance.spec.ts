@@ -82,21 +82,33 @@ test("maintenance report, history and refresh remain observational", async ({
     });
     return;
   }
+  if (e.STEERLINE_MAINTENANCE_MODE === "answer") {
+    await expect(page.getByRole("heading", { name: "等待决策", exact: true })).toBeVisible();
+    await expect(page.getByText("维持兼容", { exact: true })).toBeVisible();
+    const submit = page.getByRole("button", { name: "答复并继续" });
+    await expect(submit).toBeDisabled();
+    await page.getByRole("radio", { name: "保留公共接口" }).check();
+    await page.getByLabel("补充说明（可选）").fill("保留原接口");
+    await submit.click();
+    await expect(submit).toHaveCount(0);
+    expect(commands).toEqual(["refactoring_answer"]);
+    return;
+  }
   await expect(
     page.getByRole("heading", { name: "已交付", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "审计报告 2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "PR 合入评审 2" })).toBeVisible();
   const detail = page.getByRole("region", { name: "维护详情" });
   await detail.getByText("方向提示词", { exact: true }).click();
   await expect(
     detail.getByText("优先处理共享测试夹具。", { exact: false }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "处理冲突并更新报告" }),
+    page.getByRole("button", { name: "处理冲突并重新评审" }),
   ).toBeVisible();
   await expect(page.getByText(/不覆盖子 Agent/)).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "审计报告 2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "PR 合入评审 2" })).toBeVisible();
   expect(commands).toEqual([]);
   await page.setViewportSize({ width: 375, height: 900 });
   await page.screenshot({

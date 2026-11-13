@@ -82,7 +82,7 @@ type Publication struct {
 }
 type RunInput struct {
 	ReuseWorktreeFromRunID string             `json:"reuse_worktree_from_run_id,omitempty"`
-	ResultFile             *ProgressFileInput `json:"result_file,omitempty"`
+	ResultFile             *ResultFileInput   `json:"result_file,omitempty"`
 	ProgressFile           *ProgressFileInput `json:"progress_file,omitempty"`
 	Title                  string             `json:"title"`
 	NamePrefix             string             `json:"name_prefix,omitempty"`

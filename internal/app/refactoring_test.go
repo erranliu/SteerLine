@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/execution/backend"
 	em "github.com/erranliu/SteerLine/internal/execution/model"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
@@ -17,11 +18,15 @@ import (
 	"time"
 )
 
-func TestRefactoringPRReportAndOriginalHead(t *testing.T) {
-	for _, kind := range []string{"valid", "fork", "closed", "body", "head"} {
+func TestRefactoringPRVersionAndOriginalBranch(t *testing.T) {
+	for _, kind := range []string{"valid", "fork", "closed", "body", "head", "base"} {
 		t.Run(kind, func(t *testing.T) {
 			head := strings.Repeat("a", 40)
 			body := "完整报告"
+			base := strings.Repeat("b", 40)
+			if kind == "base" {
+				base = ""
+			}
 			fork := "owner/repo"
 			state := "open"
 			if kind == "fork" {
@@ -35,23 +40,47 @@ func TestRefactoringPRReportAndOriginalHead(t *testing.T) {
 			}
 			var server *httptest.Server
 			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_ = json.NewEncoder(w).Encode(map[string]any{"number": 1, "html_url": server.URL + "/owner/repo/pulls/1", "body": body, "state": state, "merged": false, "base": map[string]any{"ref": "main", "sha": strings.Repeat("b", 40), "repo": map[string]string{"full_name": "owner/repo"}}, "head": map[string]any{"ref": "codex/maintenance", "sha": head, "repo": map[string]string{"full_name": fork}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"number": 1, "html_url": server.URL + "/owner/repo/pulls/1", "body": body, "state": state, "merged": false, "base": map[string]any{"ref": "main", "sha": base, "repo": map[string]string{"full_name": "owner/repo"}}, "head": map[string]any{"ref": "codex/maintenance", "sha": head, "repo": map[string]string{"full_name": fork}}})
 			}))
 			defer server.Close()
 			p := refactoringPort{config: Config{PR: em.PRProviderConfig{Kind: "gitea", BaseURL: server.URL, Repository: "owner/repo"}, CommandTimeout: "3s"}}
 			record := ref.Record{Frozen: ref.Frozen{Repository: rc.Repository{BaseBranch: "main"}, Publication: map[string]string{"repository": "owner/repo", "base_url": server.URL}}, Operations: []ref.Operation{{Run: &rc.Run{Execution: rc.Execution{Branch: "codex/maintenance"}}}}}
-			result := ref.Result{Head: head, PR: server.URL + "/owner/repo/pulls/1", Report: "完整报告"}
+			result := ref.Result{Head: head, PR: server.URL + "/owner/repo/pulls/1"}
 			if kind == "head" {
 				result.Head = strings.Repeat("c", 40)
 			}
-			fact, e := p.verify(context.Background(), record, result)
-			if (e == nil) != (kind == "valid") {
+			fact, checks, e := p.verify(context.Background(), record, result)
+			if (e == nil) != (kind == "valid" || kind == "body" || kind == "head" || kind == "closed") {
 				t.Fatal(kind, fact, e)
 			}
-			if kind == "body" && fact == nil {
-				t.Fatal("report mismatch must retain validated original PR identity")
+			if e == nil && (fact.BaseRevision != base || fact.HeadRevision != head || checks != "") {
+				t.Fatal("version query must return the actual platform facts")
 			}
 		})
+	}
+}
+
+func TestRefactoringReviewDiffIgnoresLocalReplacementObjects(t *testing.T) {
+	remote, local := t.TempDir(), t.TempDir()
+	fixtureGit(t, remote, "init", "-q", "-b", "main")
+	commit := func(text string) string {
+		require(t, os.WriteFile(filepath.Join(remote, "code.txt"), []byte(text+"\n"), 0600))
+		fixtureGit(t, remote, "add", "--", "code.txt")
+		fixtureGit(t, remote, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", text)
+		return fixtureGit(t, remote, "rev-parse", "HEAD")
+	}
+	base := commit("original")
+	head := commit("reviewed")
+	fixtureGit(t, remote, "checkout", "-q", "-b", "unrelated", base)
+	replacement := commit("replacement")
+	fixtureGit(t, local, "clone", "-q", "--no-checkout", remote, ".")
+	fixtureGit(t, local, "replace", head, replacement)
+	remoteURL := fixtureGit(t, local, "remote", "get-url", "origin")
+	p := refactoringPort{config: Config{Repository: local, Git: backend.Command{Executable: "git"}, CommandTimeout: "10s", ProcessHost: NewProcessHost(10 * time.Second)}}
+	r := ref.Record{Frozen: ref.Frozen{Repository: rc.Repository{URL: remoteURL, Remote: "origin"}}}
+	diff, err := p.reviewDiff(context.Background(), r, rc.PRFact{BaseRevision: base, HeadRevision: head})
+	if err != nil || !strings.Contains(diff, "+reviewed") || strings.Contains(diff, "+replacement") {
+		t.Fatalf("review diff differs from the pinned objects: %s, %v", diff, err)
 	}
 }
 

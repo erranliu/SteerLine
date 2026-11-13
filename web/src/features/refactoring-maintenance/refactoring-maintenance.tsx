@@ -38,11 +38,20 @@ export type MaintenanceRecord = {
     closing: { amount?: string };
   };
   report_stale?: boolean;
-  question?: { id: string; text: string };
+  question?: {
+    id: string;
+    prompt: string;
+    facts: string[];
+    attempts: string[];
+    options: { id: string; label: string; impact: string }[];
+    recommended_option_id: string;
+    recommendation_reason: string;
+  };
   pr?: { url: string };
   can_finish: boolean;
   can_stop: boolean;
   can_conflict: boolean;
+  can_review?: boolean;
   operations?: {
     id: string;
     purpose: string;
@@ -57,8 +66,7 @@ export type MaintenanceRecord = {
     head: string;
     base: string;
     created_at: string;
-    as_of?: string;
-    cost?: string;
+    recommendation: "merge" | "revise" | "insufficient_evidence";
   }[];
 };
 type Index = {
@@ -78,11 +86,13 @@ type DirectionCatalogue = {
   diagnostics?: string[];
 };
 const phases: Record<string, string> = {
+  first: "首轮调查",
   select: "选择下一轮",
   execute: "Runner 执行中",
   audit: "独立审计中",
   finish: "准备交付",
   verifying: "核验交付",
+  report: "评审 PR",
   waiting_input: "等待决策",
   stopping: "正在停止",
   stopped: "已停止，可继续交付",
@@ -104,6 +114,7 @@ export function RefactoringMaintenance() {
   const [minutes, setMinutes] = useState("");
   const [rounds, setRounds] = useState("1");
   const [answer, setAnswer] = useState("");
+  const [option, setOption] = useState("");
   const [error, setError] = useState("");
   const [startError, setStartError] = useState("");
   const [outdatedDirection, setOutdatedDirection] =
@@ -166,6 +177,7 @@ export function RefactoringMaintenance() {
   }, [index.data, selected, setParams]);
   useEffect(() => {
     setAnswer("");
+    setOption("");
   }, [detail.data?.question?.id]);
   const current = detail.data;
   const directions = catalogue.data?.directions ?? [];
@@ -624,7 +636,16 @@ export function RefactoringMaintenance() {
                   )
                 }
               >
-                处理冲突并更新报告
+                处理冲突并重新评审
+              </Button>
+            )}
+            {current.can_review && (
+              <Button
+                variant="outline"
+                disabled={disabled || working}
+                onClick={() => void command("refactoring_review", current.id, current.revision, {})}
+              >
+                重新评审
               </Button>
             )}
             {current.pr && <SafeLink url={current.pr.url}>查看 PR</SafeLink>}
@@ -637,37 +658,60 @@ export function RefactoringMaintenance() {
                   "refactoring_answer",
                   current.id,
                   current.revision,
-                  { question_id: current.question!.id, answer },
+                  { question_id: current.question!.id, option_id: option, note: answer },
                 );
               }}
             >
-              <p className="refactoring-pre">{current.question.text}</p>
+              <p className="refactoring-pre">{current.question.prompt}</p>
+              <ul>
+                {[...current.question.facts, ...current.question.attempts].map((fact, index) => (
+                  <li key={index}>{fact}</li>
+                ))}
+              </ul>
+              <fieldset>
+                <legend>选择处理方式</legend>
+                {current.question.options.map((choice) => (
+                  <div key={choice.id}>
+                    <label>
+                      <input
+                        type="radio"
+                        name="maintenance-option"
+                        value={choice.id}
+                        checked={option === choice.id}
+                        onChange={() => setOption(choice.id)}
+                      />
+                      {choice.label}
+                    </label>
+                    <p>{choice.impact}</p>
+                    {current.question!.recommended_option_id === choice.id && (
+                      <p>推荐 · {current.question!.recommendation_reason}</p>
+                    )}
+                  </div>
+                ))}
+              </fieldset>
               <label>
-                你的决定
+                补充说明（可选）
                 <textarea
-                  required
                   maxLength={32768}
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
                 />
               </label>
-              <Button variant="default" disabled={disabled || !answer.trim()}>
+              <Button variant="default" disabled={disabled || !option}>
                 答复并继续
               </Button>
             </form>
           )}
+          {current.phase === "delivered" && !current.pr && current.summary && <p>{current.summary}</p>}
           {current.reports?.map((r, i) => (
             <article key={i}>
-              <h3>审计报告 {i + 1}</h3>
+              <h3>PR 合入评审 {i + 1}</h3>
               <p>
                 head {r.head} · base {r.base}
               </p>
-              <p>
-                费用截止快照：{r.cost === undefined ? "未核实" : "$" + r.cost}
-                {r.as_of && " · " + r.as_of}
-              </p>
+              <p>{{ merge: "建议合入", revise: "建议修改后再审", insufficient_evidence: "证据不足" }[r.recommendation]}</p>
               {current.report_stale && i === current.reports!.length - 1 && (
-                <p>目标分支已变化，此版本报告待复核。</p>
+                <p>此评审已过期或正在复核。</p>
               )}
               <div className="refactoring-pre">{r.body}</div>
             </article>

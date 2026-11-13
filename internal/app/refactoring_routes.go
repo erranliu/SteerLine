@@ -31,14 +31,16 @@ func (p *runtimeProjectPort) refactoringCommand(ctx context.Context, in httpcont
 	case "refactoring_answer":
 		var payload struct {
 			QuestionID string `json:"question_id"`
-			Answer     string `json:"answer"`
+			OptionID   string `json:"option_id"`
+			Note       string `json:"note,omitempty"`
 		}
 		if e := decodeStrictJSON(in.Payload, &payload); e != nil {
 			return out, e
 		}
 		command.QuestionID = payload.QuestionID
-		command.Answer = payload.Answer
-	case "refactoring_finish", "refactoring_stop", "refactoring_conflict":
+		command.OptionID = payload.OptionID
+		command.Note = payload.Note
+	case "refactoring_finish", "refactoring_stop", "refactoring_conflict", "refactoring_review":
 		if e := decodeStrictJSON(in.Payload, &struct{}{}); e != nil {
 			return out, e
 		}

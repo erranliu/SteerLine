@@ -122,7 +122,7 @@ Web 只作受限同源 `/api/v2/application/...` 转接；原生 `/native/identi
 
 ## 项目维护动作与能力边界
 
-重构与维护独立于下表的项目基线维护：`GET /refactoring`、`GET /refactoring/<action-id>` 只读取保存事实；`refactoring_start/answer/finish/stop/conflict` 沿同一命令信封及 journal，回执的 `refactoring` 仅含行动 ID/版本。启动 target 是 repository_identity、版本 1；后继操作 target 为原行动，采用其版本；停止/结束允许同一行动的较早已知版本，人工答复仍须匹配原 question_id 和当前版本。详情不返回冻结执行 settings 或传输原请求。完整规则归[产品设计](refactoring-maintenance.md)与[路由](../../internal/app/refactoring_routes.go)。
+重构与维护独立于下表的项目基线维护：`GET /refactoring`、`GET /refactoring/<action-id>` 只读取保存事实；`refactoring_start/answer/finish/stop/conflict/review` 沿同一命令信封及 journal，回执的 `refactoring` 仅含行动 ID/版本。启动 target 是 repository_identity、版本 1；后继操作 target 为原行动，采用其版本；停止/结束允许同一行动的较早已知版本，人工答复仍须匹配原 question_id 和当前版本。详情不返回冻结执行 settings 或传输原请求。完整规则归[产品设计](refactoring-maintenance.md)与[路由](../../internal/app/refactoring_routes.go)。 人工答复正文包含 `question_id`、`option_id` 和可选 `note`，按原行动版本恢复待答用途。PR 核验及独立合入评审进度由行动状态及已保存事实展示。
 
 `GET /refactoring/readiness?profile=<id>` 以已观察的基线核实所选执行配置的运行环境资格，返回目标分支、项目基线、运行环境状态与诊断。省略 `profile` 时只核实项目基线。该查询不会发起远端同步或环境检测，启动命令会重新核验。
 

@@ -148,9 +148,16 @@ func indexRefactoringReading(ctx context.Context, tx readingWriter, r refactorin
 	for i, answer := range r.Answers {
 		field := base
 		field.id = "answer:" + answer.QuestionID
-		field.field = fmt.Sprintf("$.answers[%d].text", i)
-		field.role, field.kind, field.text = "user", "answer", answer.Text
+		field.field = fmt.Sprintf("$.answers[%d].option.label", i)
+		field.role, field.kind, field.text = "user", "answer", answer.Option.Label
+		field.label = "所选选项"
 		field.state = "saved"
+		if err := putReadingField(ctx, tx, r.Project, field); err != nil {
+			return err
+		}
+		field.id += ":note"
+		field.field = fmt.Sprintf("$.answers[%d].note", i)
+		field.label, field.text = "补充说明", answer.Note
 		if err := putReadingField(ctx, tx, r.Project, field); err != nil {
 			return err
 		}

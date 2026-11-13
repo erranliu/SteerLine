@@ -147,14 +147,14 @@ func RefactoringMaintenance(s *Scenario) {
 	s.Must(e)
 	out := filepath.Join(s.Output, "browser")
 	s.Must(os.MkdirAll(out, 0700))
-	browser := func(id string) {
+	browser := func(id, mode string) {
 		cmd := p.Command(node, filepath.Join(s.Run.Root, "web", "node_modules", "@playwright", "test", "cli.js"), "test", "tests/refactoring-maintenance.spec.ts")
 		cmd.Dir = filepath.Join(s.Run.Root, "web")
-		cmd.Env = append(cmd.Env, "STEERLINE_MAINTENANCE_WEB="+web, "STEERLINE_MAINTENANCE_HOME="+p.Home, "STEERLINE_MAINTENANCE_PROJECT="+identity.ProjectID, "STEERLINE_MAINTENANCE_ID="+id, "STEERLINE_WEB_EVIDENCE="+out)
+		cmd.Env = append(cmd.Env, "STEERLINE_MAINTENANCE_WEB="+web, "STEERLINE_MAINTENANCE_HOME="+p.Home, "STEERLINE_MAINTENANCE_PROJECT="+identity.ProjectID, "STEERLINE_MAINTENANCE_ID="+id, "STEERLINE_MAINTENANCE_MODE="+mode, "STEERLINE_WEB_EVIDENCE="+out)
 		_, err := s.RunCommand(cmd, "maintenance-browser-"+id)
 		s.Must(err)
 	}
-	browser("")
+	browser("", "start")
 	var request httpcontract.CommandEnvelope
 	raw, e := os.ReadFile(filepath.Join(out, "start.json"))
 	s.Must(e)
@@ -182,9 +182,9 @@ func RefactoringMaintenance(s *Scenario) {
 	if replay.Status != "applied" {
 		s.t.Fatal(replay)
 	}
-	command("refactoring_answer", record.ID, record.Revision, map[string]string{"question_id": record.Question.ID, "answer": "保留公共接口"})
+	browser(record.ID, "answer")
 	wait("delivered")
-	if record.Round != 2 || len(record.Reports) != 1 || record.PR == nil {
+	if record.Round != 2 || len(record.Reports) != 1 || record.PR == nil || record.Reports[0].Recommendation == "" {
 		s.t.Fatal("delivery missing", record)
 	}
 	original := record.PR.URL
@@ -216,20 +216,31 @@ func RefactoringMaintenance(s *Scenario) {
 			if settings.Model != agentModel || settings.ReasoningEffort != "medium" || settings.AccessMode != "read_only" {
 				s.t.Fatalf("decision %s used the wrong execution settings: %+v", o.RunID, settings)
 			}
-			if !runnerbinding.SamePath(run.Execution.Workspace, p.Repo) || run.RepositorySource != nil {
-				s.t.Fatalf("decision %s did not use the original project directory: %q", o.RunID, run.Execution.Workspace)
+			if run.RepositorySource != nil || runnerbinding.SamePath(run.Execution.Workspace, p.Repo) {
+				s.t.Fatalf("decision %s received the live project directory: %q", o.RunID, run.Execution.Workspace)
 			}
-			if len(run.Materials) != 2 || run.Materials[1].Path != "maintenance/context.json" {
+			if o.Purpose != "first" && !runnerbinding.SamePath(run.Execution.Workspace, filepath.Join(runnerstatepath.Directory(p.Home), "runs", o.RunID, "content")) {
+				s.t.Fatal("later decision did not use isolated content directory", o.Purpose, run.Execution.Workspace)
+			}
+			if len(run.Materials) != 3 || run.Materials[1].Path != "maintenance/context.json" {
 				s.t.Fatal("missing decision context", run.Materials)
 			}
 			contextRaw, err := os.ReadFile(run.Materials[1].SnapshotPath)
 			s.Must(err)
 			var decisionContext struct {
 				DirectionPrompt string `json:"direction_prompt"`
+				PR              *runnercontract.PRFact
 			}
 			s.Must(json.Unmarshal(contextRaw, &decisionContext))
 			if decisionContext.DirectionPrompt != directionPrompt {
 				s.t.Fatal("decision lost original direction after template edit", o.RunID)
+			}
+			if o.Purpose == "report" {
+				version := decisionContext.PR
+				report := record.Reports[0]
+				if version == nil || version.CheckedAt.IsZero() || version.URL != report.PR || version.HeadRevision != report.Head || version.BaseRevision != report.Base {
+					s.t.Fatal("report received an unverified PR version", version, report)
+				}
 			}
 			continue
 		}
@@ -250,6 +261,11 @@ func RefactoringMaintenance(s *Scenario) {
 	}
 	if writes != 4 {
 		s.t.Fatalf("first, repair, second, publication: got %d", writes)
+	}
+	provider, e := controlled.Read(fixture.Providers[latest])
+	s.Must(e)
+	if provider.PRs[original].Body != "Original PR description" {
+		s.t.Fatal("maintenance review modified the PR body")
 	}
 	for _, n := range fixture.SubmitCalls {
 		if n != 1 {
@@ -272,7 +288,7 @@ func RefactoringMaintenance(s *Scenario) {
 	if !found {
 		s.t.Fatal("missing maintenance activity")
 	}
-	browser(record.ID)
+	browser(record.ID, "history")
 	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-proof.json"), map[string]any{"rounds": 2, "executes": writes, "same_workspace": true, "original_pr": true, "independent_audit": true, "browser": true, "direction_template": true, "head": record.Reports[1].Head, "pr": original}))
 	s.Must(s.FinishBody())
 }
