@@ -126,7 +126,10 @@ func (a *Actor) InstanceID() string { return a.State.Service.InstanceID }
 // CheckStartProfile previews the same profile and environment gates as Start
 // using the observed environment basis without refreshing external state.
 func (a *Actor) CheckStartProfile(ctx context.Context, id string) error {
-	if _, err := a.options.Tasks.startProfile(id); err != nil {
+	s := a.options.Tasks
+	ctx = s.pinProfiles(ctx)
+	_, profiles := s.currentProfiles(ctx)
+	if _, err := startProfile(profiles, id); err != nil {
 		return err
 	}
 	return a.options.Tasks.checkExecution(ctx, id, false)

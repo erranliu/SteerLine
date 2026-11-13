@@ -26,8 +26,9 @@ func (p *environmentPort) observeBasis(ctx context.Context, commit string) error
 	if p.store == nil {
 		return nil
 	}
+	ctx = p.config.withProfiles(ctx)
 	seen := map[string]bool{}
-	for _, profile := range p.config.RunnerExecution.Profiles {
+	for _, profile := range p.config.executionConfig(ctx).Profiles {
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}

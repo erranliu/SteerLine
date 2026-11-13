@@ -22,7 +22,7 @@ func TestDeveloperConfigurationOptions(t *testing.T) {
 	for _, skip := range []bool{false, true} {
 		p := &environmentPort{config: Config{RunnerExecution: RunnerExecutionConfig{Developer: developerconfig.Config{SkipEnvironmentReadiness: skip}}}}
 		p.config.resolveCapabilities()
-		options := p.configurationOptions()
+		options := p.configurationOptions(context.Background())
 		if options.ReadinessRequired != !(skip && developerconfig.Available) {
 			t.Fatal("configuration-only response lost the frozen admission policy", options)
 		}
@@ -47,7 +47,7 @@ func TestDeveloperConfigurationLoad(t *testing.T) {
 		t.Fatal("saved global switch was not loaded")
 	}
 	loaded.RunnerExecution.Developer.SkipEnvironmentReadiness = false
-	if loaded.environmentPolicy.RequireReadiness() || (&environmentPort{config: loaded}).configurationOptions().ReadinessRequired {
+	if loaded.environmentPolicy.RequireReadiness() || (&environmentPort{config: loaded}).configurationOptions(context.Background()).ReadinessRequired {
 		t.Fatal("loaded capability changed with raw developer configuration")
 	}
 	c.RunnerExecution.Developer.SkipEnvironmentReadiness = false
@@ -125,7 +125,7 @@ func TestDeveloperReadinessService(t *testing.T) {
 	if options.ReadinessRequired {
 		t.Fatal(options)
 	}
-	if p.configurationOptions().ReadinessRequired != options.ReadinessRequired {
+	if p.configurationOptions(ctx).ReadinessRequired != options.ReadinessRequired {
 		t.Fatal("configuration and qualification responses disagree on admission policy")
 	}
 	for _, item := range options.Environments {

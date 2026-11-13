@@ -29,6 +29,7 @@ import (
 )
 
 type ProjectRuntime struct {
+	profiles          *executionProfiles
 	runner            *applicationRunner // borrowed; only ApplicationDirectory stops it
 	config            Config
 	hostConfig        host.Config
@@ -186,6 +187,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	}
 	r.config.runtimeGenerations = runner.generations
 	r.config.runtimeCatalog = runner.catalog
+	r.config.runtimeProfiles = r.profiles
 	r.config.runtimeNative = runner.native
 	r.config.runtimeEnvironmentAdmission = runner.environments
 	if runner.environments != nil {
@@ -501,6 +503,11 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if route == "/presentation" && p.config.runtimeProfiles != nil && p.product != nil {
+		view := p.product.Project().Presentation
+		p.config.presentProfiles(&view, p.config.withProfiles(ctx))
+		return httpapi.ProjectPresentation{ProjectID: httpcontract.ProjectID(p.config.Identity()), SampledAt: time.Now().UTC(), Presentation: view}, nil
+	}
 	if route == "/dispatch" {
 		if len(values) != 0 {
 			return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "dispatch observation does not accept parameters"}

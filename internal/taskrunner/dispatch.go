@@ -21,13 +21,15 @@ func (s *Service) nextDispatchTask(ready []taskmodel.TaskRecord) (taskmodel.Task
 // actor still refreshes admission and the writer rechecks it on reservation.
 func (a *Actor) ObserveDispatch(ctx context.Context, checkProject func(context.Context) error) (api.DispatchObservation, error) {
 	s := a.options.Tasks
+	ctx = s.pinProfiles(ctx)
+	defaultID, profiles := s.currentProfiles(ctx)
 	graph, err := s.Store.TaskGraphSnapshot(ctx, s.Project)
 	if err != nil {
 		return api.DispatchObservation{}, err
 	}
 	view := api.DispatchObservation{
 		Mode: graph.Authority.DispatchMode, Revision: graph.Authority.AuthorityVersion,
-		State: "closed", DefaultProfileID: s.DefaultProfile, DefaultProfileName: s.Profiles[s.DefaultProfile].Name,
+		State: "closed", DefaultProfileID: defaultID, DefaultProfileName: profiles[defaultID].Name,
 	}
 	if view.Mode != "auto" {
 		return view, nil
@@ -39,11 +41,11 @@ func (a *Actor) ObserveDispatch(ctx context.Context, checkProject func(context.C
 	default:
 		if _, ready := s.nextDispatchTask(graph.ReadySnapshot().Tasks); !ready {
 			view.Blocker = &api.DispatchBlocker{Category: "tasks", Code: "no_ready_tasks", Diagnostic: "暂无符合条件的待执行任务"}
-		} else if _, err := s.startProfile(s.DefaultProfile); err != nil {
+		} else if _, err := startProfile(profiles, defaultID); err != nil {
 			view.Blocker = dispatchBlocker("profile", "profile_unverified", err)
 		} else if err := checkProject(ctx); err != nil {
 			view.Blocker = dispatchBlocker("project", "project_readiness_unverified", err)
-		} else if err := s.checkExecution(ctx, s.DefaultProfile, false); err != nil {
+		} else if err := s.checkExecution(ctx, defaultID, false); err != nil {
 			view.Blocker = dispatchBlocker("environment", "environment_not_ready", err)
 		} else {
 			view.State = "ready"

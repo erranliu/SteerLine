@@ -24,6 +24,7 @@ func (p *runtimeProjectPort) refactoringCommand(ctx context.Context, in httpcont
 	var start *ref.Start
 	switch in.Action {
 	case "refactoring_start":
+		ctx = p.config.withProfiles(ctx)
 		start = &ref.Start{}
 		if e := decodeStrictJSON(in.Payload, start); e != nil {
 			return out, e

@@ -49,12 +49,12 @@ type environmentOptions struct {
 	DefaultProfile string                   `json:"default_profile_id"`
 }
 
-func (p *environmentPort) configurationOptions() environmentOptions {
-	ctx := context.Background()
+func (p *environmentPort) configurationOptions(ctx context.Context) environmentOptions {
+	current := p.config.executionConfig(ctx)
 	// Configuration facts exist independently of project storage and materials.
 	environments := []environmentView{}
 	groups := map[string]int{}
-	for _, profile := range p.config.RunnerExecution.Profiles {
+	for _, profile := range current.Profiles {
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}
@@ -84,16 +84,16 @@ func (p *environmentPort) configurationOptions() environmentOptions {
 		groups[group] = len(environments)
 		environments = append(environments, environmentView{Key: key, Name: name, Target: profile.Execution.Target, Adapter: profile.Execution.Adapter, Agent: description.View.Agent, Profiles: []environmentProfileView{view}, DocumentPath: env.DocumentPath(), Status: view.Status, Stage: view.Stage, Reason: view.Reason})
 	}
-	return p.optionsFor(environments)
+	return p.optionsFor(current, environments)
 }
 
 func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
-	ctx = materialReads(ctx)
+	ctx = p.config.withProfiles(materialReads(ctx))
 	commit, sourceErr := p.observedSource(ctx, true)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	environments := p.configurationOptions().Environments
+	environments := p.configurationOptions(ctx).Environments
 
 	rows, historyErr := p.store.Environments(ctx, p.config.Identity())
 	for i := range environments {
@@ -143,10 +143,10 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			v.CurrentRevision, v.ActivityID = item.CurrentRevision, item.ActivityID
 		}
 	}
-	return p.optionsFor(environments), nil
+	return p.optionsFor(p.config.executionConfig(ctx), environments), nil
 }
 
-func (p *environmentPort) optionsFor(environments []environmentView) environmentOptions {
+func (p *environmentPort) optionsFor(current RunnerExecutionConfig, environments []environmentView) environmentOptions {
 	byProfile := map[string]environmentProfileView{}
 	for _, item := range environments {
 		for _, profile := range item.Profiles {
@@ -154,17 +154,16 @@ func (p *environmentPort) optionsFor(environments []environmentView) environment
 		}
 	}
 	profiles := []environmentProfileView{}
-	for _, profile := range p.config.RunnerExecution.Profiles {
+	for _, profile := range current.Profiles {
 		if view, ok := byProfile[profile.ID]; ok {
 			profiles = append(profiles, view)
 		}
 	}
-	return environmentOptions{Profiles: profiles, Environments: environments, DefaultProfile: p.config.RunnerExecution.DefaultProfile, ReadinessRequired: p.config.environmentPolicy.RequireReadiness()}
+	return environmentOptions{Profiles: profiles, Environments: environments, DefaultProfile: current.DefaultProfile, ReadinessRequired: p.config.environmentPolicy.RequireReadiness()}
 }
 
-func (p *environmentPort) supportsEnvironment(key string) bool {
-	ctx := context.Background()
-	for _, profile := range p.config.RunnerExecution.Profiles {
+func (p *environmentPort) supportsEnvironment(ctx context.Context, key string) bool {
+	for _, profile := range p.config.executionConfig(ctx).Profiles {
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}

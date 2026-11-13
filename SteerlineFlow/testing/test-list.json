@@ -51,7 +51,7 @@
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=configuration -env=controlled -scenario configuration.execution-profiles",
-      "check": "浏览器条件保存本机Orca三Agent配置、待重启门槛、正式停启、关闭Web后CLI核对adapter/target/agent/model/effort/helper，原候选不变且资源清理完整。",
+      "check": "浏览器条件保存本机 Orca/Codex 和 Pi 方案并切换默认项，同一项目服务加载，关闭 Web 后 CLI 使用新方案，原候选输入和服务实例保持一致并完成资源清理。",
       "note": "Windows/Go/Git、Node/npm、Edge；先串行执行 npm --prefix web ci 和 npm --prefix web run build，测试仅只读复用已构建资产，不在场景中 npm 构建。独立 home/repo/DB/端口/浏览器输出；受控 Runner，无真实 Orca。跨包总并发二；已验证组合见专属验收，不推断全部组合。"
     },
     {

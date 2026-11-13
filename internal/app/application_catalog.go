@@ -10,6 +10,7 @@ import (
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/httpfs"
 )
 
 // applicationCatalog is a frozen file census with no runtime or cancellation
@@ -63,7 +64,7 @@ func loadApplicationCatalog(home string) *applicationCatalog {
 }
 
 func readConfiguration(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := httpfs.OpenRegularSnapshot(path)
 	if err != nil {
 		return nil, err
 	}

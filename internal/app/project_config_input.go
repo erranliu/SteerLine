@@ -45,6 +45,7 @@ type Config struct {
 	runtimeRunner                 *runnerclient.Client
 	runtimeMessages               *messageObserver
 	runtimeCatalog                *runnerclient.Catalog
+	runtimeProfiles               *executionProfiles
 	runtimeNative                 *runnerclient.ConfigurationSnapshot
 	runtimeMaintenance            *projectMaintenance
 	runtimeTests                  api.TestManagementPort
