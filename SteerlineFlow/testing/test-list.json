@@ -275,7 +275,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.runner-result",
-      "check": "runneracceptance 标签下精确执行 TestProjectEnvironmentExecutionPublishedResultRoundTrip，原始结果来源、封存及资源清理断言通过。；同一固定实际Runner以协议夹具额外验证至少四次execute的最新持有者/原worktree/独立session、dirty文件保留、停止封存，generate.directory与file manifest，以及只读后仍接回原写入者；不证明模型审计质量或真实PR。",
+      "check": "runneracceptance 标签下精确执行 TestProjectEnvironmentExecutionPublishedResultRoundTrip，原始结果来源、封存及资源清理断言通过。；同一固定实际Runner以协议夹具额外验证至少四次execute的最新持有者/原worktree/独立session、dirty文件保留、停止封存，首轮generate.directory、后续无目录generate与file manifest，以及只读后仍接回原写入者；不证明模型审计质量或真实PR。",
       "note": "显式 STEERRUNNER_EXE、STEERRUNNER_VERSION、STEERRUNNER_SHA256、STEERRUNNER_NATIVE_FIXTURE（Runner 提供的原生协议 fixture）；不证明真实模型或 PR。缺输入阻断。"
     },
     {
@@ -318,13 +318,13 @@
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.refactoring-maintenance",
       "name": "维护多轮、审计和原PR交付",
-      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner/provider夹具：宽窄屏预览方向原文、拒绝过期版本、安装模板修改后继续使用冻结正文；两轮及失败修复四次execute沿同一worktree最新持有者；谨慎人工答复、预算自动收尾、原PR报告和手动更新；刷新零命令、活动分类和资源清理。原生模型与真实PR由live专项验证。",
+      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner/provider夹具：宽窄屏预览方向原文、拒绝过期版本、安装模板修改后继续使用冻结正文；两轮、失败修复、发布和同步复用同一worktree最新持有者；结构化人工答复、预算自动收尾、PR版本核验后生成报告并原样同步、原PR手动更新；刷新零命令、活动分类和资源清理。原生模型与真实PR由live专项验证。",
       "id": "runtime.refactoring-maintenance",
       "note": "Windows/Go/Git/Node/Edge；先构建Web，独立home/repo/provider/浏览器输出。串行准备，受控不证明真实模型工程判断。",
       "level": "L3"
     },
     {
-      "check": "固定新Runner与本机Codex，独立GitHub测试base：两轮同方向维护、预算自动收尾、同worktree原身份链、一个draft PR及同源审计报告；目标推进形成真实Git冲突后手动更新原PR及冲突审计；所有Run与服务停止、关闭本轮PR并清理自有分支。",
+      "check": "固定新Runner与本机Codex，独立GitHub测试base：两轮同方向维护、预算自动收尾、同worktree原身份链、一个draft PR，经核验head/base后生成报告并原样同步；目标推进形成真实Git冲突后手动更新原PR及冲突审计；所有Run与服务停止、关闭本轮PR并清理自有分支。",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=refactoring -env=live -scenario refactoring.local-codex",
       "name": "本机真实维护与冲突交付",
       "environment": "live",

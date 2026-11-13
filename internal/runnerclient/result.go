@@ -17,8 +17,9 @@ type ResultCapability struct {
 		Workflows   []string `json:"workflows"`
 	} `json:"supported"`
 	ProgressCapability
-	Collection     string `json:"collection"`
-	QueryReadsFile *bool  `json:"query_reads_file"`
+	RequiredInitialization string `json:"required_initialization"`
+	Collection             string `json:"collection"`
+	QueryReadsFile         *bool  `json:"query_reads_file"`
 }
 
 func (c *Catalog) ValidateResult() error {

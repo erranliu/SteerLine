@@ -15,6 +15,11 @@ type ProgressFileInput struct {
 	InitialContentBase64 string `json:"initial_content_base64"`
 }
 
+type ResultFileInput struct {
+	InitialContentBase64  string `json:"initial_content_base64"`
+	RequireInitialization bool   `json:"require_initialization,omitempty"`
+}
+
 // ProgressFile is the public opaque snapshot; business interpretation belongs to SteerLine.
 type ProgressFile struct {
 	Contract         string     `json:"contract"`

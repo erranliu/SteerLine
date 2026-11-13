@@ -37,7 +37,15 @@ export type MaintenanceRecord = {
     closing: { amount?: string };
   };
   report_stale?: boolean;
-  question?: { id: string; text: string };
+  question?: {
+    id: string;
+    prompt: string;
+    facts: string[];
+    attempts: string[];
+    options: { id: string; label: string; impact: string }[];
+    recommended_option_id: string;
+    recommendation_reason: string;
+  };
   pr?: { url: string };
   can_finish: boolean;
   can_stop: boolean;
@@ -76,11 +84,17 @@ type DirectionCatalogue = {
   diagnostics?: string[];
 };
 const phases: Record<string, string> = {
+  first: "首轮调查",
   select: "选择下一轮",
   execute: "Runner 执行中",
   audit: "独立审计中",
   finish: "准备交付",
   verifying: "核验交付",
+  report: "生成重构报告",
+  evidence: "补充报告证据",
+  version_audit: "复核 PR 版本",
+  sync: "同步 PR 正文",
+  sync_verifying: "核验 PR 正文",
   waiting_input: "等待决策",
   stopping: "正在停止",
   stopped: "已停止，可继续交付",
@@ -102,6 +116,7 @@ export function RefactoringMaintenance() {
   const [minutes, setMinutes] = useState("");
   const [rounds, setRounds] = useState("1");
   const [answer, setAnswer] = useState("");
+  const [option, setOption] = useState("");
   const [error, setError] = useState("");
   const [startError, setStartError] = useState("");
   const key = [
@@ -160,6 +175,7 @@ export function RefactoringMaintenance() {
   }, [index.data, selected, setParams]);
   useEffect(() => {
     setAnswer("");
+    setOption("");
   }, [detail.data?.question?.id]);
   const current = detail.data;
   const directions = catalogue.data?.directions ?? [];
@@ -572,21 +588,46 @@ export function RefactoringMaintenance() {
                   "refactoring_answer",
                   current.id,
                   current.revision,
-                  { question_id: current.question!.id, answer },
+                  { question_id: current.question!.id, option_id: option, note: answer },
                 );
               }}
             >
-              <p className="refactoring-pre">{current.question.text}</p>
+              <p className="refactoring-pre">{current.question.prompt}</p>
+              <ul>
+                {[...current.question.facts, ...current.question.attempts].map((fact, index) => (
+                  <li key={index}>{fact}</li>
+                ))}
+              </ul>
+              <fieldset>
+                <legend>选择处理方式</legend>
+                {current.question.options.map((choice) => (
+                  <div key={choice.id}>
+                    <label>
+                      <input
+                        type="radio"
+                        name="maintenance-option"
+                        value={choice.id}
+                        checked={option === choice.id}
+                        onChange={() => setOption(choice.id)}
+                      />
+                      {choice.label}
+                    </label>
+                    <p>{choice.impact}</p>
+                    {current.question!.recommended_option_id === choice.id && (
+                      <p>推荐 · {current.question!.recommendation_reason}</p>
+                    )}
+                  </div>
+                ))}
+              </fieldset>
               <label>
-                你的决定
+                补充说明（可选）
                 <textarea
-                  required
                   maxLength={32768}
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
                 />
               </label>
-              <Button variant="default" disabled={disabled || !answer.trim()}>
+              <Button variant="default" disabled={disabled || !option}>
                 答复并继续
               </Button>
             </form>

@@ -82,6 +82,18 @@ test("maintenance report, history and refresh remain observational", async ({
     });
     return;
   }
+  if (e.STEERLINE_MAINTENANCE_MODE === "answer") {
+    await expect(page.getByRole("heading", { name: "等待决策", exact: true })).toBeVisible();
+    await expect(page.getByText("维持兼容", { exact: true })).toBeVisible();
+    const submit = page.getByRole("button", { name: "答复并继续" });
+    await expect(submit).toBeDisabled();
+    await page.getByRole("radio", { name: "保留公共接口" }).check();
+    await page.getByLabel("补充说明（可选）").fill("保留原接口");
+    await submit.click();
+    await expect(submit).toHaveCount(0);
+    expect(commands).toEqual(["refactoring_answer"]);
+    return;
+  }
   await expect(
     page.getByRole("heading", { name: "已交付", exact: true }),
   ).toBeVisible();

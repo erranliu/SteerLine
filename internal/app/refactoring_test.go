@@ -18,10 +18,14 @@ import (
 )
 
 func TestRefactoringPRReportAndOriginalHead(t *testing.T) {
-	for _, kind := range []string{"valid", "fork", "closed", "body", "head"} {
+	for _, kind := range []string{"valid", "fork", "closed", "body", "head", "base"} {
 		t.Run(kind, func(t *testing.T) {
 			head := strings.Repeat("a", 40)
 			body := "完整报告"
+			base := strings.Repeat("b", 40)
+			if kind == "base" {
+				base = ""
+			}
 			fork := "owner/repo"
 			state := "open"
 			if kind == "fork" {
@@ -35,28 +39,28 @@ func TestRefactoringPRReportAndOriginalHead(t *testing.T) {
 			}
 			var server *httptest.Server
 			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_ = json.NewEncoder(w).Encode(map[string]any{"number": 1, "html_url": server.URL + "/owner/repo/pulls/1", "body": body, "state": state, "merged": false, "base": map[string]any{"ref": "main", "sha": strings.Repeat("b", 40), "repo": map[string]string{"full_name": "owner/repo"}}, "head": map[string]any{"ref": "codex/maintenance", "sha": head, "repo": map[string]string{"full_name": fork}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"number": 1, "html_url": server.URL + "/owner/repo/pulls/1", "body": body, "state": state, "merged": false, "base": map[string]any{"ref": "main", "sha": base, "repo": map[string]string{"full_name": "owner/repo"}}, "head": map[string]any{"ref": "codex/maintenance", "sha": head, "repo": map[string]string{"full_name": fork}}})
 			}))
 			defer server.Close()
 			p := refactoringPort{config: Config{PR: em.PRProviderConfig{Kind: "gitea", BaseURL: server.URL, Repository: "owner/repo"}, CommandTimeout: "3s"}}
 			record := ref.Record{Frozen: ref.Frozen{Repository: rc.Repository{BaseBranch: "main"}, Publication: map[string]string{"repository": "owner/repo", "base_url": server.URL}}, Operations: []ref.Operation{{Run: &rc.Run{Execution: rc.Execution{Branch: "codex/maintenance"}}}}}
-			result := ref.Result{Head: head, PR: server.URL + "/owner/repo/pulls/1", Report: "完整报告"}
+			result := ref.Result{Head: head, PR: server.URL + "/owner/repo/pulls/1"}
 			if kind == "head" {
 				result.Head = strings.Repeat("c", 40)
 			}
-			fact, e := p.verify(context.Background(), record, result)
-			if (e == nil) != (kind == "valid") {
+			fact, gotBody, e := p.verify(context.Background(), record, result)
+			if (e == nil) != (kind == "valid" || kind == "body" || kind == "head") {
 				t.Fatal(kind, fact, e)
 			}
-			if kind == "body" && fact == nil {
-				t.Fatal("report mismatch must retain validated original PR identity")
+			if e == nil && (fact.BaseRevision != base || fact.HeadRevision != head || gotBody != body) {
+				t.Fatal("version query must return the actual platform facts")
 			}
 		})
 	}
 }
 
 func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
-	for _, kind := range []string{"missing-stale", "missing-current", "accepted", "rejected", "foreign", "unavailable", "stopped"} {
+	for _, kind := range []string{"missing-stale", "missing-current", "accepted", "rejected", "foreign", "unavailable", "stopped", "initialization-failed"} {
 		t.Run(kind, func(t *testing.T) {
 			c := Config{identity: "project"}
 			cli := startupFixtureCLI(t)
@@ -72,6 +76,13 @@ func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
 			}
 			if kind == "stopped" {
 				run.StopStatus = "stopped"
+			}
+			const initializationDiagnostic = "required result_file initialization failed: initialization_timeout"
+			if kind == "initialization-failed" {
+				op.Purpose = "publish"
+				run.Status, run.Phase, run.StopStatus = "blocked", "result_file_initialization_failed", ""
+				run.Diagnostic = initializationDiagnostic
+				op.Stop, op.StopState = nil, ""
 			}
 			entries := map[string]any{run.RunID: rc.Inspection{Run: &run}}
 			if kind == "accepted" || kind == "rejected" || kind == "foreign" {
@@ -108,12 +119,28 @@ func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
 			if len(stops) != 1 {
 				t.Fatal(stops)
 			}
-			changed := kind == "missing-stale" || kind == "rejected"
+			changed := kind == "missing-stale" || kind == "rejected" || kind == "initialization-failed"
 			if (stops[0].Request.RequestID != "original-stop") != changed {
 				t.Fatal("wrong original stop decision", kind, stops)
 			}
 			saved, e := store.Refactoring(ctx, c.Identity(), id)
 			require(t, e)
+			if kind == "initialization-failed" {
+				if saved.Operations[0].InitializationFailure != initializationDiagnostic {
+					t.Fatal("startup did not save the original initialization failure before stopping")
+				}
+				run.Revision++
+				run.Status, run.Phase, run.StopStatus, run.Diagnostic = "stopped", "stopped", "stopped", ""
+				require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-inspections-fixture.json"), mustJSON(entries), 0600))
+				again, err := prepareRefactoringStops(ctx, &c, store, &cli)
+				require(t, err)
+				saved, err = store.Refactoring(ctx, c.Identity(), id)
+				require(t, err)
+				if len(again) != 0 || saved.Operations[0].Run.Phase != "stopped" || saved.Operations[0].InitializationFailure != initializationDiagnostic {
+					t.Fatal("stopped observation replaced the original failure or issued another stop")
+				}
+				return
+			}
 			if changed && len(saved.Operations[0].PriorStops) != 1 {
 				t.Fatal("old stop evidence lost")
 			}

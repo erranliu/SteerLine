@@ -113,6 +113,6 @@ func queryGitea(ctx context.Context, p model.PRProviderConfig, number int) (mode
 	} else if state == "closed" {
 		state = "closed_unmerged"
 	}
-	return model.PRInfo{Body: pr.Body, URL: pr.URL, Repository: pr.Base.Repo.Name, BaseBranch: pr.Base.Branch, HeadRepository: pr.Head.Repo.Name,
+	return model.PRInfo{Body: pr.Body, URL: pr.URL, Repository: pr.Base.Repo.Name, BaseBranch: pr.Base.Branch, BaseRevision: pr.Base.Revision, HeadRepository: pr.Head.Repo.Name,
 		HeadBranch: pr.Head.Branch, HeadRevision: pr.Head.Revision, State: state, Merged: *pr.Merged, MergedAt: pr.MergedAt, MergeCommit: pr.MergeCommit}, nil
 }

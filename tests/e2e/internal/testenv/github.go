@@ -23,9 +23,19 @@ const githubRepository = "erranliu/SteerlineTest"
 
 const githubURL = "https://github.com/" + githubRepository + ".git"
 
-const githubFields = "body,url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName"
+const githubFields = "body,url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName,baseRefOid"
 
-const githubInfoQuery = `{body:.body,url:.url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + "/" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
+const githubInfoQuery = `{body:.body,url:.url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,base_revision:.baseRefOid,head_repository:(.headRepositoryOwner.login + "/" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
+
+// A PR's baseRefOid can lag behind the target branch. Maintenance reports bind
+// the current branch tip returned by baseRef.target in the same observation.
+const githubMaintenanceGraphQL = `query($number:Int!) { repository(owner:"erranliu",name:"SteerlineTest") { pullRequest(number:$number) { body url state isDraft mergedAt mergeCommit { oid } headRefName headRefOid headRepository { nameWithOwner } baseRefName baseRef { target { oid } } } } }`
+
+const githubMaintenanceQuery = `.data.repository.pullRequest | {body,url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,base_revision:.baseRef.target.oid,head_repository:.headRepository.nameWithOwner,head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
+
+func githubMaintenancePRArgs(number, projection string) []string {
+	return []string{"api", "graphql", "--hostname", "github.com", "-f", "query=" + githubMaintenanceGraphQL, "-F", "number=" + number, "--jq", projection}
+}
 
 func (p *Project) enableGitHub() {
 	s := p.Scenario
@@ -61,6 +71,9 @@ func (p *Project) enableGitHub() {
 	s.Must(os.MkdirAll(filepath.Join(p.Repo, "SteerlineFlow", "plans"), 0700))
 	s.register("github-base-branch", p.BaseBranch, 0)
 	query := map[string]any{"executable": gh, "args": []string{"pr", "view", "{pr_url}", "--repo", "{repository}", "--json", githubFields, "--jq", githubInfoQuery}}
+	if s.ID == "refactoring.local-codex" {
+		query["args"] = githubMaintenancePRArgs("{number}", githubMaintenanceQuery)
+	}
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)
 	s.Must(err)

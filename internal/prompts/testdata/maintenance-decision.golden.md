@@ -1,1 +1,1 @@
-读取 maintenance/rules.md 与 maintenance/context.json 的完整文件，并按本次 mode 在只读目录调查。最终回复只输出一个约定的 JSON 对象，不要提前输出决策 JSON，也不要附加说明、代码围栏或 Markdown。
+使用 Runner 附带的文件材料清单。path 标识材料名，按对应的 file 路径读取完整正文。读取 maintenance/rules.md 和 maintenance/context.json。清单包含 maintenance/strategy.md 时一并读取。最终回复仅输出一个符合本阶段约定的 JSON 对象。

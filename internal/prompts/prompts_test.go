@@ -114,7 +114,13 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		read         func() ([]byte, error)
 	}{
 		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
-		{"maintenance", "3216610f7879af8c8b94f8bf6bc93c1a83187eaa494a6eb284147fdf1f12b04f", MaintenanceRules},
+
+		{"maintenance-first", "ac9c1d8c7abb827251e0d6ed68a79cc033a0920014e2e59b458fea053acd312d", func() ([]byte, error) { return MaintenanceRules("first") }},
+		{"maintenance-followup", "fb89ac11fa7b22725e8be9bb9ad48b9d3ad12d35cf05ac5500ac8edf73d713cd", func() ([]byte, error) { return MaintenanceRules("followup") }},
+		{"maintenance-report", "5344024544603b86d44e12d570f9aba43ca850ec7a861242c0b1360e855d3dec", func() ([]byte, error) { return MaintenanceRules("report") }},
+		{"maintenance-cautious", "36fb56b30ba9e12306c3066b0f9315752bb5e880dbaaa7261cf543612657c7f4", func() ([]byte, error) { return MaintenanceStrategy("cautious") }},
+		{"maintenance-autonomous", "f0c2470a07e019911ae36c30046e1ad320a5ea60b9a5db46a7d67b404ef57776", func() ([]byte, error) { return MaintenanceStrategy("autonomous") }},
+		{"maintenance-aggressive", "e9ed219ceaf5abdab0b467664db2d247ddf3f57a8da853d918246c993a08130b", func() ([]byte, error) { return MaintenanceStrategy("aggressive") }},
 		{"main-agent", "156e47b49a34bcb45b7393978607a92ea2bd2c687163e5064d386c3c66985ec6", MainAgentRules},
 		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
 		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},

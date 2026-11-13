@@ -6,19 +6,22 @@ import (
 	"errors"
 	"math/big"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/billing"
 	"github.com/erranliu/SteerLine/internal/billingconfig"
+	"github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/refactoring"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"github.com/erranliu/SteerLine/internal/steeragent/maintenance"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
@@ -31,7 +34,7 @@ type refactoringPort struct {
 
 func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error) *refactoringPort {
 	p := &refactoringPort{config: c, store: store}
-	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReadCost: p.cost, Queue: c.runtimeGenerations}
+	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReadCost: p.cost, Queue: c.runtimeGenerations, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
 	p.service.Reserve = func(ctx context.Context, commit string, save func() error) error {
 		return c.runtimeMaintenance.reserveReadyExecution(ctx, commit, save)
 	}
@@ -120,15 +123,26 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 			return out, e
 		}
 	}
-	rules, e := maintenance.Rules()
+	for phase, destination := range map[string]*string{"first": &out.FirstRules, "followup": &out.FollowRules, "report": &out.ReportRules} {
+		rules, err := prompts.MaintenanceRules(phase)
+		if err != nil {
+			return out, err
+		}
+		*destination = string(rules)
+	}
+	strategy, e := prompts.MaintenanceStrategy(in.Strategy)
 	if e != nil {
 		return out, e
 	}
+	out.Strategy = string(strategy)
 	cli, e := c.runnerClient(ctx)
 	if e != nil {
 		return out, e
 	}
-	out = ref.Frozen{Direction: direction, Repository: runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}, Write: *write.Execution, Read: *read.Execution, Runner: cli.BuildPin(), Rules: string(rules)}
+	out.Direction = direction
+	out.Repository = runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}
+	out.Documents = runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}
+	out.Write, out.Read, out.Runner = *write.Execution, *read.Execution, cli.BuildPin()
 	out.Publication = map[string]string{"provider": c.PR.Kind, "base_url": c.PR.BaseURL, "repository": c.PR.Repository, "base_branch": c.Branch, "token_env": c.PR.TokenEnv}
 	settings, priceErr := (billingconfig.Store{Home: HomeDir()}).Read()
 	if priceErr == nil {
@@ -158,6 +172,51 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 		}
 	}
 	return out, nil
+}
+
+func investigationPath(id string) (string, error) {
+	if !ref.ValidID(id) {
+		return "", errors.New("首轮调查目录身份无效")
+	}
+	return filepath.Join(HomeDir(), "maintenance-investigations", id), nil
+}
+
+func releaseInvestigation(id string) error {
+	dir, err := investigationPath(id)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
+}
+
+func (p *refactoringPort) investigation(ctx context.Context, r ref.Record, id string) error {
+	dir, err := investigationPath(id)
+	if err != nil {
+		return err
+	}
+	if err = os.MkdirAll(filepath.Dir(dir), 0700); err != nil {
+		return err
+	}
+	if err = os.Mkdir(dir, 0700); err != nil {
+		return err
+	}
+	source := filepath.ToSlash(r.Frozen.Repository.LocalPath)
+	if !strings.HasPrefix(source, "/") {
+		source = "/" + source
+	}
+	local := (&url.URL{Scheme: "file", Path: source}).String()
+	commit := r.Frozen.Repository.BaseRevision
+	git := commandRunner{Dir: dir, ProcessHost: p.config.ProcessHost, Timeout: positiveDuration(p.config.CommandTimeout, 30*time.Second)}
+	for _, args := range [][]string{
+		{"init", "--quiet", "--template="},
+		{"fetch", "--quiet", "--no-tags", "--depth=1", local, commit},
+		{"-c", "core.hooksPath=" + filepath.Join(dir, ".git", "disabled-hooks"), "checkout", "--quiet", "--detach", commit},
+	} {
+		if _, err = git.Output(ctx, backend.Command{Executable: "git"}, args...); err != nil {
+			return errors.Join(err, releaseInvestigation(id))
+		}
+	}
+	return nil
 }
 func (p *refactoringPort) cost(ctx context.Context, r ref.Record, o ref.Operation) (ref.Cost, error) {
 	out := ref.Cost{ObservedAt: time.Now().UTC(), Untracked: []string{"subagents", "tool_internal_models", "unobserved_provider_calls"}}
@@ -226,12 +285,12 @@ func (p *refactoringPort) cost(ctx context.Context, r ref.Record, o ref.Operatio
 	}
 	return out, nil
 }
-func (p *refactoringPort) verify(ctx context.Context, r ref.Record, result ref.Result) (*runnercontract.PRFact, error) {
+func (p *refactoringPort) verify(ctx context.Context, r ref.Record, result ref.Result) (*runnercontract.PRFact, string, error) {
 	c := p.config
 	client := publication.QueryClient{Command: commandRunner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), ProcessHost: c.ProcessHost}, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}
 	info, e := client.Query(ctx, c.PR, result.PR)
 	if e != nil {
-		return nil, e
+		return nil, "", e
 	}
 	branch := ""
 	for _, o := range r.Operations {
@@ -240,17 +299,17 @@ func (p *refactoringPort) verify(ctx context.Context, r ref.Record, result ref.R
 			break
 		}
 	}
-	if c.PR.Repository != r.Frozen.Publication["repository"] || c.PR.BaseURL != r.Frozen.Publication["base_url"] || info.BaseBranch != r.Frozen.Repository.BaseBranch || info.Repository != c.PR.Repository || info.HeadRepository != c.PR.Repository || info.HeadRevision != result.Head || branch == "" || info.HeadBranch != branch || r.PR != nil && info.URL != r.PR.URL {
-		return nil, errors.New("PR目标、原分支或报告提交不匹配")
+	if c.PR.Repository != r.Frozen.Publication["repository"] || c.PR.BaseURL != r.Frozen.Publication["base_url"] || info.BaseBranch != r.Frozen.Repository.BaseBranch || info.Repository != c.PR.Repository || info.HeadRepository != c.PR.Repository || branch == "" || info.HeadBranch != branch || r.PR != nil && info.URL != r.PR.URL {
+		return nil, "", errors.New("PR目标、原分支或报告提交不匹配")
 	}
 	if info.Merged || !strings.EqualFold(info.State, "open") {
-		return nil, errors.New("原PR已关闭或合并")
+		return nil, "", errors.New("原PR已关闭或合并")
 	}
-	fact := &runnercontract.PRFact{URL: info.URL, Provider: c.PR.Kind, Repository: info.Repository, HeadRepository: info.HeadRepository, Number: func() int { n, _ := c.PR.PRNumber(info.URL); return n }(), BaseBranch: info.BaseBranch, HeadBranch: info.HeadBranch, HeadRevision: info.HeadRevision, State: info.State, Merged: info.Merged, CheckedAt: time.Now().UTC()}
-	if result.Report != "" && info.Body != result.Report {
-		return fact, errors.New("原PR正文与封存报告不一致，需更新原PR正文后重新审计")
+	if !ref.ValidRevision(info.HeadRevision) || !ref.ValidRevision(info.BaseRevision) {
+		return nil, "", errors.New("原PR平台未返回可信的head/base提交")
 	}
-	return fact, nil
+	fact := &runnercontract.PRFact{URL: info.URL, Provider: c.PR.Kind, Repository: info.Repository, HeadRepository: info.HeadRepository, Number: func() int { n, _ := c.PR.PRNumber(info.URL); return n }(), BaseBranch: info.BaseBranch, BaseRevision: info.BaseRevision, HeadBranch: info.HeadBranch, HeadRevision: info.HeadRevision, State: info.State, Merged: info.Merged, CheckedAt: time.Now().UTC()}
+	return fact, info.Body, nil
 }
 
 type refactoringReadiness struct {
@@ -361,9 +420,14 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 		return nil, e
 	}
 	v := query.Refactoring(r, time.Now().UTC())
-	if len(r.Reports) > 0 && p.config.runtimeMaintenance != nil {
-		base := p.config.runtimeMaintenance.current().Commit
-		v["report_stale"] = base != "" && base != r.Reports[len(r.Reports)-1].Base
+	if len(r.Reports) > 0 && r.PR != nil {
+		report := r.Reports[len(r.Reports)-1]
+		stale := report.Head != r.PR.HeadRevision || report.Base != r.PR.BaseRevision
+		if r.Phase == "delivered" && p.config.runtimeMaintenance != nil {
+			base := p.config.runtimeMaintenance.current().Commit
+			stale = stale || base != "" && base != report.Base
+		}
+		v["report_stale"] = stale
 	}
 	return v, nil
 }

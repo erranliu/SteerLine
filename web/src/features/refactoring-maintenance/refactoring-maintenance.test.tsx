@@ -50,7 +50,7 @@ const record: MaintenanceRecord = {
   source_commit: "b".repeat(40),
   elapsed_seconds: 65,
   cost_complete: false,
-  question: { id: "question", text: "保留原公共接口还是允许调整？建议保留。" },
+  question: { id: "question", prompt: "保留原公共接口还是允许调整？建议保留。", facts: ["已有公共调用"], attempts: [], options: [{ id: "keep", label: "保留公共接口", impact: "保持兼容" }], recommended_option_id: "keep", recommendation_reason: "兼容现有调用" },
   can_finish: true,
   can_stop: true,
   can_conflict: false,
@@ -244,13 +244,14 @@ it("refreshes the selected qualification after a rejected start and keeps the fo
 });
 it("shows coverage exclusions and answers the original question without another chat", async () => {
   const { submit } = setup([record]);
-  await screen.findByText(record.question!.text);
+  await screen.findByText(record.question!.prompt);
   expect(screen.getByText(/不覆盖子 Agent/)).toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: "开始维护" }),
   ).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("你的决定"), {
-    target: { value: "保留公共接口" },
+  fireEvent.click(screen.getByRole("radio", { name: "保留公共接口" }));
+  fireEvent.change(screen.getByLabelText("补充说明（可选）"), {
+    target: { value: "维持兼容" },
   });
   fireEvent.click(screen.getByRole("button", { name: "答复并继续" }));
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
@@ -258,7 +259,7 @@ it("shows coverage exclusions and answers the original question without another 
     action: "refactoring_answer",
     target_id: id,
     expected_version: 7,
-    payload: { question_id: "question", answer: "保留公共接口" },
+    payload: { question_id: "question", option_id: "keep", note: "维持兼容" },
   });
 });
 it("links maintenance activity and receipts to the same action", () => {

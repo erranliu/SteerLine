@@ -20,6 +20,9 @@ func (c *Catalog) ValidateMaintenance(write, read runnercontract.ExecutionInput)
 	if err := c.ValidateEnvironmentExecution(write); err != nil {
 		return err
 	}
+	if c.Capabilities.ResultFile.RequiredInitialization != "require_initialization" {
+		return errors.New("Runner缺少派发前核验维护结果文件初始化的能力")
+	}
 	if err := c.fileMaterialGenerationUnavailable(); err != "" {
 		return errors.New(err)
 	}

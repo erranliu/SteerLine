@@ -52,8 +52,24 @@ func RoadmapPlanning(rules, draft, goal string) (string, error) {
 func RoadmapPlanningConflict(decision string) (string, error) {
 	return render("roadmap-planning-conflict", struct{ Decision string }{decision})
 }
-func MainAgentRules() ([]byte, error)   { return files.ReadFile("materials/main-agent.md") }
-func MaintenanceRules() ([]byte, error) { return files.ReadFile("materials/maintenance.md") }
+func MainAgentRules() ([]byte, error) { return files.ReadFile("materials/main-agent.md") }
+func MaintenanceRules(phase string) ([]byte, error) {
+	switch phase {
+	case "first", "followup", "report":
+		return files.ReadFile("materials/maintenance-" + phase + ".md")
+	default:
+		return nil, fmt.Errorf("unknown maintenance phase %q", phase)
+	}
+}
+
+func MaintenanceStrategy(strategy string) ([]byte, error) {
+	switch strategy {
+	case "cautious", "autonomous", "aggressive":
+		return files.ReadFile("materials/maintenance-" + strategy + ".md")
+	default:
+		return nil, fmt.Errorf("unknown maintenance strategy %q", strategy)
+	}
+}
 func MaintenanceDirection(id string) ([]byte, error) {
 	return files.ReadFile("materials/refactoring-directions/" + id + ".md")
 }
