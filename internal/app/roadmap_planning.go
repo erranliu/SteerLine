@@ -159,7 +159,7 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		return page, nil
 	}
 	if tail == "predecessors" && len(values) == 0 && task.Kind == roadmap.SingleTaskPlanning {
-		graph, err := p.store.TaskGraphSnapshot(ctx, task.Project)
+		graph, err := p.taskGraph.TaskGraphSnapshot(ctx, task.Project)
 		if err != nil {
 			return nil, err
 		}

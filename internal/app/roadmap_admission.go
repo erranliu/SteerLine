@@ -222,7 +222,7 @@ func (p *roadmapPort) verifyAdmissionGraph(ctx context.Context, r roadmap.Record
 	if r.Source.PlanningID != "" {
 		// A single task has only explicit edges from existing tasks. Unrelated
 		// additions between publication and admission do not change those edges.
-		graph, err := p.store.TaskGraphSnapshot(ctx, p.config.Identity())
+		graph, err := p.taskGraph.TaskGraphSnapshot(ctx, p.config.Identity())
 		if err != nil {
 			return err
 		}
