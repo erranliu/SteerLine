@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { NavLink } from "react-router-dom";
 import { ApiError, json } from "../../shared/api/client";
@@ -34,10 +35,12 @@ const fields = [
 ] as const;
 
 export function AddProject({
+  homeId,
   csrf,
   enabled,
   projects,
 }: {
+  homeId: string;
   csrf: string;
   enabled: boolean;
   projects: ConfiguredProject[];
@@ -46,6 +49,30 @@ export function AddProject({
   const [result, setResult] = useState<Registration>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [copyStatus, setCopyStatus] = useState<{
+    label: string;
+    manualBody?: string;
+  }>();
+  const prompt = useQuery({
+    queryKey: [homeId, "project-registration-prompt"],
+    queryFn: ({ signal }) =>
+      json<{ initialization_prompt: string; prompt: string }>(
+        "/api/v2/application/projects/registration/prompt",
+        { signal },
+      ),
+    enabled,
+    retry: false,
+  });
+
+  async function copyPrompt(label: string, body?: string) {
+    if (!body || !enabled) return;
+    try {
+      await navigator.clipboard.writeText(body);
+      setCopyStatus({ label });
+    } catch {
+      setCopyStatus({ label, manualBody: body });
+    }
+  }
 
   function change(field: keyof typeof initial, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -114,8 +141,44 @@ export function AddProject({
         >
           项目接入指南
         </a>
-        准备仓库，并将初始化材料合入目标分支。
+        初始化仓库并将材料合入目标分支，再接入当前安装实例。
       </p>
+      {enabled && (
+        <>
+          <div className="project-registration-actions">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!prompt.data?.initialization_prompt || prompt.isError}
+              onClick={() =>
+                void copyPrompt("项目初始化", prompt.data?.initialization_prompt)
+              }
+            >
+              1. 复制项目初始化提示词
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!prompt.data?.prompt || prompt.isError}
+              onClick={() => void copyPrompt("项目接入", prompt.data?.prompt)}
+            >
+              2. 复制项目接入提示词
+            </Button>
+          </div>
+          {prompt.isError && (
+            <p role="alert">无法读取项目提示词，请刷新页面重试。</p>
+          )}
+          {!prompt.isError && copyStatus && !copyStatus.manualBody && (
+            <p role="status">已复制{copyStatus.label}提示词，可粘贴给目标项目的 Agent。</p>
+          )}
+          {!prompt.isError && copyStatus?.manualBody && (
+            <label className="project-registration-prompt">
+              复制失败，请手动复制下方{copyStatus.label}提示词。
+              <textarea readOnly rows={8} value={copyStatus.manualBody} />
+            </label>
+          )}
+        </>
+      )}
       {!enabled && <p role="alert">会话已失效，请重新打开 SteerLine Web。</p>}
       {!result?.saved && (
         <form onSubmit={verify} aria-busy={busy}>

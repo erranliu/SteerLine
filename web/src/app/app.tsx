@@ -457,6 +457,7 @@ export function App({ initial }: { initial: BrowserSession }) {
         ) : route.pathname === "/projects/add" ? (
           <AddProject
             key={home}
+            homeId={home}
             csrf={session.data.csrf_token}
             enabled={sessionValid}
             projects={projects}

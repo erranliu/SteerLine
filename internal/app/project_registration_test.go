@@ -16,6 +16,24 @@ import (
 	progresstools "github.com/erranliu/SteerLine/tools"
 )
 
+func TestProjectRegistrationPromptUsesDirectoryHomeWithoutProjects(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	home := filepath.Join(t.TempDir(), "SteerLine 安装")
+	d := NewApplicationDirectory(home)
+	defer d.cancel()
+	result, err := d.ProjectRegistrationPrompt()
+	if err != nil || !strings.Contains(result.Prompt, home) || strings.Contains(result.Prompt, HomeDir()) {
+		t.Fatalf("prompt did not use the application directory home: %q, %v", result.Prompt, err)
+	}
+	if !strings.Contains(result.InitializationPrompt, "https://github.com/erranliu/SteerLine/blob/HEAD/SteerlineProjectGuideDoc/README.md") ||
+		strings.Contains(result.InitializationPrompt, home) {
+		t.Fatalf("unexpected project initialization prompt: %q", result.InitializationPrompt)
+	}
+	if _, err := os.Stat(home); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("prompt wrote to the installation directory: %v", err)
+	}
+}
+
 func TestProjectRegistrationUsesPublishedCommitAndStagesConfiguration(t *testing.T) {
 	root, home, repo := t.TempDir(), t.TempDir(), t.TempDir()
 	d := NewApplicationDirectory(home)

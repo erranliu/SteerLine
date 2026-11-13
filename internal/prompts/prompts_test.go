@@ -32,6 +32,10 @@ func TestPromptGovernanceGolden(t *testing.T) {
 			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/scripts/verify-environment.ps1")
 		}},
 		{"environment-repair", func() (string, error) { return EnvironmentRepair("SteerlineFlow/environment.md") }},
+		{"project-initialization", ProjectInitialization},
+		{"project-registration", func() (string, error) {
+			return ProjectRegistration(`D:\Tools\SteerLine 安装`)
+		}},
 		{"roadmap-parse", func() (string, error) { return RoadmapParse("roadmap.md", "fixed") }},
 		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md", "T1") }},
 		{"roadmap-planning", func() (string, error) {

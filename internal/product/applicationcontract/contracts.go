@@ -50,6 +50,12 @@ type Catalog struct {
 }
 
 const ProjectRegistrationPath = "/projects/registration"
+const ProjectRegistrationPromptPath = ProjectRegistrationPath + "/prompt"
+
+type ProjectRegistrationPrompt struct {
+	InitializationPrompt string `json:"initialization_prompt"`
+	Prompt               string `json:"prompt"`
+}
 
 type ProjectRegistration struct {
 	Name         string `json:"name"`
