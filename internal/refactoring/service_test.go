@@ -28,6 +28,10 @@ type maintenanceRunner struct {
 	prBody               string
 	baseOverride         string
 	headOverride         string
+	checks               string
+	unchangedConflict    bool
+	wrongConflictPR      bool
+	rejectConflict       bool
 	askMode              string
 	t                    *testing.T
 	dir                  string
@@ -49,6 +53,10 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 	var in rc.RunInput
 	if e := json.Unmarshal(req.Input, &in); e != nil {
 		f.t.Fatal(e)
+	}
+	if f.rejectConflict && in.Title == "重构与维护 · conflict" {
+		f.rejectConflict = false
+		return runnerclient.Receipt{}, &runnerclient.Failure{Code: "fixture_rejected"}
 	}
 	run := &rc.Run{RunID: id, Revision: 2, InputDigest: m.Digest(req.Input), Workflow: in.Workflow, Correlation: in.Correlation, StopStatus: "stopped", Status: "completed", UpdatedAt: time.Now().Add(-time.Minute), Final: &rc.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command-" + id, AttemptID: id, SessionID: "session-" + id, TurnID: "turn-" + id}}
 	if in.Workflow.ID == "generate" {
@@ -116,6 +124,13 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 		if purpose == "conflict" && f.baseOverride != "" {
 			value.Base = f.baseOverride
 		}
+		if purpose == "conflict" && !f.unchangedConflict {
+			value.Head = strings.Repeat("d", 40)
+			f.headOverride = value.Head
+		}
+		if purpose == "conflict" && f.wrongConflictPR {
+			value.PR = "https://example.test/repo/pull/99"
+		}
 		data, _ := json.Marshal(value)
 		if purpose == "publish" && f.malformedPublication {
 			var fields map[string]any
@@ -179,7 +194,7 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 		t.Fatal(e)
 	}
 	t.Cleanup(func() { store.Close() })
-	f := &maintenanceRunner{t: t, dir: dir, runs: map[string]*rc.Run{}}
+	f := &maintenanceRunner{t: t, dir: dir, runs: map[string]*rc.Run{}, checks: "SUCCESS"}
 	s := &Service{Project: "project", Store: store, Runner: f, Queue: runnerbinding.NewContentQueue(1), InvestigationPath: func(string) (string, error) { return filepath.Join(dir, "fixed"), nil }, Investigate: func(context.Context, m.Record, string) error { return nil }, Prepare: func(context.Context, m.Start) (m.Frozen, error) {
 		direction, err := readBuiltInDirection("simplify")
 		return m.Frozen{Direction: direction, Repository: rc.Repository{LocalPath: dir, BaseRevision: strings.Repeat("b", 40)}, FirstRules: "首轮规则", FollowRules: "后续规则", ReportRules: "报告规则", Strategy: "策略正文", Runner: rc.BuildPin{StateDir: dir}}, err
@@ -194,7 +209,7 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 		if f.headOverride != "" {
 			head = f.headOverride
 		}
-		return &rc.PRFact{URL: v.PR, HeadRevision: head, BaseRevision: base, HeadBranch: "codex/maintenance", State: "open"}, "SUCCESS", nil
+		return &rc.PRFact{URL: v.PR, HeadRevision: head, BaseRevision: base, HeadBranch: "codex/maintenance", State: "open"}, f.checks, nil
 	}}
 	cmd := m.Command{ID: m.ID(), Action: "refactoring_start", Target: s.Project, Expected: 1, Raw: json.RawMessage(`{"start":true}`)}
 	direction, e := readBuiltInDirection("simplify")
@@ -746,7 +761,7 @@ func TestMaintenanceAnswerPersistsAndResumesOriginalPurpose(t *testing.T) {
 }
 
 func TestMaintenanceVersionDriftDiscardsStaleInFlightReview(t *testing.T) {
-	for _, changed := range []string{"head", "base"} {
+	for _, changed := range []string{"head", "base", "checks"} {
 		t.Run(changed, func(t *testing.T) {
 			s, f, r := fixture(t)
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool {
@@ -757,15 +772,18 @@ func TestMaintenanceVersionDriftDiscardsStaleInFlightReview(t *testing.T) {
 				return last.Purpose == "report" && last.RunID != ""
 			})
 			head, base := r.PR.HeadRevision, r.PR.BaseRevision
-			if changed == "base" {
+			switch changed {
+			case "base":
 				base = strings.Repeat("c", 40)
 				f.baseOverride = base
-			} else {
+			case "head":
 				head = strings.Repeat("d", 40)
 				f.headOverride = head
+			case "checks":
+				f.checks = "FAILURE"
 			}
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-			if len(r.Reports) != 1 || r.Reports[0].Head != head || r.Reports[0].Base != base || r.Reports[0].PR != r.PR.URL || f.prBody != "" {
+			if len(r.Reports) != 1 || r.Reports[0].Head != head || r.Reports[0].Base != base || r.Reports[0].PR != r.PR.URL || r.Reports[0].Checks != f.checks || f.prBody != "" {
 				t.Fatal("stale review was adopted or PR changed", r.Reports)
 			}
 			publishes := 0
@@ -792,6 +810,70 @@ func TestMaintenanceMissingPRDiffDoesNotInvokeWriter(t *testing.T) {
 		if op.Purpose == "report" || op.Purpose == "sync" {
 			t.Fatal("unexpected dispatch", op.Purpose)
 		}
+	}
+}
+
+func TestMaintenanceCannotReviewAroundUnresolvedConflict(t *testing.T) {
+	s, f, r := fixture(t)
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
+	originalPR := r.PR.URL
+	f.unchangedConflict = true
+	f.wrongConflictPR = true
+	r = control(t, s, r, "refactoring_conflict")
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
+	if r.CanReview() || len(r.Reports) != 1 || r.Candidate == nil || r.Candidate.PR != originalPR {
+		t.Fatal("unchanged PR head incorrectly settled conflict", r.Phase, r.Candidate)
+	}
+	cmd := m.Command{ID: m.ID(), Action: "refactoring_review", Target: r.ID, Expected: r.Revision, Raw: json.RawMessage(`{}`)}
+	if _, err := s.Command(context.Background(), cmd, nil); err == nil {
+		t.Fatal("manual review bypassed the unresolved conflict")
+	}
+	before := len(f.requests)
+	f.headOverride = strings.Repeat("e", 40)
+	r = control(t, s, r, "refactoring_finish")
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
+	if len(r.Reports) != 2 || r.PR.URL != originalPR || r.PR.HeadRevision != f.headOverride || len(f.requests) != before+1 {
+		t.Fatal("reconciliation must only review the new head", r.Phase, len(f.requests)-before)
+	}
+}
+
+func TestMaintenanceResumesDefinitivelyRejectedConflict(t *testing.T) {
+	s, f, r := fixture(t)
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
+	f.rejectConflict = true
+	r = control(t, s, r, "refactoring_conflict")
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
+	last := r.Operations[len(r.Operations)-1]
+	if last.Purpose != "conflict" || last.State != "rejected" {
+		t.Fatal("fixture did not definitively reject the conflict", last.Purpose, last.State)
+	}
+	r = control(t, s, r, "refactoring_finish")
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
+	if len(r.Reports) != 2 || r.Reports[0].PR != r.Reports[1].PR || r.Reports[0].Head == r.Reports[1].Head {
+		t.Fatal("rejected conflict could not resume on the original PR", r.Reports)
+	}
+}
+
+func TestMaintenanceAcceptedPublicationNeedingInputDoesNotReplay(t *testing.T) {
+	s, _, r := fixture(t)
+	execution := rc.Execution{AttemptID: "attempt", SessionID: "session", TurnID: "turn"}
+	o := m.Operation{Purpose: "publish", State: "complete",
+		Run: &rc.Run{Execution: execution, Status: "completed", StopStatus: "stopped", Final: &rc.Final{
+			Verified: true, NativeOutcome: "succeeded", CommandID: "command", AttemptID: execution.AttemptID, SessionID: execution.SessionID, TurnID: execution.TurnID,
+		}},
+		Result: &m.Result{Outcome: "needs_input", Question: "是否处理另一处冲突？"},
+	}
+	r.Operations = append(r.Operations, o)
+	s.applyExecution(&r, o)
+	if r.Phase != "blocked" || !uncertainPublication(r) {
+		t.Fatal("input request did not establish that initial publication had no side effects", r.Phase)
+	}
+	r.PR = &rc.PRFact{URL: "https://example.test/repo/pull/1"}
+	r.Phase, r.WriteKind = "execute", "conflict"
+	o.Purpose = "conflict"
+	s.applyExecution(&r, o)
+	if r.Phase != "verifying" || r.Candidate == nil || r.Candidate.PR != r.PR.URL {
+		t.Fatal("input request from an accepted writer must first reconcile the original PR", r.Phase, r.Candidate)
 	}
 }
 
@@ -896,6 +978,16 @@ func TestMaintenanceRefreshesDeliveredReviewOnVersionChange(t *testing.T) {
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
 	if len(r.Reports) != 2 || r.Reports[0] != first || r.Reports[1].Base != f.baseOverride || r.Reports[1].PR != first.PR {
 		t.Fatal("original review not retained alongside new version", r.Reports)
+	}
+	second := r.Reports[1]
+	later = later.Add(2 * time.Minute)
+	f.checks = "FAILURE"
+	if err := s.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
+	if len(r.Reports) != 3 || r.Reports[1] != second || r.Reports[2].Head != second.Head || r.Reports[2].Base != second.Base || r.Reports[2].Checks != f.checks {
+		t.Fatal("check changes without a new revision did not refresh the review", r.Reports)
 	}
 }
 

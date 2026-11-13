@@ -711,7 +711,7 @@ export function RefactoringMaintenance() {
               </p>
               <p>{{ merge: "建议合入", revise: "建议修改后再审", insufficient_evidence: "证据不足" }[r.recommendation]}</p>
               {current.report_stale && i === current.reports!.length - 1 && (
-                <p>PR 版本已变化，此评审已过期。</p>
+                <p>此评审已过期或正在复核。</p>
               )}
               <div className="refactoring-pre">{r.body}</div>
             </article>

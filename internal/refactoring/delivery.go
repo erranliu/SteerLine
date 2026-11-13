@@ -19,26 +19,23 @@ func (s *Service) block(r *model.Record, message string) {
 }
 
 func closingPhase(r model.Record) string {
-	if r.PR != nil && r.WriteKind != "conflict" {
-		return "report"
-	}
 	if r.Candidate != nil {
 		return "verifying"
+	}
+	if r.PR != nil && r.WriteKind != "conflict" {
+		return "report"
 	}
 	return "finish"
 }
 
 func uncertainPublication(r model.Record) bool {
-	if r.Candidate != nil {
+	if r.Candidate != nil || r.PR != nil {
 		return false
 	}
 	for i := len(r.Operations) - 1; i >= 0; i-- {
 		o := r.Operations[i]
-		switch o.Purpose {
-		case "publish", "conflict":
-			if o.State == "complete" {
-				return !successfulExecution(o) || o.Result.Outcome != "needs_input" || o.Result.PR != ""
-			}
+		if o.Purpose == "publish" {
+			return o.State == "complete"
 		}
 	}
 	return false
@@ -143,23 +140,27 @@ func nativeFinalBound(run *runnercontract.Run) bool {
 func (s *Service) applyExecution(r *model.Record, o model.Operation) {
 	trusted := successfulExecution(o)
 	completed := trusted && o.Result.Outcome == "done" && strings.TrimSpace(o.Result.Summary) != ""
-	if (o.Purpose == "publish" || o.Purpose == "conflict") && completed {
-		r.Candidate = o.Result
+	switch o.Purpose {
+	case "conflict":
+		if r.PR != nil {
+			r.Candidate = &model.Result{PR: r.PR.URL}
+			if completed && o.Result.PR == r.PR.URL {
+				r.Candidate = o.Result
+			}
+		}
+	case "publish":
+		if completed && (o.Result.PR != "" || o.Result.NoChanges && model.ValidRevision(o.Result.Head) && model.ValidRevision(o.Result.Base)) {
+			r.Candidate = o.Result
+		} else if trusted && o.Result.PR != "" {
+			r.Candidate = &model.Result{PR: o.Result.PR}
+		}
 	}
 	if r.StopRequested {
 		return
 	}
 	switch o.Purpose {
 	case "publish", "conflict":
-		if completed {
-			r.Phase = "verifying"
-		} else if trusted && o.Result.Outcome == "needs_input" && o.Result.PR == "" {
-			r.Phase = "finish"
-		} else if o.Purpose == "conflict" && r.PR != nil {
-			r.Candidate = &model.Result{PR: r.PR.URL}
-			r.Phase = "verifying"
-		} else if trusted && o.Result.PR != "" {
-			r.Candidate = &model.Result{PR: o.Result.PR}
+		if r.Candidate != nil {
 			r.Phase = "verifying"
 		} else {
 			s.block(r, "原发布操作未取得可核验结果，请核实原操作及PR状态")
@@ -227,8 +228,7 @@ func (s *Service) verifyDelivery(ctx context.Context, r model.Record) error {
 			return nil
 		}
 		switch {
-		case pr != nil && value.Outcome == "" && current.PR != nil && current.PR.HeadRevision == pr.HeadRevision:
-			current.Candidate = nil
+		case pr != nil && current.WriteKind == "conflict" && current.PR != nil && current.PR.HeadRevision == pr.HeadRevision:
 			s.block(current, "原 PR 尚无可核实的新提交，请核对原发布操作")
 		case pr != nil && strings.EqualFold(pr.State, "open") && !pr.Merged:
 			current.PR, current.Candidate = pr, nil
@@ -268,23 +268,23 @@ func (s *Service) reviewEvidence(ctx context.Context, r model.Record) (*runnerco
 	return pr, evidence, nil
 }
 
-func (s *Service) applyReview(r *model.Record, op model.Operation, latest *runnercontract.PRFact, review decision.Review) {
+func (s *Service) applyReview(r *model.Record, op model.Operation, latest *runnercontract.PRFact, checks string, review decision.Review) {
 	r.PR = latest
 	if latest.Merged || !strings.EqualFold(latest.State, "open") {
 		s.deliver(r)
 		return
 	}
-	if op.PRVersion != prVersion(latest) {
+	if op.PRVersion != prVersion(latest) || op.ReviewChecks != checks {
 		r.Phase = "report"
-		r.Diagnostic = "PR 版本已变化，正在重新评审"
+		r.Diagnostic = "PR 版本或检查状态已变化，正在重新评审"
 		return
 	}
-	s.saveReview(r, review.Recommendation, review.Report)
+	s.saveReview(r, checks, review.Recommendation, review.Report)
 }
 
-func (s *Service) saveReview(r *model.Record, recommendation, body string) {
+func (s *Service) saveReview(r *model.Record, checks, recommendation, body string) {
 	r.Reports = append(r.Reports, model.Report{Body: body, Recommendation: recommendation,
-		PR: r.PR.URL, Head: r.PR.HeadRevision, Base: r.PR.BaseRevision, CreatedAt: s.now()})
+		PR: r.PR.URL, Head: r.PR.HeadRevision, Base: r.PR.BaseRevision, Checks: checks, CreatedAt: s.now()})
 	s.deliver(r)
 }
 

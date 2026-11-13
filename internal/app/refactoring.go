@@ -329,7 +329,7 @@ func (p *refactoringPort) reviewDiff(ctx context.Context, r ref.Record, pr runne
 	if _, err := c.repositoryGit(ctx, "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--no-auto-maintenance", "--refmap=", "--", r.Frozen.Repository.Remote, pr.BaseRevision, pr.HeadRevision); err != nil {
 		return "", err
 	}
-	diff, err := c.repositoryGit(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--find-renames", "--ignore-submodules=none", pr.BaseRevision+"..."+pr.HeadRevision, "--")
+	diff, err := c.repositoryGit(ctx, "--no-replace-objects", "diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-color", "--find-renames", "--ignore-submodules=none", pr.BaseRevision+"..."+pr.HeadRevision, "--")
 	if len(diff) > 512<<10 || !utf8.Valid(diff) {
 		return "", errors.New("PR 差异超出评审材料限额或编码不可读")
 	}
@@ -450,7 +450,7 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 	v := query.Refactoring(r, time.Now().UTC())
 	if len(r.Reports) > 0 && r.PR != nil {
 		report := r.Reports[len(r.Reports)-1]
-		v["report_stale"] = report.Head != r.PR.HeadRevision || report.Base != r.PR.BaseRevision || r.PR.Merged || r.PR.State != "open"
+		v["report_stale"] = report.Head != r.PR.HeadRevision || report.Base != r.PR.BaseRevision || r.PR.Merged || r.PR.State != "open" || r.Phase != "delivered"
 	}
 	return v, nil
 }

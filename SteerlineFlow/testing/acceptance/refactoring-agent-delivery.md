@@ -21,6 +21,13 @@ Runner 使用 #157 之前的 `8be179f29e0b9eac8572f447439a15cd7d776213`。公开
 
 真实 `refactoring.local-codex` L4 复验通过，见 `C:/SteerlineDebug/wt-1851-pr-review/test-results/L4/pr-review-retry-20261113T085638Z-039b2a70/summary.json`。同一测试 PR [#844](https://github.com/erranliu/SteerlineTest/pull/844) 完成两轮及两个文件的实际冲突续作。发布与续作均有已验证的最终 JSON，五次可写执行共享原工作区。首版 head/base 为 `53823b86fabfacb65aba1ad31f1e8c60a7478776` / `87b8df1f0a726bfa97c46058901bbbbc0faa8f4f`，新版为 `315f80ccce4dc720e7d4b770d2273c484c9aed66` / `9fa2f339f285e995375c80220eae3950bfa16147`。两版评审均按固定差异判断，由于 GitHub 无可核实的测试状态给出证据不足，独立场景验证两版源码通过。两版 PR 正文逐字一致，场景清理通过。后续 UI 过期投影仅采用 PR 事实的调整已通过定向检查，真实复验的执行接线相同。
 
+### 实现审计
+
+- 已受理的冲突续作只对账原 PR。错报 PR、缺少回执或回传需要输入均不能触发重新发布。原 head 未推进时保留旧评审并阻断重评，收尾重试继续核验原 PR。明确拒绝、未执行时允许用户恢复。初次发布缺少可对账 PR 也不因需要输入而重发。
+- 平台检查状态与 head/base 一起绑定评审。评审在途或交付后发生变化时重新取证；收集差异失败也要复核后才记录证据不足。PR 差异禁用本地 Git 替换对象。
+- 提示词资产、发送的固定正文及黄金样本差异均为空，固定正文 UTF-8 字节数变化为 0。独立审核复核了检查状态接线、原 PR 对账及重发边界。
+- 审计回归覆盖原 head 未变、错误 PR、明确拒绝、已受理发布的空 PR 回执、检查变化及本地替换对象。最终维护与应用定向测试通过，Web 构建通过。分级报告位于 `C:/SteerlineDebug/wt-1851-pr-review-audit/test-results/` 下对应级别的 `20261113T092025Z-8f17b66e/summary.json`。真实 GitHub 联验为上文的 #844，审计增量以定向及受控证据核验。
+
 前置能力验证和主体接线已完成，逐项验证范围见下文。关联 [Spec](../../spec/refactoring-agent-delivery.spec.md) · [Plan](../../plans/refactoring-agent-delivery.plan.md) · [测试选择](../../plans/refactoring-agent-delivery.tests.json)。原最小闭环验收见 [历史证据](refactoring-maintenance.md)。
 
 ## 前置能力验证

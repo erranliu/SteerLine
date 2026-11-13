@@ -151,6 +151,7 @@ type Report struct {
 	Head           string    `json:"head"`
 	Base           string    `json:"base"`
 	PR             string    `json:"pr"`
+	Checks         string    `json:"checks,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -171,6 +172,7 @@ type Operation struct {
 	DecisionSummary   string                       `json:"decision_summary,omitempty"`
 	DecisionKind      string                       `json:"decision_kind,omitempty"`
 	PRVersion         string                       `json:"pr_version,omitempty"`
+	ReviewChecks      string                       `json:"review_checks,omitempty"`
 	AcceptedOperation string                       `json:"accepted_operation,omitempty"`
 	Question          *Question                    `json:"question,omitempty"`
 	ID                string                       `json:"id"`
@@ -251,6 +253,10 @@ func (r Record) Active() bool {
 		}
 	}
 	return r.Phase != "delivered" && r.Phase != "stopped" && r.Phase != "blocked"
+}
+
+func (r Record) CanReview() bool {
+	return !r.Active() && r.PR != nil && !r.PR.Merged && r.PR.State == "open" && r.WriteKind != "conflict"
 }
 func (r Record) Elapsed(now time.Time) time.Duration {
 	d := time.Duration(r.ElapsedNanos)

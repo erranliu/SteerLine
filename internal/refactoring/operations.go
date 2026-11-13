@@ -146,6 +146,7 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 	o := model.Operation{ID: id, Purpose: r.Phase, Round: r.Round, State: "pending", CreatedAt: now, Investigation: directory, Closing: r.FinishRequested}
 	if r.Phase == "report" {
 		o.PRVersion = prVersion(r.PR)
+		o.ReviewChecks = review.Checks
 	}
 	correlation := map[string]string{"steerline_project": r.Project, "steerline_refactoring": r.ID, "refactoring_operation": id}
 	var input any

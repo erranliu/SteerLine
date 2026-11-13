@@ -215,7 +215,7 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		now := s.now()
 		r.ActiveSince = &now
 	case "refactoring_review":
-		if r.Active() || r.PR == nil || r.PR.Merged || r.PR.State != "open" {
+		if !r.CanReview() {
 			return r, errors.New("当前行动不可重新评审")
 		}
 		r.Phase = "report"
@@ -297,8 +297,9 @@ func (s *Service) Tick(ctx context.Context) error {
 				s.reviewChecked = make(map[string]time.Time)
 			}
 			s.reviewChecked[r.ID] = s.now()
-			pr, _, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
-			if err == nil && (!matchesVersion(r.PR, pr.URL, pr.HeadRevision, pr.BaseRevision) || pr.State != r.PR.State || pr.Merged != r.PR.Merged) {
+			pr, checks, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
+			checksChanged := len(r.Reports) > 0 && r.Reports[len(r.Reports)-1].Checks != checks
+			if err == nil && (checksChanged || !matchesVersion(r.PR, pr.URL, pr.HeadRevision, pr.BaseRevision) || pr.State != r.PR.State || pr.Merged != r.PR.Merged) {
 				_, err = s.update(ctx, r.ID, func(current *model.Record) error {
 					if current.Revision != r.Revision {
 						return nil
@@ -393,6 +394,16 @@ func (s *Service) tick(ctx context.Context, r model.Record) error {
 		if err != nil {
 			return err
 		}
+		if review.Limitation != "" {
+			latest, checks, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
+			if err != nil {
+				return err
+			}
+			if !matchesVersion(pr, latest.URL, latest.HeadRevision, latest.BaseRevision) || checks != review.Checks {
+				return nil
+			}
+			pr = latest
+		}
 	}
 	_, e := s.update(ctx, r.ID, func(current *model.Record) error {
 		if current.StopRequested || current.Revision != r.Revision {
@@ -405,7 +416,7 @@ func (s *Service) tick(ctx context.Context, r model.Record) error {
 				return nil
 			}
 			if review.Limitation != "" {
-				s.saveReview(current, "insufficient_evidence", review.Limitation)
+				s.saveReview(current, review.Checks, "insufficient_evidence", review.Limitation)
 				return nil
 			}
 		}
@@ -645,8 +656,9 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 		o.Cost = cost
 	}
 	var latest *runnercontract.PRFact
+	var latestChecks string
 	if o.Purpose == "report" && decisionSucceeded && !r.StopRequested {
-		latest, _, e = s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
+		latest, latestChecks, e = s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
 		if e != nil {
 			return e
 		}
@@ -709,7 +721,7 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			if err != nil {
 				s.block(r, err.Error())
 			} else {
-				s.applyReview(r, *last, latest, review)
+				s.applyReview(r, *last, latest, latestChecks, review)
 			}
 			return nil
 		}

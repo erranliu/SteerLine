@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/execution/backend"
 	em "github.com/erranliu/SteerLine/internal/execution/model"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
@@ -56,6 +57,30 @@ func TestRefactoringPRVersionAndOriginalBranch(t *testing.T) {
 				t.Fatal("version query must return the actual platform facts")
 			}
 		})
+	}
+}
+
+func TestRefactoringReviewDiffIgnoresLocalReplacementObjects(t *testing.T) {
+	remote, local := t.TempDir(), t.TempDir()
+	fixtureGit(t, remote, "init", "-q", "-b", "main")
+	commit := func(text string) string {
+		require(t, os.WriteFile(filepath.Join(remote, "code.txt"), []byte(text+"\n"), 0600))
+		fixtureGit(t, remote, "add", "--", "code.txt")
+		fixtureGit(t, remote, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", text)
+		return fixtureGit(t, remote, "rev-parse", "HEAD")
+	}
+	base := commit("original")
+	head := commit("reviewed")
+	fixtureGit(t, remote, "checkout", "-q", "-b", "unrelated", base)
+	replacement := commit("replacement")
+	fixtureGit(t, local, "clone", "-q", "--no-checkout", remote, ".")
+	fixtureGit(t, local, "replace", head, replacement)
+	remoteURL := fixtureGit(t, local, "remote", "get-url", "origin")
+	p := refactoringPort{config: Config{Repository: local, Git: backend.Command{Executable: "git"}, CommandTimeout: "10s", ProcessHost: NewProcessHost(10 * time.Second)}}
+	r := ref.Record{Frozen: ref.Frozen{Repository: rc.Repository{URL: remoteURL, Remote: "origin"}}}
+	diff, err := p.reviewDiff(context.Background(), r, rc.PRFact{BaseRevision: base, HeadRevision: head})
+	if err != nil || !strings.Contains(diff, "+reviewed") || strings.Contains(diff, "+replacement") {
+		t.Fatalf("review diff differs from the pinned objects: %s, %v", diff, err)
 	}
 }
 
