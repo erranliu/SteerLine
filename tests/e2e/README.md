@@ -76,6 +76,8 @@ PowerShell薄入口分别为`test-execution-profile-discovery.ps1`、`test-proje
 
 Playwright `roadmap-live.spec.ts` 通过正式页面和 HTTP 原信封验证刷新不重发、提前零任务、原发布/入图请求重放、防重复映射、DAG 及来源导航；不模拟 API/Runner/provider。自动派发保持关闭。失败保留 trace、截图、原信封及原记录，不自动重跑。`result.json` 只有浏览器全部断言及正常停服/公开 verify-stop、进程/监听清理、原 PR 对账和自有远端分支清理都完成才通过。只删除本轮 head/base，核对默认分支提交未变；保留真实 PR。证据目录仅当前用户可读，认证不写入共享文档。
 
+在同一命令上加 `-SingleTask` 运行单任务专项。夹具通过正式 Task 命令预置一个已有 DAG 前置。浏览器在原生会话写入并更新任务卡，确认所选前置，审阅真实模型生成的四个文件，发布并按原 head 合并真实文档 PR。合并核验后在原详情页单独入图，核对新增节点与前置边、稳定链接以及无 Roadmap 草稿。该入口复用相同的隔离和清理检查。
+
 
 ## 本机环境准备 L4
 

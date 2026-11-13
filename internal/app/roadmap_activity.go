@@ -16,7 +16,7 @@ func (p *roadmapPort) recordPublicationObservation(ctx context.Context, before, 
 	if err != nil {
 		at, diagnostic, revision = time.Time{}, err.Error(), before.Revision
 	}
-	metadataCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 100*time.Millisecond)
+	metadataCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer cancel()
 	_ = p.store.RecordSourceObservation(metadataCtx, before.Project, "roadmap", before.ID, revision, at, diagnostic)
 }

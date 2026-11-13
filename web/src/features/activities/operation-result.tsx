@@ -45,7 +45,8 @@ export function OperationResult({
     r.project_id === identity.project_id &&
     (r.target_id === targetID ||
       related?.id === targetID ||
-      (r.action === "roadmap_parse" && r.target_id === sourceID) ||
+      (["roadmap_parse", "roadmap_task_generate"].includes(r.action) &&
+        r.target_id === sourceID) ||
       (r.action === "roadmap_prepare_static" &&
         r.target_id === identity.project_id));
   return (

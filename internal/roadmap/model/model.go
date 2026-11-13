@@ -27,6 +27,7 @@ const Root = "SteerlineFlow/Roadmap/drafts/"
 const MaxBytes = 2 << 20
 
 type Source struct {
+	PlanningID string `json:"planning_id,omitempty"`
 	ID         string `json:"id"`
 	Path       string `json:"path"`
 	Body       string `json:"body"`
@@ -436,6 +437,9 @@ func ValidateSourceMapping(a Analysis, mapping map[string]string) error {
 	return nil
 }
 func (r Record) Settled() bool {
+	if r.Purpose == "task-planning" {
+		return true
+	}
 	if r.Purpose == "documents" && r.GenerationID == "" {
 		for _, g := range r.Generations {
 			if !r.Execution(g).Settled() {

@@ -24,17 +24,37 @@ func (s *Service) verifyInvestigation(ctx context.Context, r model.Record, raw [
 	for _, file := range source.Files {
 		files[file.Path] = file
 	}
+	var paths []string
 	for _, ref := range result.Investigation {
 		if ref.Source != "repository" {
 			continue
 		}
-		file, exists := files[ref.Path]
+		_, exists := files[ref.Path]
 		if !exists {
 			return fmt.Errorf("固定仓库缺少调查文件：%s", ref.Path)
 		}
-		body, err := s.ReadCommitted(ctx, r.CodeCommit, ref.Path)
-		if err != nil || model.Digest(body) != file.SHA256 || len(body) != file.SizeBytes {
-			return fmt.Errorf("调查文件与固定 Git 不一致：%s", ref.Path)
+		paths = append(paths, ref.Path)
+	}
+	var bodies map[string][]byte
+	if s.ReadCommittedFiles != nil {
+		var err error
+		bodies, err = s.ReadCommittedFiles(ctx, r.CodeCommit, paths)
+		if err != nil {
+			return fmt.Errorf("无法核实调查文件的固定 Git 内容：%w", err)
+		}
+	}
+	for _, path := range paths {
+		body := bodies[path]
+		if s.ReadCommittedFiles == nil {
+			var err error
+			body, err = s.ReadCommitted(ctx, r.CodeCommit, path)
+			if err != nil {
+				return fmt.Errorf("无法核实调查文件的固定 Git 内容：%w", err)
+			}
+		}
+		file := files[path]
+		if model.Digest(body) != file.SHA256 || len(body) != file.SizeBytes {
+			return fmt.Errorf("调查文件与固定 Git 不一致：%s", path)
 		}
 	}
 	return nil

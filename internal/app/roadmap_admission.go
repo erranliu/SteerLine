@@ -105,13 +105,8 @@ func (p *roadmapPort) admit(ctx context.Context, r roadmap.Record, request strin
 		if e != nil {
 			return r, e
 		}
-		graph, e := p.service.Graph(ctx)
-		if e != nil {
+		if e = p.verifyAdmissionGraph(ctx, r); e != nil {
 			return r, e
-		}
-		// Only a stable confirmed dependency/material snapshot can reach the transaction.
-		if roadmap.GraphDigest(graph) != r.GraphDigest {
-			return r, errors.New("已有 DAG 或任务材料已变化，请重新核对规划")
 		}
 		r.AdmissionBatch, e = json.Marshal(batch)
 		if e != nil {
@@ -210,16 +205,37 @@ func (p *roadmapPort) resumeAdmission(ctx context.Context, r roadmap.Record) (ro
 	}
 	// The original Task request does not exist. Recheck its fixed prerequisites
 	// before explicitly resuming the same idempotent transaction.
-	graph, err := p.service.Graph(ctx)
-	if err != nil {
+	if err = p.verifyAdmissionGraph(ctx, r); err != nil {
 		return r, err
-	}
-	if roadmap.GraphDigest(graph) != r.GraphDigest {
-		return r, errors.New("原入图前置已变化，不能继续，请重新核对规划")
 	}
 	if err = p.verifyMerged(ctx, &r); err != nil {
 		return r, err
 	}
 	r.State = "admission-unknown"
 	return p.admit(ctx, r, r.AdmissionRequest)
+}
+
+func (p *roadmapPort) verifyAdmissionGraph(ctx context.Context, r roadmap.Record) error {
+	if r.Source.PlanningID != "" {
+		// A single task has only explicit edges from existing tasks. Unrelated
+		// additions between publication and admission do not change those edges.
+		graph, err := p.store.TaskGraphSnapshot(ctx, p.config.Identity())
+		if err != nil {
+			return err
+		}
+		tasks := make([]roadmap.Existing, 0, len(graph.Tasks))
+		for _, task := range graph.Tasks {
+			tasks = append(tasks, roadmap.Existing{ID: task.TaskID, Status: task.Status})
+		}
+		_, err = roadmap.ValidateAnalysis(*r.Analysis, r.Source, tasks)
+		return err
+	}
+	graph, err := p.service.Graph(ctx)
+	if err != nil {
+		return err
+	}
+	if roadmap.GraphDigest(graph) != r.GraphDigest {
+		return errors.New("已有 DAG 或任务材料已变化，请重新核对规划")
+	}
+	return nil
 }

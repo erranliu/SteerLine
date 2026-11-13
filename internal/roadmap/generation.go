@@ -45,6 +45,7 @@ type Service struct {
 	Prepare             func(context.Context) (runnercontract.ExecutionInput, *runnerclient.Catalog, error)
 	PrepareDocuments    func(context.Context, model.Record) (model.DocumentContext, error)
 	ReadCommitted       func(context.Context, string, string) ([]byte, error)
+	ReadCommittedFiles  func(context.Context, string, []string) (map[string][]byte, error)
 	Admit               func(context.Context) error
 	mu                  sync.Mutex
 	next                int
@@ -356,6 +357,9 @@ func (s *Service) observe(ctx context.Context, r model.Record) (out model.Record
 					}
 					r.Result = append(json.RawMessage(nil), result.JSON...)
 					if err := s.verifyInvestigation(ctx, r, r.Result, result.RepositorySource); err != nil {
+						if ctx.Err() != nil {
+							return before, ctx.Err()
+						}
 						r.State, r.Diagnostic = "invalid", err.Error()
 						return s.save(ctx, r)
 					}

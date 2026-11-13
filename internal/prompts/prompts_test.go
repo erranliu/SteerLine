@@ -41,6 +41,10 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		{"roadmap-planning", func() (string, error) {
 			return RoadmapPlanning("rules.md", "drafts/topic.md", "用户目标原文\r\n下一行")
 		}},
+		{"task-planning", func() (string, error) {
+			return TaskPlanning("rules.md", "cards/topic.json", "用户目标原文\r\n下一行")
+		}},
+		{"task-planning-documents", func() (string, error) { return TaskPlanningDocuments("fixed", "T1") }},
 		{"roadmap-planning-conflict", func() (string, error) { return RoadmapPlanningConflict("保留原定范围。") }},
 		{"roadmap-planning-conflict-default", func() (string, error) { return RoadmapPlanningConflict("") }},
 	}
@@ -124,6 +128,7 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
 		{"roadmap-planning", "d405343c050b42dad6cd74d63d2d53e52ee34551965bd21ecb79fa49bb362261", RoadmapPlanningRules},
+		{"task-planning", "62818dbf7dc3186cdbaee93ee5feb5caa13c056a960e0a3e24126f1f39880e42", TaskPlanningRules},
 	}
 	for _, direction := range []struct{ id, sha256 string }{
 		{"simplify", "0eae9dbb8636492f585982d01964e43b8a3116d6957ed5fb92f39437477b1abd"},

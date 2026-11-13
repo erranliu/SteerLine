@@ -52,6 +52,9 @@ func (r Record) Execution(g Generation) Record {
 	return r
 }
 func (r Record) Executions() []Record {
+	if r.Purpose == "task-planning" {
+		return nil
+	}
 	if r.Purpose != "documents" {
 		return []Record{r}
 	}
