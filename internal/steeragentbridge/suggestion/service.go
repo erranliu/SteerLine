@@ -111,7 +111,11 @@ func (s *Service) enter(ctx context.Context) error {
 func (s *Service) leave() { <-s.gate }
 
 func (s *Service) load(ctx context.Context, id string) (Record, error) {
-	raw, rev, err := s.Store.LoadAdvisory(ctx, s.Project, id)
+	return loadRecord(ctx, s.Store.LoadAdvisory, s.Project, id)
+}
+
+func loadRecord(ctx context.Context, read func(context.Context, string, string) ([]byte, uint64, error), project, id string) (Record, error) {
+	raw, rev, err := read(ctx, project, id)
 	var r Record
 	if err != nil {
 		return r, err
@@ -119,7 +123,7 @@ func (s *Service) load(ctx context.Context, id string) (Record, error) {
 	if err = json.Unmarshal(raw, &r); err != nil {
 		return r, err
 	}
-	if r.ID != id || r.Project != s.Project || r.Revision != rev {
+	if r.ID != id || r.Project != project || r.Revision != rev {
 		return r, errors.New("advisory identity or revision mismatch")
 	}
 	return r, nil

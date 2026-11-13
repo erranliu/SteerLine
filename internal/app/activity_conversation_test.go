@@ -24,6 +24,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	advisory "github.com/erranliu/SteerLine/internal/steeragentbridge/suggestion"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 type conversationCandidateStore struct {
@@ -40,12 +41,16 @@ func (s *conversationCandidateStore) Candidate(_ context.Context, project, id st
 	return s.candidate, nil
 }
 
+func (s *conversationCandidateStore) conversationReaders() map[string]activityConversationReader {
+	return map[string]activityConversationReader{"task_candidate": bindActivityConversation(s.Candidate, ports.ErrNotFound, taskrunner.CandidateConversation)}
+}
+
 func TestActivityConversationRequiresOriginalCandidateAndAdvertisedRunner(t *testing.T) {
 	cli := &runnerclient.Client{InstanceID: "instance", StateDir: "state"}
 	store := &conversationCandidateStore{candidate: runnerstate.Candidate{
-		RunID: "run", RunnerBuild: cli.BuildPin(), Projection: conversationRun("run", "attempt"),
+		ID: "candidate", RunID: "run", RunnerBuild: cli.BuildPin(), Projection: conversationRun("run", "attempt"),
 	}}
-	port := &runtimeProjectPort{config: Config{identity: "p", runtimeRunner: cli}, store: store}
+	port := &runtimeProjectPort{config: Config{identity: "p", runtimeRunner: cli}, conversationReaders: store.conversationReaders()}
 	target := conversationTarget("candidate", "", "run", store.candidate.Projection, cli.StateDir)
 	for _, tc := range []struct {
 		identity, code string
@@ -85,9 +90,9 @@ func TestActivityConversationReadsOnePageFromPinnedRunner(t *testing.T) {
 	originalBuild.Version = "earlier-build"
 	originalBuild.SHA256 = strings.Repeat("a", 64)
 	store := &conversationCandidateStore{candidate: runnerstate.Candidate{
-		RunID: "run", RunnerBuild: originalBuild, Projection: conversationRun("run", "attempt"),
+		ID: "candidate", RunID: "run", RunnerBuild: originalBuild, Projection: conversationRun("run", "attempt"),
 	}}
-	port := &runtimeProjectPort{config: Config{identity: "p", runtimeRunner: cli}, store: store}
+	port := &runtimeProjectPort{config: Config{identity: "p", runtimeRunner: cli}, conversationReaders: store.conversationReaders()}
 	id := base64.RawURLEncoding.EncodeToString([]byte("p\x00task_candidate\x00candidate"))
 	route := "/activities/" + id + "/conversation"
 	calls := filepath.Join(state, "calls.txt")
@@ -149,7 +154,9 @@ func conversationRun(id, attempt string) *runnercontract.Run {
 
 type conversationSourceStore struct {
 	conversationCandidateStore
-	pin runnercontract.BuildPin
+	pin              runnercontract.BuildPin
+	roadmapReads     int
+	advisoryRevision uint64
 }
 
 func (s *conversationSourceStore) Environment(_ context.Context, project, id string) (env.Record, error) {
@@ -163,6 +170,7 @@ func (s *conversationSourceStore) Environment(_ context.Context, project, id str
 }
 
 func (s *conversationSourceStore) Roadmap(_ context.Context, project, id string) (roadmap.Record, error) {
+	s.roadmapReads++
 	if project != "p" || id != "documents" {
 		return roadmap.Record{}, roadmap.ErrNotFound
 	}
@@ -178,7 +186,7 @@ func (s *conversationSourceStore) LoadAdvisory(_ context.Context, project, id st
 		return nil, 0, sql.ErrNoRows
 	}
 	raw, err := json.Marshal(advisory.Record{ID: id, Project: project, Revision: 1, RunID: "advice", Projection: conversationRun("advice", "first"), Runner: s.pin})
-	return raw, 1, err
+	return raw, s.advisoryRevision, err
 }
 
 func (s *conversationSourceStore) Refactoring(_ context.Context, project, id string) (refactoring.Record, error) {
@@ -201,9 +209,9 @@ func (s *conversationSourceStore) LookupCommand(_ context.Context, project, id s
 
 func TestActivityConversationSourcesAndTargetIsolation(t *testing.T) {
 	cli := &runnerclient.Client{InstanceID: "fixture", StateDir: "state", FullBindingCommands: []string{runnerclient.NativeConversationHistory}}
-	store := &conversationSourceStore{pin: cli.BuildPin()}
-	store.candidate = runnerstate.Candidate{RunID: "candidate-run", Projection: conversationRun("candidate-run", "first"), RunnerBuild: store.pin}
-	port := &runtimeProjectPort{config: Config{identity: "p", runtimeRunner: cli}, store: store}
+	store := &conversationSourceStore{pin: cli.BuildPin(), advisoryRevision: 1}
+	store.candidate = runnerstate.Candidate{ID: "candidate", RunID: "candidate-run", Projection: conversationRun("candidate-run", "first"), RunnerBuild: store.pin}
+	port := &runtimeProjectPort{config: Config{identity: "p", runtimeRunner: cli}, conversationReaders: newActivityConversationReaders(store)}
 	tests := map[string]struct {
 		id   string
 		runs []string
@@ -215,7 +223,7 @@ func TestActivityConversationSourcesAndTargetIsolation(t *testing.T) {
 		"refactoring":           {"refactoring", []string{"refactor-1", "refactor-2"}},
 		"baseline_check":        {"baseline", nil},
 	}
-	if len(activityConversationSources) != len(query.AsyncActivitySources) || len(tests) != len(query.AsyncActivitySources) {
+	if len(port.conversationReaders) != len(query.AsyncActivitySources) || len(tests) != len(query.AsyncActivitySources) {
 		t.Fatal("activity registry and conversation coverage differ")
 	}
 	route := func(source, id string) string {
@@ -250,6 +258,9 @@ func TestActivityConversationSourcesAndTargetIsolation(t *testing.T) {
 			}
 		})
 	}
+	if store.roadmapReads != 1 {
+		t.Fatalf("Roadmap targets and operation must come from one record read, got %d", store.roadmapReads)
+	}
 	value, err := port.Read(context.Background(), route("environment_detection", "environment"), nil)
 	require(t, err)
 	target := value.(activityConversations).Targets[0]
@@ -257,6 +268,11 @@ func TestActivityConversationSourcesAndTargetIsolation(t *testing.T) {
 	var clientError *httpclient.ClientError
 	if !errors.As(err, &clientError) || clientError.Code != "conversation_changed" {
 		t.Fatalf("accepted another activity's conversation: %v", err)
+	}
+	store.advisoryRevision = 2
+	_, err = port.Read(t.Context(), route("main_agent_advisory", "advisory"), nil)
+	if !errors.As(err, &clientError) || clientError.Code != "reading_unavailable" {
+		t.Fatalf("accepted advisory with a different stored revision: %v", err)
 	}
 }
 

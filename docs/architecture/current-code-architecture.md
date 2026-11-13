@@ -116,4 +116,6 @@ flowchart LR
 
 ## 统一异步观察
 
+各业务模块从单份持久记录解析会话和操作关联。项目运行时绑定来源读取，公共会话入口校验原 Run、Attempt、Session 和 Generation，再按现有分页和输出预算读取 Runner。已记录交互继续使用原有存储快照及正文校验。
+
 `storage/ports.AsyncActivityReader` 提供中性有界事实；SQLite 单条查询获取来源及关联，产品 `query/async_activities.go` 只做状态、相关性与列表投影。App 注入四个静态来源并暴露 `GET /activities`，绕开 actor 的业务执行路径；不调用 Runner 或 Git。业务 owner 负责批次/关联/观察元数据的持久化，读取方没有执行能力。Web 的 App 在 keyed Workspace 外保存抽屉偏好，Workspace 内按 home/project/instance 保存查询；入口通过 slot 交给应用壳。设计与扩展约定见[异步活动中心](../product-design/async-activities.md)，实际验证见[专属验收](../../SteerlineFlow/testing/acceptance/async-activity-center.md)。
