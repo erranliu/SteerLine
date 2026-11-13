@@ -531,7 +531,8 @@ func TestMaintenanceConflictReviewRegeneratesInvalidJSON(t *testing.T) {
 			control(t, s, r, "refactoring_conflict")
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool {
 				last := r.Operations[len(r.Operations)-1]
-				return last.Purpose == "report" && last.RunID != "" && len(r.Reports) == 1
+				return r.Phase == "report" && r.PR.HeadRevision != firstReport.Head &&
+					last.Purpose == "report" && last.State == "submitted" && last.RunID != "" && len(r.Reports) == 1
 			})
 			first := r.Operations[len(r.Operations)-1]
 			const malformed = `{"recommendation":"merge","report":"复查新基线"},"prompt":"多余字段"}`
@@ -548,9 +549,12 @@ func TestMaintenanceConflictReviewRegeneratesInvalidJSON(t *testing.T) {
 			})
 			retry := r.Operations[len(r.Operations)-1]
 			want, err := prompts.MaintenanceDecisionJSONRetry()
-			if err != nil || retry.Prompt != want || r.Operations[len(r.Operations)-2].Feedback != malformed ||
-				strings.Contains(string(retry.Request.Input), "多余字段") {
-				t.Fatal("retry did not use clean current-schema guidance or lost original feedback", err)
+			if err != nil || retry.Prompt != want {
+				t.Fatalf("unexpected retry prompt %q: %v", retry.Prompt, err)
+			}
+			previous := r.Operations[len(r.Operations)-2]
+			if previous.Feedback != malformed || strings.Contains(string(retry.Request.Input), "多余字段") {
+				t.Fatalf("unexpected previous feedback: %q", previous.Feedback)
 			}
 			if !retrySucceeds {
 				fail(retry.RunID)

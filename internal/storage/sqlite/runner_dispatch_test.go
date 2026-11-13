@@ -95,7 +95,7 @@ func TestAutomaticDispatchWaitsForReadinessAndRespectsClose(t *testing.T) {
 				}
 				return nil
 			}
-			service.PrepareExecution = func(ctx context.Context, work taskmodel.FixedWork, _ bool) (taskmodel.FixedWork, string, error) {
+			service.PrepareExecution = func(ctx context.Context, work taskmodel.FixedWork, _ string) (taskmodel.FixedWork, string, error) {
 				return work, strings.Repeat("a", 40), checkProject(ctx)
 			}
 			actor, err := taskrunner.NewActor(taskrunner.ActorOptions{
