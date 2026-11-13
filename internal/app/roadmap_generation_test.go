@@ -149,6 +149,7 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 	require(f.t, err)
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: f.run.RepositorySource, FileMaterials: f.run.Materials,
 		Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: q.RequestID, TurnID: "controlled-turn"}}
+	f.run.Final = new(f.run.ContentResult.Source)
 	if f.runs == nil {
 		f.runs = map[string]runnercontract.Run{}
 		f.requests = map[string]runnercontract.Request{}

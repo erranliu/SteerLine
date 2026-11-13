@@ -514,6 +514,7 @@ func TestRoadmapGenerateDurableRequestUnknownAndConfirm(t *testing.T) {
 	a := sampleAnalysis()
 	raw, _ := json.Marshal(a)
 	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "result", TurnID: "turn"}}
+	f.run.Final = new(f.run.ContentResult.Source)
 	f.run.Status = "completed"
 	f.run.StopStatus = "stopped"
 	f.run.Revision++
@@ -542,6 +543,7 @@ func TestRoadmapFrozenFileMaterialResultValidation(t *testing.T) {
 			body, _ := json.Marshal(sampleAnalysis())
 			peer.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: body, RepositorySource: peer.run.RepositorySource,
 				FileMaterials: append([]runnercontract.Material{}, peer.run.Materials...), Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "parse", TurnID: "turn"}}
+			peer.run.Final = new(peer.run.ContentResult.Source)
 			peer.run.Status, peer.run.StopStatus = "completed", "stopped"
 			switch mutation {
 			case "missing-run":
@@ -577,6 +579,7 @@ func TestRoadmapParseWaitsForNativeSettlement(t *testing.T) {
 	body, _ := json.Marshal(sampleAnalysis())
 	peer.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: body,
 		Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "parse", TurnID: "turn"}}
+	peer.run.Final = new(peer.run.ContentResult.Source)
 	peer.run.Status, peer.run.StopStatus = "settling", "pending"
 	waiting, err := s.Observe(context.Background(), r.ID)
 	if err != nil || waiting.Analysis != nil || waiting.State == "review" {
@@ -592,6 +595,61 @@ func TestRoadmapParseWaitsForNativeSettlement(t *testing.T) {
 		t.Fatal("settled parse not ready", ready.State, err)
 	}
 }
+
+func TestRoadmapParseRequiresOriginalVerifiedFinal(t *testing.T) {
+	for _, change := range []string{"matching", "foreign turn", "missing final", "unverified final", "empty JSON"} {
+		t.Run(change, func(t *testing.T) {
+			ctx := context.Background()
+			s, store, peer, input := generationSetup(t)
+			r, err := s.Parse(ctx, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(sampleAnalysis())
+			if err != nil {
+				t.Fatal(err)
+			}
+			final := runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "parse", TurnID: "original-turn"}
+			peer.run.Final = &final
+			peer.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: body, Source: final}
+			peer.run.Status, peer.run.StopStatus = "completed", "stopped"
+			switch change {
+			case "foreign turn":
+				peer.run.ContentResult.Source.TurnID = "foreign-turn"
+			case "missing final":
+				peer.run.Final = nil
+			case "unverified final":
+				final.Verified = false
+			case "empty JSON":
+				peer.run.ContentResult.JSON = nil
+			}
+			if _, err := s.Observe(ctx, r.ID); err != nil {
+				t.Fatal(err)
+			}
+			saved, err := store.Roadmap(ctx, s.Project, r.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if change == "matching" {
+				if saved.State != "review" || saved.Analysis == nil {
+					t.Fatalf("matching result did not enter review: %s %s", saved.State, saved.Diagnostic)
+				}
+				return
+			}
+			diagnostic := "Final 不一致"
+			if change == "empty JSON" {
+				diagnostic = "缺少结构化结果 ContentResult.JSON"
+			}
+			if saved.State != "invalid" || !strings.Contains(saved.Diagnostic, diagnostic) || saved.Analysis != nil || len(saved.Result) != 0 || !saved.ObservationComplete() {
+				t.Fatalf("invalid result was not rejected and settled: %s %s", saved.State, saved.Diagnostic)
+			}
+			if _, err = s.Confirm(ctx, saved.ID, strings.Repeat("b", 32), saved.Revision); err == nil {
+				t.Fatal("unverified analysis became confirmable")
+			}
+		})
+	}
+}
+
 func TestRoadmapCancelledUnknownOnlyStopsOriginal(t *testing.T) {
 	s, _, f, in := generationSetup(t)
 	ctx := context.Background()

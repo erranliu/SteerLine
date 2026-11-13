@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+Roadmap 结构化结果的 Final 来源校验（2026-11-13）。[实现与验收](roadmap-verified-final.md)
+
 维护只读决策结果校验（2026-11-13）。[实现与验收](maintenance-structured-decisions.md)
 
 自动派发开关与就绪状态（2026-11-12）。[实现与验收](automatic-dispatch-readiness.md)

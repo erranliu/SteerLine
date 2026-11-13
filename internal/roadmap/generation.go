@@ -326,6 +326,14 @@ func (s *Service) observe(ctx context.Context, r model.Record) (out model.Record
 				if run.Status != "completed" || run.StopStatus != "stopped" {
 					return s.save(ctx, r)
 				}
+				if run.Final == nil || *run.Final != result.Source {
+					r.State, r.Diagnostic = "invalid", "结构化结果来源与原 Run 已验证的 Final 不一致"
+					return s.save(ctx, r)
+				}
+				if len(result.JSON) == 0 {
+					r.State, r.Diagnostic = "invalid", "缺少结构化结果 ContentResult.JSON"
+					return s.save(ctx, r)
+				}
 				var frozen runnercontract.GenerateRunInput
 				if err := json.Unmarshal(r.Request.Input, &frozen); err != nil {
 					return r, err

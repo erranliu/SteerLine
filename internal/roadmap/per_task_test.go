@@ -116,9 +116,48 @@ func finishGeneration(t *testing.T, s *Service, f *batchPeer, r model.Record, g 
 		}
 		run.RepositorySource = source
 		run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: raw, RepositorySource: source, FileMaterials: run.Materials, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", TurnID: "turn"}}
+		run.Final = new(run.ContentResult.Source)
 	}
 	f.runs[run.RunID] = run
 }
+
+func TestRoadmapDocumentGenerationRequiresOriginalVerifiedFinal(t *testing.T) {
+	for _, change := range []string{"matching", "foreign turn"} {
+		t.Run(change, func(t *testing.T) {
+			ctx := context.Background()
+			s, store, peer, parent := batchSetup(t, 1, 1)
+			r, err := s.GenerateDocuments(ctx, parent.ID, strings.Repeat("d", 32), parent.Revision)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r = observeBatch(t, s, r.ID)
+			generation := r.Generations[0]
+			if generation.RunID == "" {
+				t.Fatal("document request did not reach Runner")
+			}
+			finishGeneration(t, s, peer, r, generation, false)
+			if change == "foreign turn" {
+				peer.runs[generation.RunID].ContentResult.Source.TurnID = "foreign-turn"
+			}
+			observeBatch(t, s, r.ID)
+			saved, err := store.Roadmap(ctx, s.Project, r.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			generation = saved.Generations[0]
+			if change == "matching" {
+				if saved.State != "documents-review" || !saved.DocumentsVerified || len(saved.Documents) != 1 || generation.Document == nil {
+					t.Fatalf("matching result did not enter batch review: %s %s", saved.State, saved.Diagnostic)
+				}
+				return
+			}
+			if saved.State != "invalid" || saved.DocumentsVerified || len(saved.Documents) != 0 || generation.State != "invalid" || generation.Document != nil || len(generation.Result) != 0 || !saved.ObservationComplete() || !strings.Contains(generation.Diagnostic, "Final 不一致") {
+				t.Fatalf("unverified result entered the document batch: %s %s, generation %s %s", saved.State, saved.Diagnostic, generation.State, generation.Diagnostic)
+			}
+		})
+	}
+}
+
 func TestRoadmapPerTaskConcurrencyAndRetry(t *testing.T) {
 	s, store, f, parent := batchSetup(t, 6, 5)
 	ctx := context.Background()
