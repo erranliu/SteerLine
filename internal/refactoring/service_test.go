@@ -213,6 +213,12 @@ func control(t *testing.T, s *Service, r m.Record, action string) m.Record {
 
 func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 	s, f, r := fixture(t)
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) == 1 && r.Operations[0].RunID != "" })
+	run := f.runs[r.Operations[0].RunID]
+	// The verified Final can supply feedback while the structured result
+	// independently supplies the decision.
+	run.Final.Text = "原生反馈仅供展示"
+	run.ContentResult.Source = *run.Final
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
 	if r.Round != 2 || len(r.Reports) != 1 || r.PR == nil {
 		t.Fatal(r)
@@ -228,7 +234,10 @@ func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 	if writes != 3 {
 		t.Fatalf("two rounds and publication: got %d", writes)
 	}
-	for _, o := range r.Operations {
+	if r.Operations[0].Feedback != "原生反馈仅供展示" {
+		t.Fatal("original Final feedback missing from history")
+	}
+	for _, o := range r.Operations[1:] {
 		if o.Purpose == "select" || o.Purpose == "audit" || o.Purpose == "finish" {
 			if !strings.Contains(o.Feedback, `"kind"`) {
 				t.Fatal("completed decision feedback missing from history", o)
@@ -244,6 +253,41 @@ func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 	}
 	if len(f.requests) == 0 || r.Reports[0].AsOf.IsZero() {
 		t.Fatal("missing frozen report snapshot")
+	}
+}
+
+func TestMaintenanceNeverAdoptsDecisionTextWithoutStructuredResult(t *testing.T) {
+	for _, change := range []string{"missing result", "empty JSON", "invalid decision JSON"} {
+		t.Run(change, func(t *testing.T) {
+			s, f, r := fixture(t)
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) == 1 && r.Operations[0].RunID != "" })
+			run := f.runs[r.Operations[0].RunID]
+			text := string(run.ContentResult.JSON)
+			run.Final.Text = text
+			run.ContentResult.Source = *run.Final
+			run.ContentResult.Text = text
+			diagnostic := "缺少结构化决策结果 ContentResult.JSON"
+			switch change {
+			case "missing result":
+				run.ContentResult = nil
+			case "empty JSON":
+				run.ContentResult.JSON = nil
+			case "invalid decision JSON":
+				run.ContentResult.JSON = json.RawMessage(`{"kind":"execute","prompt":""}`)
+				diagnostic = "执行决定缺少提示词"
+			}
+
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
+			if !strings.Contains(r.Diagnostic, diagnostic) || r.Round != 0 || r.PendingPrompt != "" || r.Active() {
+				t.Fatalf("unusable structured result advanced the action: %+v", r)
+			}
+			if len(r.Operations) != 1 || !r.Operations[0].Settled() || r.Operations[0].Feedback != text {
+				t.Fatalf("the original read-only operation should settle and keep feedback: %+v", r.Operations)
+			}
+			if err := s.Tick(context.Background()); err != nil || len(f.requests) != 1 || f.latest != "" {
+				t.Fatalf("unusable structured result submitted another operation: %v, %d requests, latest write %q", err, len(f.requests), f.latest)
+			}
+		})
 	}
 }
 func TestMaintenanceUnknownSubmitStopAndFinish(t *testing.T) {
@@ -338,7 +382,7 @@ func TestMaintenanceConcurrentTicksDoNotOrphanPending(t *testing.T) {
 	}
 }
 func TestMaintenanceRejectsForeignDecisionSource(t *testing.T) {
-	for _, change := range []string{"repository", "result-repository", "final", "material"} {
+	for _, change := range []string{"repository", "result-repository", "final", "material", "result-material"} {
 		t.Run(change, func(t *testing.T) {
 			s, f, r := fixture(t)
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) > 0 && r.Operations[0].RunID != "" })
@@ -352,6 +396,9 @@ func TestMaintenanceRejectsForeignDecisionSource(t *testing.T) {
 				run.ContentResult.Source.TurnID = "foreign"
 			case "material":
 				run.Materials[0].Digest = "foreign"
+			case "result-material":
+				run.ContentResult.FileMaterials = append([]rc.Material(nil), run.Materials...)
+				run.ContentResult.FileMaterials[0].Digest = "foreign"
 			}
 			if e := s.Tick(context.Background()); e == nil {
 				t.Fatal("foreign evidence accepted")
