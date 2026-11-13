@@ -664,12 +664,7 @@ test("runtime environments keep row actions, failed observations and task return
     { project: projects[0] },
   );
   const operationResult = page.getByRole("region", { name: "操作结果" });
-  await expect(
-    operationResult.getByText("开始检测：操作成功", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    operationResult.getByRole("button", { name: "复制执行信息", exact: true }),
-  ).toBeEnabled();
+  await expect(operationResult).toHaveCount(0);
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await first
     .getByRole("button", { name: "复制执行信息", exact: true })
@@ -703,6 +698,30 @@ test("runtime environments keep row actions, failed observations and task return
       fullPage: true,
     });
   }
+  await page
+    .getByRole("navigation", { name: "配置导航" })
+    .getByRole("link", { name: "项目状态", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { name: "项目状态" })).toBeVisible();
+  await operationResult.getByText("操作回执 · 最近 1 项").click();
+  await expect(
+    operationResult.getByText("环境检测", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    operationResult.getByText("已应用", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    operationResult.getByRole("button", { name: "复制执行信息", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("navigation", { name: "配置导航" })
+    .getByRole("link", { name: "项目运行环境", exact: true })
+    .click();
+  await expect(overview).toBeVisible();
+  await expect(operationResult).toHaveCount(0);
+  await page.getByRole("link", { name: "任务执行", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "任务执行" })).toBeVisible();
+  await expect(operationResult).toHaveCount(0);
   await page.goto(`${origin}/projects/${projects[1]}/environment`);
   await expect(
     page.getByRole("link", { name: "配置执行方案", exact: true }),

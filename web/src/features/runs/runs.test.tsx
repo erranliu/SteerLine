@@ -682,7 +682,7 @@ it("separates applied stop from a delayed candidate snapshot", async () => {
     expect(screen.getByText(/停止已生效，列表刷新中/)).toBeVisible(),
   );
   expect(
-    screen.queryByText("停止请求待核实，请在操作回执中查询原请求"),
+    screen.queryByText("停止请求待核实，请前往「项目状态」查询"),
   ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "停止参与" })).toBeDisabled();
   expect(w.submit).toHaveBeenCalledTimes(1);

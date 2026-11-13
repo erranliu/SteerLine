@@ -190,7 +190,7 @@ export function Workspace({
             <div role="alert" className="notice amber">
               <strong>
                 {environmentPage
-                  ? "操作未完成，请查看操作结果或刷新重试。"
+                  ? "操作未完成，请前往「项目状态」查看操作回执。"
                   : "操作结果未放行"}
               </strong>
               <p>{error}</p>
@@ -260,7 +260,21 @@ export function Workspace({
               />
               <Route
                 path={`/projects/${identity.project_id}/status`}
-                element={<ProjectMaintenance />}
+                element={
+                  <>
+                    <ProjectMaintenance />
+                    <Operations
+                      scope={identity}
+                      candidates={page?.runs ?? []}
+                      requests={(requests.data ?? []).filter(
+                        (r) => r.envelope.project_id === identity.project_id,
+                      )}
+                      online={!!online}
+                      reconcile={reconcile}
+                      reconciling={reconciling}
+                    />
+                  </>
+                }
               />
               <Route
                 path={"/projects/" + identity.project_id + "/tests"}
@@ -289,17 +303,6 @@ export function Workspace({
               />
             </Routes>
           </Suspense>
-          <Operations
-            scope={identity}
-            candidates={page?.runs ?? []}
-            compact={environmentPage}
-            requests={(requests.data ?? []).filter(
-              (r) => r.envelope.project_id === identity.project_id,
-            )}
-            online={!!online}
-            reconcile={reconcile}
-            reconciling={reconciling}
-          />
         </AppShell>
       </ActivityFeedbackProvider>
     </WorkspaceContext.Provider>

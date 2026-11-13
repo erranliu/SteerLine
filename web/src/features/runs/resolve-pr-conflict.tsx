@@ -35,7 +35,7 @@ export function ResolvePRConflict({ run }: { run: Candidate }) {
   const reason = !online
     ? "服务离线"
     : pending
-      ? "原请求待核实，请在操作回执中查询"
+      ? "原请求待核实，请前往「项目状态」查询"
       : busy ||
           sending ||
           activeMessage ||
