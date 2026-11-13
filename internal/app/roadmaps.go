@@ -97,7 +97,7 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 	if len(graph.Tasks) == 0 {
 		return result, nil
 	}
-	observation, e := p.config.runtimeMaintenance.check(ctx)
+	baseline, e := p.mergeHistory.refreshBaseline(ctx)
 	if e != nil {
 		return nil, e
 	}
@@ -106,7 +106,7 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 		if e != nil {
 			return nil, e
 		}
-		spec, e := p.materials.readCommittedMaterial(ctx, observation.Commit, contract.SpecRef.Path)
+		spec, e := p.materials.readCommittedMaterial(ctx, baseline, contract.SpecRef.Path)
 		if e != nil {
 			return nil, fmt.Errorf("已有任务 #%s 的 Spec 无法读取: %w", t.TaskID, e)
 		}
