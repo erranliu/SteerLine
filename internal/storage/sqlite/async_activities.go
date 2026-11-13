@@ -46,7 +46,7 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		'cancelled',json(CASE WHEN json_extract(a.payload,'$.cancelled') THEN 'true' ELSE 'false' END),
 		'requests',json((SELECT COALESCE(json_group_array(json_object('request_id',json_extract(q.value,'$.request_id'),'action',json_extract(q.value,'$.action'))),'[]') FROM json_each(a.payload,'$.requests') q)),
 		'rounds',json((SELECT COALESCE(json_group_array(json_object(
-		'number',json_extract(r.value,'$.number'),'run_id',json_extract(r.value,'$.run_id'),
+		'number',json_extract(r.value,'$.number'),'run_id',json_extract(r.value,'$.run_id'),'submission',json_extract(r.value,'$.submission'),
 		'settled',json(CASE WHEN json_extract(r.value,'$.settled') THEN 'true' ELSE 'false' END),
 		'timed_out',json(CASE WHEN json_extract(r.value,'$.timed_out') THEN 'true' ELSE 'false' END),
 		'diagnostic',json_extract(r.value,'$.diagnostic'),'submission_diagnostic',json_extract(r.value,'$.submission_diagnostic'),

@@ -85,6 +85,10 @@ func TestEnvironmentSubmissionDiagnosticSurvivesRestartAndReconciliation(t *test
 			t.Fatal("original submit failure was mutable")
 		}
 	}
+	_, _, reason := envmodel.View(envmodel.Current{}, saved, "", nil)
+	if !strings.Contains(reason, original) || !strings.Contains(reason, "request_not_found") {
+		t.Fatal("readiness projection hid the unconfirmed submission", reason)
+	}
 	remote.inspectFailure = nil
 	setReport(remote, report(r, remote, true))
 	observe(t, s)
@@ -93,12 +97,12 @@ func TestEnvironmentSubmissionDiagnosticSurvivesRestartAndReconciliation(t *test
 	if saved.Status() != "ready" || saved.Rounds[0].SubmissionDiagnostic != original || saved.DiagnosticText() != saved.Rounds[0].Report.Message || remote.submits != 1 {
 		t.Fatal("recovery lost the cause or retained a stale public failure", saved.DiagnosticText())
 	}
-	// The readiness projection carries both causes while still unverified.
+	// An accepted submission can still have a current observation failure.
 	saved.State, saved.Rounds[0].Settled = "running", false
 	saved.Diagnostic = "request_not_found"
-	_, _, reason := envmodel.View(envmodel.Current{}, saved, "", nil)
-	if !strings.Contains(reason, original) || !strings.Contains(reason, "request_not_found") {
-		t.Fatal("readiness projection hid the first cause", reason)
+	_, _, reason = envmodel.View(envmodel.Current{}, saved, "", nil)
+	if strings.Contains(reason, original) || !strings.Contains(reason, "request_not_found") {
+		t.Fatal("readiness projection obscured the current observation", reason)
 	}
 }
 
@@ -183,7 +187,7 @@ func TestEnvironmentLostSubmissionReplySettlesDurableRejection(t *testing.T) {
 	saved = read(t, s, r.ID)
 	if !saved.Settled() || saved.State != "failed" || saved.Rounds[0].Submission != "rejected" ||
 		saved.Rounds[0].RunID != "" || remote.submits != 1 || remote.stops != 0 ||
-		!strings.Contains(saved.DiagnosticText(), remote.inspectCommand.Error.Error()) ||
+		saved.DiagnosticText() != remote.inspectCommand.Error.Error() ||
 		saved.Rounds[0].SubmissionDiagnostic != remote.submitFailure.Error() {
 		t.Fatal("durable rejection did not settle with the original diagnostic", saved.DiagnosticText(), saved.Rounds[0])
 	}

@@ -12,6 +12,7 @@ import {
 } from "./use-readiness";
 import {
   DetectionID,
+  DetectionSubmissionHistory,
   recordLabel,
   type DetectionRecord,
 } from "./detection-record";
@@ -358,6 +359,7 @@ function EnvironmentWorkspace() {
                 {requestedRecord.data.profile_id}
               </p>
               <p>{requestedRecord.data.diagnostic}</p>
+              <DetectionSubmissionHistory record={requestedRecord.data} />
               {params.get("request_id") && (
                 <OperationResult
                   requestID={params.get("request_id")!}

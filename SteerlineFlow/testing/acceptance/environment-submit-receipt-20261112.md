@@ -17,3 +17,13 @@
 独立 clone/home 使用 `merge-h-308-code` 的 `AIRefactor@d2eee8a6487ea076d8bba65fa52589a683611143`、本机 Codex `project-default`、正式 `environment_start`。记录 `df29a8b7450744a8bd1000376aa5ea33`，Run `e884df58e817ed6ab4806c78e7dcf230`。
 
 北京时间 13:06:33 达到 `ready`。十项均通过，包括 Android Editor 模块和 Unity 批处理授权。Run `completed/stopped`，最终报告 `closed`，独立服务停止且资源已核实结算。报告、状态观察、构建摘要和停服证据位于 `live-308/attempt-1/evidence`。原回执断连由回归用例覆盖。此次真机验收使用 rebase 前构建，已核对 rebase 后的后端源码树字节一致。
+
+## 2026-11-13 回执提示展示
+
+308 检测记录 `101aee3f470249708cac85469b35b36d` 的首次提交诊断为 `request_outcome_unknown`。只读核对确认原 Run `5df89b7d854405aa00bd2d223c508abe` 已完成并停止，检测状态为 `ready`。
+
+回执待核实时，环境状态、历史列表及活动中心显示首次提交诊断。确认受理或拒绝后，顶层诊断展示当前检测结果或失败原因，检测详情保留首次提交记录。回归覆盖未知回执到原 Run 确认、当前观察错误及确认后详情文案。此次验证使用隔离夹具，未重新执行 308 检测或部署到当前安装。
+
+受测版本为 `90ac5261` 加本次工作区改动。固定 L1、L2 和 L4 `go.environment` 在隔离目录串行通过。报告根为 `C:/Users/lmas1/.codex/visualizations/2026/11/13/01a1d412-887c-72e0-be66-e38fa98c1856`，各命令的 `-out` 分别为根下的 `environment-receipt-verified-l1`、`environment-receipt-verified-l2`、`environment-receipt-verified-l4`，均含 `summary.json`。首轮沙箱运行遇到 Git 初始化、PowerShell 授权或快照写入错误，以上结果来自沙箱外重跑。
+
+`npm --prefix web test -- src/features/environment-checks/project-environment.test.tsx` 共 31 项通过，`npm --prefix web run build` 通过。
