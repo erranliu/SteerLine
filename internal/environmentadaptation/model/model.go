@@ -59,23 +59,32 @@ type Manifest struct {
 	Requirements map[string]string `json:"requirements"`
 }
 
-func ParseManifest(document []byte) (Manifest, error) {
-	var m Manifest
+// ManifestBlock extracts the invocation description from the Markdown document.
+func ManifestBlock(document []byte) ([]byte, error) {
 	if len(document) == 0 || len(document) > 1<<20 || !utf8.Valid(document) {
-		return m, errors.New("environment.md exceeds UTF-8 bounds")
+		return nil, errors.New("environment.md exceeds UTF-8 bounds")
 	}
 	document = bytes.ReplaceAll(document, []byte("\r\n"), []byte("\n"))
 	marker := []byte("```steerline-environment\n")
 	start := bytes.Index(document, marker)
 	if start < 0 || start > 0 && document[start-1] != '\n' || bytes.Count(document, []byte("```steerline-environment")) != 1 {
-		return m, errors.New("environment.md requires one steerline-environment JSON block")
+		return nil, errors.New("environment.md requires one steerline-environment JSON block")
 	}
 	b := document[start+len(marker):]
 	end := bytes.Index(b, []byte("\n```"))
 	if end < 0 || end+4 < len(b) && b[end+4] != '\n' {
-		return m, errors.New("invalid environment metadata block")
+		return nil, errors.New("invalid environment metadata block")
 	}
-	if e := Decode(b[:end], &m); e != nil {
+	return b[:end], nil
+}
+
+func ParseManifest(document []byte) (Manifest, error) {
+	var m Manifest
+	block, err := ManifestBlock(document)
+	if err != nil {
+		return m, err
+	}
+	if e := Decode(block, &m); e != nil {
 		return m, e
 	}
 	if m.Version != ManifestVersion || m.Dependencies == nil || m.Requirements == nil || (m.Script != ScriptPath("ps1") && m.Script != ScriptPath("sh")) || (strings.HasSuffix(m.Script, ".ps1") && m.Interpreter != "powershell.exe") || (strings.HasSuffix(m.Script, ".sh") && m.Interpreter != "bash") {
@@ -105,13 +114,14 @@ type CallContext struct {
 	Target  runnercontract.ExecutionTarget `json:"target"`
 }
 type Prepared struct {
-	Identity         runnercontract.ExecutionIdentity `json:"execution_identity"`
-	DerivedExecution runnercontract.ExecutionInput    `json:"derived_execution"`
-	Commit           string                           `json:"commit"`
-	Inputs           string                           `json:"inputs"`
-	Files            map[string]string                `json:"files"`
-	Manifest         Manifest                         `json:"manifest"`
-	Input            runnercontract.RunInput          `json:"input"`
+	SyncRemoteCheckout bool                             `json:"sync_remote_checkout,omitempty"`
+	Identity           runnercontract.ExecutionIdentity `json:"execution_identity"`
+	DerivedExecution   runnercontract.ExecutionInput    `json:"derived_execution"`
+	Commit             string                           `json:"commit"`
+	Inputs             string                           `json:"inputs"`
+	Files              map[string]string                `json:"files"`
+	Manifest           Manifest                         `json:"manifest"`
+	Input              runnercontract.RunInput          `json:"input"`
 }
 type Start struct {
 	EnvironmentKey          string `json:"environment_key"`
@@ -124,7 +134,16 @@ type Request struct {
 	Original json.RawMessage `json:"original"`
 	Action   string          `json:"action"`
 }
+type CheckoutPreparation struct {
+	Step       string                  `json:"step"`
+	Request    runnercontract.Request  `json:"request"`
+	Dispatched bool                    `json:"dispatched,omitempty"`
+	Run        *runnercontract.Run     `json:"run,omitempty"`
+	Stop       *runnercontract.Request `json:"stop,omitempty"`
+}
+
 type Round struct {
+	Checkout             *CheckoutPreparation       `json:"checkout_preparation,omitempty"`
 	Number               int                        `json:"number"`
 	Request              runnercontract.Request     `json:"request"`
 	Submission           string                     `json:"submission"`

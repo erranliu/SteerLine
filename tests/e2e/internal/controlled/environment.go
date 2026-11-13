@@ -41,6 +41,7 @@ func scriptedEnvironment(input runnercontract.RunInput, run *runnercontract.Run)
 }
 
 func advertiseResult(caps map[string]any) {
+	caps["checkout_probe"] = map[string]string{"contract": "steerrunner-checkout-probe/v1", "submit_property": "checkout_probe", "workspace": "existing_checkout"}
 	caps["offline_inspect"] = map[string]any{"command": "inspect --offline", "read_only": true, "writer_absent": true, "starts_workers": false}
 	found := false
 	for _, raw := range caps["workflows"].([]any) {

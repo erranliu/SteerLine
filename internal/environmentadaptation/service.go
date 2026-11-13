@@ -11,7 +11,6 @@ import (
 	"time"
 
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -156,16 +155,16 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 	}
 	input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}
 	input.ProgressFile = nil
-	instruction, err := prompts.EnvironmentInvoke(r.Prepared.Manifest.Interpreter, r.Prepared.Manifest.Script)
-	if err != nil {
-		return err
-	}
-	input.Workflow.PromptOverrides = map[string]string{"execute": instruction}
 	body, err := json.Marshal(input)
 	if err != nil {
 		return err
 	}
 	r.Rounds = []envmodel.Round{{Number: 1, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}, Submission: "pending", Deadline: s.now().Add(time.Duration(r.TimeoutSeconds) * time.Second)}}
+	if r.Prepared.SyncRemoteCheckout {
+		if err := setCheckoutStep(r, &r.Rounds[0], "verify"); err != nil {
+			return err
+		}
+	}
 	r.State = "running"
 	return nil
 }
@@ -230,6 +229,9 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 		return errors.New("environment activity has no original operation")
 	}
 	a := &r.Rounds[len(r.Rounds)-1]
+	if a.Checkout != nil {
+		return s.observeCheckout(ctx, r, a)
+	}
 	if a.Submission == "pending" {
 		if r.Cancelled {
 			a.Settled = true

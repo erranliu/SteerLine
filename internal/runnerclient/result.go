@@ -104,6 +104,24 @@ func (c *Catalog) ValidateResultTarget(e runnercontract.ExecutionInput, w runner
 	return nil
 }
 
+func (c *Catalog) SupportsCheckoutFastForward() bool {
+	p := c.Capabilities.CheckoutFastForward
+	return p != nil && p.Contract == "steerrunner-checkout-fast-forward/v1" &&
+		p.SubmitProperty == "checkout_fast_forward" && p.Workspace == "existing_checkout"
+}
+
+// ValidateEnvironmentCheckout requires the dedicated structured Runner route.
+func (c *Catalog) ValidateEnvironmentCheckout(e runnercontract.ExecutionInput) error {
+	if c == nil || c.Capabilities.EnvironmentCheck == nil {
+		return errors.New("Runner未公布复用现有checkout的环境检测能力")
+	}
+	p := c.Capabilities.EnvironmentCheck
+	if p.Contract != "steerrunner-checkout-probe/v1" || p.SubmitProperty != "checkout_probe" || p.Workspace != "existing_checkout" {
+		return errors.New("Runner现有checkout环境检测能力不完整")
+	}
+	return c.ValidateEnvironmentExecution(e)
+}
+
 // ValidateEnvironmentExecution consumes the Runner's generic one-shot contract.
 func (c *Catalog) ValidateEnvironmentExecution(e runnercontract.ExecutionInput) error {
 	if c == nil || c.Capabilities.OfflineInspect == nil {
