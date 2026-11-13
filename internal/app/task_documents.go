@@ -35,6 +35,23 @@ type taskDocuments struct {
 	timeout     time.Duration
 }
 
+func (c Config) committedDocuments() taskDocuments {
+	return taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
+}
+
+func (a taskDocuments) readCommittedMaterial(ctx context.Context, commit, path string) ([]byte, error) {
+	return a.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
+}
+
+func (a taskDocuments) readCommittedMaterials(ctx context.Context, commit string, paths []string) (map[string][]byte, error) {
+	for _, path := range paths {
+		if err := taskmodel.ValidateFileReference(taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)}); err != nil {
+			return nil, err
+		}
+	}
+	return a.readCommittedFiles(ctx, commit, paths)
+}
+
 func (a taskDocuments) ReadCommittedRegularFile(ctx context.Context, ref taskmodel.FileReference) ([]byte, error) {
 	if err := taskmodel.ValidateFileReference(ref); err != nil {
 		return nil, err

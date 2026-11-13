@@ -3,15 +3,22 @@ package sqlite
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func (s *SQLiteStore) TaskContract(ctx context.Context, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error) {
+	return readTaskContract(ctx, s.db, project, task)
+}
+
+func readTaskContract(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error) {
 	var body []byte
 	var digest string
-	err := s.db.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, task.ContractID, task.TaskID).Scan(&digest, &body)
+	err := q.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, task.ContractID, task.TaskID).Scan(&digest, &body)
 	if err != nil {
 		return taskmodel.TaskContract{}, requiredRecordError(err, "contract_mismatch", "native task has no matching fixed contract")
 	}
@@ -69,21 +76,5 @@ func sameTaskRecord(a, b taskmodel.TaskRecord) bool {
 }
 
 func (tx *sqliteTx) TaskContract(ctx context.Context, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error) {
-	var body []byte
-	var digest string
-	err := tx.tx.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, task.ContractID, task.TaskID).Scan(&digest, &body)
-	if err != nil {
-		return taskmodel.TaskContract{}, requiredRecordError(err, "contract_mismatch", "native task has no matching fixed contract")
-	}
-	var contract taskmodel.TaskContract
-	if err = json.Unmarshal(body, &contract); err != nil {
-		return contract, err
-	}
-	if contract.Digest != digest {
-		return contract, nativeErr("contract_mismatch", "fixed task contract digest differs from its stored row")
-	}
-	if err = taskmodel.ValidateContract(contract); err != nil {
-		return contract, err
-	}
-	return contract, nil
+	return readTaskContract(ctx, tx.tx, project, task)
 }

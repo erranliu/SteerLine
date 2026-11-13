@@ -47,6 +47,7 @@ type roadmapPort struct {
 	config           Config
 	store            *sqlite.SQLiteStore
 	materials        committedMaterialReader
+	taskGraph        roadmapTaskGraphReader
 	service          *roadmapservice.Service
 	publicationMu    sync.Mutex
 	generationMu     sync.Mutex
@@ -57,9 +58,19 @@ type roadmapPort struct {
 	mergeHistory     roadmapMergeHistory
 }
 
-func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, taskAdmission roadmapTaskAdmission, mergeHistory roadmapMergeHistory, refreshBaselineWithRewrite func(context.Context) (commit string, rewritten bool, err error)) *roadmapPort {
+type roadmapMaterialReader interface {
+	committedMaterialReader
+	readCommittedMaterials(context.Context, string, []string) (map[string][]byte, error)
+}
+
+type roadmapTaskGraphReader interface {
+	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
+	TaskGraphSpecSnapshot(context.Context, string) (storageports.TaskGraphSpecSnapshot, error)
+}
+
+func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials roadmapMaterialReader, taskGraph roadmapTaskGraphReader, taskAdmission roadmapTaskAdmission, mergeHistory roadmapMergeHistory, refreshBaselineWithRewrite func(context.Context) (commit string, rewritten bool, err error)) *roadmapPort {
 	c = bindNativeConfiguration(c, cli)
-	p := &roadmapPort{config: c, store: store, materials: materials, taskAdmission: taskAdmission, mergeHistory: mergeHistory}
+	p := &roadmapPort{config: c, store: store, materials: materials, taskGraph: taskGraph, taskAdmission: taskAdmission, mergeHistory: mergeHistory}
 	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit, refreshBaselineWithRewrite: refreshBaselineWithRewrite}
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source
@@ -67,9 +78,7 @@ func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client
 	p.service.Prepare = c.prepareSteerAgentGeneration
 	p.service.PrepareDocuments = p.documentContext
 	p.service.ReadCommitted = materials.readCommittedMaterial
-	if c.runtimeMaintenance != nil {
-		p.service.ReadCommittedFiles = c.runtimeMaintenance.readCommittedMaterials
-	}
+	p.service.ReadCommittedFiles = materials.readCommittedMaterials
 	return p
 }
 func (p *roadmapPort) source(ctx context.Context, relative string) (roadmap.Source, error) {
@@ -89,7 +98,7 @@ func (p *roadmapPort) source(ctx context.Context, relative string) (roadmap.Sour
 	return source, nil
 }
 func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
-	graph, e := p.store.TaskGraphSnapshot(ctx, p.config.Identity())
+	graph, e := p.taskGraph.TaskGraphSpecSnapshot(ctx, p.config.Identity())
 	if e != nil {
 		return nil, e
 	}
@@ -97,20 +106,18 @@ func (p *roadmapPort) graph(ctx context.Context) ([]roadmap.Existing, error) {
 	if len(graph.Tasks) == 0 {
 		return result, nil
 	}
+	// The graph digest includes Spec bytes from one freshly observed target commit.
 	baseline, e := p.mergeHistory.refreshBaseline(ctx)
 	if e != nil {
 		return nil, e
 	}
 	for _, t := range graph.Tasks {
-		contract, e := p.store.TaskContract(ctx, p.config.Identity(), t)
-		if e != nil {
-			return nil, e
-		}
-		spec, e := p.materials.readCommittedMaterial(ctx, baseline, contract.SpecRef.Path)
+		path := graph.SpecPaths[t.TaskID]
+		spec, e := p.materials.readCommittedMaterial(ctx, baseline, path)
 		if e != nil {
 			return nil, fmt.Errorf("已有任务 #%s 的 Spec 无法读取: %w", t.TaskID, e)
 		}
-		n := roadmap.Existing{ID: t.TaskID, Title: t.Title, Status: t.Status, Spec: contract.SpecRef.Path, SpecText: string(spec), MaterialDigest: roadmap.Digest(spec), Predecessors: []string{}}
+		n := roadmap.Existing{ID: t.TaskID, Title: t.Title, Status: t.Status, Spec: path, SpecText: string(spec), MaterialDigest: roadmap.Digest(spec), Predecessors: []string{}}
 		for _, edge := range graph.Edges {
 			if edge.SuccessorID == t.TaskID {
 				n.Predecessors = append(n.Predecessors, edge.PredecessorID)

@@ -48,15 +48,7 @@ func (m *projectMaintenance) git(ctx context.Context, args ...string) ([]byte, e
 }
 
 func (m *projectMaintenance) readCommittedMaterial(ctx context.Context, commit, path string) ([]byte, error) {
-	return (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
-}
-func (m *projectMaintenance) readCommittedMaterials(ctx context.Context, commit string, paths []string) (map[string][]byte, error) {
-	for _, path := range paths {
-		if err := taskmodel.ValidateFileReference(taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)}); err != nil {
-			return nil, err
-		}
-	}
-	return (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).readCommittedFiles(ctx, commit, paths)
+	return m.config.committedDocuments().readCommittedMaterial(ctx, commit, path)
 }
 func (m *projectMaintenance) current() pmm.Observation {
 	m.mu.Lock()

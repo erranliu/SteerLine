@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -58,7 +59,13 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 		return out
 	}
 	commands := NewTaskCommands(store, c)
-	port := &roadmapPort{config: c, store: store, materials: newProjectMaintenance(c, store)}
+	port := newRoadmapPort(c, nil, runnerclient.Client{}, nil, c.committedDocuments(), store, nil, nil, nil)
+	specPath := "SteerlineFlow/spec/roadmap/a.spec.md"
+	bodies, e := port.service.ReadCommittedFiles(ctx, commit, []string{specPath})
+	require(t, e)
+	if string(bodies[specPath]) != files[specPath] {
+		t.Fatalf("Roadmap batch reader returned the wrong committed Spec: %q", bodies[specPath])
+	}
 	empty, e := port.graph(ctx)
 	require(t, e)
 	if empty == nil || len(empty) != 0 {
@@ -102,6 +109,15 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 		existing, err = port.graph(ctx)
 		if refreshes != 2 || existing != nil || err == nil || !strings.Contains(err.Error(), "已有任务 #"+graph.Tasks[0].TaskID+" 的 Spec 无法读取") || errors.Unwrap(err) == nil {
 			t.Fatalf("missing Spec at the refreshed commit did not return a task-specific error: %+v, %v", existing, err)
+		}
+
+		unavailable := errors.New("baseline unavailable")
+		port.mergeHistory = mergeHistoryFixture{refresh: func(context.Context) (string, error) {
+			return commit, unavailable
+		}}
+		existing, err = port.graph(ctx)
+		if existing != nil || !errors.Is(err, unavailable) {
+			t.Fatalf("failed baseline refresh returned a graph: %+v, %v", existing, err)
 		}
 	})
 	// Replay does not reread Git or allocate, even when the observer has a newer authority version.

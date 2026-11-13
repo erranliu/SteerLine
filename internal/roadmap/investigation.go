@@ -13,7 +13,7 @@ import (
 // Repository citations are qualified against original Git objects, not hashes
 // copied by the model. Input-file citations use the already verified request.
 func (s *Service) verifyInvestigation(ctx context.Context, r model.Record, raw []byte, source *runnercontract.RepositorySource) error {
-	if s.ReadCommitted == nil || source == nil {
+	if source == nil {
 		return errors.New("缺少固定调查文件读取能力")
 	}
 	var result model.GeneratedDocuments
@@ -35,25 +35,20 @@ func (s *Service) verifyInvestigation(ctx context.Context, r model.Record, raw [
 		}
 		paths = append(paths, ref.Path)
 	}
-	var bodies map[string][]byte
-	if s.ReadCommittedFiles != nil {
-		var err error
-		bodies, err = s.ReadCommittedFiles(ctx, r.CodeCommit, paths)
-		if err != nil {
-			return fmt.Errorf("无法核实调查文件的固定 Git 内容：%w", err)
-		}
+	if len(paths) == 0 {
+		return nil
+	}
+	if s.ReadCommittedFiles == nil {
+		return errors.New("缺少固定调查文件读取能力")
+	}
+	bodies, err := s.ReadCommittedFiles(ctx, r.CodeCommit, paths)
+	if err != nil {
+		return fmt.Errorf("无法核实调查文件的固定 Git 内容：%w", err)
 	}
 	for _, path := range paths {
-		body := bodies[path]
-		if s.ReadCommittedFiles == nil {
-			var err error
-			body, err = s.ReadCommitted(ctx, r.CodeCommit, path)
-			if err != nil {
-				return fmt.Errorf("无法核实调查文件的固定 Git 内容：%w", err)
-			}
-		}
+		body, found := bodies[path]
 		file := files[path]
-		if model.Digest(body) != file.SHA256 || len(body) != file.SizeBytes {
+		if !found || model.Digest(body) != file.SHA256 || len(body) != file.SizeBytes {
 			return fmt.Errorf("调查文件与固定 Git 不一致：%s", path)
 		}
 	}

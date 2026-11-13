@@ -22,6 +22,14 @@ type TaskGraphSnapshot struct {
 	ExecutionSlotBusy bool
 }
 
+// TaskGraphSpecSnapshot binds each task's Spec path to the same read snapshot
+// as the graph. Spec bodies are read from Git by the consumer.
+type TaskGraphSpecSnapshot struct {
+	Tasks     []taskmodel.TaskRecord
+	Edges     []taskmodel.TaskDependencyRecord
+	SpecPaths map[string]string
+}
+
 // TaskGraph projects the sampled records to the task domain's dependency view.
 func (s TaskGraphSnapshot) TaskGraph() taskmodel.Snapshot {
 	deliveries := make(map[string]taskmodel.DeliveryFact, len(s.Deliveries))
