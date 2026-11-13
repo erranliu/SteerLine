@@ -39,12 +39,6 @@ func materialAdviceSource(c runnerstate.Candidate) (suggestionbridge.Source, boo
 	source.BaseRevision, source.ContractDigest = c.BaseRevision, c.ContractDigest
 	q, _ := json.Marshal(r.Question)
 	source.Facts = []contract.Material{{ID: "question", Label: "原问题", Body: string(q), Source: c.ID, Revision: source.Occurrence}}
-	if r.Final != nil && r.Final.Verified {
-		source.Facts = append(source.Facts, contract.Material{ID: "final", Label: "已核实的原结果", Body: r.Final.Text, Source: c.ID, Revision: source.Occurrence})
-	}
-	if len(c.TestPlan) > 0 {
-		source.Facts = append(source.Facts, contract.Material{ID: "test-plan", Label: "原测试安排", Body: string(c.TestPlan), Source: c.ID})
-	}
 	return source, source.Valid()
 }
 func (p *continuationSuggestionPort) tick(ctx context.Context) error {
@@ -91,24 +85,13 @@ func (p *continuationSuggestionPort) context(ctx context.Context, source suggest
 		return out, errors.New("原待答问题已变化")
 	}
 	// Use the original occurrence/goal. Later observations cannot replace the frozen request.
-	out.Context.Materials = append(out.Context.Materials, source.Facts...)
-	refs := append(append(append(c.Contract.CommonRefs[:0:0], c.Contract.CommonRefs...), c.Contract.AcceptanceRefs...), c.Contract.SpecRef, c.Contract.PlanRef)
-	seen := map[string]bool{}
-	for _, ref := range refs {
-		if ref.Path == "" || seen[ref.Path] {
-			continue
+	for _, material := range source.Facts {
+		if material.ID == "question" {
+			out.Context.Materials = append(out.Context.Materials, material)
+			return out, contract.Validate(out)
 		}
-		seen[ref.Path] = true
-		body, e := p.config.runtimeMaintenance.read(ctx, ref.Commit, ref.Path)
-		if e != nil {
-			return out, e
-		}
-		if ref.Commit == "" || contract.Digest(body) != ref.SHA256 {
-			return out, errors.New("原绑定材料正文或版本不匹配：" + ref.Path)
-		}
-		out.Context.Materials = append(out.Context.Materials, contract.Material{ID: ref.Path, Label: ref.Path, Body: string(body), Source: ref.Path, Revision: ref.Commit})
 	}
-	return out, contract.Validate(out)
+	return out, errors.New("缺少原待答问题")
 }
 func (p *continuationSuggestionPort) read(ctx context.Context, route string, values url.Values) (any, error) {
 	if route == "/main-agent" {
