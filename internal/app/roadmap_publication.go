@@ -195,7 +195,7 @@ func (p *roadmapPort) publicationFiles(ctx context.Context, r roadmap.Record) (m
 		return nil, e
 	}
 	out["SteerlineFlow/Roadmap/generated/"+r.Source.ID+".json"] = string(raw) + "\n"
-	old, e := p.config.runtimeMaintenance.read(ctx, r.CodeCommit, "SteerlineFlow/Roadmap/execution-map.md")
+	old, e := p.materials.readCommittedMaterial(ctx, r.CodeCommit, "SteerlineFlow/Roadmap/execution-map.md")
 	var missing *missingCommittedFileError
 	if e != nil && !errors.As(e, &missing) {
 		return nil, e
@@ -277,7 +277,7 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 	for _, name := range keys {
 		if name != "SteerlineFlow/Roadmap/execution-map.md" {
 			var missing *missingCommittedFileError
-			if old, e := m.read(ctx, pub.Base, name); e == nil {
+			if old, e := p.materials.readCommittedMaterial(ctx, pub.Base, name); e == nil {
 				if !ownedRoadmapMetadata(name, old, *r) {
 					return errors.New("拒绝覆盖已存在的无关文件：" + name)
 				}
@@ -326,7 +326,7 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 		return errors.New("文档提交未形成")
 	}
 	for name, body := range files {
-		got, e := m.read(ctx, pub.Commit, name)
+		got, e := p.materials.readCommittedMaterial(ctx, pub.Commit, name)
 		if e != nil || string(got) != body {
 			return errors.New("文档提交内容未核实：" + name)
 		}

@@ -93,6 +93,7 @@ flowchart LR
 - SQLite 与存储端口无产品包生产依赖；查询层从同快照事实生成 DTO。`runnerbridge` 不导入 SQLite 或 task 实现，`runnerbinding` 仅使用公开契约和 caller 事实。
 - `product/client` 只依赖产品 API；任务交付/项目权威归 `task/model`，宿主 checkpoint/控制及观察契约归 `hostcontract`。这些值不能经旧包别名重新形成双所有者。
 - `taskrunner`、storage 和 query 仍消费 `execution/model` 等展示或配置值；app 也同时包含组装与产品适配。它们是现存耦合，不能因文件已拆分就宣称可独立编译、替换或交付。
+- 项目运行时分别注入固定提交材料读取与执行预留。读取返回指定提交下的普通 Git 文件，执行预留由项目维护核实就绪并持有基线锁完成保存。环境准备使用基线预留，任务启动继续按环境目标、项目基线、存储的顺序取得锁。
 
 新增边界按实际消费者收窄；未实施的 app 拆分、调用面调整等建议保留在历史入口，需另行确认。当前任务交付的同一原子事务和项目资源所有权不因拆包改变。
 

@@ -171,7 +171,7 @@ func (p *roadmapPort) verifyMerged(ctx context.Context, r *roadmap.Record) error
 		return e
 	}
 	for name, body := range files {
-		got, e := p.config.runtimeMaintenance.read(ctx, fact.MergeCommit, name)
+		got, e := p.materials.readCommittedMaterial(ctx, fact.MergeCommit, name)
 		if e != nil {
 			return e
 		}

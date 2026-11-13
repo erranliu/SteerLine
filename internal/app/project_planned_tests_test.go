@@ -35,7 +35,7 @@ func plannedTestsWaitWithoutBlockingProviderAndRequireDeliveredDefinitions(t *te
 	r.ConfirmedDigest = roadmap.ConfirmationDigest(r)
 	r.Documents = roadmap.PlannedDocuments(r)
 	for _, path := range []string{"SteerlineFlow/environment-project.json", "SteerlineFlow/testing/test-list.json"} {
-		raw, err := m.read(ctx, r.CodeCommit, path)
+		raw, err := m.readCommittedMaterial(ctx, r.CodeCommit, path)
 		require(t, err)
 		body := string(raw)
 		r.Materials = append(r.Materials, runnercontract.Document{Path: path, Content: &body})

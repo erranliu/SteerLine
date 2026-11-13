@@ -46,7 +46,7 @@ func planningGitFixture(t *testing.T) (*planningPort, roadmap.PlanningTask, stri
 	require(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	config.runtimeMaintenance = newProjectMaintenance(config, store)
-	port := &planningPort{roadmapPort: &roadmapPort{config: config, store: store}}
+	port := &planningPort{roadmapPort: &roadmapPort{config: config, store: store, materials: config.runtimeMaintenance}}
 	task := roadmap.PlanningTask{ID: strings.Repeat("a", 32), Project: config.Identity(), Revision: 1,
 		Title: "Planning", Path: roadmap.Root + "new.md", Base: base, Material: filepath.Join(root, "rules.md"),
 		Run: &runnercontract.Run{RunID: "run", WorkspaceOriginRunID: "run", WorkspaceIdentity: "workspace",

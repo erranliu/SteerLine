@@ -157,7 +157,7 @@ func TestRoadmapSourceAndMissingDocumentCapability(t *testing.T) {
 	require(t, e)
 	defer store.Close()
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
-	port := &roadmapPort{config: c, store: store}
+	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store}
 	name := roadmap.Root + "source.md"
 	full := filepath.Join(c.Repository, filepath.FromSlash(name))
 	require(t, os.MkdirAll(filepath.Dir(full), 0700))

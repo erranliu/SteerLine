@@ -161,6 +161,10 @@ func TestProjectReadinessRequiresSafeLocalSynchronizationAndRechecksReservation(
 	if ready.Status != "ready" {
 		t.Fatal(ready)
 	}
+	if err := m.reserveReadyExecution(ctx, commit, save); err == nil || reserved != 1 {
+		t.Fatal("ready project admitted a reservation at the superseded baseline", err, reserved)
+	}
+	require(t, m.reserveReadyExecution(ctx, newCommit, func() error { return nil }))
 	m.observation.Diagnostic = "remote unavailable"
 	checkBlocked(pm.RemoteCheckFailed)
 	m.observation.Diagnostic = ""

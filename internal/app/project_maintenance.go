@@ -20,6 +20,12 @@ type maintenanceStore interface {
 	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
 }
+
+// committedMaterialReader reads a regular Git file at the exact supplied commit.
+type committedMaterialReader interface {
+	readCommittedMaterial(ctx context.Context, commit, path string) ([]byte, error)
+}
+
 type projectMaintenance struct {
 	environmentObservation func(context.Context, string) error
 	commitCache            map[string]cachedBaselineCommit
@@ -41,7 +47,7 @@ func (m *projectMaintenance) git(ctx context.Context, args ...string) ([]byte, e
 	return (commandRunner{Dir: m.config.Repository, Timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), ProcessHost: m.config.ProcessHost}).Output(ctx, m.config.Git, args...)
 }
 
-func (m *projectMaintenance) read(ctx context.Context, commit, path string) ([]byte, error) {
+func (m *projectMaintenance) readCommittedMaterial(ctx context.Context, commit, path string) ([]byte, error) {
 	return (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
 }
 func (m *projectMaintenance) current() pmm.Observation {
@@ -171,7 +177,7 @@ func (m *projectMaintenance) workspace(ctx context.Context) (string, error) {
 }
 func (m *projectMaintenance) resolved(ctx context.Context, c taskmodel.TaskContract, commit string) (taskmodel.TaskContract, error) {
 	resolve := func(ref taskmodel.FileReference) (taskmodel.FileReference, error) {
-		b, e := m.read(ctx, commit, ref.Path)
+		b, e := m.readCommittedMaterial(ctx, commit, ref.Path)
 		if e != nil {
 			return ref, e
 		}

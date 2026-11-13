@@ -30,13 +30,13 @@ func (p *roadmapPort) documentContext(ctx context.Context, r roadmap.Record) (ro
 		return result, err
 	}
 	result.Tree = strings.TrimSpace(string(tree))
-	entry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, result.Commit, path) })
+	entry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return p.materials.readCommittedMaterial(ctx, result.Commit, path) })
 	if err != nil {
 		return result, err
 	}
 	names := append([]string{"SteerlineFlow/spec/SpecGuide.md", "SteerlineProjectGuideDoc/spec-plan-guidelines.md"}, entry.Paths()...)
 	for _, name := range names {
-		body, err := m.read(ctx, result.Commit, name)
+		body, err := p.materials.readCommittedMaterial(ctx, result.Commit, name)
 		if err != nil {
 			return result, errors.New("固定版本缺少必需生成规范：" + name)
 		}
@@ -75,7 +75,7 @@ func (p *roadmapPort) publicationPreview(ctx context.Context, r roadmap.Record) 
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		old, err := p.config.runtimeMaintenance.read(ctx, r.CodeCommit, key)
+		old, err := p.materials.readCommittedMaterial(ctx, r.CodeCommit, key)
 		var missing *missingCommittedFileError
 		if err != nil && !errors.As(err, &missing) {
 			return nil, err
@@ -135,7 +135,7 @@ func roadmapTestPreview(r roadmap.Record, d roadmap.Documents, catalogue testmod
 }
 
 func (p *roadmapPort) testCatalogueAt(ctx context.Context, commit string) (testmodel.Catalogue, string, error) {
-	read := func(path string) ([]byte, error) { return p.config.runtimeMaintenance.read(ctx, commit, path) }
+	read := func(path string) ([]byte, error) { return p.materials.readCommittedMaterial(ctx, commit, path) }
 	entry, err := testmodel.ReadProjectEntry(read)
 	if err != nil {
 		return testmodel.Catalogue{}, "", err

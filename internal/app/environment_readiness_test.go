@@ -251,7 +251,7 @@ func TestProjectEnvironmentReadinessRefreshRejectsBeforeMaterialPreparation(t *t
 	p.config.runtimeMaintenance = maintenance
 	_, err = maintenance.check(ctx)
 	require(t, err)
-	service := runnerTaskService(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")})
+	service := runnerTaskService(c, store, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")}, maintenance.prepare, maintenance)
 	service.Tasks.Reader = readinessTasks{c.Identity()}
 	// This owner test isolates preparation ordering; execution-wait capability
 	// validation is covered by the existing published-catalog tests.
