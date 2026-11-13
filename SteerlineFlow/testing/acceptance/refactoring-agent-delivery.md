@@ -19,6 +19,8 @@ Runner 使用 #157 之前的 `8be179f29e0b9eac8572f447439a15cd7d776213`。公开
 
 本轮定向检查、Web 构建、L1/L2、`go.http`、`go.storage`、`go.runner-result` 及受控 `runtime.refactoring-maintenance` 均通过。定向日志在 `C:/SteerlineDebug/wt-1851-pr-review/diagnostics/final-owner-20261113T084739Z-21dc4b12/`。正式报告根为 `C:/SteerlineDebug/wt-1851-pr-review/test-results/`，L1/L2 使用 `pr-review-final-20261113T084554Z-b557806a`，L3 通过复验为 `pr-review-retry-20261113T085638Z-039b2a70`，L4 owner 见 `go.http-20261113T085245Z-8208bb7a`、`go.storage-20261113T085245Z-8208bb7a` 及 `runner-contract-retry-20261113T084333Z-47f512ec`。先前受控场景一次发现失败原生回复的阻断回执未传给审计，修复后一次超时，均确认清理。通过的受控复验覆盖失败回执、原 PR 续作、两版评审及保留 PR 正文。
 
+真实 `refactoring.local-codex` L4 复验通过，见 `C:/SteerlineDebug/wt-1851-pr-review/test-results/L4/pr-review-retry-20261113T085638Z-039b2a70/summary.json`。同一测试 PR [#844](https://github.com/erranliu/SteerlineTest/pull/844) 完成两轮及两个文件的实际冲突续作。发布与续作均有已验证的最终 JSON，五次可写执行共享原工作区。首版 head/base 为 `53823b86fabfacb65aba1ad31f1e8c60a7478776` / `87b8df1f0a726bfa97c46058901bbbbc0faa8f4f`，新版为 `315f80ccce4dc720e7d4b770d2273c484c9aed66` / `9fa2f339f285e995375c80220eae3950bfa16147`。两版评审均按固定差异判断，由于 GitHub 无可核实的测试状态给出证据不足，独立场景验证两版源码通过。两版 PR 正文逐字一致，场景清理通过。后续 UI 过期投影仅采用 PR 事实的调整已通过定向检查，真实复验的执行接线相同。
+
 前置能力验证和主体接线已完成，逐项验证范围见下文。关联 [Spec](../../spec/refactoring-agent-delivery.spec.md) · [Plan](../../plans/refactoring-agent-delivery.plan.md) · [测试选择](../../plans/refactoring-agent-delivery.tests.json)。原最小闭环验收见 [历史证据](refactoring-maintenance.md)。
 
 ## 前置能力验证
