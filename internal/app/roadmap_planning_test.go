@@ -45,10 +45,10 @@ func planningGitFixture(t *testing.T) (*planningPort, roadmap.PlanningTask, stri
 	store, err := OpenNativeTaskCommandStore(ctx, &config)
 	require(t, err)
 	t.Cleanup(func() { _ = store.Close() })
-	config.runtimeMaintenance = newProjectMaintenance(config, store)
+	maintenance := newProjectMaintenance(config, store)
 	port := &planningPort{
-		roadmapPort:            &roadmapPort{config: config, store: store, materials: config.runtimeMaintenance, mergeHistory: config.runtimeMaintenance},
-		refreshBaselineForPush: config.runtimeMaintenance.refreshBaselineForPush,
+		roadmapPort:                &roadmapPort{config: config, store: store, materials: maintenance, mergeHistory: maintenance},
+		refreshBaselineWithRewrite: maintenance.refreshBaselineWithRewrite,
 	}
 	task := roadmap.PlanningTask{ID: strings.Repeat("a", 32), Project: config.Identity(), Revision: 1,
 		Title: "Planning", Path: roadmap.Root + "new.md", Base: base, Material: filepath.Join(root, "rules.md"),
@@ -155,7 +155,6 @@ func TestRoadmapPlanningSelectedPublicationAndHandoff(t *testing.T) {
 	}
 	task.Operation = &roadmap.PlanningOperation{Kind: "publish", Digest: task.Review.Digest, Selected: []string{task.Path, "selected.md"}}
 	require(t, port.capturePlanningReview(ctx, &task))
-	port.config.runtimeMaintenance = nil
 	version := &task.Publication.Versions[0]
 	head, err := port.preparePlanningCommit(ctx, &task, version)
 	require(t, err)
@@ -211,7 +210,6 @@ func TestRoadmapPlanningSelectedPublicationAndHandoff(t *testing.T) {
 func testPlanningPublicationReplay(t *testing.T) {
 	ctx := context.Background()
 	port, task, remote := planningGitFixture(t)
-	port.config.runtimeMaintenance = nil
 	worker := task.Run.Execution.Workspace
 	writePlanningFixture(t, worker, task.Path, "# First approved draft\n")
 	writePlanningFixture(t, worker, "keep-local.txt", "never selected\n")
@@ -285,7 +283,6 @@ func testPlanningPublicationReplay(t *testing.T) {
 func testPlanningPushAfterTargetRewrite(t *testing.T) {
 	ctx := context.Background()
 	port, task, remote := planningGitFixture(t)
-	port.config.runtimeMaintenance = nil
 	writePlanningFixture(t, task.Run.Execution.Workspace, task.Path, "# Approved draft\n")
 	task.Operation = &roadmap.PlanningOperation{Kind: "review"}
 	require(t, port.capturePlanningReview(ctx, &task))
@@ -491,10 +488,31 @@ func TestRoadmapPlanningBatchFreezesOneTarget(t *testing.T) {
 		t.Fatal("case-insensitive planning path was occupied twice")
 	}
 	project := httpcontract.ProjectID(first.Project)
-	queued, summary, err := port.prepare(ctx, httpcontract.CommandEnvelope{Action: planningAction + "rebase_all", ProjectID: project, TargetID: project, ExpectedVersion: 1, Payload: []byte(`{}`)})
+	batch := httpcontract.CommandEnvelope{Action: planningAction + "rebase_all", ProjectID: project, TargetID: project, ExpectedVersion: 1, Payload: []byte(`{}`)}
+	single := httpcontract.CommandEnvelope{Action: planningAction + "rebase", ProjectID: project, TargetID: first.ID, ExpectedVersion: first.Revision, Payload: []byte(`{}`)}
+	refresh := port.refreshBaselineWithRewrite
+	refreshes := 0
+	port.refreshBaselineWithRewrite = func(ctx context.Context) (string, bool, error) {
+		refreshes++
+		return refresh(ctx)
+	}
+	queued, summary, err := port.prepare(ctx, batch)
 	require(t, err)
-	if len(queued) != 2 || queued[0].Operation.Target != first.Base || queued[1].Operation.Target != first.Base || summary.(map[string]any)["skipped"].(map[string]string)[busy.ID] == "" {
+	batchSummary := summary.(map[string]any)
+	if refreshes != 1 || len(queued) != 2 || queued[0].Operation.Target != first.Base || queued[1].Operation.Target != first.Base ||
+		batchSummary["target"] != first.Base || batchSummary["skipped"].(map[string]string)[busy.ID] == "" {
 		t.Fatalf("batch did not preserve independent eligibility and one fixed target: %+v %v", queued, summary)
+	}
+	queued, _, err = port.prepare(ctx, single)
+	require(t, err)
+	if refreshes != 2 || len(queued) != 1 || queued[0].Operation.Target != first.Base {
+		t.Fatalf("single Rebase did not freeze its refreshed target: %+v", queued)
+	}
+	port.refreshBaselineWithRewrite = func(context.Context) (string, bool, error) { return first.Base, true, nil }
+	for _, in := range []httpcontract.CommandEnvelope{batch, single} {
+		if queued, _, err := port.prepare(ctx, in); len(queued) != 0 || err == nil || err.Error() != "目标分支历史已改写，请先核对项目基线" {
+			t.Fatalf("%s accepted a rewritten target: %+v %v", in.Action, queued, err)
+		}
 	}
 }
 
@@ -516,6 +534,7 @@ func (f *planningSubmitFixture) Call(_ context.Context, _ string, _ []string, re
 }
 
 func TestRoadmapPlanningMaterialSendAndOriginalRecovery(t *testing.T) {
+	t.Run("create at refreshed target", testPlanningCreateAtRefreshedTarget)
 	ctx := context.Background()
 	file := filepath.Join(t.TempDir(), "rules.md")
 	rules := []byte("fixed rules")
@@ -547,5 +566,59 @@ func TestRoadmapPlanningMaterialSendAndOriginalRecovery(t *testing.T) {
 	require(t, err)
 	if task.Run == nil || task.Run.RunID != "run" || task.Operation != nil || fixture.sent != nil {
 		t.Fatal("accepted original was not reconciled")
+	}
+}
+
+func testPlanningCreateAtRefreshedTarget(t *testing.T) {
+	ctx := context.Background()
+	port, task, remote := planningGitFixture(t)
+	var caps runnerclient.Capabilities
+	require(t, json.Unmarshal([]byte(`{
+		"workflows":[{"id":"conversation","version":2,"supported_adapters":["codex-app-server"]}],
+		"workspace_write":{"workflow":"conversation/2","acquire":"workspace acquire","release":"workspace release","run_property":"workspace_write","survives_service_restart":true},
+		"configuration_schemas":{"workflow":{},"run_configuration":{},"managed_conversation_input":{}}
+	}`), &caps))
+	catalog, err := runnerclient.CompileCatalog(caps)
+	require(t, err)
+	port.config.runtimeCatalog = catalog
+	port.admit = func(context.Context) error { return nil }
+	port.runner = &planningSubmitFixture{}
+
+	worker := task.Run.Execution.Workspace
+	writePlanningFixture(t, worker, task.Path, "# Existing draft\n")
+	card := roadmap.TaskCardPath(task.ID)
+	writePlanningFixture(t, worker, card, "{}\n")
+	pmGit(t, worker, "add", "--", task.Path, card)
+	pmGit(t, worker, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "existing draft")
+	pmGit(t, worker, "push", remote, "HEAD:refs/heads/main")
+	target := pmGit(t, worker, "rev-parse", "HEAD")
+	project := httpcontract.ProjectID(task.Project)
+	in := httpcontract.CommandEnvelope{Action: planningAction + "create", ProjectID: project, TargetID: project, ExpectedVersion: 1, RequestID: task.ID}
+	for _, payload := range []string{
+		`{"title":"Planning","goal":"Plan a release","file":"NEW.md"}`,
+		`{"title":"Planning","goal":"Plan a release","kind":"task"}`,
+	} {
+		in.Payload = []byte(payload)
+		if _, _, err := port.prepare(ctx, in); err == nil || err.Error() != "目标分支已有同名草稿" {
+			t.Fatalf("creation did not check %s at the refreshed remote target: %v", payload, err)
+		}
+	}
+	cardID := strings.Repeat("c", 32)
+	for _, tc := range []struct{ id, payload, kind, path string }{
+		{strings.Repeat("b", 32), `{"title":"Planning","goal":"Plan a release","file":"fresh.md"}`, "", roadmap.Root + "fresh.md"},
+		{cardID, `{"title":"Planning","goal":"Plan a release","kind":"task"}`, roadmap.SingleTaskPlanning, roadmap.TaskCardPath(cardID)},
+	} {
+		in.RequestID = tc.id
+		in.Payload = []byte(tc.payload)
+		created, _, err := port.prepare(ctx, in)
+		require(t, err)
+		if len(created) != 1 || created[0].Base != target || created[0].Kind != tc.kind || created[0].Path != tc.path {
+			t.Fatalf("creation did not preserve the kind, path and refreshed target: %+v", created)
+		}
+		var submission runnercontract.ConversationRunInput
+		require(t, json.Unmarshal(created[0].Submission.Input, &submission))
+		if submission.Repository.BaseRevision != target {
+			t.Fatalf("Runner submission did not use the frozen target: %+v", submission.Repository)
+		}
 	}
 }

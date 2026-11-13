@@ -57,10 +57,10 @@ type roadmapPort struct {
 	mergeHistory     roadmapMergeHistory
 }
 
-func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, taskAdmission roadmapTaskAdmission, mergeHistory roadmapMergeHistory, refreshBaselineForPush func(context.Context) (commit string, rewritten bool, err error)) *roadmapPort {
+func newRoadmapPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, taskAdmission roadmapTaskAdmission, mergeHistory roadmapMergeHistory, refreshBaselineWithRewrite func(context.Context) (commit string, rewritten bool, err error)) *roadmapPort {
 	c = bindNativeConfiguration(c, cli)
 	p := &roadmapPort{config: c, store: store, materials: materials, taskAdmission: taskAdmission, mergeHistory: mergeHistory}
-	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit, refreshBaselineForPush: refreshBaselineForPush}
+	p.planning = &planningPort{roadmapPort: p, runner: cli, admit: admit, refreshBaselineWithRewrite: refreshBaselineWithRewrite}
 	p.service = &roadmapservice.Service{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Queue: c.runtimeGenerations, Admit: admit}
 	p.service.Source = p.source
 	p.service.Graph = p.graph

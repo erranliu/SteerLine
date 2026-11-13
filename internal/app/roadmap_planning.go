@@ -29,9 +29,9 @@ const planningAction = "roadmap_planning_"
 
 type planningPort struct {
 	*roadmapPort
-	runner                 planningRunner
-	admit                  func(context.Context) error
-	refreshBaselineForPush func(context.Context) (commit string, rewritten bool, err error)
+	runner                     planningRunner
+	admit                      func(context.Context) error
+	refreshBaselineWithRewrite func(context.Context) (commit string, rewritten bool, err error)
 }
 
 type planningRunner interface {
@@ -238,12 +238,9 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		if err != nil {
 			return nil, nil, err
 		}
-		target, err := p.config.runtimeMaintenance.check(ctx)
+		target, err := p.rebaseTarget(ctx)
 		if err != nil {
 			return nil, nil, err
-		}
-		if target.Rewritten {
-			return nil, nil, errors.New("目标分支历史已改写，请先核对项目基线")
 		}
 		var ready []roadmap.PlanningTask
 		skipped := map[string]string{}
@@ -255,10 +252,10 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 				skipped[task.ID] = "当前轮次、冲突或其他操作尚未结算"
 				continue
 			}
-			schedulePlanning(&task, "rebase", target.Commit)
+			schedulePlanning(&task, "rebase", target)
 			ready = append(ready, task)
 		}
-		return ready, map[string]any{"target": target.Commit, "queued": len(ready), "skipped": skipped}, nil
+		return ready, map[string]any{"target": target, "queued": len(ready), "skipped": skipped}, nil
 	}
 	task, err := p.store.PlanningTask(ctx, p.config.Identity(), in.TargetID)
 	if err != nil {
@@ -330,14 +327,11 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		if !view.CanRebase || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
 			return nil, nil, errors.New("任务当前无法 Rebase")
 		}
-		target, err := p.config.runtimeMaintenance.check(ctx)
+		target, err := p.rebaseTarget(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		if target.Rewritten {
-			return nil, nil, errors.New("目标分支历史已改写，请先核对项目基线")
-		}
-		schedulePlanning(&task, "rebase", target.Commit)
+		schedulePlanning(&task, "rebase", target)
 	case planningAction + "abort":
 		if task.Conflict == nil || !view.CanMessage || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
 			return nil, nil, errors.New("没有可中止的 Rebase")
@@ -365,6 +359,17 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		return nil, nil, errors.New("unknown planning command")
 	}
 	return []roadmap.PlanningTask{task}, viewPlanning(task), nil
+}
+
+func (p *planningPort) rebaseTarget(ctx context.Context) (string, error) {
+	target, rewritten, err := p.refreshBaselineWithRewrite(ctx)
+	if err != nil {
+		return "", err
+	}
+	if rewritten {
+		return "", errors.New("目标分支历史已改写，请先核对项目基线")
+	}
+	return target, nil
 }
 
 func schedulePlanning(task *roadmap.PlanningTask, kind, target string) {
@@ -424,7 +429,7 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
-	obs, err := p.config.runtimeMaintenance.check(ctx)
+	baseline, err := p.mergeHistory.refreshBaseline(ctx)
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
@@ -434,7 +439,7 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 		path = roadmap.TaskCardPath(id)
 		directory = "SteerlineFlow/task-planning"
 	}
-	entries, err := p.config.runtimeMaintenance.git(ctx, "ls-tree", "-r", "--name-only", "-z", obs.Commit, "--", directory)
+	entries, err := p.config.repositoryGit(ctx, "ls-tree", "-r", "--name-only", "-z", baseline, "--", directory)
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
@@ -443,7 +448,7 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 			return roadmap.PlanningTask{}, errors.New("目标分支已有同名草稿")
 		}
 	}
-	remote, err := p.config.runtimeMaintenance.git(ctx, "config", "--get", "remote."+p.config.Remote+".url")
+	remote, err := p.config.repositoryGit(ctx, "config", "--get", "remote."+p.config.Remote+".url")
 	if err != nil {
 		return roadmap.PlanningTask{}, err
 	}
@@ -466,7 +471,7 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 		return roadmap.PlanningTask{}, err
 	}
 	request := runnercontract.ConversationRunInput{Title: input.Title, Correlation: map[string]string{"steerline_planning": id}, Workflow: workflow, Execution: execution,
-		Repository:   runnercontract.Repository{URL: strings.TrimSpace(string(remote)), LocalPath: p.config.Repository, Remote: p.config.Remote, BaseBranch: p.config.Branch, BaseRevision: obs.Commit},
+		Repository:   runnercontract.Repository{URL: strings.TrimSpace(string(remote)), LocalPath: p.config.Repository, Remote: p.config.Remote, BaseBranch: p.config.Branch, BaseRevision: baseline},
 		Conversation: runnercontract.ConversationInput{Instruction: instruction, Materials: []runnercontract.Document{}}}
 	if err = p.config.runtimeCatalog.ValidateManagedConversation(request); err != nil {
 		return roadmap.PlanningTask{}, err
@@ -479,7 +484,7 @@ func (p *planningPort) create(ctx context.Context, in httpcontract.CommandEnvelo
 		return roadmap.PlanningTask{}, err
 	}
 	submit := runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: roadmaps.Token(), Input: raw}
-	return roadmap.PlanningTask{ID: id, Project: p.config.Identity(), Title: input.Title, Goal: input.Goal, Kind: input.Kind, Path: path, Base: obs.Commit, Revision: 1, Status: "starting", Build: p.runner.BuildPin(), Submission: submit, Material: material, MaterialSHA: roadmap.Digest(rules), Operation: &roadmap.PlanningOperation{Kind: "submit", Stage: "runner", Command: "submit", Request: &submit, QueuedAt: time.Now().UTC()}}, nil
+	return roadmap.PlanningTask{ID: id, Project: p.config.Identity(), Title: input.Title, Goal: input.Goal, Kind: input.Kind, Path: path, Base: baseline, Revision: 1, Status: "starting", Build: p.runner.BuildPin(), Submission: submit, Material: material, MaterialSHA: roadmap.Digest(rules), Operation: &roadmap.PlanningOperation{Kind: "submit", Stage: "runner", Command: "submit", Request: &submit, QueuedAt: time.Now().UTC()}}, nil
 }
 
 func storePlanningMaterial(filePath string, rules []byte) error {
