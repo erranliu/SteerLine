@@ -160,6 +160,11 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 		return err
 	}
 	r.Rounds = []envmodel.Round{{Number: 1, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}, Submission: "pending", Deadline: s.now().Add(time.Duration(r.TimeoutSeconds) * time.Second)}}
+	if r.Prepared.SyncRemoteCheckout {
+		if err := setCheckoutStep(r, &r.Rounds[0], "verify"); err != nil {
+			return err
+		}
+	}
 	r.State = "running"
 	return nil
 }
@@ -224,6 +229,9 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 		return errors.New("environment activity has no original operation")
 	}
 	a := &r.Rounds[len(r.Rounds)-1]
+	if a.Checkout != nil {
+		return s.observeCheckout(ctx, r, a)
+	}
 	if a.Submission == "pending" {
 		if r.Cancelled {
 			a.Settled = true

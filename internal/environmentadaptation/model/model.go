@@ -114,13 +114,14 @@ type CallContext struct {
 	Target  runnercontract.ExecutionTarget `json:"target"`
 }
 type Prepared struct {
-	Identity         runnercontract.ExecutionIdentity `json:"execution_identity"`
-	DerivedExecution runnercontract.ExecutionInput    `json:"derived_execution"`
-	Commit           string                           `json:"commit"`
-	Inputs           string                           `json:"inputs"`
-	Files            map[string]string                `json:"files"`
-	Manifest         Manifest                         `json:"manifest"`
-	Input            runnercontract.RunInput          `json:"input"`
+	SyncRemoteCheckout bool                             `json:"sync_remote_checkout,omitempty"`
+	Identity           runnercontract.ExecutionIdentity `json:"execution_identity"`
+	DerivedExecution   runnercontract.ExecutionInput    `json:"derived_execution"`
+	Commit             string                           `json:"commit"`
+	Inputs             string                           `json:"inputs"`
+	Files              map[string]string                `json:"files"`
+	Manifest           Manifest                         `json:"manifest"`
+	Input              runnercontract.RunInput          `json:"input"`
 }
 type Start struct {
 	EnvironmentKey          string `json:"environment_key"`
@@ -133,7 +134,16 @@ type Request struct {
 	Original json.RawMessage `json:"original"`
 	Action   string          `json:"action"`
 }
+type CheckoutPreparation struct {
+	Step       string                  `json:"step"`
+	Request    runnercontract.Request  `json:"request"`
+	Dispatched bool                    `json:"dispatched,omitempty"`
+	Run        *runnercontract.Run     `json:"run,omitempty"`
+	Stop       *runnercontract.Request `json:"stop,omitempty"`
+}
+
 type Round struct {
+	Checkout             *CheckoutPreparation       `json:"checkout_preparation,omitempty"`
 	Number               int                        `json:"number"`
 	Request              runnercontract.Request     `json:"request"`
 	Submission           string                     `json:"submission"`

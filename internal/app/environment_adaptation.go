@@ -107,7 +107,11 @@ func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prep
 	if e = p.config.runtimeCatalog.ValidateEnvironmentCheckout(*derived.Execution); e != nil {
 		return envmodel.Prepared{}, e
 	}
-	return p.materialAt(ctx, id, "")
+	prepared, err := p.materialAt(ctx, id, "")
+	if err == nil {
+		prepared.SyncRemoteCheckout = derived.Execution.Target.Kind == "orca_environment" && p.config.runtimeCatalog.SupportsCheckoutFastForward()
+	}
+	return prepared, err
 }
 func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (envmodel.Prepared, error) {
 	ctx = materialReads(ctx)
