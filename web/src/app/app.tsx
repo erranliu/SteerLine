@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   NavLink,
   Routes,
@@ -14,7 +14,6 @@ import {
   type ActivityControl,
 } from "../features/activities/activities";
 import { AppShell } from "./app-shell";
-import { json } from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
 import type { Identity, BrowserSession } from "../shared/api/types";
 import { WorkspaceContext } from "./context";
@@ -206,8 +205,7 @@ export function Workspace({
           )}
           {configurationPending && (
             <div className="notice amber" role="status">
-              配置已保存，需重启 SteerLine
-              后才能启动新候选。已有执行保留原参数。
+              全局启动设置已保存，需重启 SteerLine 后才能启动新候选。
             </div>
           )}
           <Suspense fallback={<div className="empty">正在加载页面…</div>}>
@@ -323,6 +321,26 @@ export function App({ initial }: { initial: BrowserSession }) {
     choose,
     returnTo,
   } = useApplicationProjects(initial);
+  const queryClient = useQueryClient();
+  const loadedDigest = catalog.data?.loaded_execution_digest;
+  const previousLoadedDigest = useRef(loadedDigest);
+  useEffect(() => {
+    if (!loadedDigest) return;
+    const previous = previousLoadedDigest.current;
+    previousLoadedDigest.current = loadedDigest;
+    if (!previous || previous === loadedDigest) return;
+    void queryClient.invalidateQueries({
+      predicate: ({ queryKey }) =>
+        queryKey[0] === home &&
+        [
+          "presentation",
+          "dispatch",
+          "task",
+          "environment",
+          "refactoring",
+        ].includes(String(queryKey[3])),
+    });
+  }, [home, loadedDigest, queryClient]);
   const route = useLocation();
   const previousActivityHome = useRef(home);
   useEffect(() => {
@@ -333,20 +351,7 @@ export function App({ initial }: { initial: BrowserSession }) {
         current.open ? { ...current, open: false } : current,
       );
   }, [route.pathname, home]);
-  const savedStatus = useQuery({
-    queryKey: [home, "execution-config-status"],
-    queryFn: ({ signal }) =>
-      json<{ saved_digest: string }>("/api/web/execution-config/status", {
-        signal,
-      }),
-    enabled: sessionValid,
-    refetchInterval: 5000,
-    retry: false,
-  });
-  const configurationPending =
-    !!savedStatus.data?.saved_digest &&
-    !!catalog.data?.loaded_execution_digest &&
-    savedStatus.data.saved_digest !== catalog.data.loaded_execution_digest;
+  const configurationPending = !!catalog.data?.execution_restart_required;
   const projectConnectionMessage =
     selected && !selected.online
       ? {
@@ -426,7 +431,7 @@ export function App({ initial }: { initial: BrowserSession }) {
   const configurationProps = {
     home,
     csrf: session.data.csrf_token,
-    loadedDigest: catalog.data?.loaded_execution_digest,
+    loadedDigest,
     applicationConnected: sessionValid && !catalog.isError,
   };
   if (configurationPage(route.pathname) || route.pathname === "/projects/add")
@@ -451,7 +456,12 @@ export function App({ initial }: { initial: BrowserSession }) {
         }
       >
         {route.pathname === "/settings/execution-configs" ? (
-          <ExecutionConfigs key={home} {...configurationProps} />
+          <ExecutionConfigs
+            key={home}
+            {...configurationProps}
+            restartRequired={catalog.data?.execution_restart_required}
+            reloadError={catalog.data?.execution_reload_error}
+          />
         ) : route.pathname === "/settings/billing" ? (
           <BillingPage key={home} {...configurationProps} />
         ) : route.pathname === "/projects/add" ? (

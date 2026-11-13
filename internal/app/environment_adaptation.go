@@ -62,11 +62,12 @@ func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Cl
 	p.service = s
 	s.Prepare = p.prepare
 	s.WithTarget = func(ctx context.Context, target, owner, commit string, create func() error) error {
+		save := func() error { return c.reserveCurrentProfiles(ctx, create) }
 		selectCurrent := func() error {
 			if p.baseline != nil {
-				return p.baseline.reserveBaseline(commit, create)
+				return p.baseline.reserveBaseline(commit, save)
 			}
-			return create()
+			return save()
 		}
 		// Match candidate admission's target -> baseline -> storage lock order.
 		if admission := p.config.runtimeEnvironmentAdmission; admission != nil {
@@ -100,10 +101,11 @@ func (p *environmentPort) read(ctx context.Context, commit, path string) ([]byte
 	return r.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
 }
 func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prepared, error) {
+	ctx = p.config.withProfiles(ctx)
 	if p.config.runtimeCatalog == nil {
 		return envmodel.Prepared{}, errors.New("Runner能力目录不可用")
 	}
-	profile, e := p.config.RunnerExecution.Profile(id, "")
+	profile, e := p.config.executionConfig(ctx).Profile(id, "")
 	if e != nil {
 		return envmodel.Prepared{}, e
 	}
@@ -118,6 +120,7 @@ func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prep
 }
 func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (envmodel.Prepared, error) {
 	c := p.config
+	ctx = c.withProfiles(ctx)
 	if commit == "" {
 		var err error
 		commit, err = p.refreshSource(ctx)
@@ -129,7 +132,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if e != nil {
 		return out, e
 	}
-	profile, e := c.RunnerExecution.Profile(id, "")
+	profile, e := c.executionConfig(ctx).Profile(id, "")
 	if e != nil {
 		return out, e
 	}
@@ -160,7 +163,7 @@ func (p *environmentPort) basisAt(ctx context.Context, id, commit string) (envmo
 	ctx = materialReads(ctx)
 	var out envmodel.Prepared
 	c := p.config
-	profile, e := c.RunnerExecution.Profile(id, "")
+	profile, e := c.executionConfig(ctx).Profile(id, "")
 	if e != nil {
 		return out, e
 	}
@@ -261,7 +264,7 @@ func (p *environmentPort) observedSource(ctx context.Context, waitForCheck bool)
 	return strings.TrimSpace(string(raw)), err
 }
 func (p *environmentPort) current(ctx context.Context, id string) (envmodel.Current, envmodel.Record, error) {
-	profile, err := p.config.RunnerExecution.Profile(id, "")
+	profile, err := p.config.executionConfig(ctx).Profile(id, "")
 	if err != nil {
 		return envmodel.Current{}, envmodel.Record{}, err
 	}
@@ -283,6 +286,7 @@ func (p *environmentPort) current(ctx context.Context, id string) (envmodel.Curr
 	return current, record, err
 }
 func (p *environmentPort) admission(ctx context.Context, id, candidateCommit string, refresh bool) (envmodel.Admission, envmodel.Record, error) {
+	ctx = p.config.withProfiles(ctx)
 	if refresh {
 		if err := p.refreshExecutionConfiguration(ctx, id); err != nil {
 			return envmodel.Admission{}, envmodel.Record{}, err
@@ -298,7 +302,7 @@ func (p *environmentPort) admission(ctx context.Context, id, candidateCommit str
 
 func (p *environmentPort) refreshExecutionConfiguration(ctx context.Context, id string) error {
 	p.config.runtimeNative.RefreshFailures()
-	profile, err := p.config.RunnerExecution.Profile(id, "")
+	profile, err := p.config.executionConfig(ctx).Profile(id, "")
 	if err != nil {
 		return err
 	}
@@ -307,6 +311,7 @@ func (p *environmentPort) refreshExecutionConfiguration(ctx context.Context, id 
 }
 
 func (p *environmentPort) qualifyEnvironment(ctx context.Context, id, candidateCommit string, source func(context.Context) (string, error)) (envmodel.Admission, envmodel.Record, error) {
+	ctx = p.config.withProfiles(ctx)
 	current, record, err := p.current(ctx, id)
 	if err != nil {
 		return envmodel.Admission{}, record, err

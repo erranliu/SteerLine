@@ -16,7 +16,7 @@
 
 新增/改变 execution/workflow 必须恰有一条 profile_edit；selection/unset 与保存前 base_profile_id 从同一可信保存版本重建并比较。名称、默认项及删除不伪造 edit；缺能力或非法原文只读显示，不清洗旧字段。
 
-保存按配置摘要条件写入并原子替换，冲突保留输入，失败不覆盖其他页面配置。页面区分草稿、已保存待重启和生效未知；保存后须正式重启，不热加载或自动停服。保存至重启之间按原变更保护暂停新执行受理，已运行执行继续对账；冻结调试包只读。
+保存按配置摘要条件写入并原子替换，冲突保留输入，失败不覆盖其他页面配置。应用服务读取并核验新方案后更新所有项目的方案和默认项，新增、修改、删除和切换默认项无需重启。任务、派发和环境页面读取当前方案。新请求固定受理时的方案，最终写入时再次核对保存版本。Runner 部署和其他全局启动设置仍需正式重启，已有执行继续使用原请求。冻结调试包只读。
 
 目录查询使用 home 上下文，不继承项目 cwd/相对 PATH，只合并同上下文在途请求，失败标过期。目录、默认账号和工作区可见性不证明登录有效或项目就绪，环境检测另行办理。接线见[配置边界 Spec](../../SteerlineFlow/spec/native-execution-configuration-boundary.spec.md)及[验收](../../SteerlineFlow/testing/acceptance/native-execution-configuration-boundary.md)，操作归[Web README](../../web/README.md)。
 

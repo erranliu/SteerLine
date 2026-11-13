@@ -141,7 +141,7 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 			if profileID == "" {
 				return productapi.ControlPayload{}, errors.New("start_task requires -execution-profile")
 			}
-			p, err := c.RunnerExecution.Profile(profileID, "")
+			p, err := c.executionConfig(ctx).Profile(profileID, "")
 			if err != nil {
 				return productapi.ControlPayload{}, err
 			}
@@ -524,7 +524,15 @@ func projectPresentation(c Config) productapi.ProjectPresentation {
 	if c.RunnerExecution.Runner.Executable != "" {
 		result.ExecutionLocation.Runner = &productapi.RunnerLocation{Executable: c.RunnerExecution.Runner.Executable}
 	}
-	for _, p := range c.RunnerExecution.Profiles {
+	c.presentProfiles(&result, context.Background())
+	return result
+}
+
+func (c Config) presentProfiles(result *productapi.ProjectPresentation, ctx context.Context) {
+	current := c.executionConfig(ctx)
+	result.DefaultProfileID = current.DefaultProfile
+	result.Profiles = nil
+	for _, p := range current.Profiles {
 		f := executionmodel.RunnerProfileDisplay(p.ID, p.Name, p.Digest(), runnerclient.RunInput{Execution: p.Execution, Workflow: p.Workflow})
 		f.AcceptedConfigVersion = c.LoadedConfigDigest()
 		view := query.Profile(*f)
@@ -532,7 +540,6 @@ func projectPresentation(c Config) productapi.ProjectPresentation {
 		view.Details = append(view.Details, "SteerRunner "+c.RunnerExecution.Runner.Version, "CLI: "+runnerclient.Protocol)
 		result.Profiles = append(result.Profiles, view)
 	}
-	return result
 }
 
 func clientServiceInstruction(ref productapi.ProjectRef) string {

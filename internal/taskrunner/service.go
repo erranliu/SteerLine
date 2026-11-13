@@ -41,6 +41,8 @@ type Profile struct {
 type Service struct {
 	Project, Claimant, StateDir, DefaultProfile string
 	Profiles                                    map[string]Profile
+	CurrentProfiles                             func(context.Context) (string, map[string]Profile)
+	PinProfiles                                 func(context.Context) context.Context
 	Tasks                                       taskapp.Service
 	Store                                       Store
 	Bridge                                      *runnerbridge.Bridge
@@ -94,6 +96,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	} else if !errors.Is(err, storageports.ErrNotFound) {
 		return runnerbridge.Candidate{}, err
 	}
+	ctx = s.pinProfiles(ctx)
 	if s.Admit != nil {
 		if err := s.Admit(ctx); err != nil {
 			return runnerbridge.Candidate{}, failure("runner_unavailable", err.Error())
@@ -109,11 +112,12 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if !s.Tasks.CanExecuteType(work.Record.Type) {
 		return runnerbridge.Candidate{}, failure("task_not_ready", "task type cannot execute")
 	}
+	defaultID, profiles := s.currentProfiles(ctx)
 	profileID := input.ProfileID
 	if profileID == "" {
-		profileID = s.DefaultProfile
+		profileID = defaultID
 	}
-	profile, err := s.startProfile(profileID)
+	profile, err := startProfile(profiles, profileID)
 	if err != nil {
 		return runnerbridge.Candidate{}, err
 	}
@@ -259,8 +263,22 @@ func (s *Service) checkExecution(ctx context.Context, profile string, refresh bo
 	return s.CheckExecution(ctx, profile, refresh)
 }
 
-func (s *Service) startProfile(id string) (Profile, error) {
-	profile, ok := s.Profiles[id]
+func (s *Service) pinProfiles(ctx context.Context) context.Context {
+	if s.PinProfiles != nil {
+		return s.PinProfiles(ctx)
+	}
+	return ctx
+}
+
+func (s *Service) currentProfiles(ctx context.Context) (string, map[string]Profile) {
+	if s.CurrentProfiles != nil {
+		return s.CurrentProfiles(ctx)
+	}
+	return s.DefaultProfile, s.Profiles
+}
+
+func startProfile(profiles map[string]Profile, id string) (Profile, error) {
+	profile, ok := profiles[id]
 	switch {
 	case !ok:
 		return profile, failure("profile_not_found", "所选执行方案不可用")
@@ -276,7 +294,9 @@ func (s *Service) startProfile(id string) (Profile, error) {
 }
 
 func (s *Service) Dispatch(ctx context.Context) error {
-	if err := s.checkExecution(ctx, s.DefaultProfile, false); err != nil {
+	ctx = s.pinProfiles(ctx)
+	defaultID, _ := s.currentProfiles(ctx)
+	if err := s.checkExecution(ctx, defaultID, false); err != nil {
 		var blocked *taskmodel.Error
 		if errors.As(err, &blocked) && blocked.Code == "environment_not_ready" {
 			return nil

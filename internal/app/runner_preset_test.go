@@ -216,8 +216,7 @@ func testRuntimeReplacement(t *testing.T, restart bool, invalid ...bool) {
 	if err = d.Close(); err == nil {
 		t.Fatal("original A unexpectedly settled")
 	}
-	// A same-build preset rename is admitted only by the reconstructed host;
-	// history continues to display the candidate's original name.
+	// A restarted host reads the saved name. History keeps the original name.
 	renamed := c.RunnerExecution
 	renamed.Profiles[0].Name = "New preset name"
 	require(t, os.WriteFile(GlobalExecutionConfigPath(), mustJSON(renamed), 0600))

@@ -40,20 +40,20 @@ test("configuration.execution-profiles: global editor, saved and loaded snapshot
       await page.getByRole("button", { name: "保存配置", exact: true }).click();
       expect((await saved).status()).toBe(200);
       await expect(
-        page.getByRole("button", { name: new RegExp("浏览器保存的新配置 " + agent) }),
+        page.getByRole("button", {
+          name: new RegExp("浏览器保存的新配置 " + agent),
+        }),
       ).toBeVisible();
-      await expect(page.getByText("配置已保存，待重启生效")).toBeVisible();
-      await expect(page.getByText("服务仍使用已加载配置")).toBeVisible();
+      await expect(page.getByText("当前服务已加载保存配置")).toBeVisible();
     }
     await page.screenshot({
-      path: info.outputPath("saved-pending.png"),
+      path: info.outputPath("saved-active.png"),
       fullPage: true,
     });
     await page.reload();
-    await expect(page.getByText("配置已保存，待重启生效")).toBeVisible();
+    await expect(page.getByText("当前服务已加载保存配置")).toBeVisible();
   } else {
     await expect(page.getByText("当前服务已加载保存配置")).toBeVisible();
-    await expect(page.getByText("配置已保存，待重启生效")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /浏览器保存的新配置/ }),
     ).toHaveCount(2);

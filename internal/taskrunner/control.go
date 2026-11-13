@@ -26,7 +26,7 @@ type Controls struct {
 	Store ControlStore
 	// ResolveProfile validates the caller's current profile ID and digest. No
 	// native profile, policy or lifecycle port is reachable through this callback.
-	ResolveProfile func(string, string) (string, error)
+	ResolveProfile func(context.Context, string, string) (string, error)
 }
 
 func (c Controls) Handle(ctx context.Context, req api.ControlRequest, instance string, revision uint64) (api.ControlReceipt, error) {
@@ -210,7 +210,8 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 		if payload.ExpectedTaskVersion == 0 {
 			return failure("invalid_request", "start requires the displayed task version")
 		}
-		profileID, err := c.ResolveProfile(payload.ExecutionProfileID, payload.ExecutionProfileDigest)
+		ctx = c.Tasks.pinProfiles(ctx)
+		profileID, err := c.ResolveProfile(ctx, payload.ExecutionProfileID, payload.ExecutionProfileDigest)
 		if err != nil {
 			return err
 		}

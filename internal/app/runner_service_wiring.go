@@ -46,15 +46,27 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 	policy := config.environmentPolicy
 	service := &taskrunner.Service{Project: config.Identity(), Claimant: config.Claimant, StateDir: cli.StateDir, DefaultProfile: config.RunnerExecution.DefaultProfile, Profiles: config.RunnerExecution.taskProfiles(config.Repository, config.runnerPublication()), Tasks: NewTaskService(connection, config), Store: connection}
 	service.RunnerBuild = cli.BuildPin()
-	for id, profile := range service.Profiles {
-		profile.UnavailableReason = config.runtimeCatalog.ExecutionWaitUnavailable(profile.Input.Execution)
-		if profile.UnavailableReason == "" && maintenance != nil &&
-			(profile.Input.Workflow.ID == "development" || profile.Input.Workflow.ID == "development-audited") {
-			if err := config.validateTestArrangementProfile(profile.Input.Execution, profile.Input.Workflow); err != nil {
-				profile.UnavailableReason = err.Error()
+	checkProfiles := func(profiles map[string]taskrunner.Profile) {
+		for id, profile := range profiles {
+			profile.UnavailableReason = config.runtimeCatalog.ExecutionWaitUnavailable(profile.Input.Execution)
+			if profile.UnavailableReason == "" && maintenance != nil &&
+				(profile.Input.Workflow.ID == "development" || profile.Input.Workflow.ID == "development-audited") {
+				if err := config.validateTestArrangementProfile(profile.Input.Execution, profile.Input.Workflow); err != nil {
+					profile.UnavailableReason = err.Error()
+				}
 			}
+			profiles[id] = profile
 		}
-		service.Profiles[id] = profile
+	}
+	checkProfiles(service.Profiles)
+	if config.runtimeProfiles != nil {
+		service.PinProfiles = config.withProfiles
+		service.CurrentProfiles = func(ctx context.Context) (string, map[string]taskrunner.Profile) {
+			current := config.executionConfig(ctx)
+			profiles := current.taskProfiles(config.Repository, config.runnerPublication())
+			checkProfiles(profiles)
+			return current.DefaultProfile, profiles
+		}
 	}
 	service.PrepareTestPlan = func(ctx context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (json.RawMessage, error) {
 		if run.Workflow.ID == "development" || run.Workflow.ID == "development-audited" {
@@ -108,7 +120,9 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		}
 		service.ReserveExecution = func(ctx context.Context, w taskmodel.FixedWork, c runnerbridge.Candidate, candidate bool) error {
 			return maintenance.reserveReadyExecution(ctx, c.BaseRevision, func() error {
-				return connection.ReserveRunnerCandidate(ctx, w, c, candidate)
+				return config.reserveCurrentProfiles(ctx, func() error {
+					return connection.ReserveRunnerCandidate(ctx, w, c, candidate)
+				})
 			})
 		}
 	}
@@ -130,7 +144,9 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			if previous != nil {
 				return previous(ctx, w, candidate, alternate)
 			}
-			return connection.ReserveRunnerCandidate(ctx, w, candidate, alternate)
+			return config.reserveCurrentProfiles(ctx, func() error {
+				return connection.ReserveRunnerCandidate(ctx, w, candidate, alternate)
+			})
 		}
 		var input runnercontract.RunInput
 		if err := json.Unmarshal(candidate.Submit.Input, &input); err != nil {
@@ -147,7 +163,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			if err != nil {
 				return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 			}
-			profile, profileErr := config.RunnerExecution.Profile(candidate.ProfileID, "")
+			profile, profileErr := config.executionConfig(ctx).Profile(candidate.ProfileID, "")
 			if profileErr != nil {
 				return profileErr
 			}
@@ -161,9 +177,6 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		a := config.runtimeEnvironmentAdmission
 		a.mu.Lock()
 		defer a.mu.Unlock()
-		if err := (appConfigVerifier{project: config.projectPath, global: config.executionPath, digest: config.configDigest}).VerifyCurrentConfig(); err != nil {
-			return err
-		}
 		if err := a.check(ctx, target, ""); err != nil {
 			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 		}
@@ -191,7 +204,8 @@ func newRunnerService(config Config, host hostport.HostPort, connection *sqlite.
 		return connection.ObserveManualPR(ctx, config.Identity(), observation, err)
 	}
 	service.Admit = func(ctx context.Context) error {
-		if err := (appConfigVerifier{project: config.projectPath, global: config.executionPath, digest: config.configDigest}).VerifyCurrentConfig(); err != nil {
+		ctx = config.withProfiles(ctx)
+		if err := config.verifyCurrentConfig(ctx); err != nil {
 			return err
 		}
 		status, err := cli.ServiceStatus(ctx)
@@ -203,8 +217,8 @@ func newRunnerService(config Config, host hostport.HostPort, connection *sqlite.
 		}
 		return nil
 	}
-	controls := taskrunner.Controls{Tasks: service, Store: connection, ResolveProfile: func(id, digest string) (string, error) {
-		p, err := config.RunnerExecution.Profile(id, digest)
+	controls := taskrunner.Controls{Tasks: service, Store: connection, ResolveProfile: func(ctx context.Context, id, digest string) (string, error) {
+		p, err := config.executionConfig(ctx).Profile(id, digest)
 		return p.ID, err
 	}}
 	var actor *taskrunner.Actor

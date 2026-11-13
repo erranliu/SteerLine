@@ -82,7 +82,7 @@ func TestAutomaticDeliveryActorKeepsStopPriority(t *testing.T) {
 				return fixturePRObservation(second, time.Now().UTC(), "open", nil).Fact, nil
 			}
 			host := &stopHost{done: make(chan api.ControlReceipt, 1)}
-			controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(string, string) (string, error) {
+			controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(context.Context, string, string) (string, error) {
 				t.Fatal("stop consulted the execution profile")
 				return "", nil
 			}}

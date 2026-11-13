@@ -62,6 +62,9 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 		return out, projectStoppingError()
 	}
 	e := p.actor.Call(ctx, func(ctx context.Context) error {
+		if in.Action == "environment_start" || in.Action == "environment_invalidate" {
+			ctx = p.config.withProfiles(ctx)
+		}
 		raw, _ := json.Marshal(in)
 		old, found, e := p.store.LookupCommand(ctx, p.config.Identity(), in.RequestID)
 		if e != nil {
@@ -113,7 +116,7 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 			if e = decodeStrictJSON(in.Payload, &invalidate); e != nil {
 				break
 			}
-			if invalidate.Revision == nil || !p.config.runtimeEnvironment.supportsEnvironment(invalidate.Key) {
+			if invalidate.Revision == nil || !p.config.runtimeEnvironment.supportsEnvironment(ctx, invalidate.Key) {
 				e = errors.New("invalid current environment target/version")
 				break
 			}
@@ -211,7 +214,7 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 	}
 	key := values.Get("environment_key")
 	if route == "/environment/options" && len(values) == 1 && len(values["configuration"]) == 1 && values.Get("configuration") == "true" {
-		options := port.configurationOptions()
+		options := port.configurationOptions(ctx)
 		var err error
 		options.RepairPrompt, err = prompts.EnvironmentRepair(env.DocumentPath())
 		return options, err

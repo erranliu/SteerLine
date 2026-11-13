@@ -16,7 +16,7 @@ func (c Config) resolveSteerAgentExecution(ctx context.Context, workflow runnerc
 	}
 	resolved, err := c.runtimeNative.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{
 		Operation:     "compose",
-		BaseExecution: executionconfig.SteerAgentBase(c.RunnerExecution.Profiles),
+		BaseExecution: executionconfig.SteerAgentBase(c.executionConfig(ctx).Profiles),
 		Workflow:      workflow,
 		Selection: &runnercontract.ExecutionSelection{
 			Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Agent: "codex",

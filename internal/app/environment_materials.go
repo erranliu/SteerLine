@@ -6,9 +6,8 @@ import (
 	model "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 )
 
-func (p *environmentPort) targetProfile(key string) (RunnerProfile, error) {
-	ctx := context.Background()
-	for _, profile := range p.config.RunnerExecution.Profiles {
+func (p *environmentPort) targetProfile(ctx context.Context, key string) (RunnerProfile, error) {
+	for _, profile := range p.config.executionConfig(ctx).Profiles {
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}
@@ -20,7 +19,7 @@ func (p *environmentPort) targetProfile(key string) (RunnerProfile, error) {
 	return RunnerProfile{}, fmt.Errorf("所选环境不存在于当前开发方案")
 }
 func (p *environmentPort) materials(ctx context.Context, key string) (any, error) {
-	_, e := p.targetProfile(key)
+	_, e := p.targetProfile(ctx, key)
 	if e != nil {
 		return nil, e
 	}

@@ -37,7 +37,12 @@ type refactoringPort struct {
 
 func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, reserver readyExecutionReserver) *refactoringPort {
 	p := &refactoringPort{config: c, store: store, materials: materials}
-	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReviewDiff: p.reviewDiff, ReadCost: p.cost, Queue: c.runtimeGenerations, Reserve: reserver.reserveReadyExecution, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
+	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReviewDiff: p.reviewDiff, ReadCost: p.cost, Queue: c.runtimeGenerations, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
+	p.service.Reserve = func(ctx context.Context, commit string, save func() error) error {
+		return reserver.reserveReadyExecution(ctx, commit, func() error {
+			return c.reserveCurrentProfiles(ctx, save)
+		})
+	}
 	return p
 }
 func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen, error) {
@@ -67,7 +72,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	if e = requireProjectReadiness(ready); e != nil {
 		return out, e
 	}
-	profile, e := c.RunnerExecution.Profile(in.Profile, "")
+	profile, e := c.executionConfig(ctx).Profile(in.Profile, "")
 	if e != nil {
 		return out, e
 	}
@@ -361,7 +366,8 @@ func (p *refactoringPort) readiness(ctx context.Context, id string) (refactoring
 	if id == "" {
 		return out, nil
 	}
-	profile, err := c.RunnerExecution.Profile(id, "")
+	ctx = c.withProfiles(ctx)
+	profile, err := c.executionConfig(ctx).Profile(id, "")
 	if err != nil || !supportsRefactoringProfile(profile) {
 		out.Environment, out.Reason = "not_ready", "所选执行配置不可用于本地 Codex 维护"
 		return out, nil
@@ -428,7 +434,8 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 			views = append(views, v)
 		}
 		profiles := []map[string]string{}
-		for _, profile := range p.config.RunnerExecution.Profiles {
+		current := p.config.executionConfig(ctx)
+		for _, profile := range current.Profiles {
 			if supportsRefactoringProfile(profile) {
 				profiles = append(profiles, map[string]string{"id": profile.ID, "name": profile.Name})
 			}
@@ -437,7 +444,7 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"records": views, "profiles": profiles, "default_profile": p.config.RunnerExecution.DefaultProfile, "steer_agent": agent}, nil
+		return map[string]any{"records": views, "profiles": profiles, "default_profile": current.DefaultProfile, "steer_agent": agent}, nil
 	}
 	id := strings.TrimPrefix(route, "/refactoring/")
 	if !ref.ValidID(id) {

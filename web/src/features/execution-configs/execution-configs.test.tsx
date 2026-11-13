@@ -475,13 +475,13 @@ function fixture(
   );
   return writes;
 }
-it("edits and saves without dropping advanced values, showing pending restart", async () => {
+it("edits and saves without dropping advanced values, waiting for activation", async () => {
   const writes = fixture();
   const name = await screen.findByLabelText("配置名称");
   expect(screen.getByRole("button", { name: "保存配置" })).toBeDisabled();
   fireEvent.change(name, { target: { value: "已修改" } });
   fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
-  await screen.findByText("配置已保存，待重启生效");
+  await screen.findByText("执行方案已保存。");
   expect(writes).toHaveLength(1);
   expect(writes[0]).toMatchObject({
     execution_profiles: [
@@ -546,7 +546,7 @@ it("renames a profile without expanding native model defaults", async () => {
   expect(screen.getByLabelText("模型")).toHaveValue("");
   fireEvent.change(name, { target: { value: "原生默认配置" } });
   fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
-  await screen.findByText("配置已保存，待重启生效");
+  await screen.findByText("执行方案已保存。");
   expect(writes).toHaveLength(1);
   const settings = (writes[0] as ConfigSnapshot["config"]).execution_profiles[0]
     .execution.settings;
@@ -559,7 +559,7 @@ it("reconciles a lost save response before claiming the result", async () => {
   const name = await screen.findByLabelText("配置名称");
   fireEvent.change(name, { target: { value: "回执丢失" } });
   fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
-  await screen.findByText("配置已保存，待重启生效");
+  await screen.findByText("执行方案已保存。");
   expect(writes).toHaveLength(1);
   expect(screen.getByLabelText("配置名称")).toHaveValue("回执丢失");
 });
@@ -600,7 +600,7 @@ it("preserves read-only content settings until explicitly switching to developme
     (writes[0] as ConfigSnapshot["config"]).execution_profiles[0].execution
       .settings.access_mode,
   ).toBe("read_only");
-  await screen.findByText("配置已保存，待重启生效");
+  await screen.findByText("执行方案已保存。");
   fireEvent.click(
     screen.getByText("更多设置", { selector: "summary", exact: false }),
   );
@@ -623,7 +623,7 @@ it("copies and deletes a saved non-default profile without deleting the default"
   expect(screen.getByRole("button", { name: "删除" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "复制" }));
   fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
-  await screen.findByText("配置已保存，待重启生效");
+  await screen.findByText("执行方案已保存。");
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "删除" })).toBeEnabled(),
   );

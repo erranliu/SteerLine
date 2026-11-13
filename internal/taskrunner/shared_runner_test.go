@@ -37,7 +37,10 @@ func TestSharedRunnerControlRecoversMissingOuterReceipt(t *testing.T) {
 	body, _ := json.Marshal(req)
 	wire := runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: strings.Repeat("c", 32), Input: json.RawMessage(`{"expected_revision":7,"text":"answer"}`)}
 	store := &savedActionStore{command: ports.CommandRecord{Kind: "runner_control", Payload: body}, candidate: runnerbridge.Candidate{ID: strings.Repeat("b", 32), Project: "project", Revision: 99, Actions: []runnerbridge.Action{{CallerRequestID: req.RequestID, CallerRequestDigest: RequestDigest(req), Command: "reply", Request: wire, State: "accepted"}}}}
-	controls := Controls{Store: store, Tasks: &Service{Project: "project", Store: store}, ResolveProfile: func(string, string) (string, error) { t.Fatal("replay reconstructed input"); return "", nil }}
+	controls := Controls{Store: store, Tasks: &Service{Project: "project", Store: store}, ResolveProfile: func(context.Context, string, string) (string, error) {
+		t.Fatal("replay reconstructed input")
+		return "", nil
+	}}
 	// The original Action survived, but the outer receipt did not. All live
 	// revisions and the current host have advanced; no Runner implementation exists.
 	for i := 0; i < 2; i++ {
