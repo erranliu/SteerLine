@@ -13,7 +13,6 @@ export function Operations({
   reconcile,
   reconciling,
   online,
-  compact = false,
   scope,
   candidates = [],
 }: {
@@ -21,7 +20,6 @@ export function Operations({
   reconcile: (row: StoredRequest) => void;
   reconciling: boolean;
   online: boolean;
-  compact?: boolean;
   scope?: Pick<Identity, "project_id" | "instance_id">;
   candidates?: Candidate[];
 }) {
@@ -29,72 +27,6 @@ export function Operations({
     !scope ||
     (row.envelope.project_id === scope.project_id &&
       row.envelope.instance_id === scope.instance_id);
-  if (compact) {
-    const rows = requests
-      .filter((r) => current(r) && r.envelope.action.startsWith("environment_"))
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
-    const latest = rows.at(-1);
-    const pending = rows.filter(
-      (r) => !["applied", "rejected"].includes(r.response?.status ?? ""),
-    );
-    const displayed = rows.filter((r) => r === latest || pending.includes(r));
-    const actions: Record<string, string> = {
-      environment_start: "开始检测",
-      environment_stop: "停止检测",
-      environment_invalidate: "标记失效",
-    };
-    return displayed.length ? (
-      <section
-        className="environment-operation-results"
-        aria-label="操作结果"
-        aria-live="polite"
-      >
-        {displayed.map((row) => {
-          const unresolved = pending.includes(row);
-          const confirmingStart =
-            unresolved && row.envelope.action === "environment_start";
-          return (
-            <div key={row.envelope.request_id}>
-              <p>
-                {actions[row.envelope.action] || "环境操作"}：
-                {row.response?.status === "applied"
-                  ? "操作成功"
-                  : row.response?.status === "rejected"
-                    ? "操作未成功，请刷新后重试"
-                    : confirmingStart
-                      ? "正在确认启动"
-                      : "结果待核实"}
-                {unresolved && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={!online || reconciling}
-                    onClick={() => reconcile(row)}
-                  >
-                    重新查询
-                  </Button>
-                )}
-              </p>
-              {row.response?.status !== "applied" &&
-                (row.response?.diagnostic || row.error) && (
-                  <p className="muted">
-                    {row.response?.diagnostic || row.error}
-                  </p>
-                )}
-              <CopyExecutionInfo
-                info={requestExecutionInfo(row.envelope, row.response)}
-              />
-              {requestDestination(row.envelope, row.response) && (
-                <Link to={requestDestination(row.envelope, row.response)!}>
-                  查看对应记录
-                </Link>
-              )}
-            </div>
-          );
-        })}
-      </section>
-    ) : null;
-  }
   const latest = requests
     .filter(current)
     .slice()

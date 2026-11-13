@@ -465,6 +465,11 @@ it("routes manual reconciliation through the original envelope while an automati
   );
   const mounted = mountWorkspace(api, client);
   await waitFor(() => expect(reconcile).toHaveBeenCalledTimes(1));
+  expect(
+    screen.queryByRole("region", { name: "操作结果" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("link", { name: /^配置$/ }));
+  await screen.findByRole("region", { name: "操作结果" });
   fireEvent.click(screen.getByText(/操作回执 · 最近/));
   const button = await screen.findByRole("button", { name: "查询原请求" });
   fireEvent.click(button);
