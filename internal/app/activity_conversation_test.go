@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
@@ -98,9 +99,12 @@ func TestActivityConversationReadsOnePageFromPinnedRunner(t *testing.T) {
 	calls := filepath.Join(state, "calls.txt")
 	t.Setenv("STEERLINE_USAGE_QUERY_CALLS", calls)
 	publish := func(session string) {
+		startedAt := time.Date(2026, 11, 13, 8, 10, 11, 0, time.UTC)
 		page := runnerclient.NativeConversationPage{
 			NativeSessionTarget: runnerclient.NativeSessionTarget{RunID: "run", AttemptID: "attempt", SessionID: session, Generation: "generation"},
-			Messages:            []runnerclient.NativeConversationMessage{{ID: "older", Role: "assistant", Text: "Earlier assistant text"}},
+			Messages: []runnerclient.NativeConversationMessage{{
+				ID: "older", Role: "assistant", Text: "Earlier assistant text", TurnID: "turn", TurnStartedAt: &startedAt,
+			}},
 		}
 		fixture, err := json.Marshal(map[string]any{runnerclient.NativeConversationHistory: page})
 		require(t, err)
@@ -121,7 +125,8 @@ func TestActivityConversationReadsOnePageFromPinnedRunner(t *testing.T) {
 	require(t, err)
 	payload, err := json.Marshal(value)
 	require(t, err)
-	if !strings.Contains(string(payload), id) || !strings.Contains(string(payload), "Earlier assistant text") {
+	if !strings.Contains(string(payload), id) || !strings.Contains(string(payload), "Earlier assistant text") ||
+		!strings.Contains(string(payload), `"turn_started_at":"2026-11-13T08:10:11Z"`) {
 		t.Fatalf("original conversation page not returned: %s", payload)
 	}
 	invocation, err := os.ReadFile(calls)

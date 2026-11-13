@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -150,6 +151,9 @@ function setup(
           {
             id: older ? "earlier" : "latest",
             role: "assistant",
+            turn_id: older ? "older-turn" : "current-turn",
+            turn_started_at:
+              !older && !body ? "2026-11-13T08:10:11Z" : undefined,
             text: body
               ? "最新的助手消息完整正文"
               : older
@@ -160,6 +164,16 @@ function setup(
             truncated: !older && !body,
             body_cursor: !older && !body ? "body" : undefined,
           },
+          ...(!older && !body && !second
+            ? [
+                {
+                  id: "follow-up",
+                  role: "assistant",
+                  turn_id: "current-turn",
+                  text: "同轮后续消息",
+                },
+              ]
+            : []),
         ],
       };
     }
@@ -486,13 +500,23 @@ it("opens candidate conversation on demand and prepends earlier pages in native 
   const panel = screen.getByRole("region", { name: "原会话对话" });
   expect(
     Array.from(panel.querySelectorAll("article p"), (el) => el.textContent),
-  ).toEqual(["更早的助手消息", "最新的助手消息"]);
+  ).toEqual(["更早的助手消息", "最新的助手消息", "同轮后续消息"]);
+  expect(panel.querySelectorAll("article time")).toHaveLength(1);
+  expect(panel.querySelector("article time")).toHaveAttribute(
+    "datetime",
+    "2026-11-13T08:10:11Z",
+  );
+  expect(within(panel).getByText("时间未记录")).toBeVisible();
   expect(screen.getByText("原会话仅有部分历史可读。")).toBeVisible();
   expect(calls.filter((path) => path.includes("/conversation?"))).toHaveLength(
     2,
   );
   fireEvent.click(screen.getByRole("button", { name: "展开消息正文" }));
   await screen.findByText("最新的助手消息完整正文");
+  expect(panel.querySelector("article time")).toHaveAttribute(
+    "datetime",
+    "2026-11-13T08:10:11Z",
+  );
   expect(calls.filter((path) => path.includes("cursor=body"))).toHaveLength(1);
 });
 

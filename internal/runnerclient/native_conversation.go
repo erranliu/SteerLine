@@ -4,18 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"time"
 	"unicode/utf8"
 )
 
 const NativeConversationHistory = "native-conversation-history"
 
 type NativeConversationMessage struct {
-	ID         string `json:"id"`
-	Role       string `json:"role"`
-	Text       string `json:"text"`
-	TurnID     string `json:"turn_id,omitempty"`
-	BodyCursor string `json:"body_cursor,omitempty"`
-	Truncated  bool   `json:"truncated,omitempty"`
+	ID            string     `json:"id"`
+	Role          string     `json:"role"`
+	Text          string     `json:"text"`
+	TurnID        string     `json:"turn_id,omitempty"`
+	TurnStartedAt *time.Time `json:"turn_started_at,omitempty"`
+	BodyCursor    string     `json:"body_cursor,omitempty"`
+	Truncated     bool       `json:"truncated,omitempty"`
 }
 
 type NativeConversationPage struct {
