@@ -13,3 +13,5 @@
 - 应用公开环境命令、检测材料和依赖定向验证通过。sl-checkout-final-app-eda6f7d2b5154bb7a13b0d5e4106aaf6/summary.json。
 - Markdown 链接与 git diff --check 通过。
 - 配套 Runner 用独立服务和临时 Git 项目验证了本机和本机 Orca 结果封存，配对机验证见 SteerRunner PR 161。没有更换正式安装。
+
+配对机 308 验证创建 Run 56c1554838e7b2d7563f3fda32bb0fb5。其 checkout 的 HEAD 3dd85978 与调用基线 d57552a2 的 manifest 依赖声明不同，Runner 在调用项目入口前按约定拒绝，原 Run 已停止并封存诊断。未修改目标 checkout。
