@@ -184,7 +184,7 @@ func RefactoringMaintenance(s *Scenario) {
 	}
 	browser(record.ID, "answer")
 	wait("delivered")
-	if record.Round != 2 || len(record.Reports) != 1 || record.PR == nil || record.Reports[0].SyncedAt == nil {
+	if record.Round != 2 || len(record.Reports) != 1 || record.PR == nil || record.Reports[0].Recommendation == "" {
 		s.t.Fatal("delivery missing", record)
 	}
 	original := record.PR.URL
@@ -222,11 +222,7 @@ func RefactoringMaintenance(s *Scenario) {
 			if o.Purpose != "first" && !runnerbinding.SamePath(run.Execution.Workspace, filepath.Join(runnerstatepath.Directory(p.Home), "runs", o.RunID, "content")) {
 				s.t.Fatal("later decision did not use isolated content directory", o.Purpose, run.Execution.Workspace)
 			}
-			materialCount := 3
-			if o.Purpose == "report" {
-				materialCount = 2
-			}
-			if len(run.Materials) != materialCount || run.Materials[1].Path != "maintenance/context.json" {
+			if len(run.Materials) != 3 || run.Materials[1].Path != "maintenance/context.json" {
 				s.t.Fatal("missing decision context", run.Materials)
 			}
 			contextRaw, err := os.ReadFile(run.Materials[1].SnapshotPath)
@@ -263,13 +259,13 @@ func RefactoringMaintenance(s *Scenario) {
 		identityKey = r.WorkspaceIdentity
 		origin = r.WorkspaceOriginRunID
 	}
-	if writes != 5 {
-		s.t.Fatalf("first, repair, second, publication, report sync: got %d", writes)
+	if writes != 4 {
+		s.t.Fatalf("first, repair, second, publication: got %d", writes)
 	}
 	provider, e := controlled.Read(fixture.Providers[latest])
 	s.Must(e)
-	if provider.PRs[original].Body != record.Reports[0].Body {
-		s.t.Fatal("provider body differs from the stored report")
+	if provider.PRs[original].Body != "Original PR description" {
+		s.t.Fatal("maintenance review modified the PR body")
 	}
 	for _, n := range fixture.SubmitCalls {
 		if n != 1 {

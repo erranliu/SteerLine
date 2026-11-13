@@ -339,13 +339,13 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat *Catalog, base runnercontract.RunInput, nativeState string) {
 	t.Helper()
 	input := base
-	executePrompt, promptErr := prompts.MaintenanceExecute()
+	executePrompt, promptErr := prompts.MaintenanceExecute([]byte(`{"action_id":"fixture","operation_id":"fixture","instruction":"controlled maintenance writer"}`))
 	if promptErr != nil {
 		t.Fatal(promptErr)
 	}
 	input.Workflow = runnercontract.Workflow{ID: "execute", Version: 1, PromptOverrides: map[string]string{"execute": executePrompt}}
 	input.Publication = runnercontract.Publication{}
-	input.ProgressFile = nil
+	input.ProgressFile, input.ResultFile = nil, nil
 	read, err := c.ConfigureExecution(ctx, cat, runnercontract.ExecutionConfigurationRequest{Operation: "derive", Execution: &input.Execution, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, AccessMode: "read_only"})
 	if err != nil || read.Execution == nil {
 		t.Fatal(read, err)
@@ -388,8 +388,7 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	sessions := map[string]bool{}
 	for i := 0; i < 4; i++ {
 		input.ReuseWorktreeFromRunID = latest
-		seed := []byte(fmt.Sprintf("maintenance seed for writer %d", i))
-		input.ResultFile = &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(seed), RequireInitialization: true}
+
 		body, _ := json.Marshal(input)
 		receipt, e := c.Submit(ctx, Request{Protocol: Protocol, RequestID: fmt.Sprintf("maintenance-reuse-%d", i), Input: body})
 		if e != nil {
@@ -423,24 +422,7 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 			t.Fatal(e)
 		}
 		wait(run.RunID, true)
-		var sealed runnercontract.ResultFile
-		for ctx.Err() == nil {
-			sealed, e = c.ResultFile(ctx, run.RunID)
-			if e != nil {
-				t.Fatal(e)
-			}
-			if sealed.CollectionStatus == "closed" {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		if sealed.CollectionStatus != "closed" {
-			t.Fatalf("writer %d result did not settle: %s (%v)", i, sealed.Diagnostic, ctx.Err())
-		}
-		raw, e := ValidateResultFile(sealed, run.RunID)
-		if e != nil || !bytes.Equal(raw, seed) {
-			t.Fatalf("writer %d did not seal its own initialized result bytes: %v (%s)", i, e, sealed.Diagnostic)
-		}
+
 		latest = run.RunID
 	}
 	// Maintenance decisions use the original project directory while the
@@ -509,5 +491,5 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	if after.WorkspaceIdentity != identity || after.ReuseWorktreeFromRunID != latest {
 		t.Fatal("readonly changed original writer chain", after)
 	}
-	t.Logf("fixed EXE maintenance: four execute Runs share origin=%s identity=%s workspace=%s branch=%s; distinct sessions; dirty file retained; readonly directory/file manifests verified", origin, identity, workspace, branch)
+	t.Logf("fixed EXE maintenance: four execute Runs share origin=%s identity=%s workspace=%s branch=%s; distinct sessions; dirty file retained without result files; readonly directory/file manifests verified", origin, identity, workspace, branch)
 }

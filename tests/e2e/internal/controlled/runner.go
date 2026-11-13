@@ -598,7 +598,6 @@ func controlledCapabilities() map[string]any {
 	caps["configuration_schemas"].(map[string]any)["generate_input"] = map[string]any{"type": "object", "required": []string{"workflow", "execution", "generate"}}
 	advertiseRepository(caps)
 	advertiseResult(caps)
-	caps["result_file"].(map[string]any)["required_initialization"] = "require_initialization"
 	caps["worktree_reuse"] = map[string]any{"input_property": "reuse_worktree_from_run_id", "workflow": "execute/1", "new_session": true, "arbitrary_directory": false, "optional_file_writes": "closed"}
 	caps["generate"].(map[string]any)["file_materials"] = map[string]any{"contract": "frozen_private_files/v1", "input_property": "generate.materials", "kind": "file", "manifest": "run.materials/content_result.file_materials", "max_files": 16, "max_bytes": 1048576}
 	return caps

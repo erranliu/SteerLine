@@ -146,71 +146,64 @@ type Result struct {
 	Question    string `json:"question"`
 }
 type Report struct {
-	AsOf       time.Time  `json:"as_of"`
-	Body       string     `json:"body"`
-	Head       string     `json:"head"`
-	Base       string     `json:"base"`
-	PR         string     `json:"pr"`
-	CreatedAt  time.Time  `json:"created_at"`
-	Cost       *string    `json:"cost,omitempty"`
-	SyncPrompt string     `json:"sync_prompt,omitempty"`
-	SyncedAt   *time.Time `json:"synced_at,omitempty"`
+	Body           string    `json:"body"`
+	Recommendation string    `json:"recommendation"`
+	Head           string    `json:"head"`
+	Base           string    `json:"base"`
+	PR             string    `json:"pr"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type ReviewEvidence struct {
+	Diff       string `json:"diff"`
+	Checks     string `json:"checks"`
+	Limitation string `json:"limitation,omitempty"`
 }
 type StopAttempt struct {
 	Request runnercontract.Request `json:"request"`
 	State   string                 `json:"state"`
 }
 type Operation struct {
-	Closing               bool                         `json:"closing"`
-	ReportAsOf            time.Time                    `json:"report_as_of,omitempty"`
-	PriorStops            []StopAttempt                `json:"prior_stops,omitempty"`
-	ReportCost            *string                      `json:"report_cost,omitempty"`
-	Prompt                string                       `json:"prompt"`
-	Investigation         string                       `json:"investigation,omitempty"`
-	DecisionSummary       string                       `json:"decision_summary,omitempty"`
-	DecisionKind          string                       `json:"decision_kind,omitempty"`
-	PRVersion             string                       `json:"pr_version,omitempty"`
-	AcceptedOperation     string                       `json:"accepted_operation,omitempty"`
-	Question              *Question                    `json:"question,omitempty"`
-	ID                    string                       `json:"id"`
-	Purpose               string                       `json:"purpose"`
-	Round                 int                          `json:"round"`
-	Request               runnercontract.Request       `json:"request"`
-	InputDigest           string                       `json:"input_digest,omitempty"`
-	RunID                 string                       `json:"run_id,omitempty"`
-	State                 string                       `json:"state"`
-	Run                   *runnercontract.Run          `json:"run,omitempty"`
-	WorkspaceGit          *runnercontract.WorkspaceGit `json:"workspace_git,omitempty"`
-	Stop                  *runnercontract.Request      `json:"stop,omitempty"`
-	StopState             string                       `json:"stop_state,omitempty"`
-	InitializationFailure string                       `json:"initialization_failure,omitempty"`
-	Feedback              string                       `json:"feedback,omitempty"`
-	Result                *Result                      `json:"result,omitempty"`
-	Cost                  Cost                         `json:"cost"`
-	CreatedAt             time.Time                    `json:"created_at"`
-	CompletedAt           *time.Time                   `json:"completed_at,omitempty"`
+	Closing           bool                         `json:"closing"`
+	PriorStops        []StopAttempt                `json:"prior_stops,omitempty"`
+	Prompt            string                       `json:"prompt"`
+	Investigation     string                       `json:"investigation,omitempty"`
+	DecisionSummary   string                       `json:"decision_summary,omitempty"`
+	DecisionKind      string                       `json:"decision_kind,omitempty"`
+	PRVersion         string                       `json:"pr_version,omitempty"`
+	AcceptedOperation string                       `json:"accepted_operation,omitempty"`
+	Question          *Question                    `json:"question,omitempty"`
+	ID                string                       `json:"id"`
+	Purpose           string                       `json:"purpose"`
+	Round             int                          `json:"round"`
+	Request           runnercontract.Request       `json:"request"`
+	InputDigest       string                       `json:"input_digest,omitempty"`
+	RunID             string                       `json:"run_id,omitempty"`
+	State             string                       `json:"state"`
+	Run               *runnercontract.Run          `json:"run,omitempty"`
+	WorkspaceGit      *runnercontract.WorkspaceGit `json:"workspace_git,omitempty"`
+	Stop              *runnercontract.Request      `json:"stop,omitempty"`
+	StopState         string                       `json:"stop_state,omitempty"`
+	Feedback          string                       `json:"feedback,omitempty"`
+	Result            *Result                      `json:"result,omitempty"`
+	Cost              Cost                         `json:"cost"`
+	CreatedAt         time.Time                    `json:"created_at"`
+	CompletedAt       *time.Time                   `json:"completed_at,omitempty"`
 }
 
 func (o Operation) Settled() bool {
 	return o.State == "complete" || o.State == "rejected" || o.State == "cancelled"
 }
 
-// ObserveRun records an already validated observation. Stop replaces the Run
-// phase, so keep the pre-dispatch failure in the original operation.
+// ObserveRun records an already validated observation.
 func (o *Operation) ObserveRun(run *runnercontract.Run) {
 	o.RunID, o.InputDigest, o.Run = run.RunID, run.InputDigest, run
-	if run.Workflow.ID == "execute" && run.Correlation["refactoring_operation"] == o.ID && run.Phase == "result_file_initialization_failed" {
-		o.InitializationFailure = run.Diagnostic
-		if o.InitializationFailure == "" {
-			o.InitializationFailure = run.Phase
-		}
-	}
 }
 
 func (o Operation) Content(r Record) runnerbinding.Content {
 	w := "execute"
 	switch o.Purpose {
-	case "first", "select", "audit", "finish", "report", "evidence", "version_audit":
+	case "first", "select", "audit", "finish", "report":
 		w = "generate"
 	}
 	var rev uint64
@@ -242,7 +235,6 @@ type Record struct {
 	Candidate       *Result                `json:"candidate,omitempty"`
 	PR              *runnercontract.PRFact `json:"pr,omitempty"`
 	Reports         []Report               `json:"reports"`
-	EvidenceNeed    string                 `json:"evidence_need,omitempty"`
 	Diagnostic      string                 `json:"diagnostic,omitempty"`
 	Summary         string                 `json:"summary,omitempty"`
 	CreatedAt       time.Time              `json:"created_at"`

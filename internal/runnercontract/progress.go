@@ -16,8 +16,7 @@ type ProgressFileInput struct {
 }
 
 type ResultFileInput struct {
-	InitialContentBase64  string `json:"initial_content_base64"`
-	RequireInitialization bool   `json:"require_initialization,omitempty"`
+	InitialContentBase64 string `json:"initial_content_base64"`
 }
 
 // ProgressFile is the public opaque snapshot; business interpretation belongs to SteerLine.

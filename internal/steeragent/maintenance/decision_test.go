@@ -15,7 +15,7 @@ func TestDecisionRoleBoundary(t *testing.T) {
 		accept, finish bool
 	}{
 		{"first", false, true}, {"select", false, true}, {"audit", true, false},
-		{"version_audit", true, true}, {"evidence", false, false}, {"finish", false, false},
+		{"finish", false, false},
 	} {
 		var schema struct {
 			Properties map[string]struct{ Enum []string }
@@ -44,11 +44,25 @@ func TestDecisionRoleBoundary(t *testing.T) {
 		{`{"kind":"ask","summary":"范围冲突","prompt":"execute","question":{"prompt":"如何处理？","facts":["依赖公开接口"],"attempts":[],"options":[{"id":"keep","label":"保留","impact":"保持兼容"}],"recommended_option_id":"keep","recommendation_reason":"低风险"}}`, "audit", false},
 		{`{"kind":"accept","summary":"证据充分"}`, "evidence", false},
 		{`{"kind":"accept","summary":"已交付"}`, "finish", false},
-		{`{"kind":"report","report":"原文","prompt":"按材料同步"}`, "report", true},
 	} {
 		_, e := Accept([]byte(v.body), v.mode)
 		if (e == nil) != v.valid {
 			t.Fatal(v, e)
+		}
+	}
+}
+
+func TestReviewOnlyReturnsRecommendationAndReport(t *testing.T) {
+	if _, err := AcceptReview([]byte(`{"recommendation":"revise","report":"新增结构债"}`)); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{
+		`{"recommendation":"merge","report":"评审","prompt":"同步正文"}`,
+		`{"recommendation":"merge","report":""}`,
+		`{"recommendation":"approve","report":"评审"}`,
+	} {
+		if _, err := AcceptReview([]byte(raw)); err == nil {
+			t.Fatal("accepted", raw)
 		}
 	}
 }

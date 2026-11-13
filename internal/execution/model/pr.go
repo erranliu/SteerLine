@@ -6,6 +6,7 @@ import (
 
 type PRInfo struct {
 	Body           string     `json:"body,omitempty"`
+	Checks         string     `json:"checks,omitempty"`
 	URL            string     `json:"url"`
 	Repository     string     `json:"repository"`
 	BaseBranch     string     `json:"base_branch"`

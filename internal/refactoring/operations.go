@@ -1,7 +1,6 @@
 package refactoring
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -54,12 +53,8 @@ type decisionContext struct {
 	ElapsedSeconds   float64                   `json:"elapsed_seconds"`
 	Diagnostic       string                    `json:"diagnostic,omitempty"`
 	PR               *runnercontract.PRFact    `json:"pr,omitempty"`
-	FinalEvidence    *model.Result             `json:"final_evidence,omitempty"`
-	EvidenceNeed     string                    `json:"evidence_need,omitempty"`
 	Feedback         []contextOperation        `json:"feedback,omitempty"`
 	History          []roundSummary            `json:"history,omitempty"`
-	HistoryTotals    map[string]int            `json:"history_totals,omitempty"`
-	PastAnswers      []model.Answer            `json:"past_answers,omitempty"`
 	Answers          []model.Answer            `json:"answers,omitempty"`
 	Question         *model.Question           `json:"answered_question,omitempty"`
 }
@@ -82,7 +77,7 @@ func (s *Service) context(r model.Record, now time.Time) decisionContext {
 		Finish: r.FinishRequested, CanStartRound: (r.Phase == "first" || r.Phase == "select") && !r.FinishRequested && !r.BudgetExhausted(now) && (r.Input.Budget.Dollars == "" || complete),
 		ContinueConflict: r.Phase == "finish" && r.WriteKind == "conflict",
 		Amount:           amount, CostComplete: complete, AsOf: now, ElapsedSeconds: r.Elapsed(now).Seconds(), Diagnostic: r.Diagnostic,
-		PR: r.PR, FinalEvidence: r.Candidate, EvidenceNeed: r.EvidenceNeed,
+		PR: r.PR,
 	}
 	f.Repository.LocalPath = ""
 	if r.Phase == "audit" {
@@ -96,15 +91,7 @@ func (s *Service) context(r model.Record, now time.Time) decisionContext {
 				break
 			}
 		}
-		if r.Phase == "report" {
-			for i := max(0, n-33); i < n-1; i++ {
-				answer := r.Answers[i]
-				answer.Option.Label = clippedSummary(answer.Option.Label, 256)
-				answer.Option.Impact = clippedSummary(answer.Option.Impact, 256)
-				answer.Note = clippedSummary(answer.Note, 256)
-				f.PastAnswers = append(f.PastAnswers, answer)
-			}
-		}
+
 	}
 	executions := 0
 	for i := len(r.Operations) - 1; i >= 0; i-- {
@@ -124,32 +111,9 @@ func (s *Service) context(r model.Record, now time.Time) decisionContext {
 			executions++
 		}
 	}
-	historyLimit := 24
-	if r.Phase == "report" {
-		historyLimit = 256
-		f.HistoryTotals = map[string]int{"人工答复": len(r.Answers)}
-	}
-	for i := len(r.Operations) - 1; i >= 0; i-- {
+	for i := len(r.Operations) - 1; i >= 0 && len(f.History) < 24; i-- {
 		o := r.Operations[i]
-		if !o.Settled() {
-			continue
-		}
-		if r.Phase == "report" && o.Purpose == "implement" {
-			status := o.State
-			if successfulExecution(o) {
-				status = o.Result.Outcome
-			} else if o.Run != nil {
-				status = o.Run.Status
-			}
-			f.HistoryTotals[status]++
-			if len(f.History) < historyLimit {
-				f.History = append(f.History, roundSummary{ID: o.ID, Round: o.Round, Outcome: status})
-			}
-		}
-		if o.DecisionSummary != "" && (o.AcceptedOperation != "" || r.Phase == "report" && (o.Question != nil || o.Purpose == "first" || o.Purpose == "finish" || o.Purpose == "version_audit" || o.Purpose == "audit")) {
-			if len(f.History) >= historyLimit {
-				continue
-			}
+		if o.Settled() && o.AcceptedOperation != "" {
 			f.History = append(f.History, roundSummary{ID: o.ID, Round: o.Round, Outcome: o.Purpose, Summary: clippedSummary(o.DecisionSummary, 512)})
 		}
 	}
@@ -177,25 +141,20 @@ func roundStart(r model.Record) string {
 	return ""
 }
 
-func (s *Service) prepareOperation(r model.Record, id, directory string) (model.Operation, error) {
+func (s *Service) prepareOperation(r model.Record, id, directory string, review model.ReviewEvidence) (model.Operation, error) {
 	now := s.now()
 	o := model.Operation{ID: id, Purpose: r.Phase, Round: r.Round, State: "pending", CreatedAt: now, Investigation: directory, Closing: r.FinishRequested}
-	if r.Phase == "version_audit" {
+	if r.Phase == "report" {
 		o.PRVersion = prVersion(r.PR)
 	}
 	correlation := map[string]string{"steerline_project": r.Project, "steerline_refactoring": r.ID, "refactoring_operation": id}
 	var input any
 	if r.Phase == "execute" {
 		o.Purpose, o.Prompt = r.WriteKind, r.PendingPrompt
-		body, err := prompts.MaintenanceExecute()
-		if err != nil {
-			return o, err
-		}
 		context := struct {
 			Publication   map[string]string      `json:"publication"`
 			ManagedBranch string                 `json:"managed_branch,omitempty"`
 			PR            *runnercontract.PRFact `json:"pr,omitempty"`
-			Report        string                 `json:"report,omitempty"`
 			RoundStart    string                 `json:"round_start,omitempty"`
 		}{Publication: r.Frozen.Publication, PR: r.PR}
 		if o.Purpose == "repair" {
@@ -207,13 +166,6 @@ func (s *Service) prepareOperation(r model.Record, id, directory string) (model.
 				break
 			}
 		}
-		if o.Purpose == "sync" {
-			report := pendingReport(r)
-			if report == nil {
-				return o, errors.New("缺少待同步的报告版本")
-			}
-			context.Report = report.Body
-		}
 		if strings.TrimSpace(o.Prompt) == "" {
 			return o, errors.New("缺少本次三级指令")
 		}
@@ -221,10 +173,11 @@ func (s *Service) prepareOperation(r model.Record, id, directory string) (model.
 		if err != nil {
 			return o, err
 		}
-		if len(data) > runnercontract.MaxProgressBytes {
-			return o, errors.New("维护执行材料超过Runner结果文件限额")
+		body, err := prompts.MaintenanceExecute(data)
+		if err != nil {
+			return o, err
 		}
-		input = runnercontract.RunInput{Title: "重构与维护 · " + o.Purpose, NamePrefix: "maintenance", Correlation: correlation, Repository: r.Frozen.Repository, Documents: r.Frozen.Documents, Execution: r.Frozen.Write, Workflow: runnercontract.Workflow{ID: "execute", Version: 1, PromptOverrides: map[string]string{"execute": body}}, ReuseWorktreeFromRunID: r.LatestOwner, ResultFile: &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(data), RequireInitialization: true}}
+		input = runnercontract.RunInput{Title: "重构与维护 · " + o.Purpose, NamePrefix: "maintenance", Correlation: correlation, Repository: r.Frozen.Repository, Documents: r.Frozen.Documents, Execution: r.Frozen.Write, Workflow: runnercontract.Workflow{ID: "execute", Version: 1, PromptOverrides: map[string]string{"execute": body}}, ReuseWorktreeFromRunID: r.LatestOwner}
 	} else {
 		body, err := decision.Instruction()
 		if err != nil {
@@ -241,12 +194,23 @@ func (s *Service) prepareOperation(r model.Record, id, directory string) (model.
 		if rules == "" || r.Phase != "report" && r.Frozen.Strategy == "" || r.Frozen.Direction.Prompt == "" {
 			return o, errors.New("缺少冻结维护提示词材料")
 		}
-		f := s.context(r, now)
-		data, err := json.Marshal(f)
+		var facts any
+		if r.Phase == "report" {
+			facts = struct {
+				Mode            string                 `json:"mode"`
+				PR              *runnercontract.PRFact `json:"pr"`
+				DirectionPrompt string                 `json:"direction_prompt"`
+				Requirements    string                 `json:"requirements"`
+				Checks          string                 `json:"checks"`
+			}{"report", r.PR, r.Frozen.Direction.Prompt, r.Input.Requirements, review.Checks}
+		} else {
+			facts = s.context(r, now)
+		}
+		data, err := json.Marshal(facts)
 		if err != nil {
 			return o, err
 		}
-		if len(data)+len(rules)+len(r.Frozen.Strategy) > 1<<20 {
+		if len(data)+len(rules)+len(r.Frozen.Strategy)+len(review.Diff) > 1<<20 {
 			return o, errors.New("本阶段必要的维护上下文超过限额，需缩小证据范围")
 		}
 		contextBody := string(data)
@@ -257,7 +221,7 @@ func (s *Service) prepareOperation(r model.Record, id, directory string) (model.
 		if r.Phase != "report" {
 			g.Materials = append(g.Materials, runnercontract.Document{Kind: "file", Path: "maintenance/strategy.md", Content: &r.Frozen.Strategy})
 		} else {
-			o.ReportCost, o.ReportAsOf = f.Amount, f.AsOf
+			g.Materials = append(g.Materials, runnercontract.Document{Kind: "file", Path: "maintenance/pr.diff", Content: &review.Diff})
 		}
 		if r.Phase == "first" {
 			if directory == "" {

@@ -2,7 +2,6 @@ package controlled
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -30,7 +29,6 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 		Requirements string
 		Answers      []ref.Answer
 		PR           *rc.PRFact
-		Report       string
 		Feedback     []struct {
 			Purpose string
 			Result  *ref.Result
@@ -42,7 +40,7 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 	if in.Workflow.ID == "generate" {
 		var g rc.GenerateRunInput
 		_ = json.Unmarshal(request.Input, &g)
-		if purpose == "report" && len(g.Generate.Materials) != 2 || purpose != "report" && len(g.Generate.Materials) != 3 {
+		if len(g.Generate.Materials) != 3 {
 			return nil, "invalid_materials", nil
 		}
 		_ = json.Unmarshal([]byte(*g.Generate.Materials[1].Content), &facts)
@@ -62,11 +60,11 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 				decision["question"] = ref.QuestionBody{Prompt: "是否保留公共接口？", Facts: []string{"当前接口有调用方"}, Attempts: []string{}, Options: []ref.QuestionOption{{ID: "keep", Label: "保留公共接口", Impact: "维持兼容"}}, RecommendedOptionID: "keep", RecommendationReason: "兼容现有调用"}
 			}
 		case "report":
-			decision = map[string]any{"kind": "report", "report": reportBody}
-			if facts.PR != nil {
-				decision["report"] = reportBody + "\r\n" + facts.PR.HeadRevision + "  "
-				decision["prompt"] = "按随附版本核对原 PR，将随附正文原样同步。"
+			if facts.PR == nil || g.Generate.Materials[2].Path != "maintenance/pr.diff" ||
+				!strings.Contains(*g.Generate.Materials[2].Content, "maintenance-result.txt") {
+				return nil, "missing_pr_diff", nil
 			}
+			decision = map[string]any{"recommendation": "merge", "report": reportBody + "\r\n" + facts.PR.HeadRevision + "  "}
 		}
 		if g.Generate.Repository != nil || (purpose == "first") != (g.Generate.Directory != nil) {
 			return nil, "unexpected_source", nil
@@ -120,20 +118,10 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 		run.WorkspaceIdentity = "identity-" + run.WorkspaceOriginRunID
 		run.Execution.Workspace = worktree
 		run.Execution.Branch = branch
-		initial, e := base64.StdEncoding.DecodeString(in.ResultFile.InitialContentBase64)
-		if e != nil {
-			return nil, "", e
+		if in.ResultFile != nil {
+			return nil, "unexpected_result_file", nil
 		}
-		var seed struct {
-			ActionID    string          `json:"action_id"`
-			OperationID string          `json:"operation_id"`
-			Context     json.RawMessage `json:"context"`
-		}
-		if e = json.Unmarshal(initial, &seed); e != nil {
-			return nil, "", e
-		}
-		_ = json.Unmarshal(seed.Context, &facts)
-		value := ref.Result{ActionID: seed.ActionID, OperationID: seed.OperationID, Outcome: "done", Summary: "受控执行"}
+		value := ref.Result{ActionID: in.Correlation["steerline_refactoring"], OperationID: in.Correlation["refactoring_operation"], Outcome: "done", Summary: "受控执行"}
 		if purpose == "implement" || purpose == "repair" || purpose == "conflict" {
 			if e = os.WriteFile(filepath.Join(worktree, "maintenance-result.txt"), []byte(id+"\n"), 0600); e != nil {
 				return nil, "", e
@@ -161,10 +149,10 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 				return nil, "", e
 			}
 			url := fmt.Sprintf("https://github.com/%s/pull/%d", provider.RepositoryName(), len(provider.PRs)+1)
-			if facts.PR != nil {
-				url = facts.PR.URL
+			if purpose == "conflict" {
+				url = provider.PR.URL
 			}
-			pr := em.PRInfo{URL: url, Repository: provider.RepositoryName(), HeadRepository: provider.RepositoryName(), BaseBranch: provider.BranchName(), BaseRevision: value.Base, HeadBranch: branch, HeadRevision: head, State: "open"}
+			pr := em.PRInfo{URL: url, Repository: provider.RepositoryName(), HeadRepository: provider.RepositoryName(), BaseBranch: provider.BranchName(), BaseRevision: value.Base, HeadBranch: branch, HeadRevision: head, State: "open", Body: "Original PR description"}
 			if provider.PRs == nil {
 				provider.PRs = map[string]em.PRInfo{}
 			}
@@ -175,28 +163,8 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 			}
 			value.PR = url
 		}
-		if purpose == "sync" {
-			if facts.PR == nil || facts.Report == "" {
-				return nil, "missing_sync_binding", nil
-			}
-			pr := provider.PRs[facts.PR.URL]
-			if pr.HeadRevision != facts.PR.HeadRevision || pr.BaseRevision != facts.PR.BaseRevision {
-				return nil, "stale_sync_binding", nil
-			}
-			pr.Body = facts.Report
-			provider.PRs[pr.URL], provider.PR = pr, pr
-			if e = Write(providerPath, provider); e != nil {
-				return nil, "", e
-			}
-			value.PR, value.Head, value.Base = pr.URL, pr.HeadRevision, pr.BaseRevision
-		}
-
 		raw, _ := json.Marshal(value)
-		encoded := base64.StdEncoding.EncodeToString(raw)
-		if s.Results == nil {
-			s.Results = map[string]rc.ResultFile{}
-		}
-		s.Results[id] = rc.ResultFile{Contract: rc.ResultContract, RunID: id, Version: 1, Encoding: "base64", ObservedAt: &now, ContentBase64: &encoded, SHA256: ref.Digest(raw), SizeBytes: len(raw), CollectionStatus: "closed"}
+		run.Final.Text = string(raw)
 	}
 	s.Runs[id] = run
 	s.Providers[id] = providerPath

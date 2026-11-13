@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/billing"
 	"github.com/erranliu/SteerLine/internal/billingconfig"
@@ -36,7 +37,7 @@ type refactoringPort struct {
 
 func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, reserver readyExecutionReserver) *refactoringPort {
 	p := &refactoringPort{config: c, store: store, materials: materials}
-	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReadCost: p.cost, Queue: c.runtimeGenerations, Reserve: reserver.reserveReadyExecution, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
+	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Verify: p.verify, ReviewDiff: p.reviewDiff, ReadCost: p.cost, Queue: c.runtimeGenerations, Reserve: reserver.reserveReadyExecution, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
 	return p
 }
 func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen, error) {
@@ -299,14 +300,40 @@ func (p *refactoringPort) verify(ctx context.Context, r ref.Record, result ref.R
 	if c.PR.Repository != r.Frozen.Publication["repository"] || c.PR.BaseURL != r.Frozen.Publication["base_url"] || info.BaseBranch != r.Frozen.Repository.BaseBranch || info.Repository != c.PR.Repository || info.HeadRepository != c.PR.Repository || branch == "" || info.HeadBranch != branch || r.PR != nil && info.URL != r.PR.URL {
 		return nil, "", errors.New("PR目标、原分支或报告提交不匹配")
 	}
-	if info.Merged || !strings.EqualFold(info.State, "open") {
-		return nil, "", errors.New("原PR已关闭或合并")
+	if info.BaseRevision == "" && r.Frozen.Repository.URL != "" && c.ProcessHost != nil {
+		refName := "refs/heads/" + info.BaseBranch
+		remote, remoteErr := c.repositoryGit(ctx, "remote", "get-url", r.Frozen.Repository.Remote)
+		if remoteErr != nil || strings.TrimSpace(string(remote)) != r.Frozen.Repository.URL {
+			return nil, "", errors.New("PR 目标分支与冻结远端不匹配")
+		}
+		out, gitErr := c.repositoryGit(ctx, "ls-remote", "--exit-code", "--", r.Frozen.Repository.Remote, refName)
+		fields := strings.Fields(string(out))
+		if gitErr == nil && len(fields) == 2 && fields[1] == refName {
+			info.BaseRevision = fields[0]
+		}
 	}
 	if !ref.ValidRevision(info.HeadRevision) || !ref.ValidRevision(info.BaseRevision) {
 		return nil, "", errors.New("原PR平台未返回可信的head/base提交")
 	}
-	fact := &runnercontract.PRFact{URL: info.URL, Provider: c.PR.Kind, Repository: info.Repository, HeadRepository: info.HeadRepository, Number: func() int { n, _ := c.PR.PRNumber(info.URL); return n }(), BaseBranch: info.BaseBranch, BaseRevision: info.BaseRevision, HeadBranch: info.HeadBranch, HeadRevision: info.HeadRevision, State: info.State, Merged: info.Merged, CheckedAt: time.Now().UTC()}
-	return fact, info.Body, nil
+	fact := &runnercontract.PRFact{URL: info.URL, Provider: c.PR.Kind, Repository: info.Repository, HeadRepository: info.HeadRepository, Number: func() int { n, _ := c.PR.PRNumber(info.URL); return n }(), BaseBranch: info.BaseBranch, BaseRevision: info.BaseRevision, HeadBranch: info.HeadBranch, HeadRevision: info.HeadRevision, Draft: info.Draft, State: info.State, Merged: info.Merged, CheckedAt: time.Now().UTC()}
+	return fact, info.Checks, nil
+}
+
+func (p *refactoringPort) reviewDiff(ctx context.Context, r ref.Record, pr runnercontract.PRFact) (string, error) {
+	c := p.config
+	remote, err := c.repositoryGit(ctx, "remote", "get-url", r.Frozen.Repository.Remote)
+	if err != nil || strings.TrimSpace(string(remote)) != r.Frozen.Repository.URL {
+		return "", errors.New("PR 评审仓库与冻结来源不一致")
+	}
+	// Fetch only pinned objects. No ref, index or execution worktree is used as evidence.
+	if _, err := c.repositoryGit(ctx, "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--no-auto-maintenance", "--refmap=", "--", r.Frozen.Repository.Remote, pr.BaseRevision, pr.HeadRevision); err != nil {
+		return "", err
+	}
+	diff, err := c.repositoryGit(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--find-renames", "--ignore-submodules=none", pr.BaseRevision+"..."+pr.HeadRevision, "--")
+	if len(diff) > 512<<10 || !utf8.Valid(diff) {
+		return "", errors.New("PR 差异超出评审材料限额或编码不可读")
+	}
+	return string(diff), err
 }
 
 type refactoringReadiness struct {
@@ -423,7 +450,7 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 	v := query.Refactoring(r, time.Now().UTC())
 	if len(r.Reports) > 0 && r.PR != nil {
 		report := r.Reports[len(r.Reports)-1]
-		stale := report.Head != r.PR.HeadRevision || report.Base != r.PR.BaseRevision
+		stale := report.Head != r.PR.HeadRevision || report.Base != r.PR.BaseRevision || r.PR.Merged || r.PR.State != "open"
 		if r.Phase == "delivered" && p.config.runtimeMaintenance != nil {
 			base := p.config.runtimeMaintenance.current().Commit
 			stale = stale || base != "" && base != report.Base

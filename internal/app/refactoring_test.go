@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func TestRefactoringPRReportAndOriginalHead(t *testing.T) {
+func TestRefactoringPRVersionAndOriginalBranch(t *testing.T) {
 	for _, kind := range []string{"valid", "fork", "closed", "body", "head", "base"} {
 		t.Run(kind, func(t *testing.T) {
 			head := strings.Repeat("a", 40)
@@ -48,11 +48,11 @@ func TestRefactoringPRReportAndOriginalHead(t *testing.T) {
 			if kind == "head" {
 				result.Head = strings.Repeat("c", 40)
 			}
-			fact, gotBody, e := p.verify(context.Background(), record, result)
-			if (e == nil) != (kind == "valid" || kind == "body" || kind == "head") {
+			fact, checks, e := p.verify(context.Background(), record, result)
+			if (e == nil) != (kind == "valid" || kind == "body" || kind == "head" || kind == "closed") {
 				t.Fatal(kind, fact, e)
 			}
-			if e == nil && (fact.BaseRevision != base || fact.HeadRevision != head || gotBody != body) {
+			if e == nil && (fact.BaseRevision != base || fact.HeadRevision != head || checks != "") {
 				t.Fatal("version query must return the actual platform facts")
 			}
 		})
@@ -60,7 +60,7 @@ func TestRefactoringPRReportAndOriginalHead(t *testing.T) {
 }
 
 func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
-	for _, kind := range []string{"missing-stale", "missing-current", "accepted", "rejected", "foreign", "unavailable", "stopped", "initialization-failed"} {
+	for _, kind := range []string{"missing-stale", "missing-current", "accepted", "rejected", "foreign", "unavailable", "stopped"} {
 		t.Run(kind, func(t *testing.T) {
 			c := Config{identity: "project"}
 			cli := startupFixtureCLI(t)
@@ -76,13 +76,6 @@ func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
 			}
 			if kind == "stopped" {
 				run.StopStatus = "stopped"
-			}
-			const initializationDiagnostic = "required result_file initialization failed: initialization_timeout"
-			if kind == "initialization-failed" {
-				op.Purpose = "publish"
-				run.Status, run.Phase, run.StopStatus = "blocked", "result_file_initialization_failed", ""
-				run.Diagnostic = initializationDiagnostic
-				op.Stop, op.StopState = nil, ""
 			}
 			entries := map[string]any{run.RunID: rc.Inspection{Run: &run}}
 			if kind == "accepted" || kind == "rejected" || kind == "foreign" {
@@ -119,28 +112,12 @@ func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
 			if len(stops) != 1 {
 				t.Fatal(stops)
 			}
-			changed := kind == "missing-stale" || kind == "rejected" || kind == "initialization-failed"
+			changed := kind == "missing-stale" || kind == "rejected"
 			if (stops[0].Request.RequestID != "original-stop") != changed {
 				t.Fatal("wrong original stop decision", kind, stops)
 			}
 			saved, e := store.Refactoring(ctx, c.Identity(), id)
 			require(t, e)
-			if kind == "initialization-failed" {
-				if saved.Operations[0].InitializationFailure != initializationDiagnostic {
-					t.Fatal("startup did not save the original initialization failure before stopping")
-				}
-				run.Revision++
-				run.Status, run.Phase, run.StopStatus, run.Diagnostic = "stopped", "stopped", "stopped", ""
-				require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-inspections-fixture.json"), mustJSON(entries), 0600))
-				again, err := prepareRefactoringStops(ctx, &c, store, &cli)
-				require(t, err)
-				saved, err = store.Refactoring(ctx, c.Identity(), id)
-				require(t, err)
-				if len(again) != 0 || saved.Operations[0].Run.Phase != "stopped" || saved.Operations[0].InitializationFailure != initializationDiagnostic {
-					t.Fatal("stopped observation replaced the original failure or issued another stop")
-				}
-				return
-			}
 			if changed && len(saved.Operations[0].PriorStops) != 1 {
 				t.Fatal("old stop evidence lost")
 			}

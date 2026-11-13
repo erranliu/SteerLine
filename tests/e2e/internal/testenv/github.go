@@ -29,9 +29,9 @@ const githubInfoQuery = `{body:.body,url:.url,repository:"erranliu/SteerlineTest
 
 // A PR's baseRefOid can lag behind the target branch. Maintenance reports bind
 // the current branch tip returned by baseRef.target in the same observation.
-const githubMaintenanceGraphQL = `query($number:Int!) { repository(owner:"erranliu",name:"SteerlineTest") { pullRequest(number:$number) { body url state isDraft mergedAt mergeCommit { oid } headRefName headRefOid headRepository { nameWithOwner } baseRefName baseRef { target { oid } } } } }`
+const githubMaintenanceGraphQL = `query($number:Int!) { repository(owner:"erranliu",name:"SteerlineTest") { pullRequest(number:$number) { body url state isDraft mergedAt mergeCommit { oid } headRefName headRefOid headRepository { nameWithOwner } baseRefName baseRef { target { oid } } commits(last:1) { nodes { commit { oid statusCheckRollup { state } } } } } } }`
 
-const githubMaintenanceQuery = `.data.repository.pullRequest | {body,url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,base_revision:.baseRef.target.oid,head_repository:.headRepository.nameWithOwner,head_branch:.headRefName,head_revision:.headRefOid,draft:.isDraft,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
+const githubMaintenanceQuery = `.data.repository.pullRequest | {body,url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,base_revision:.baseRef.target.oid,checks:(if .commits.nodes[0].commit.oid == .headRefOid then (.commits.nodes[0].commit.statusCheckRollup.state // null) else null end),head_repository:.headRepository.nameWithOwner,head_branch:.headRefName,head_revision:.headRefOid,draft:.isDraft,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
 
 func githubMaintenancePRArgs(number, projection string) []string {
 	return []string{"api", "graphql", "--hostname", "github.com", "-f", "query=" + githubMaintenanceGraphQL, "-F", "number=" + number, "--jq", projection}

@@ -87,7 +87,9 @@ func MaintenanceDirection(id string) ([]byte, error) {
 	return files.ReadFile("materials/refactoring-directions/" + id + ".md")
 }
 func MaintenanceDecision() (string, error) { return render("maintenance-decision", nil) }
-func MaintenanceExecute() (string, error)  { return render("maintenance-execute", nil) }
+func MaintenanceExecute(request []byte) (string, error) {
+	return render("maintenance-execute", string(request))
+}
 func MainAgentAdvisory(context string) (string, error) {
 	rules, err := MainAgentRules()
 	if err != nil {

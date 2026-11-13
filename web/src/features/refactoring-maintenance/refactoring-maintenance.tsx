@@ -51,6 +51,7 @@ export type MaintenanceRecord = {
   can_finish: boolean;
   can_stop: boolean;
   can_conflict: boolean;
+  can_review?: boolean;
   operations?: {
     id: string;
     purpose: string;
@@ -65,8 +66,7 @@ export type MaintenanceRecord = {
     head: string;
     base: string;
     created_at: string;
-    as_of?: string;
-    cost?: string;
+    recommendation: "merge" | "revise" | "insufficient_evidence";
   }[];
 };
 type Index = {
@@ -92,11 +92,7 @@ const phases: Record<string, string> = {
   audit: "独立审计中",
   finish: "准备交付",
   verifying: "核验交付",
-  report: "生成重构报告",
-  evidence: "补充报告证据",
-  version_audit: "复核 PR 版本",
-  sync: "同步 PR 正文",
-  sync_verifying: "核验 PR 正文",
+  report: "评审 PR",
   waiting_input: "等待决策",
   stopping: "正在停止",
   stopped: "已停止，可继续交付",
@@ -640,7 +636,16 @@ export function RefactoringMaintenance() {
                   )
                 }
               >
-                处理冲突并更新报告
+                处理冲突并重新评审
+              </Button>
+            )}
+            {current.can_review && (
+              <Button
+                variant="outline"
+                disabled={disabled || working}
+                onClick={() => void command("refactoring_review", current.id, current.revision, {})}
+              >
+                重新评审
               </Button>
             )}
             {current.pr && <SafeLink url={current.pr.url}>查看 PR</SafeLink>}
@@ -697,18 +702,16 @@ export function RefactoringMaintenance() {
               </Button>
             </form>
           )}
+          {current.phase === "delivered" && !current.pr && current.summary && <p>{current.summary}</p>}
           {current.reports?.map((r, i) => (
             <article key={i}>
-              <h3>审计报告 {i + 1}</h3>
+              <h3>PR 合入评审 {i + 1}</h3>
               <p>
                 head {r.head} · base {r.base}
               </p>
-              <p>
-                费用截止快照：{r.cost === undefined ? "未核实" : "$" + r.cost}
-                {r.as_of && " · " + r.as_of}
-              </p>
+              <p>{{ merge: "建议合入", revise: "建议修改后再审", insufficient_evidence: "证据不足" }[r.recommendation]}</p>
               {current.report_stale && i === current.reports!.length - 1 && (
-                <p>目标分支已变化，此版本报告待复核。</p>
+                <p>PR 版本已变化，此评审已过期。</p>
               )}
               <div className="refactoring-pre">{r.body}</div>
             </article>

@@ -40,7 +40,7 @@ func (p *runtimeProjectPort) refactoringCommand(ctx context.Context, in httpcont
 		command.QuestionID = payload.QuestionID
 		command.OptionID = payload.OptionID
 		command.Note = payload.Note
-	case "refactoring_finish", "refactoring_stop", "refactoring_conflict":
+	case "refactoring_finish", "refactoring_stop", "refactoring_conflict", "refactoring_review":
 		if e := decodeStrictJSON(in.Payload, &struct{}{}); e != nil {
 			return out, e
 		}

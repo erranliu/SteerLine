@@ -1,5 +1,20 @@
 # 重构与维护的 SteerAgent 决策与交付验收
 
+## 当前方案：独立 PR 合入评审
+
+维护改用现有 `execute/1` 已验证最终回执。独立评审读取已核验的 PR 版本、Git 差异及可用检查，只保存至原行动。以下正文同步和初始化门禁证据属于前一方案。SteerRunner #157 已关闭，当前方案使用该 PR 之前的固定构建验证。
+
+| 提示词资产 | 变更前 → 变更后（UTF-8 字节） | 业务原因 |
+| --- | --- | --- |
+| `maintenance-decision.md` | 293 → 317 | 使用原文件清单定位固定版本差异 |
+| `maintenance-execute.md` | 507 → 503 | 直接交付原三级指令和事实，单行 JSON 保留原指令换行，回执由最终回复承载 |
+| `materials/maintenance-followup.md` | 3418 → 2873 | 删除正文同步和从工作区补评审证据的流程，保留原 PR 冲突续作 |
+| `materials/maintenance-report.md` | 2559 → 994 | 只按已核验的 PR 证据评估合入价值、风险和新增结构债 |
+
+完整资产及实际调用方样本差异见 [本轮差异](evidence/refactoring-pr-review-prompts.diff)。首轮正文和三种策略字节未变。历史联验结果按受测版本保留。
+
+独立审核确认四份资产、Spec 正文与实际样本。决策短正文实际渲染 316 字节，可写黄金样本渲染 589 字节，实际写入长度随原三级指令及事实变化。审核确认可写回执绑定原 Run，评审 schema 仅允许建议与正文。审核发现历史费用补查会抢占 PR 版本轮询，已将补查排在活跃行动和 PR 版本检查之后并补回归。
+
 前置能力验证和主体接线已完成，逐项验证范围见下文。关联 [Spec](../../spec/refactoring-agent-delivery.spec.md) · [Plan](../../plans/refactoring-agent-delivery.plan.md) · [测试选择](../../plans/refactoring-agent-delivery.tests.json)。原最小闭环验收见 [历史证据](refactoring-maintenance.md)。
 
 ## 前置能力验证

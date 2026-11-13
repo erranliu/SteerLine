@@ -1,8 +1,8 @@
 package refactoring
 
 import (
+	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -28,7 +28,6 @@ type Runner interface {
 	Submit(context.Context, runnercontract.Request) (runnerclient.Receipt, error)
 	Inspect(context.Context, string, string) (runnerclient.Inspection, error)
 	Call(context.Context, string, []string, *runnercontract.Request) (runnerclient.Response, error)
-	ResultFile(context.Context, string) (runnercontract.ResultFile, error)
 }
 type Service struct {
 	Project              string
@@ -38,6 +37,7 @@ type Service struct {
 	Reserve              func(context.Context, string, func() error) error
 	Admit                func(context.Context) error
 	Verify               func(context.Context, model.Record, model.Result) (*runnercontract.PRFact, string, error)
+	ReviewDiff           func(context.Context, model.Record, runnercontract.PRFact) (string, error)
 	InvestigationPath    func(string) (string, error)
 	Investigate          func(context.Context, model.Record, string) error
 	ReleaseInvestigation func(string) error
@@ -46,10 +46,11 @@ type Service struct {
 		UpdateContent(string, string, time.Time, bool, bool)
 		AcquireContent(string, string) bool
 	}
-	Now      func() time.Time
-	mu       sync.Mutex
-	advance  sync.Mutex
-	dispatch sync.Mutex
+	Now           func() time.Time
+	mu            sync.Mutex
+	advance       sync.Mutex
+	dispatch      sync.Mutex
+	reviewChecked map[string]time.Time
 }
 
 func (s *Service) now() time.Time {
@@ -213,6 +214,15 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		r.Question = nil
 		now := s.now()
 		r.ActiveSince = &now
+	case "refactoring_review":
+		if r.Active() || r.PR == nil || r.PR.Merged || r.PR.State != "open" {
+			return r, errors.New("当前行动不可重新评审")
+		}
+		r.Phase = "report"
+		r.StopRequested = false
+		r.FinishedAt = nil
+		now := s.now()
+		r.ActiveSince = &now
 	case "refactoring_conflict":
 		if r.Phase != "delivered" || r.PR == nil || r.PR.Merged || r.PR.State == "closed" {
 			return r, errors.New("原PR不允许冲突续作")
@@ -223,6 +233,9 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		pr, _, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
 		if err != nil {
 			return r, err
+		}
+		if pr.Merged || !strings.EqualFold(pr.State, "open") {
+			return r, errors.New("原 PR 已关闭或合并")
 		}
 		r.PR = pr
 		r.Phase = "finish"
@@ -267,28 +280,6 @@ func (s *Service) Tick(ctx context.Context) error {
 			}
 		}
 		if !r.Active() {
-			if s.ReadCost != nil && r.Frozen.Pricing != nil {
-				for _, o := range r.Operations {
-					if o.State == "complete" && !o.Cost.Complete && s.now().Sub(o.Cost.ObservedAt) > 30*time.Second {
-						cost, err := s.ReadCost(ctx, r, o)
-						if err != nil {
-							cost = o.Cost
-							cost.Diagnostic = err.Error()
-						}
-						cost.ObservedAt = s.now()
-						_, err = s.update(ctx, r.ID, func(current *model.Record) error {
-							for i := range current.Operations {
-								if current.Operations[i].ID == o.ID {
-									current.Operations[i].Cost = cost
-									break
-								}
-							}
-							return nil
-						})
-						return err
-					}
-				}
-			}
 			continue
 		}
 		if e = s.tick(ctx, r); e != nil {
@@ -296,6 +287,58 @@ func (s *Service) Tick(ctx context.Context) error {
 			return e
 		}
 		return cleanupErr
+	}
+	if s.Verify != nil && ctx.Err() == nil {
+		for _, r := range rows {
+			if r.Phase != "delivered" || r.PR == nil || r.PR.Merged || r.PR.State != "open" || s.now().Sub(s.reviewChecked[r.ID]) < time.Minute {
+				continue
+			}
+			if s.reviewChecked == nil {
+				s.reviewChecked = make(map[string]time.Time)
+			}
+			s.reviewChecked[r.ID] = s.now()
+			pr, _, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
+			if err == nil && (!matchesVersion(r.PR, pr.URL, pr.HeadRevision, pr.BaseRevision) || pr.State != r.PR.State || pr.Merged != r.PR.Merged) {
+				_, err = s.update(ctx, r.ID, func(current *model.Record) error {
+					if current.Revision != r.Revision {
+						return nil
+					}
+					current.PR = pr
+					if pr.State == "open" && !pr.Merged {
+						current.Phase = "report"
+						now := s.now()
+						current.ActiveSince = &now
+						current.FinishedAt = nil
+					}
+					return nil
+				})
+				return errors.Join(cleanupErr, err)
+			}
+			break
+		}
+	}
+	if s.ReadCost != nil {
+		for _, r := range rows {
+			if r.Frozen.Pricing == nil {
+				continue
+			}
+			for i, op := range r.Operations {
+				if op.State != "complete" || op.Cost.Complete || s.now().Sub(op.Cost.ObservedAt) <= 30*time.Second {
+					continue
+				}
+				cost, err := s.ReadCost(ctx, r, op)
+				if err != nil {
+					cost = op.Cost
+					cost.Diagnostic = err.Error()
+				}
+				cost.ObservedAt = s.now()
+				_, err = s.update(ctx, r.ID, func(current *model.Record) error {
+					current.Operations[i].Cost = cost
+					return nil
+				})
+				return errors.Join(cleanupErr, err)
+			}
+		}
 	}
 	return cleanupErr
 }
@@ -314,10 +357,8 @@ func (s *Service) tick(ctx context.Context, r model.Record) error {
 		return e
 	}
 	switch r.Phase {
-	case "verifying", "sync_verifying":
+	case "verifying":
 		return s.verifyDelivery(ctx, r)
-	case "sync":
-		return s.prepareSync(ctx, r)
 	}
 	if r.Phase == "waiting_input" || r.Phase == "blocked" || r.Phase == "delivered" || r.Phase == "stopped" {
 		return nil
@@ -341,13 +382,36 @@ func (s *Service) tick(ctx context.Context, r model.Record) error {
 			directory, prepareErr = s.InvestigationPath(id)
 		}
 	}
+	var pr *runnercontract.PRFact
+	var review model.ReviewEvidence
+	if r.Phase == "report" {
+		if r.PR == nil {
+			return errors.New("缺少待评审 PR")
+		}
+		var err error
+		pr, review, err = s.reviewEvidence(ctx, r)
+		if err != nil {
+			return err
+		}
+	}
 	_, e := s.update(ctx, r.ID, func(current *model.Record) error {
 		if current.StopRequested || current.Revision != r.Revision {
 			return nil
 		}
+		if pr != nil {
+			current.PR = pr
+			if pr.Merged || !strings.EqualFold(pr.State, "open") {
+				s.deliver(current)
+				return nil
+			}
+			if review.Limitation != "" {
+				s.saveReview(current, "insufficient_evidence", review.Limitation)
+				return nil
+			}
+		}
 		if prepareErr == nil {
 			var op model.Operation
-			op, prepareErr = s.prepareOperation(*current, id, directory)
+			op, prepareErr = s.prepareOperation(*current, id, directory, review)
 			if prepareErr == nil {
 				current.Operations = append(current.Operations, op)
 				current.PendingPrompt = ""
@@ -476,7 +540,6 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			return model.ErrConflict
 		}
 		last.ObserveRun(run)
-		r.Diagnostic = last.InitializationFailure
 		if binding.WorkflowID == "execute" {
 			r.LatestOwner = run.RunID
 			if run.WorkspaceIdentity != "" {
@@ -491,7 +554,7 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 		return e
 	}
 	o = r.Operations[len(r.Operations)-1]
-	if (r.StopRequested || o.InitializationFailure != "") && run.StopStatus != "stopped" {
+	if r.StopRequested && run.StopStatus != "stopped" {
 		return s.stopOperation(ctx, r, o)
 	}
 	if run.StopStatus != "stopped" {
@@ -543,36 +606,29 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 	}
 	var result *model.Result
 	if binding.WorkflowID == "execute" {
-		file, readErr := s.Runner.ResultFile(ctx, run.RunID)
-		if readErr != nil {
-			return readErr
-		}
-		if file.CollectionStatus != "closed" {
-			return nil
-		}
-		if file.Version == 1 && file.ContentBase64 != nil {
-			data, de := base64.StdEncoding.DecodeString(*file.ContentBase64)
-			if de != nil || model.Digest(data) != file.SHA256 || len(data) != file.SizeBytes {
-				return errors.New("原维护结果文件校验失败")
-			}
+		if nativeFinalBound(run) {
 			var value model.Result
 			var fieldType *json.UnmarshalTypeError
-			switch err := json.Unmarshal(data, &value); {
+			decoder := json.NewDecoder(bytes.NewReader([]byte(run.Final.Text)))
+			decoder.DisallowUnknownFields()
+			switch err := decoder.Decode(&value); {
+			case !json.Valid([]byte(run.Final.Text)):
+				feedback += "\n最终回复不是单个有效的维护 JSON 对象"
 			case errors.As(err, &fieldType) && fieldType.Field != "":
-				feedback += "\n结果文件字段类型无效：" + fieldType.Field
+				feedback += "\n最终回复字段类型无效：" + fieldType.Field
 			case err != nil:
-				feedback += "\n结果文件不是有效的维护 JSON 对象"
-			case value.ActionID != r.ID:
-				feedback += "\n结果文件 action_id 与原行动不匹配"
-			case value.OperationID != o.ID:
-				feedback += "\n结果文件 operation_id 与本次操作不匹配"
+				feedback += "\n最终回复不是有效的维护回执"
+			case value.ActionID != r.ID || value.OperationID != o.ID:
+				feedback += "\n最终回复与原维护操作不匹配"
 			case value.Outcome != "done" && value.Outcome != "needs_input" && value.Outcome != "blocked":
-				feedback += "\n结果文件 outcome 无效"
+				feedback += "\n最终回复 outcome 无效"
 			default:
 				result = &value
 			}
-		} else {
-			feedback += "\n结果文件未有效封存：" + file.Diagnostic
+		}
+		if result != nil && result.Outcome == "done" && !nativeExecutionSucceeded(run) {
+			feedback += "\n原生执行未成功，不能采用 done 回执"
+			result = nil
 		}
 		if !r.StopRequested {
 			o.WorkspaceGit = s.observeWorkspaceGit(ctx, run.RunID)
@@ -587,6 +643,17 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			return nil
 		}
 		o.Cost = cost
+	}
+	var latest *runnercontract.PRFact
+	if o.Purpose == "report" && decisionSucceeded && !r.StopRequested {
+		latest, _, e = s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
+		if e != nil {
+			return e
+		}
+		if s.reviewChecked == nil {
+			s.reviewChecked = make(map[string]time.Time)
+		}
+		s.reviewChecked[r.ID] = s.now()
 	}
 	_, e = s.update(ctx, r.ID, func(r *model.Record) error {
 		last := &r.Operations[len(r.Operations)-1]
@@ -635,6 +702,15 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			r.Phase = "blocked"
 			r.Diagnostic = "只读决策未取得可信成功结果：" + detail
 			r.Pause(now)
+			return nil
+		}
+		if o.Purpose == "report" {
+			review, err := decision.AcceptReview(content.JSON)
+			if err != nil {
+				s.block(r, err.Error())
+			} else {
+				s.applyReview(r, *last, latest, review)
+			}
 			return nil
 		}
 		d, de := decision.Accept(content.JSON, o.Purpose)

@@ -20,7 +20,9 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		render func() (string, error)
 	}{
 		{"maintenance-decision", MaintenanceDecision},
-		{"maintenance-execute", MaintenanceExecute},
+		{"maintenance-execute", func() (string, error) {
+			return MaintenanceExecute([]byte(`{"action_id":"a","operation_id":"o","instruction":"用户原文 {{.Ignore}}\r\n下一行  "}`))
+		}},
 		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot)) }},
 		{"testing-readonly", TestingReadOnly},
 		{"main-agent", func() (string, error) { return MainAgentAdvisory(`{"goal":"clarify","materials":[]}`) }},
@@ -124,8 +126,8 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
 
 		{"maintenance-first", "ac9c1d8c7abb827251e0d6ed68a79cc033a0920014e2e59b458fea053acd312d", func() ([]byte, error) { return MaintenanceRules("first") }},
-		{"maintenance-followup", "fb89ac11fa7b22725e8be9bb9ad48b9d3ad12d35cf05ac5500ac8edf73d713cd", func() ([]byte, error) { return MaintenanceRules("followup") }},
-		{"maintenance-report", "5344024544603b86d44e12d570f9aba43ca850ec7a861242c0b1360e855d3dec", func() ([]byte, error) { return MaintenanceRules("report") }},
+		{"maintenance-followup", "92018bfa6670c1dbecc33fd20c62afc0bc85846c69e78493b24e2ad401ecd43d", func() ([]byte, error) { return MaintenanceRules("followup") }},
+		{"maintenance-report", "77a94a8fa2e9eac5e5e11f55ac0f0bc3437718a17b39533885d57a309b34a098", func() ([]byte, error) { return MaintenanceRules("report") }},
 		{"maintenance-cautious", "36fb56b30ba9e12306c3066b0f9315752bb5e880dbaaa7261cf543612657c7f4", func() ([]byte, error) { return MaintenanceStrategy("cautious") }},
 		{"maintenance-autonomous", "f0c2470a07e019911ae36c30046e1ad320a5ea60b9a5db46a7d67b404ef57776", func() ([]byte, error) { return MaintenanceStrategy("autonomous") }},
 		{"maintenance-aggressive", "e9ed219ceaf5abdab0b467664db2d247ddf3f57a8da853d918246c993a08130b", func() ([]byte, error) { return MaintenanceStrategy("aggressive") }},

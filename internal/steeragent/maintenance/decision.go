@@ -15,7 +15,22 @@ type Decision struct {
 	Prompt   string          `json:"prompt,omitempty"`
 	Summary  string          `json:"summary,omitempty"`
 	Question json.RawMessage `json:"question,omitempty"`
-	Report   string          `json:"report,omitempty"`
+}
+
+type Review struct {
+	Recommendation string `json:"recommendation"`
+	Report         string `json:"report"`
+}
+
+func AcceptReview(raw []byte) (Review, error) {
+	var review Review
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if len(raw) > 1<<20 || !json.Valid(raw) || decoder.Decode(&review) != nil || !present(review.Report) ||
+		!slices.Contains([]string{"merge", "revise", "insufficient_evidence"}, review.Recommendation) {
+		return Review{}, errors.New("无效的 PR 合入评审结果")
+	}
+	return review, nil
 }
 
 func Instruction() (string, error) { return prompts.MaintenanceDecision() }
@@ -27,14 +42,7 @@ func Accept(raw []byte, mode string) (Decision, error) {
 	if len(raw) > 1<<20 || !json.Valid(raw) || decoder.Decode(&d) != nil {
 		return d, errors.New("维护决策不是有效JSON")
 	}
-	if mode == "report" {
-		if d.Question == nil && (d.Kind == "report" && present(d.Report) ||
-			d.Kind == "needs_evidence" && present(d.Summary) && d.Report == "" && d.Prompt == "") {
-			return d, nil
-		}
-		return d, errors.New("无效的维护报告结果")
-	}
-	if !present(d.Summary) || d.Report != "" || d.Kind != "ask" && d.Question != nil || d.Kind != "execute" && d.Prompt != "" {
+	if !present(d.Summary) || d.Kind != "ask" && d.Question != nil || d.Kind != "execute" && d.Prompt != "" {
 		return d, errors.New("维护决定字段与用途不匹配")
 	}
 	if !slices.Contains(allowedKinds(mode), d.Kind) {
@@ -68,8 +76,6 @@ func allowedKinds(mode string) []string {
 		return []string{"execute", "ask", "finish", "blocked"}
 	case "audit":
 		return []string{"execute", "ask", "accept", "blocked"}
-	case "version_audit":
-		return []string{"execute", "ask", "accept", "finish", "blocked"}
 	default:
 		return []string{"execute", "ask", "blocked"}
 	}
@@ -81,5 +87,5 @@ func Schema(mode string) json.RawMessage {
 }
 
 func ReportSchema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","additionalProperties":false,"required":["kind"],"properties":{"kind":{"enum":["report","needs_evidence"]},"report":{"type":"string"},"prompt":{"type":"string"},"summary":{"type":"string"}}}`)
+	return json.RawMessage(`{"type":"object","additionalProperties":false,"required":["recommendation","report"],"properties":{"recommendation":{"enum":["merge","revise","insufficient_evidence"]},"report":{"type":"string","minLength":1}}}`)
 }
