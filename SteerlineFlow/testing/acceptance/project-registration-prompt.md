@@ -26,3 +26,15 @@
 - L1、L2 和 HTTP 专项 `go.http` 通过，L2 确认清理完成。报告根为 `C:/Users/lmas1/AppData/Local/Temp/steerline-74df-project-prompts-4a07d70f2dd64a5f83e0a7070577c29c/`，分别见 `L1/summary.json`、`L2/summary.json` 和 `go.http/summary.json`。零项目入口文案的最终修订用提示词专项和 Edge 检查验证。
 
 真实项目 Agent 操作和安装实例部署未执行。
+
+## Agent 完成项目接入
+
+2026-11-13，变更基线为 `97590c296b3421b2e94661b03bd6200d7653cbf2` 加工作树差异。
+
+为使 Agent 完成添加，将「请在核验后交给我确认添加」替换为「点击『核验目标分支』，确认页面显示的提交与目标提交一致，然后直接点击『确认添加』并检查保存结果」。保存后仍按提示词中的安装目录重启，现要求确认项目已加载并报告目标提交。页面无法操作时原先仅回传参数，现要求说明已完成的步骤、具体阻塞和所需帮助。[模板](../../../internal/prompts/project-registration.md) · [渲染全文](../../../internal/prompts/testdata/project-registration.golden.md)
+
+模板 UTF-8 字节数为 1,088 → 1,229，含尾换行。渲染样本为 1,103 → 1,244，不含尾换行。独立只读审核通过，核对了实际全文、前后字节数、逐字节渲染结果和 Web 核验、确认及重启流程。
+
+- `go test ./internal/prompts -count=1 -v`、`go test ./internal/app -run '^TestProjectRegistration' -count=1` 和 `npm --prefix web test -- src/app/project-switch.test.tsx` 通过。前端用例通过 23 项。
+- `go run ./cmd/test-feedback -level=L1` 和 `-level=L2` 分别以 `-out` 指定独立目录后通过。L2 报告确认清理完成。报告位于 `C:/SteerlineDebug/wt-4048-registration/test-results/` 下的 `L1/72dc01f5cee045a9afb0a37140ade305/summary.json` 和 `L2/7b0e339d093c412a9787a51cba3e09ef/summary.json`。沙箱内的初次运行遇到临时仓库写入和报告重命名权限错误，复测在独立目录完成。
+- 真实 Agent 接入和安装实例部署未执行。
