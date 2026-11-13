@@ -185,7 +185,19 @@ it.each([
     ["browser-session", "home"],
   );
   keys.forEach((key) => client.setQueryData(key, {}));
+  const dispatchKey = projectQueries(api).dispatch(1).queryKey;
+  client.setQueryData(dispatchKey, {
+    mode: "manual",
+    revision: 1,
+    state: "closed",
+    default_profile_id: "default",
+    default_profile_name: "Default",
+    environment_readiness_required: true,
+  });
   await invalidateCommand(client, "home", envelope);
+  expect(client.getQueryState(dispatchKey)?.isInvalidated).toBe(
+    action !== "open_native_session",
+  );
   const invalidated = keys.filter(
     (key) => client.getQueryState(key)?.isInvalidated,
   );

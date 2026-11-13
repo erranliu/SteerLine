@@ -15,6 +15,7 @@ import type {
   TaskPage,
   Materials,
   DocumentView,
+  DispatchObservation,
 } from "./types";
 
 export function projectQueries(api: Api) {
@@ -25,6 +26,12 @@ export function projectQueries(api: Api) {
   ] as const;
   const defaults = { staleTime: 1000, retry: false } as const;
   return {
+    dispatch: (revision: number) =>
+      queryOptions({
+        ...defaults,
+        queryKey: [...scope, "dispatch", revision],
+        queryFn: ({ signal }) => api.get<DispatchObservation>("/dispatch", signal),
+      }),
     projectReadiness: () =>
       queryOptions({
         ...defaults,
@@ -248,6 +255,7 @@ export function projectQueries(api: Api) {
 }
 
 const taskResources = new Set([
+  "dispatch",
   "project-readiness",
   "snapshot",
   "tasks",
@@ -296,7 +304,7 @@ export function invalidateCommand(
       const resource = String(key[3]);
       if (
         action === "maintenance_check" &&
-        ["maintenance", "project-readiness"].includes(resource)
+        ["maintenance", "project-readiness", "dispatch"].includes(resource)
       )
         return true;
       if (
@@ -311,7 +319,8 @@ export function invalidateCommand(
           ].includes(action))
       )
         return true;
-      if (action.startsWith("environment_")) return resource === "environment";
+      if (action.startsWith("environment_"))
+        return resource === "environment" || resource === "dispatch";
       if (taskActions.has(action)) return taskResources.has(resource);
       if (affectsOutput && typeof runID === "string" && runID) {
         return (

@@ -10,13 +10,20 @@ import {
   within,
 } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
-import { identity, mountFeature, testClient } from "../../test/workspace";
+import {
+  identity,
+  mountFeature,
+  snapshot,
+  testClient,
+} from "../../test/workspace";
 import { Navigate } from "react-router-dom";
 import type { EnvironmentOptions } from "./use-readiness";
 import { ProjectEnvironment } from "./project-environment";
 import { Dispatch } from "../tasks/dispatch";
 import { useOriginalRequests } from "../../app/use-original-requests";
 import { WorkspaceContext, useWorkspace } from "../../app/context";
+import { projectQueries } from "../../shared/api/queries";
+import type { DispatchObservation } from "../../shared/api/types";
 
 afterEach(() => {
   cleanup();
@@ -450,29 +457,44 @@ it("restores the selected scheme for the correct environment after switching pag
   );
 });
 
-it("shows the running default detection on the dispatch page and labels read failures unverified", async () => {
+it("shows the backend environment blocker on the dispatch page and drops it when the observation fails", async () => {
   const { api, client } = fixture();
   await loaded();
-  const options = structuredClone(
-    client.getQueryData<EnvironmentOptions>(optionsKey)!,
-  );
-  options.profiles[0].stage = "verifying";
+  const diagnostic = "环境未就绪：当前项目检测未就绪或原执行尚未结算";
+  const dispatch: DispatchObservation = {
+    mode: "auto",
+    revision: 1,
+    state: "waiting",
+    default_profile_id: "default",
+    default_profile_name: "默认方案",
+    environment_readiness_required: true,
+    blocker: {
+      category: "environment",
+      code: "environment_not_ready",
+      diagnostic,
+    },
+  };
   const read = vi.mocked(api.get).getMockImplementation()!;
   vi.mocked(api.get).mockImplementation(async (path, signal) =>
-    path === "/environment/options" ? (options as never) : read(path, signal),
+    path === "/dispatch" ? (dispatch as never) : read(path, signal),
   );
   cleanup();
-  mountFeature(<Dispatch />, api, client);
-  expect(await screen.findByText(/默认执行环境检测中/)).toBeVisible();
+  const observation = snapshot(api);
+  observation.connection.snapshot.page!.control.dispatch_mode = "auto";
+  mountFeature(<Dispatch />, api, client, true, { snapshot: observation });
+  expect(await screen.findByText(diagnostic, { exact: false })).toBeVisible();
   vi.mocked(api.get).mockImplementation(async (path, signal) => {
-    if (path === "/environment/options") throw new Error("read failed");
+    if (path === "/dispatch") throw new Error("read failed");
     return read(path, signal);
   });
   await act(async () => {
-    await client.refetchQueries({ queryKey: optionsKey });
+    await client.refetchQueries({
+      queryKey: projectQueries(api).dispatch(1).queryKey,
+    });
   });
-  expect(await screen.findByText(/默认执行环境待核实/)).toBeVisible();
-  expect(screen.queryByText(/默认执行环境阻断/)).not.toBeInTheDocument();
+  expect(await screen.findByText("已开启，状态待核实")).toBeVisible();
+  expect(screen.queryByText(diagnostic, { exact: false })).not.toBeInTheDocument();
+  expect(screen.getByRole("switch", { name: "自动派发" })).toBeEnabled();
 });
 
 it("stops the exact current activity even outside the history window and never starts a replacement", async () => {

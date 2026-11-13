@@ -271,10 +271,7 @@ func (s *Service) Dispatch(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for _, task := range ready {
-		if !s.Tasks.CanExecuteType(task.Type) {
-			continue
-		}
+	if task, found := s.nextDispatchTask(ready); found {
 		_, err := s.Start(ctx, Start{RequestID: id(), TaskID: task.TaskID, TaskVersion: task.Version})
 		return err
 	}
