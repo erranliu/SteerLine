@@ -87,8 +87,12 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 			}
 			run.Materials = append(run.Materials, rc.Material{Kind: "file", Path: doc.Path, Digest: ref.Digest([]byte(*doc.Content)), SnapshotPath: path, ExecutionLocation: path})
 		}
-		raw, _ := json.Marshal(decision)
-		run.ContentResult = &rc.ContentResult{Status: "succeeded", JSON: raw, Source: *run.Final, FileMaterials: run.Materials, RepositorySource: run.RepositorySource}
+		if strings.Contains(facts.Requirements, "hold-controlled-run") {
+			run.Status, run.StopStatus, run.Closed, run.Final = "running", "running", false, nil
+		} else {
+			raw, _ := json.Marshal(decision)
+			run.ContentResult = &rc.ContentResult{Status: "succeeded", JSON: raw, Source: *run.Final, FileMaterials: run.Materials, RepositorySource: run.RepositorySource}
+		}
 	} else {
 		providerPath = statePathForDirectory(in.Repository.LocalPath)
 		provider, e := Read(providerPath)
@@ -161,7 +165,7 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 			if e = Write(providerPath, provider); e != nil {
 				return nil, "", e
 			}
-			value.PR = url
+			value.PR = url + " (draft; open)"
 		}
 		raw, _ := json.Marshal(value)
 		run.Final.Text = string(raw)

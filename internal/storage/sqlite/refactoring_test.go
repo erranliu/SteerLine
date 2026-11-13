@@ -8,11 +8,48 @@ import (
 	"testing"
 	"time"
 
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	m "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
+
+func TestRefactoringEnvironmentProofIsAtomicWithDispatch(t *testing.T) {
+	s := openDomainTestStore(t)
+	ctx := context.Background()
+	record := readinessRecord("project")
+	record.State = "ready"
+	record.Rounds[0].Settled = true
+	require(t, s.StartEnvironment(ctx, record, 0))
+	key, err := env.Key(record.Execution, record.Prepared.Identity)
+	require(t, err)
+	current, err := s.CurrentEnvironment(ctx, record.Project, key)
+	require(t, err)
+	proof, err := env.Qualify(current, record, record.Prepared.Inputs)
+	require(t, err)
+	first := m.Record{ID: m.ID(), Project: record.Project, Revision: 1, Phase: "select"}
+	second := first
+	second.ID = m.ID()
+	require(t, s.SaveRefactoring(ctx, first, 0, nil, proof))
+	require(t, s.SaveRefactoring(ctx, second, 0, nil, proof))
+	first.Revision++
+	first.Slot, first.Authorized = true, true
+	require(t, s.SaveRefactoring(ctx, first, 1, nil, proof))
+	invalidateReadiness(t, s, record.Project, key, proof.Revision)
+	second.Revision++
+	second.Slot, second.Authorized = true, true
+	if err := s.SaveRefactoring(ctx, second, 1, nil, proof); !errors.Is(err, m.ErrEnvironmentChanged) {
+		t.Fatal("revocation before authorization did not block dispatch", err)
+	}
+	saved, err := s.Refactoring(ctx, record.Project, second.ID)
+	require(t, err)
+	if saved.Slot || saved.Authorized || saved.Revision != 1 {
+		t.Fatal("revoked dispatch changed original action", saved)
+	}
+	first.Revision++
+	require(t, s.SaveRefactoring(ctx, first, 2, nil))
+}
 
 func TestRefactoringTransactionalSlotCASAndActivity(t *testing.T) {
 	s := openDomainTestStore(t)
@@ -22,12 +59,26 @@ func TestRefactoringTransactionalSlotCASAndActivity(t *testing.T) {
 	if e := s.SaveRefactoring(ctx, r, 0, &cmd); e != nil {
 		t.Fatal(e)
 	}
-	other := r
-	other.ID = m.ID()
-	if e := s.SaveRefactoring(ctx, other, 0, nil); !errors.Is(e, m.ErrConflict) {
-		t.Fatal("parallel action admitted", e)
+	others := make([]m.Record, m.Concurrency+1)
+	for i := range others {
+		others[i] = r
+		others[i].ID = m.ID()
+		others[i].Slot = i < m.Concurrency
+		if e := s.SaveRefactoring(ctx, others[i], 0, nil); e != nil {
+			t.Fatal("could not save three occupied slots and one queued action", e)
+		}
 	}
+	r.Slot = true
 	r.Revision++
+	if e := s.SaveRefactoring(ctx, r, 1, nil); !errors.Is(e, m.ErrConflict) {
+		t.Fatal("fourth slot admitted", e)
+	}
+	foreign := r
+	foreign.Project, foreign.Revision = "second-project", 1
+	if e := s.SaveRefactoring(ctx, foreign, 0, nil); e != nil {
+		t.Fatal("first project's capacity affected second project", e)
+	}
+	r.Slot = false
 	r.Phase = "stopped"
 	if e := s.SaveRefactoring(ctx, r, 1, nil); e != nil {
 		t.Fatal(e)
@@ -35,24 +86,21 @@ func TestRefactoringTransactionalSlotCASAndActivity(t *testing.T) {
 	if e := s.SaveRefactoring(ctx, r, 1, nil); !errors.Is(e, m.ErrConflict) {
 		t.Fatal("stale CAS accepted", e)
 	}
-	if e := s.SaveRefactoring(ctx, other, 0, nil); e != nil {
-		t.Fatal(e)
-	}
 	r.Revision++
 	r.Phase = "finish"
-	if e := s.SaveRefactoring(ctx, r, 2, nil); !errors.Is(e, m.ErrConflict) {
-		t.Fatal("finish ignored current slot", e)
+	if e := s.SaveRefactoring(ctx, r, 2, nil); e != nil {
+		t.Fatal("finish should queue while full", e)
 	}
 	raw, ack, e := s.RefactoringCommand(ctx, "p", cmd.ID)
 	if e != nil || string(raw) != string(cmd.Raw) || len(ack) > 200 {
 		t.Fatal("immutable minimal receipt", string(raw), string(ack), e)
 	}
 	facts, _, e := s.ReadAsyncActivityFacts(ctx, "p", ports.AsyncActivityRead{Source: "refactoring", Filter: "summary", Limit: 50})
-	if e != nil || len(facts) != 2 {
+	if e != nil || len(facts) != len(others)+1 {
 		t.Fatal(facts, e)
 	}
 	page, e := query.ReadAsyncActivities(ctx, s, "p", "instance", query.AsyncActivityOptions{Sources: []string{"refactoring"}, Filter: "ongoing"})
-	if e != nil || len(page.Items) != 1 || page.Items[0].SteerAgent.Type != "maintenance" {
+	if e != nil || len(page.Items) != len(others)+1 || page.Items[0].SteerAgent.Type != "maintenance" {
 		t.Fatal(page, e)
 	}
 }

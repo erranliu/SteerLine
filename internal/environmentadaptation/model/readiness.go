@@ -44,9 +44,13 @@ type Admission struct {
 	Basis      string `json:"basis"`
 }
 
+type QualificationError struct{ Reason string }
+
+func (e *QualificationError) Error() string { return "环境未就绪：" + e.Reason }
+
 // Qualify is shared by preflight, queries and the candidate transaction.
 func Qualify(current Current, record Record, basis string) (Admission, error) {
-	fail := func(reason string) (Admission, error) { return Admission{}, errors.New("环境未就绪：" + reason) }
+	fail := func(reason string) (Admission, error) { return Admission{}, &QualificationError{Reason: reason} }
 	if current.Revision == 0 {
 		return fail("尚未准备当前项目环境")
 	}

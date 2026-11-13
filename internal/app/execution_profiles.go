@@ -92,6 +92,9 @@ func (p *executionProfiles) current(ctx context.Context) (*profileSnapshot, erro
 			}
 		}
 		prepareProfileMetadata(ctx, p.native, next.Profiles)
+		if agent, err := executionconfig.SteerAgentSettings(next.SteerAgent); err == nil {
+			_, _ = p.native.Resolve(ctx, steerAgentConfiguration(next.Profiles, agent, runnercontract.Workflow{ID: "generate", Version: 1}, "read_only"))
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return p.active, err

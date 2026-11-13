@@ -330,7 +330,7 @@ func (p *environmentPort) qualifyEnvironment(ctx context.Context, id, candidateC
 	proof, err := envmodel.Qualify(current, record, prepared.Inputs)
 	if err != nil {
 		if record.Prepared.Inputs != prepared.Inputs {
-			err = errors.New("环境未就绪：" + environmentBasisChange(record.Prepared, prepared) + "；须重新检测")
+			err = &envmodel.QualificationError{Reason: "" + environmentBasisChange(record.Prepared, prepared) + "；须重新检测"}
 		}
 		return envmodel.Admission{}, record, err
 	}
@@ -340,7 +340,7 @@ func (p *environmentPort) qualifyEnvironment(ctx context.Context, id, candidateC
 			return envmodel.Admission{}, record, err
 		}
 		if candidate.Inputs != prepared.Inputs {
-			return envmodel.Admission{}, record, errors.New("环境未就绪：候选固定提交与当前依据不同（候选 → 当前）；" + environmentBasisChange(candidate, prepared) + "；请更新候选来源")
+			return envmodel.Admission{}, record, &envmodel.QualificationError{Reason: "候选固定提交与当前依据不同（候选 → 当前）；" + environmentBasisChange(candidate, prepared) + "；请更新候选来源"}
 		}
 	}
 	return proof, record, nil

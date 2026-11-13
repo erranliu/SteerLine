@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/execution/backend"
 	em "github.com/erranliu/SteerLine/internal/execution/model"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
@@ -11,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,4 +156,95 @@ func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRefactoringFirstDispatchUsesCurrentQualificationForFrozenBase(t *testing.T) {
+	ctx := context.Background()
+	environment, config, store := environmentFixture(t)
+	config.runtimeMaintenance = newProjectMaintenance(config, store)
+	config.runtimeMaintenance.environmentObservation = environment.observeBasis
+	environment.config.runtimeMaintenance = config.runtimeMaintenance
+	ready := seedDetectedEnvironment(t, environment, "fixture")
+	profile, err := config.RunnerExecution.Profile("fixture", "")
+	require(t, err)
+	key, err := config.profileEnvironmentKey(ctx, profile)
+	require(t, err)
+	record := ref.Record{
+		Project: config.Identity(),
+		Input:   ref.Start{Profile: profile.ID, ProfileVersion: refactoringProfileVersion(profile), EnvironmentKey: key},
+		Frozen:  ref.Frozen{Repository: rc.Repository{BaseRevision: ready.Prepared.Commit}},
+	}
+	port := refactoringPort{config: config, store: store}
+	require(t, os.WriteFile(filepath.Join(config.Repository, "unrelated.md"), []byte("ordinary project change"), 0600))
+	advanced := commitEnvironmentMaterials(t, config)
+	proof, err := port.qualifyFirst(ctx, record)
+	require(t, err)
+	if advanced == record.Frozen.Repository.BaseRevision || proof.Basis != ready.Prepared.Inputs {
+		t.Fatal("ordinary branch advance did not preserve the frozen qualification")
+	}
+	port.config.environmentPolicy = env.NewAdmissionPolicy(false)
+	if _, err = port.qualifyFirst(ctx, record); !errors.Is(err, ref.ErrEnvironmentChanged) {
+		t.Fatal("developer bypass granted maintenance qualification", err)
+	}
+	port.config.environmentPolicy = config.environmentPolicy
+	port.config.RunnerExecution.Profiles = append([]RunnerProfile(nil), config.RunnerExecution.Profiles...)
+	port.config.RunnerExecution.Profiles[0].Execution.Settings = json.RawMessage(`{"executable":"native-fixture","model":"changed","access_mode":"full_access"}`)
+	if _, err = port.qualifyFirst(ctx, record); !errors.Is(err, ref.ErrEnvironmentChanged) {
+		t.Fatal("changed effective settings admitted original profile ID", err)
+	}
+	port.config.RunnerExecution.Profiles = config.RunnerExecution.Profiles
+	require(t, os.WriteFile(filepath.Join(config.Repository, "go.mod"), []byte("module changed.invalid\n"), 0600))
+	commitEnvironmentMaterials(t, config)
+	if _, err = port.qualifyFirst(ctx, record); !errors.Is(err, ref.ErrEnvironmentChanged) {
+		t.Fatal("changed environment basis admitted frozen action", err)
+	}
+}
+
+func TestRefactoringListKeepsOngoingAndDeepLinksAcrossHistoryPages(t *testing.T) {
+	ctx := context.Background()
+	config := Config{identity: "project"}
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
+	require(t, err)
+	defer store.Close()
+	port := refactoringPort{store: store, config: config}
+	now := time.Now().UTC()
+	oldest := ref.ID()
+	for i := 0; i < 22; i++ {
+		id := ref.ID()
+		if i == 0 {
+			id = oldest
+		}
+		ended := now.Add(time.Duration(i) * time.Second)
+		require(t, store.SaveRefactoring(ctx, ref.Record{
+			ID: id, Project: config.Identity(), Revision: 1, Phase: "delivered", CreatedAt: now, UpdatedAt: ended, FinishedAt: &ended,
+		}, 0, nil))
+	}
+	for i := 0; i < 4; i++ {
+		require(t, store.SaveRefactoring(ctx, ref.Record{
+			ID: ref.ID(), Project: config.Identity(), Revision: 1, Phase: "select", CreatedAt: now, UpdatedAt: now, Slot: i < 3,
+		}, 0, nil))
+	}
+	type page struct {
+		Ongoing, History []struct{ ID string }
+		Next             string `json:"history_next"`
+		Used             int    `json:"slots_used"`
+	}
+	read := func(values url.Values) page {
+		t.Helper()
+		view, err := port.read(ctx, "/refactoring", values)
+		require(t, err)
+		var result page
+		require(t, json.Unmarshal(mustJSON(view), &result))
+		return result
+	}
+	first := read(nil)
+	if len(first.Ongoing) != 4 || first.Used != 3 || len(first.History) != 20 || first.Next == "" {
+		t.Fatal("first page lost queued or historical records", first)
+	}
+	second := read(url.Values{"history_before": {first.Next}})
+	if len(second.History) != 2 || second.History[1].ID != oldest || second.Next != "" {
+		t.Fatal("history cursor did not return the final two records", second)
+	}
+	_, err = port.read(ctx, "/refactoring/"+oldest, nil)
+	require(t, err)
 }

@@ -302,6 +302,10 @@ export function invalidateCommand(
       )
         return false;
       const resource = String(key[3]);
+      if (action.startsWith("refactoring_"))
+        return ["refactoring", "async-activities", "activity-links"].includes(
+          resource,
+        );
       if (
         action === "maintenance_check" &&
         ["maintenance", "project-readiness", "dispatch"].includes(resource)
@@ -320,7 +324,10 @@ export function invalidateCommand(
       )
         return true;
       if (action.startsWith("environment_"))
-        return resource === "environment" || resource === "dispatch";
+        return (
+          resource === "environment" ||
+          (resource === "refactoring" && key[4] === "readiness")
+        );
       if (taskActions.has(action)) return taskResources.has(resource);
       if (affectsOutput && typeof runID === "string" && runID) {
         return (

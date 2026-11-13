@@ -63,7 +63,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	case module + "/internal/steeragent/maintenance":
 		return dependency == module+"/internal/prompts"
 	case module + "/internal/refactoring/model":
-		return dependency == module+"/internal/billing" || dependency == module+"/internal/runnerbinding" || dependency == module+"/internal/runnercontract"
+		return dependency == module+"/internal/billing" || dependency == module+"/internal/environmentadaptation/model" || dependency == module+"/internal/runnerbinding" || dependency == module+"/internal/runnercontract"
 	case module + "/internal/product/api":
 		return dependency == module+"/internal/billing"
 	case module + "/internal/task/model", module + "/internal/projectmaintenance/model":

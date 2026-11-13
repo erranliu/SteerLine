@@ -144,7 +144,7 @@ func (s *Service) applyExecution(r *model.Record, o model.Operation) {
 	case "conflict":
 		if r.PR != nil {
 			r.Candidate = &model.Result{PR: r.PR.URL}
-			if completed && o.Result.PR == r.PR.URL {
+			if completed && o.Result.PRURL() == r.PR.URL {
 				r.Candidate = o.Result
 			}
 		}
@@ -184,6 +184,7 @@ func prVersion(pr *runnercontract.PRFact) string {
 func (s *Service) deliver(r *model.Record) {
 	r.Phase = "delivered"
 	r.Candidate = nil
+	r.ConflictReview = false
 	r.Diagnostic = ""
 	now := s.now()
 	r.FinishedAt = &now
@@ -194,6 +195,7 @@ func (s *Service) verifyPR(ctx context.Context, r model.Record, v model.Result) 
 	if s.Verify == nil {
 		return nil, "", errors.New("缺少只读PR核验")
 	}
+	v.PR = v.PRURL()
 	pr, checks, err := s.Verify(ctx, r, v)
 	if err != nil {
 		return nil, "", err
@@ -222,16 +224,32 @@ func (s *Service) verifyDelivery(ctx context.Context, r model.Record) error {
 		if err != nil {
 			return err
 		}
+		if r.WriteKind == "conflict" && strings.EqualFold(pr.State, "open") && !pr.Merged &&
+			r.PR != nil && r.PR.HeadRevision != pr.HeadRevision && s.VerifyConflictBase != nil {
+			if err := s.VerifyConflictBase(ctx, r, *pr); err != nil {
+				_, saveErr := s.update(ctx, r.ID, func(current *model.Record) error {
+					if current.Revision == r.Revision && !current.StopRequested {
+						s.block(current, err.Error())
+					}
+					return nil
+				})
+				return saveErr
+			}
+		}
 	}
 	_, err := s.update(ctx, r.ID, func(current *model.Record) error {
 		if current.Revision != r.Revision || current.StopRequested {
 			return nil
 		}
 		switch {
+		case pr != nil && r.WriteKind == "conflict" && value.Outcome == "done" &&
+			(value.Head != pr.HeadRevision || value.Base != pr.BaseRevision):
+			s.block(current, "续作回执的 head/base 与原 PR 当前版本不一致")
 		case pr != nil && current.WriteKind == "conflict" && current.PR != nil && current.PR.HeadRevision == pr.HeadRevision:
 			s.block(current, "原 PR 尚无可核实的新提交，请核对原发布操作")
 		case pr != nil && strings.EqualFold(pr.State, "open") && !pr.Merged:
 			current.PR, current.Candidate = pr, nil
+			current.ConflictReview = current.WriteKind == "conflict"
 			current.WriteKind = ""
 			current.Phase = "report"
 			current.Diagnostic = ""
@@ -256,6 +274,9 @@ func (s *Service) reviewEvidence(ctx context.Context, r model.Record) (*runnerco
 	if pr.Merged || !strings.EqualFold(pr.State, "open") {
 		return pr, evidence, nil
 	}
+	if err := s.verifyConflictReviewBase(ctx, r, *pr); err != nil {
+		return nil, model.ReviewEvidence{}, err
+	}
 	if s.ReviewDiff == nil {
 		evidence.Limitation = "未配置读取 PR 差异的能力"
 	} else {
@@ -266,6 +287,14 @@ func (s *Service) reviewEvidence(ctx context.Context, r model.Record) (*runnerco
 		}
 	}
 	return pr, evidence, nil
+}
+
+func (s *Service) verifyConflictReviewBase(ctx context.Context, r model.Record, pr runnercontract.PRFact) error {
+	if r.ConflictReview && s.VerifyConflictBase != nil && pr.State == "open" && !pr.Merged &&
+		!matchesVersion(r.PR, pr.URL, pr.HeadRevision, pr.BaseRevision) {
+		return s.VerifyConflictBase(ctx, r, pr)
+	}
+	return nil
 }
 
 func (s *Service) applyReview(r *model.Record, op model.Operation, latest *runnercontract.PRFact, checks string, review decision.Review) {

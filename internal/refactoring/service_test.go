@@ -24,6 +24,7 @@ import (
 
 // Public Runner fixture: no access to Runner implementation or private state.
 type maintenanceRunner struct {
+	mu                   sync.Mutex
 	noChanges            bool
 	prBody               string
 	baseOverride         string
@@ -48,6 +49,8 @@ type maintenanceRunner struct {
 }
 
 func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnerclient.Receipt, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.requests = append(f.requests, req)
 	id := fmt.Sprintf("run-%d", len(f.requests))
 	var in rc.RunInput
@@ -157,6 +160,8 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 	return runnerclient.Receipt{RunID: id, ReceiptStatus: "accepted"}, nil
 }
 func (f *maintenanceRunner) Inspect(_ context.Context, selector, id string) (runnerclient.Inspection, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if selector == "request-id" {
 		for i, req := range f.requests {
 			if req.RequestID == id {
@@ -171,6 +176,8 @@ func (f *maintenanceRunner) Inspect(_ context.Context, selector, id string) (run
 	return runnerclient.Inspection{}, errors.New("missing")
 }
 func (f *maintenanceRunner) Call(_ context.Context, command string, args []string, _ *rc.Request) (runnerclient.Response, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if command == "workspace-git" {
 		commit, clean := strings.Repeat("a", 40), false
 		body, _ := json.Marshal(rc.WorkspaceGit{RunID: args[1], Commit: &commit, Clean: &clean, ObservedAt: time.Now(), Verified: true})
@@ -216,7 +223,7 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := s.Command(context.Background(), cmd, &m.Start{Direction: direction.ID, DirectionRevision: direction.Revision, Profile: "local", Strategy: "cautious", Budget: m.Budget{Rounds: 2}})
+	r, e := s.Command(context.Background(), cmd, &m.Start{Direction: direction.ID, DirectionRevision: direction.Revision, Profile: "local", EnvironmentKey: "test-key", EnvironmentRevision: 1, ProfileVersion: strings.Repeat("c", 64), BaseCommit: strings.Repeat("b", 40), Strategy: "cautious", Budget: m.Budget{Rounds: 2}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -511,6 +518,59 @@ func TestMaintenanceRetriesFailedDecisionOutputOnce(t *testing.T) {
 	}
 	if err := s.Tick(context.Background()); err != nil || len(f.requests) != submissions {
 		t.Fatal("advanced after failed decision", err, len(f.requests))
+	}
+}
+
+func TestMaintenanceConflictReviewRegeneratesInvalidJSON(t *testing.T) {
+	for _, retrySucceeds := range []bool{true, false} {
+		t.Run(fmt.Sprintf("retry_succeeds_%t", retrySucceeds), func(t *testing.T) {
+			s, f, r := fixture(t)
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
+			original, firstReport := r.PR.URL, r.Reports[0]
+			f.baseOverride = strings.Repeat("e", 40)
+			control(t, s, r, "refactoring_conflict")
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool {
+				last := r.Operations[len(r.Operations)-1]
+				return r.Phase == "report" && r.PR.HeadRevision != firstReport.Head &&
+					last.Purpose == "report" && last.State == "submitted" && last.RunID != "" && len(r.Reports) == 1
+			})
+			first := r.Operations[len(r.Operations)-1]
+			const malformed = `{"recommendation":"merge","report":"复查新基线"},"prompt":"多余字段"}`
+			fail := func(id string) {
+				run := f.runs[id]
+				run.Status = "failed"
+				run.Final.Text = malformed
+				run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: "invalid_json: extra data"}
+			}
+			fail(first.RunID)
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool {
+				last := r.Operations[len(r.Operations)-1]
+				return last.ID != first.ID && last.RunID != ""
+			})
+			retry := r.Operations[len(r.Operations)-1]
+			want, err := prompts.MaintenanceDecisionJSONRetry()
+			if err != nil || retry.Prompt != want {
+				t.Fatalf("unexpected retry prompt %q: %v", retry.Prompt, err)
+			}
+			previous := r.Operations[len(r.Operations)-2]
+			if previous.Feedback != malformed || strings.Contains(string(retry.Request.Input), "多余字段") {
+				t.Fatalf("unexpected previous feedback: %q", previous.Feedback)
+			}
+			if !retrySucceeds {
+				fail(retry.RunID)
+			}
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" || r.Phase == "delivered" })
+			if r.PR.URL != original || r.Reports[0] != firstReport {
+				t.Fatal("retry replaced original PR or first review")
+			}
+			if retrySucceeds {
+				if len(r.Reports) != 2 || r.Reports[1].Base != f.baseOverride || r.Reports[1].Head == firstReport.Head {
+					t.Fatal("valid retry did not record the new PR version")
+				}
+			} else if r.Phase != "blocked" || len(r.Reports) != 1 || r.Operations[len(r.Operations)-1].ID != retry.ID {
+				t.Fatal("a second invalid review did not settle without another retry")
+			}
+		})
 	}
 }
 

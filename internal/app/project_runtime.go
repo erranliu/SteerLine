@@ -219,6 +219,9 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	taskAdmission := newRoadmapTaskCommands(r.store, r.config, service.ExecuteTaskMutation)
 	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, r.config.committedDocuments(), r.store, taskAdmission, maintenance, maintenance.refreshBaselineWithRewrite)
 	r.config.runtimeContinuationSuggestion = newContinuationSuggestionPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	// Populate the read-only capability snapshot before exposing maintenance readiness.
+	// Other project capabilities remain available if this optional combination fails.
+	_, _, _ = r.config.prepareSteerAgentGeneration(ctx)
 	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, maintenance)
 	if retErr = r.config.runtimeRefactoring.service.Recover(ctx); retErr != nil {
 		return
