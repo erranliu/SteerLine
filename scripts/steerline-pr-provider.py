@@ -12,17 +12,26 @@ def gh(*args):
 
 def query(number, repository):
     raw = json.loads(gh("pr", "view", number, "--repo", repository, "--json",
-                        "url,state,mergedAt,mergeCommit,baseRefName,headRefOid"))
+                        "url,state,mergedAt,mergeCommit,baseRefName,headRefOid,"
+                        "headRefName,headRepository,headRepositoryOwner,isDraft"))
     merged_at = raw.get("mergedAt")
     merged = merged_at is not None
     merge_commit = raw.get("mergeCommit")
     if isinstance(merge_commit, dict):
         merge_commit = merge_commit.get("oid")
+    head_owner = raw.get("headRepositoryOwner") or {}
+    head_repo = raw.get("headRepository") or {}
+    head_repository = ""
+    if head_owner.get("login") and head_repo.get("name"):
+        head_repository = head_owner["login"] + "/" + head_repo["name"]
     return {
         "url": raw["url"],
         "repository": repository,
         "base_branch": raw["baseRefName"],
+        "head_repository": head_repository,
+        "head_branch": raw["headRefName"],
         "head_revision": raw["headRefOid"],
+        "draft": raw["isDraft"],
         "state": "merged" if merged else ("closed_unmerged" if raw["state"] == "CLOSED" else "open"),
         "merged": merged,
         "merged_at": merged_at,

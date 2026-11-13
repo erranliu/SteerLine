@@ -24,7 +24,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	p := s.NewProject(name)
 	p.Chain = chain
 	p.Driver.NativeHome = s.Run.AuthHome
-	if s.ID == "smoke.local-codex" || s.ID == "workflow.local-codex-audited" || s.ID == "refactoring.local-codex" {
+	if s.ID == "smoke.local-codex" || s.ID == "workflow.local-codex-audited" || s.ID == "refactoring.local-codex" || s.ID == ManualVerificationLiveID {
 		p.enableGitHub()
 	}
 	codex, err := driver.CodexExecutable("codex")
@@ -40,6 +40,9 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &catalog))
 	catalog["default_execution_profile"] = chain
+	if s.ID == ManualVerificationLiveID {
+		catalog["developer"] = map[string]bool{"skip_environment_readiness": true}
+	}
 	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"access_mode": "full_access", "executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 2}}}
 	if s.ID == "workflow.local-codex-audited" {
 		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
@@ -140,6 +143,31 @@ git rev-parse HEAD
 	arrangement, readErr := os.ReadFile(filepath.Join(s.Run.Root, "tests", "e2e", "testdata", "tasks", "task.tests.json"))
 	s.Must(readErr)
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.tests.json"), arrangement, 0600))
+	if s.ID == ManualVerificationLiveID {
+		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
+		profile["workflow"].(map[string]any)["prompt_overrides"] = map[string]string{
+			"implement.execute": "Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once. This stage only writes, checks and commits result.txt. Leave STEERLINE_RESULT_FILE and STEERLINE_PROGRESS_FILE intact, and do not run publish.ps1, push, or create a PR. The appended SHA-256 is for the existing arrangement file. After the command succeeds, write exactly 实施及必要验证已完成 as the final line, without punctuation.",
+			"implement.report":  "Report the preceding implementation outcome only, without tools or publishing. On success write exactly 实施及必要验证已完成 as the final line, without punctuation.",
+			"publish":           "Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 exactly once with the publication mode flag instructed by the Runner publication target. On success, return the actual complete PR URL on its own line and 本次发布已完成。 on the last line.",
+			"publish.report":    "Report only the preceding publication result. On success write the actual complete PR URL on its own line and 本次发布已完成。 on the last line.",
+		}
+		s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
+		checks := `{"version":1,"launch":{"program":"node","args":["manual-preview.cjs","${PORT}"],"url":"http://127.0.0.1:${PORT}"},"checks":[{"id":"M01","title":"Preview","steps":["Open the preview"],"expected":"Shows the committed result"}]}`
+		s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.manual-checks.json"), []byte(checks), 0600))
+		preview := `const {createServer}=require("node:http");const {readFileSync}=require("node:fs");createServer((req,res)=>res.end(readFileSync("result.txt"))).listen(Number(process.argv[2]),"127.0.0.1");`
+		s.Must(os.WriteFile(filepath.Join(p.Repo, "manual-preview.cjs"), []byte(preview), 0600))
+		publish := filepath.Join(p.Repo, "publish.ps1")
+		body, err := os.ReadFile(publish)
+		s.Must(err)
+		// The actual fixture command proves that the model received and used the new draft option.
+		body = []byte(strings.ReplaceAll(string(body), " --draft --title ", " @args --title "))
+		s.Must(os.WriteFile(publish, body, 0600))
+		specPath := filepath.Join(p.Repo, "SteerlineFlow", "spec", "task.spec.md")
+		body, err = os.ReadFile(specPath)
+		s.Must(err)
+		body = []byte(strings.ReplaceAll(string(body), "-File ./publish.ps1`", "-File ./publish.ps1` followed by the optional PR mode flag from the publication dispatch"))
+		s.Must(os.WriteFile(specPath, body, 0600))
+	}
 	p.prepareTestProtocol()
 	if p.RealPR {
 		p.writeLiveFixtureEnvironment()

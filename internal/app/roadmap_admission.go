@@ -161,6 +161,9 @@ func (p *roadmapPort) verifyMerged(ctx context.Context, r *roadmap.Record) error
 	}
 	for name, body := range files {
 		got, e := p.materials.readCommittedMaterial(ctx, fact.MergeCommit, name)
+		if body == "" && strings.HasSuffix(name, ".manual-checks.json") && isMissingRoadmapFile(e) {
+			continue
+		}
 		if e != nil {
 			return e
 		}

@@ -44,6 +44,7 @@ Runner state-dir 由规范绝对 home 和当前 v8 命名空间派生：Windows 
 | 原请求与控制 | 原请求对账、启动前离线读取及控制前 revision 使用 `inspect` 等既有入口；按钮资格来自公开 controls 与调用方业务资格 |
 | 等待状态 | 准备等待展示 `execution_wait` 对象或显式 null，保留原 revision；SteerLine 不重试 Orca CLI，不根据倒计时自动恢复 |
 | 原会话查看 | 仅公开 `native_session_viewer.adapters` 声明支持时启用；Runner 校验原 Run/Attempt/session/generation 并打开，不创建替代业务会话 |
+| 人工核验草稿发布 | `command` provider 公开设置 `draft`，Runner 在首次发布核实开放草稿及完整 Head，并返回持久的 `initial_draft_verified`。SteerLine 首版用 GitHub 查询草稿状态及原 Head。发布组合须支持新契约。 [人工核验](../../SteerlineFlow/spec/manual-verification.spec.md) |
 
 缺少必要 schema、能力或固定材料时明确显示不可用，不退回旧字段、普通流程或内联材料。目录查询不取得项目就绪资格，也不能用空闲能力查询证明真实 Run 读取已接通。配置详情见[执行方案](../product-design/execution-configuration.md)，接线及已验范围见[目录与边界验收](../../SteerlineFlow/testing/acceptance/runner-boundary-consolidation.md)、[执行配置验收](../../SteerlineFlow/testing/acceptance/native-execution-configuration-boundary.md)。
 

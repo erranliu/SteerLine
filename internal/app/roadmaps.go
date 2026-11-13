@@ -436,6 +436,11 @@ func (p *roadmapPort) action(ctx context.Context, in httpcontract.CommandEnvelop
 					r.Documents[i].Plan.Body = input.Body
 				case "acceptance":
 					r.Documents[i].Acceptance[0].Body = input.Body
+				case "manual_checks":
+					r.Documents[i].ManualChecks = nil
+					if strings.TrimSpace(input.Body) != "" {
+						r.Documents[i].ManualChecks = json.RawMessage(input.Body)
+					}
 				case "tests":
 					var selection tm.Arrangement
 					if err := tm.Decode([]byte(input.Body), &selection); err != nil {

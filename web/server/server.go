@@ -510,7 +510,7 @@ func spaPath(route string) bool {
 		return false
 	}
 	switch parts[2] {
-	case "refactoring", "roadmaps", "roadmap-planning", "tests", "dag", "runs", "settings", "status", "environment", "activities":
+	case "manual-verification", "refactoring", "roadmaps", "roadmap-planning", "tests", "dag", "runs", "settings", "status", "environment", "activities":
 		return true
 	}
 	return false

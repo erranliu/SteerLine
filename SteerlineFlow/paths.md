@@ -30,6 +30,7 @@
 | `SteerlineFlow/README.md`、`SteerlineFlow/paths.md` | 流程内容索引与本路径清单。 |
 | `SteerlineFlow/environment.md`、`SteerlineFlow/scripts/verify-environment.ps1/sh` | 所有目标共用的项目环境要求及检测入口，资格按项目×运行机×链路分别保存；manifest6 声明入口、解释器、非秘密 requirements 及检测辅助程序/运行要求配置，机器段/脚本/依赖计入资格摘要，说明正文不计入；version3 最终结果通过 Runner 封存。项目测试、业务文档、Spec/Plan、roadmap 不属于资格依据。平台只调用一次并消费结果，无平台协议副本或阶段编排。材料存在不等于 ready。 |
 | `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan 及同名 `.tests.json`；安排随材料入 Git，执行时固定实际 commit。 |
+| `SteerlineFlow/plans/<name>.manual-checks.json` | 可选 Plan 伴随文件，保存启动参数和人工核验项，候选从固定 Plan 提交读取。 |
 | `SteerlineFlow/Roadmap/execution-map.md` | 已确认任务、依赖、执行及验收汇总。 |
 | `SteerlineFlow/Roadmap/RoadmapGuide.md` | 本项目定制的 roadmap 维护规则。 |
 | `SteerlineFlow/Roadmap/parse-rules.md`、`document-rules.md`、`SteerlineFlow/spec/SpecGuide.md` | `project prepare-roadmap` 显式初始化/检查的静态材料；规则和默认指南的唯一打包来源为 internal/prompts/materials，不在运行时补写。 |
@@ -48,6 +49,8 @@
 任务编号还使用同仓各 worktree 共享的 Git ref `refs/steerline/roadmap-task-ids`，由 [编号工具](../scripts/roadmap_task_id.py)维护。通过 Git 查询 common dir/ref，不把某个 checkout 的 `.git/` 当作固定物理目录。
 
 ## 仓库外的工作与测试目录
+
+项目核验现场位于项目状态目录的 `manual-verification/<启动请求 ID>/`，其中 `worktree/` 是按选定核验提交创建的 detached worktree，`tmp/`、`stdout.log` 和 `stderr.log` 属于该次尝试。页面可在核实停止后移除 worktree。结果和待办状态保存在项目 SQLite。 [核验来源与待办](../docs/product-design/manual-verification.md)
 
 人工开发、AI 验证和持续保留的调试证据采用以下显式路径约定，使用现有入口的 `-out`、`-OutDir`、`-EvidenceDir` 或 `-DebugRoot` 传入：
 

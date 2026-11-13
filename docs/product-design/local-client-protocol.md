@@ -64,7 +64,19 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 
 `GET /dispatch` 按派发模式返回 `closed`，或按当前任务、执行槽位、默认方案及项目和环境观察返回 `waiting` 或 `ready`。等待原因包含 `category`、`code` 和 `diagnostic`。界面按对应派发版本展示状态。这个查询只读取事实，实际派发使用原启动和预留路径。
 
-以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning、人工验收和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
+以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning 和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
+
+人工核验使用项目范围的 `/manual-verification` 列表及 `/manual-verification/{candidate_id}/logs/{attempt_id}` 日志查询。命令以 `manual_verification_` 为前缀，按候选 ID 与核验记录版本定位。请求载荷均携带完整 `head`。
+
+| 后缀 | 载荷 |
+| --- | --- |
+| `start` | `head` 是页面所见的 PR Head。可选 `source` 默认为 `pr`，已合入时也接受 `remote_head`。服务端从冻结 Plan 读取启动命令，启动记录返回实际来源及 SHA。 |
+| `stop`、`remove` | `head` 与 `attempt_id` 定位原启动。 |
+| `result` | `head`、`attempt_id`、`check_id`、`outcome`，可选 `notes` 和 `evidence`。来源由原启动记录确定。 |
+| `close` | `source` 与 `head` 定位具备全部结论的核验提交。 |
+| `reopen` | `head` 匹配原关闭记录。 |
+
+待办状态、来源与记录规则见[人工核验设计](manual-verification.md)。
 
 POST 正文最大 1,048,576 bytes。登记前检查原信封、固定意图、digest、时间与 JSON framing 聚合编码：无结果摘要最多 1,064,960 bytes，为结果预留 16 KiB；持久读写硬上限 1,081,344 bytes。超限分别返回 HTTP 413 / request_body_too_large 或 request_record_too_large，新 ID 不登记、零业务副作用。持久摘要的 code/diagnostic 各限 1,024 UTF-8 bytes，超长保留前缀与 ` [truncated]`；正式 authority 回执保持完整。仲裁文件只存一份原信封、意图与紧凑结果，typed receipt 从原权威查询，不复制膨胀。
 

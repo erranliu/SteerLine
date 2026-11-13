@@ -230,6 +230,16 @@ func (c *Catalog) ValidateExecution(input ExecutionInput) error {
 func (c *Catalog) ValidatePublication(input Publication) error {
 	return validateSettings(c.providers, input.Provider, input.Settings)
 }
+
+func (c *Catalog) ValidateDraftPublication(input Publication) error {
+	var provider struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(c.Capabilities.ConfigurationSchemas.Providers[input.Provider], &provider); err != nil || len(provider.Properties["draft"]) == 0 {
+		return errors.New("所选 Runner 未声明草稿 PR 发布能力")
+	}
+	return c.ValidatePublication(input)
+}
 func (c *Catalog) ValidateWorkflow(input Workflow) error {
 	for _, choice := range c.Capabilities.Workflows {
 		if input.ID == choice.ID && input.Version == choice.Version {

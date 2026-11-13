@@ -17,6 +17,7 @@ import (
 	"time"
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/manualverification"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -186,6 +187,27 @@ func (p *roadmapPort) publicationFiles(ctx context.Context, r roadmap.Record) (m
 			return nil, err
 		}
 		out[name] = body
+		manualName, err := manualverification.CompanionPath(d.Plan.Path)
+		if err != nil {
+			return nil, err
+		}
+		if len(d.ManualChecks) != 0 {
+			body, err := manualverification.Encode(d.ManualChecks)
+			if err != nil {
+				return nil, err
+			}
+			out[manualName] = string(body)
+		} else if old, err := p.materials.readCommittedMaterial(ctx, r.CodeCommit, manualName); err == nil {
+			owned, err := p.ownedRoadmapDocument(ctx, r.CodeCommit, manualName, old, r)
+			if err != nil {
+				return nil, err
+			}
+			if owned {
+				out[manualName] = ""
+			}
+		} else if !isMissingRoadmapFile(err) {
+			return nil, err
+		}
 		for _, a := range d.Acceptance {
 			out[a.Path] = a.Body
 		}
@@ -286,7 +308,14 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 		if name != "SteerlineFlow/Roadmap/execution-map.md" {
 			var missing *missingCommittedFileError
 			if old, e := p.materials.readCommittedMaterial(ctx, pub.Base, name); e == nil {
-				if !ownedRoadmapMetadata(name, old, *r) {
+				owned := ownedRoadmapMetadata(name, old, *r)
+				if !owned {
+					owned, e = p.ownedRoadmapDocument(ctx, pub.Base, name, old, *r)
+					if e != nil {
+						return e
+					}
+				}
+				if !owned {
 					return errors.New("拒绝覆盖已存在的无关文件：" + name)
 				}
 			} else if !errors.As(e, &missing) {
@@ -309,11 +338,23 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 		}
 	}
 	for _, name := range keys {
+		if files[name] == "" && strings.HasSuffix(name, ".manual-checks.json") {
+			if _, e = git("rm", "--ignore-unmatch", "--", name); e != nil {
+				return e
+			}
+			continue
+		}
 		if e = writeRoadmapFile(directory, name, files[name]); e != nil {
 			return e
 		}
 	}
-	if _, e = git(append([]string{"add", "--"}, keys...)...); e != nil {
+	writes := []string{}
+	for _, name := range keys {
+		if files[name] != "" || !strings.HasSuffix(name, ".manual-checks.json") {
+			writes = append(writes, name)
+		}
+	}
+	if _, e = git(append([]string{"add", "--"}, writes...)...); e != nil {
 		return e
 	}
 	staged, e := git("diff", "--cached", "--name-only", "-z")
@@ -335,11 +376,51 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 	}
 	for name, body := range files {
 		got, e := p.materials.readCommittedMaterial(ctx, pub.Commit, name)
+		if body == "" && strings.HasSuffix(name, ".manual-checks.json") && isMissingRoadmapFile(e) {
+			continue
+		}
 		if e != nil || string(got) != body {
 			return errors.New("文档提交内容未核实：" + name)
 		}
 	}
 	return nil
+}
+
+func isMissingRoadmapFile(err error) bool {
+	var missing *missingCommittedFileError
+	return errors.As(err, &missing)
+}
+
+func (p *roadmapPort) ownedRoadmapDocument(ctx context.Context, commit, name string, body []byte, r roadmap.Record) (bool, error) {
+	index := "SteerlineFlow/Roadmap/generated/" + r.Source.ID + ".json"
+	raw, err := p.materials.readCommittedMaterial(ctx, commit, index)
+	if isMissingRoadmapFile(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var metadata struct{ Documents []roadmap.Documents }
+	if !ownedRoadmapMetadata(index, raw, r) || json.Unmarshal(raw, &metadata) != nil {
+		return false, nil
+	}
+	for _, d := range metadata.Documents {
+		for _, original := range append([]roadmap.Document{d.Spec, d.Plan}, d.Acceptance...) {
+			if original.Path == name {
+				return original.Body == string(body), nil
+			}
+		}
+		if path, err := tm.ArrangementPath(d.Plan.Path); err == nil && path == name {
+			original, err := roadmap.TestsJSON(d)
+			return err == nil && original == string(body), err
+		}
+		path, err := manualverification.CompanionPath(d.Plan.Path)
+		if err == nil && path == name && len(d.ManualChecks) != 0 {
+			original, err := manualverification.Encode(d.ManualChecks)
+			return err == nil && bytes.Equal(original, body), err
+		}
+	}
+	return false, nil
 }
 
 // Later batches may replace this source's generated index, never its original

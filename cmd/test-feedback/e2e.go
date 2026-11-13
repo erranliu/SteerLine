@@ -387,7 +387,7 @@ func runE2E(opts options) (code int) {
 	web := ""
 	activityWeb := false
 	for _, entry := range selected {
-		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.main-agent-advisory" || entry.ID == "runtime.refactoring-maintenance" {
+		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.main-agent-advisory" || entry.ID == "runtime.refactoring-maintenance" || entry.ID == "manual-verification.local-codex" {
 			activityWeb = true
 		}
 	}
@@ -776,6 +776,12 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				}
 				continue
 			}
+			if e.ID == "manual-verification.local-codex" {
+				if err := checkManualVerificationProof(filepath.Join(out, "scenarios", e.ID, "manual-verification.json")); err != nil {
+					return err
+				}
+				continue
+			}
 			if !supportedLiveScenario(e) || evidence.Live == nil || e.ID == "workflow.local-codex-audited" && evidence.Live.Audited == nil {
 				return fmt.Errorf("unsupported live chain or missing delivery proof: %s", e.ID)
 			}
@@ -789,6 +795,9 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 }
 
 func supportedLiveScenario(e e2eScenario) bool {
+	if e.ID == "manual-verification.local-codex" {
+		return e.Level == "L4" && e.Suite == "manual-verification" && e.Chain == "local-codex" && e.Package == "./tests/e2e/live"
+	}
 	if e.ID == "refactoring.local-codex" {
 		return e.Level == "L4" && e.Suite == "refactoring" && e.Chain == "local-codex" && e.Package == "./tests/e2e/live"
 	}

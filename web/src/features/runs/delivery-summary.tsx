@@ -1,4 +1,6 @@
 import type { Candidate, Task } from "../../shared/api/types";
+import { Link } from "react-router-dom";
+import { useWorkspace } from "../../app/context";
 import { SafeLink } from "../../shared/ui/status";
 import { executionEnded } from "./presentation";
 const names: Record<string, string> = {
@@ -57,6 +59,9 @@ export function DeliverySummary({
       <SafeLink url={task?.delivery?.pr_url || run.pr.url}>
         {task?.delivery?.pr_url || run.pr.url ? "查看 PR" : "尚未观察到 PR"}
       </SafeLink>
+      {v?.manual_verification && (
+        <ManualVerificationLink candidate={run.run_id} />
+      )}
       {conflict && (
         <p className="notice amber">
           PR 观察不一致：{deliveryLabel(pr)} / {deliveryLabel(v?.pr_state)}
@@ -108,5 +113,18 @@ export function DeliverySummary({
         <p className="muted">会话已关闭；业务结果与资源停止分别判断。</p>
       )}
     </div>
+  );
+}
+
+function ManualVerificationLink({ candidate }: { candidate: string }) {
+  const { identity } = useWorkspace();
+  return (
+    <p>
+      <Link
+        to={`/projects/${identity.project_id}/manual-verification?candidate=${encodeURIComponent(candidate)}`}
+      >
+        人工核验
+      </Link>
+    </p>
   );
 }
