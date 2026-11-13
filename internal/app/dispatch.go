@@ -9,11 +9,10 @@ import (
 
 func (p *runtimeProjectPort) readDispatch(ctx context.Context) (api.DispatchObservation, error) {
 	view, err := p.actor.ObserveDispatch(materialReads(ctx), func(ctx context.Context) error {
-		maintenance := p.config.runtimeMaintenance
-		if maintenance == nil {
+		if p.readiness == nil {
 			return errors.New("项目就绪状态待核实")
 		}
-		readiness, err := maintenance.projectReadiness(ctx)
+		readiness, err := p.readiness.projectReadiness(ctx)
 		if err != nil {
 			return err
 		}
