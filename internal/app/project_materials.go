@@ -200,6 +200,11 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 	}
 	return nil
 }
+
+type materialFreshnessReader interface {
+	freshness(context.Context, runnerstate.Candidate) string
+}
+
 func (m *projectMaintenance) freshness(ctx context.Context, c runnerstate.Candidate) string {
 	o := m.current()
 	if o.Commit == "" || o.Diagnostic != "" {

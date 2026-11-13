@@ -14,13 +14,17 @@ import (
 	"time"
 )
 
+func (m *projectMaintenance) testRecordTree(ctx context.Context, commit string) ([]byte, error) {
+	return m.git(ctx, "ls-tree", "-r", "-z", commit, "--", testmanagement.RecordsPath+"/")
+}
+
 // The cache contains only one immutable Git tree, never database history or
 // mutable worktree files. A changed main-branch commit replaces it entirely.
 func (p *testManagementPort) recordSnapshot(ctx context.Context) (testmanagement.RecordSnapshot, error) {
-	if p.maintenance == nil {
+	if p.baseline == nil {
 		return testmanagement.RecordSnapshot{}, errors.New("主分支基线尚未核实")
 	}
-	commit := p.maintenance.current().Commit
+	commit := p.baseline.current().Commit
 	if commit == "" {
 		return testmanagement.RecordSnapshot{}, errors.New("主分支基线尚未核实")
 	}
@@ -29,7 +33,7 @@ func (p *testManagementPort) recordSnapshot(ctx context.Context) (testmanagement
 	if p.history != nil && p.history.Commit == commit {
 		return *p.history, nil
 	}
-	tree, err := p.maintenance.git(ctx, "ls-tree", "-r", "-z", commit, "--", testmanagement.RecordsPath+"/")
+	tree, err := p.baseline.testRecordTree(ctx, commit)
 	if err != nil {
 		return testmanagement.RecordSnapshot{}, err
 	}
@@ -105,11 +109,11 @@ func (p *testManagementPort) TestCatalogue(ctx context.Context) (json.RawMessage
 		ObservedAt time.Time `json:"observed_at"`
 		Diagnostic string    `json:"diagnostic,omitempty"`
 	}{Tests: []entry{}, Path: testmodel.ProjectEntryPath, ObservedAt: time.Now().UTC()}
-	if p.maintenance == nil {
+	if p.baseline == nil {
 		out.Diagnostic = "主分支基线尚未核实"
 		return json.Marshal(out)
 	}
-	out.Commit = p.maintenance.current().Commit
+	out.Commit = p.baseline.current().Commit
 	seen := map[string]bool{}
 	projectEntry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return p.materials.readCommittedMaterial(ctx, out.Commit, path) })
 	var raw []byte

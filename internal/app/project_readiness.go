@@ -17,6 +17,10 @@ type maintenanceState struct {
 	Readiness   pm.Readiness
 }
 
+type projectReadinessReader interface {
+	projectReadiness(context.Context) (pm.Readiness, error)
+}
+
 // readyExecutionReserver rechecks readiness and saves under the original baseline lock.
 type readyExecutionReserver interface {
 	reserveReadyExecution(ctx context.Context, commit string, save func() error) error

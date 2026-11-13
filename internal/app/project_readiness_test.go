@@ -28,7 +28,7 @@ func TestProjectReadinessGatesAllUnfinishedTasksAndNewCandidates(t *testing.T) {
 	store.graph.Tasks = append(store.graph.Tasks, taskmodel.TaskRecord{TaskID: "102", Status: "open"})
 	store.materials["102"] = other
 	work := taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contract}
-	port := &runtimeProjectPort{config: Config{runtimeMaintenance: m}}
+	port := &runtimeProjectPort{readiness: m}
 	baseCalls := 0
 	base := func(context.Context, taskmodel.FixedWork, bool) (string, error) {
 		baseCalls++

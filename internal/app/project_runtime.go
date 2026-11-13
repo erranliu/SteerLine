@@ -211,7 +211,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		return
 	}
 	instance := service.InstanceID()
-	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance)
+	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, maintenance, maintenance)
 	r.environment.service.Admit = service.VerifyRunnerAdmission
 	r.config.runtimeTests = r.tests
 	taskAdmission := newRoadmapTaskCommands(r.store, r.config, service.ExecuteTaskMutation)
@@ -231,7 +231,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeHost = &r.hostConfig
 	r.product, retErr = openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context) (productclient.TaskCommands, error) {
 		return &runtimeTaskCommands{clientTaskCommands: newClientTaskCommands(r.store, r.config), service: service}, nil
-	}, r.store)
+	}, r.store, maintenance, maintenance)
 	if retErr != nil {
 		return
 	}
@@ -240,7 +240,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr != nil {
 		return
 	}
-	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance, readingBodies: runner.readingBodies}
+	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance, readingBodies: runner.readingBodies, readiness: maintenance}
 	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -374,6 +374,7 @@ type runtimeProjectPort struct {
 	users         sync.RWMutex
 	readingOnce   sync.Once
 	readingBodies *query.ReadingBodyCache
+	readiness     projectReadinessReader
 }
 
 func (p *runtimeProjectPort) StopAccepting() { p.stopping.Store(true) }

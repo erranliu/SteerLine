@@ -154,12 +154,15 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 	return &out, e
 }
 func (p *runtimeProjectPort) maintenanceRead(ctx context.Context, route, mode, plan string) (any, error) {
+	if route == "/maintenance/readiness" {
+		if p.readiness == nil {
+			return nil, errors.New("maintenance unavailable")
+		}
+		return p.readiness.projectReadiness(ctx)
+	}
 	m := p.config.runtimeMaintenance
 	if m == nil {
 		return nil, errors.New("maintenance unavailable")
-	}
-	if route == "/maintenance/readiness" {
-		return m.projectReadiness(ctx)
 	}
 	if strings.HasPrefix(route, "/maintenance/tasks/") {
 		return m.taskDocuments(ctx, strings.TrimPrefix(route, "/maintenance/tasks/"))

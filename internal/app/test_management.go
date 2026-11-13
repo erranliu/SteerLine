@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -17,19 +18,26 @@ type testManagementStore interface {
 	testmanagement.ProgressStore
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
-type testManagementPort struct {
-	historyMu   sync.Mutex
-	history     *testmanagement.RecordSnapshot
-	project     string
-	store       testManagementStore
-	progress    *testmanagement.ProgressService
-	maintenance *projectMaintenance
-	materials   committedMaterialReader
+
+type testHistoryBaseline interface {
+	current() pm.Observation
+	testRecordTree(context.Context, string) ([]byte, error)
 }
 
-func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader) *testManagementPort {
+type testManagementPort struct {
+	historyMu sync.Mutex
+	history   *testmanagement.RecordSnapshot
+	project   string
+	store     testManagementStore
+	progress  *testmanagement.ProgressService
+	baseline  testHistoryBaseline
+	materials committedMaterialReader
+	freshness materialFreshnessReader
+}
+
+func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error, baseline testHistoryBaseline, materials committedMaterialReader, freshness materialFreshnessReader) *testManagementPort {
 	c = bindNativeConfiguration(c, cli)
-	return &testManagementPort{project: c.Identity(), store: store, maintenance: c.runtimeMaintenance, materials: materials, progress: &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}}
+	return &testManagementPort{project: c.Identity(), store: store, baseline: baseline, materials: materials, freshness: freshness, progress: &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}}
 }
 func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.RawMessage, error) {
 	c, err := p.store.Candidate(ctx, p.project, id)
@@ -46,8 +54,8 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 		}
 	}
 	freshness := "current"
-	if p.maintenance != nil {
-		freshness = p.maintenance.freshness(ctx, c)
+	if p.freshness != nil {
+		freshness = p.freshness.freshness(ctx, c)
 	}
 	encode := func(v testmanagement.View) (json.RawMessage, error) {
 		if freshness == "unknown" {

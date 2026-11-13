@@ -17,8 +17,8 @@ func (r *clientReader) taskStartEligibility(ctx context.Context, mode string, ta
 	if len(view.Blockers) != 0 {
 		return view
 	}
-	if maintenance := r.config.runtimeMaintenance; maintenance != nil {
-		readiness, err := maintenance.projectReadiness(ctx)
+	if r.readiness != nil {
+		readiness, err := r.readiness.projectReadiness(ctx)
 		if err != nil {
 			view.Blockers = append(view.Blockers, api.TaskStartBlocker{Code: "project_readiness_unverified", Diagnostic: "项目就绪状态待核实：" + err.Error()})
 		} else if err = requireProjectReadiness(readiness); err != nil {
