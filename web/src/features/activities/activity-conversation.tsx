@@ -9,7 +9,7 @@ import { useWorkspace } from "../../app/context";
 import { useQueryVisibility } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
 import type { Api } from "../../shared/api/client";
-import type { Activity } from "./model";
+import { formatActivityTime, type Activity } from "./model";
 import { readingRoot } from "./reading-api";
 import { RecordedInteractions } from "./recorded-interactions";
 
@@ -27,6 +27,8 @@ type ConversationPage = {
     id: string;
     role: "user" | "assistant";
     text: string;
+    turn_id?: string;
+    turn_started_at?: string;
     truncated?: boolean;
     body_cursor?: string;
   }[];
@@ -258,10 +260,17 @@ function Conversation({
     retry: false,
   });
   const pages = history.data?.pages ?? [];
-  const messages = new Map<string, ConversationPage["messages"][number]>();
+  const byID = new Map<string, ConversationPage["messages"][number]>();
   const first = pages[0];
   for (const page of [...pages].reverse()) {
-    for (const message of page.messages) messages.set(message.id, message);
+    for (const message of page.messages) byID.set(message.id, message);
+  }
+  const messages = [...byID.values()];
+  const turnTimes = new Map<string, string>();
+  for (const message of messages) {
+    if (message.turn_id && message.turn_started_at) {
+      turnTimes.set(message.turn_id, message.turn_started_at);
+    }
   }
   return (
     <section className="reading-interactions" aria-label="原会话对话">
@@ -274,7 +283,7 @@ function Conversation({
       {pages.some((page) => page.partial) && (
         <p className="notice amber">原会话仅有部分历史可读。</p>
       )}
-      {pages.length > 0 && !messages.size && (
+      {pages.length > 0 && !messages.length && (
         <p className="muted">
           {history.hasNextPage
             ? "这一页没有可读消息。"
@@ -290,7 +299,7 @@ function Conversation({
           {history.isFetchNextPageError ? "重试读取更早消息" : "加载更早消息"}
         </Button>
       )}
-      {[...messages.values()].map((message) => (
+      {messages.map((message, index) => (
         <article
           key={message.id}
           className={
@@ -299,9 +308,21 @@ function Conversation({
               : "reading-interaction"
           }
         >
-          <strong className="reading-role">
-            {message.role === "user" ? "用户" : "助手"}
-          </strong>
+          <header className="reading-message-header">
+            <strong className="reading-role">
+              {message.role === "user" ? "用户" : "助手"}
+            </strong>
+            {(!message.turn_id ||
+              messages[index - 1]?.turn_id !== message.turn_id) && (
+              <ConversationTime
+                startedAt={
+                  message.turn_id
+                    ? turnTimes.get(message.turn_id)
+                    : message.turn_started_at
+                }
+              />
+            )}
+          </header>
           {message.body_cursor && first ? (
             <ConversationBody
               key={JSON.stringify([
@@ -330,6 +351,16 @@ function Conversation({
         {history.isLoadingError ? "重试读取对话" : "刷新对话"}
       </Button>
     </section>
+  );
+}
+
+function ConversationTime({ startedAt }: { startedAt?: string }) {
+  return startedAt ? (
+    <time className="muted" dateTime={startedAt}>
+      本轮开始于 {formatActivityTime(startedAt)}
+    </time>
+  ) : (
+    <small className="muted">时间未记录</small>
   );
 }
 
