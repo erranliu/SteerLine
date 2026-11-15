@@ -1,6 +1,15 @@
 {
   "tests": [
     {
+      "id": "manual-verification.gitea-local-codex",
+      "name": "Gitea 真实草稿 PR 与人工核验",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=manual-verification -env=live -scenario manual-verification.gitea-local-codex",
+      "check": "真实 Runner、Codex、Edge 和隔离本机 Gitea 创建草稿 PR，出现候选待办，从完整 Head 创建 worktree、启动预览并保存结论。推送新 Head 后拒绝旧提交写入，核验新提交，关闭待办和 PR，确认清理。",
+      "note": "Windows、Go、Git、Node、Edge、Codex 原生登录。STEERRUNNER_EXE 和 STEERLINE_E2E_GITEA_EXE 指向独立二进制，先构建 Web。测试服务监听 loopback，使用自有仓库与自定义 WIP 前缀。"
+    },
+    {
       "id": "manual-verification.local-codex",
       "name": "人工核验真实草稿 PR",
       "level": "L4",

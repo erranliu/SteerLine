@@ -78,8 +78,8 @@ func (s *manualVerification) refresh(ctx context.Context, r mv.Record) (ports.Ru
 	if err != nil {
 		return target, "", err
 	}
-	if target.URL != r.PR || target.Provider.Kind != "command" || strings.TrimRight(target.Provider.BaseURL, "/") != "https://github.com" {
-		return target, "", errors.New("核验仅支持已绑定的 GitHub PR")
+	if target.URL != r.PR || !supportsManualVerificationPR(target.Provider) {
+		return target, "", errors.New("核验需要与原候选绑定的 GitHub 或 Gitea PR")
 	}
 	query := publication.QueryClient{Command: commandRunner{Timeout: 30 * time.Second, ProcessHost: s.config.ProcessHost}, Timeout: 30 * time.Second}
 	observation := ports.RunnerPRObservation{CandidateID: c.ID, RunID: c.RunID, CandidateRevision: c.Revision, StartedAt: time.Now().UTC()}

@@ -347,6 +347,19 @@ func runE2E(opts options) (code int) {
 		sum := sha256.Sum256(raw)
 		report.Builds[build.path] = hex.EncodeToString(sum[:])
 	}
+	gitea := ""
+	if len(selected) == 1 && selected[0].ID == manualVerificationGiteaID {
+		gitea = os.Getenv("STEERLINE_E2E_GITEA_EXE")
+		if !filepath.IsAbs(gitea) {
+			return fail(errors.New("isolated Gitea scenario requires an absolute STEERLINE_E2E_GITEA_EXE"))
+		}
+		body, err := os.ReadFile(gitea)
+		if err != nil {
+			return fail(err)
+		}
+		sum := sha256.Sum256(body)
+		report.Builds[gitea] = hex.EncodeToString(sum[:])
+	}
 	runnerPath := helper
 	hasLive := false
 	for _, entry := range selected {
@@ -389,7 +402,7 @@ func runE2E(opts options) (code int) {
 	maintenanceWeb := false
 	for _, entry := range selected {
 		maintenanceWeb = maintenanceWeb || entry.ID == "runtime.refactoring-maintenance"
-		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.main-agent-advisory" || entry.ID == "runtime.refactoring-maintenance" || entry.ID == "manual-verification.local-codex" {
+		if entry.ID == "runtime.async-activities" || entry.ID == "runtime.main-agent-advisory" || entry.ID == "runtime.refactoring-maintenance" || entry.ID == "manual-verification.local-codex" || entry.ID == manualVerificationGiteaID {
 			activityWeb = true
 		}
 	}
@@ -417,7 +430,7 @@ func runE2E(opts options) (code int) {
 		sum := sha256.Sum256(data)
 		report.Builds[web] = hex.EncodeToString(sum[:])
 	}
-	config, err := json.Marshal(map[string]any{"Remote": remoteInput, "Web": web, "ExecutionModel": executionModel, "AuditModel": auditModel, "Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
+	config, err := json.Marshal(map[string]any{"Remote": remoteInput, "Web": web, "Gitea": gitea, "ExecutionModel": executionModel, "AuditModel": auditModel, "Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}
@@ -783,8 +796,8 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				}
 				continue
 			}
-			if e.ID == "manual-verification.local-codex" {
-				if err := checkManualVerificationProof(filepath.Join(out, "scenarios", e.ID, "manual-verification.json")); err != nil {
+			if e.ID == "manual-verification.local-codex" || e.ID == manualVerificationGiteaID {
+				if err := checkManualVerificationProof(filepath.Join(out, "scenarios", e.ID, "manual-verification.json"), e.ID == manualVerificationGiteaID); err != nil {
 					return err
 				}
 				continue
@@ -802,7 +815,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 }
 
 func supportedLiveScenario(e e2eScenario) bool {
-	if e.ID == "manual-verification.local-codex" {
+	if e.ID == "manual-verification.local-codex" || e.ID == manualVerificationGiteaID {
 		return e.Level == "L4" && e.Suite == "manual-verification" && e.Chain == "local-codex" && e.Package == "./tests/e2e/live"
 	}
 	if e.ID == "refactoring.local-codex" {

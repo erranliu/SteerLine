@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -42,14 +43,21 @@ func (c Config) prepareManualChecks(ctx context.Context, work taskmodel.FixedWor
 }
 
 func (c Config) prepareDraftPublication(run *runnerclient.RunInput) error {
-	if c.runtimeCatalog == nil || (run.Workflow.ID != "development" && run.Workflow.ID != "development-audited") || run.Publication.Provider != "command" || strings.TrimRight(c.PR.BaseURL, "/") != "https://github.com" {
-		return fmt.Errorf("人工核验需要支持草稿发布的 Runner 开发工作流和 GitHub 发布目标")
+	if c.runtimeCatalog == nil || (run.Workflow.ID != "development" && run.Workflow.ID != "development-audited") || run.Publication.Provider != c.PR.Kind || !supportsManualVerificationPR(c.PR) {
+		return fmt.Errorf("人工核验需要支持草稿发布的 Runner 开发工作流和 GitHub 或 Gitea 发布目标")
 	}
 	var settings map[string]json.RawMessage
 	if err := json.Unmarshal(run.Publication.Settings, &settings); err != nil || settings == nil {
 		return fmt.Errorf("无法读取候选的发布设置")
 	}
 	settings["draft"] = json.RawMessage("true")
+	if c.PR.Kind == "gitea" {
+		prefix := c.PR.DraftTitlePrefix
+		if prefix == "" {
+			prefix = "WIP:"
+		}
+		settings["draft_title_prefix"], _ = json.Marshal(prefix)
+	}
 	publication := run.Publication
 	publication.Settings, _ = json.Marshal(settings)
 	if err := c.runtimeCatalog.ValidateDraftPublication(publication); err != nil {
@@ -57,4 +65,8 @@ func (c Config) prepareDraftPublication(run *runnerclient.RunInput) error {
 	}
 	run.Publication = publication
 	return nil
+}
+
+func supportsManualVerificationPR(p model.PRProviderConfig) bool {
+	return p.Kind == "gitea" || p.Kind == "command" && strings.TrimRight(p.BaseURL, "/") == "https://github.com"
 }

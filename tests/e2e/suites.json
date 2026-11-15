@@ -1,5 +1,14 @@
 [
   {
+    "id": "manual-verification.gitea-local-codex",
+    "level": "L4",
+    "suite": "manual-verification",
+    "package": "./tests/e2e/live",
+    "test": "TestManualVerificationGiteaLocalCodex",
+    "env": "live",
+    "chain": "local-codex"
+  },
+  {
     "id": "manual-verification.local-codex",
     "level": "L4",
     "suite": "manual-verification",
