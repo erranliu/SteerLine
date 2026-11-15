@@ -6,6 +6,12 @@
 
 308 在 `b1025085e32b1a9f4dc3572e32290be12f0188e7` 加启动入口改动上分别直接运行两个命令。PlayMode 以 Unity 2022.3.62f2 打开纳管路径中的 `Merge-Blast`，日志记录 `EditorPlay`、`test_bundle` 及地图 `9990902` 的 `startup runtime_ready`。编辑器命令加载同一工程，启动参数未请求自动 Play。新版本页面到 308 的联合验收需在 308 启动材料进入目标分支且更新纳管目录后进行。
 
+## 人工核验页面布局
+
+在 `3cb88207` 加页面改动上，定向前端测试及生产构建通过。Edge 使用隔离的页面数据分别检查 1280、390 和 320 CSS 像素视口。桌面待办与详情并排，窄屏顺序堆叠。默认展开首个待记录项，展开长命令和日志时页面无横向溢出。空待办时核对两个启动入口可见，并分别展开本地启动命令和 PR 选择，确认可以查看所选 PR 对应的命令。
+
+固定 L1 和 L2 通过，原报告分别位于本机 `%TEMP%/steerline-test-feedback/20261115T060027.071906100Z/summary.json` 和 `%TEMP%/steerline-test-feedback/20261115T060116.659757900Z/summary.json`。
+
 ## 从 PR 启动和 Worktree 设置
 
 真实 Git 与隔离 Gitea HTTP 夹具验证了最多返回 10 个开放 PR、旧 Head 被拒绝、纳管目录未就绪时从指定 PR Head 读取并运行入口，以及不同根目录下的两个现场各自保留和清理。Web 验证了最近 PR、按编号查找、项目设置的保存与恢复，以及旧现场保留时仍可启动。生产构建通过。固定 L1、L2 通过，原报告分别位于本机 `%TEMP%/steerline-test-feedback/20261115T043957.546065500Z/summary.json` 和 `%TEMP%/steerline-test-feedback/20261115T044038.110116700Z/summary.json`。随后对旧现场保留的改动补跑了 Git 夹具和前端人工核验测试。
