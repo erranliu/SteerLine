@@ -92,6 +92,17 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 func (p *runtimeProjectPort) maintenanceAction(ctx context.Context, in httpcontract.CommandEnvelope) (any, error) {
 	m := p.config.runtimeMaintenance
 	switch in.Action {
+	case "maintenance_set_worktree_directory":
+		var input struct {
+			Directory *string `json:"directory"`
+		}
+		if e := decodeStrictJSON(in.Payload, &input); e != nil {
+			return nil, e
+		}
+		if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 || input.Directory == nil {
+			return nil, errors.New("Worktree 设置目标、版本或目录无效")
+		}
+		return p.config.setWorktreeDirectory(*input.Directory)
 	case "maintenance_check":
 		if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
 			return nil, errors.New("observation target/version mismatch")

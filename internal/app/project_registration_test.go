@@ -93,6 +93,11 @@ func TestProjectRegistrationUsesPublishedCommitAndStagesConfiguration(t *testing
 		pmGit(t, bare, "update-server-info")
 		return pmGit(t, repo, "rev-parse", "HEAD")
 	}
+	publish()
+	write("SteerlineFlow/manual-launches.json", `{"version":1,"entries":[{"id":"preview","name":"Preview","launch":{"program":"node","args":["preview.js"]}}]}`)
+	if _, err := d.RegisterProject(ctx, input); err == nil || !strings.Contains(err.Error(), "manual-launches.json") {
+		t.Fatalf("an uncommitted launch manifest must not satisfy registration: %v", err)
+	}
 	commit := publish()
 	check, err := d.RegisterProject(ctx, input)
 	if err != nil || check.Commit != commit || check.Saved || check.Confirmation == "" {

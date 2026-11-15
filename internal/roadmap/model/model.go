@@ -86,6 +86,7 @@ type Documents struct {
 	ManualChecks  json.RawMessage `json:"manual_checks,omitempty"`
 }
 type Publication struct {
+	Worktree     string `json:"worktree,omitempty"`
 	RequestID    string `json:"request_id"`
 	ReviewDigest string `json:"review_digest"`
 	Branch       string `json:"branch"`

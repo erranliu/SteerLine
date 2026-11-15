@@ -27,16 +27,19 @@ import (
 )
 
 type manualVerification struct {
-	config    Config
-	store     *sqlite.SQLiteStore
-	ctx       context.Context
-	cancel    context.CancelFunc
-	workers   sync.WaitGroup
-	mu        sync.Mutex
-	commandMu sync.Mutex
-	portMu    sync.Mutex
-	ports     map[int]bool
-	stops     map[string]context.CancelFunc
+	config     Config
+	store      *sqlite.SQLiteStore
+	ctx        context.Context
+	cancel     context.CancelFunc
+	workers    sync.WaitGroup
+	mu         sync.Mutex
+	commandMu  sync.Mutex
+	portMu     sync.Mutex
+	ports      map[int]bool
+	stops      map[string]context.CancelFunc
+	projectRun *projectLaunchRun
+	prRun      *projectLaunchRun
+	prRetained []projectLaunchRun
 }
 
 func newManualVerification(c Config, store *sqlite.SQLiteStore) *manualVerification {
@@ -51,6 +54,11 @@ func (s *manualVerification) close() {
 
 func (s *manualVerification) worktree(id string) string {
 	return filepath.Join(s.config.RunDir, "manual-verification", id, "worktree")
+}
+
+func (s *manualVerification) newVerificationWorktree(id string) (string, error) {
+	dir, err := s.config.localWorktreePath("manual-verification", id)
+	return filepath.Join(dir, "worktree"), err
 }
 
 func (s *manualVerification) git(ctx context.Context, args ...string) ([]byte, error) {
@@ -146,27 +154,12 @@ func (s *manualVerification) launch(r mv.Record, attempt mv.Attempt, target port
 }
 
 func (s *manualVerification) checkout(ctx context.Context, a mv.Attempt, target ports.RunnerPRTarget, remote string, merged bool) error {
-	if a.Worktree != s.worktree(a.ID) {
-		return errors.New("核验 worktree 路径不匹配")
+	if err := s.verifyWorktreePath(a); err != nil {
+		return err
 	}
 	if err := target.Provider.ValidateRemote(remote); err != nil {
 		return err
 	}
-	if err := ordinaryVerificationPath(s.config.RunDir, filepath.Dir(a.Worktree)); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(a.Worktree), 0700); err != nil {
-		return err
-	}
-	if err := ordinaryVerificationPath(s.config.RunDir, filepath.Dir(a.Worktree)); err != nil {
-		return err
-	}
-	privateRef := "refs/steerline/manual-verification/" + a.ID
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_, _ = s.git(cleanup, "update-ref", "-d", privateRef)
-	}()
 	ref := fmt.Sprintf("refs/pull/%d/head", target.Number)
 	if a.Source == mv.SourceRemote {
 		ref = "refs/heads/" + target.Base
@@ -174,12 +167,38 @@ func (s *manualVerification) checkout(ctx context.Context, a mv.Attempt, target 
 		// The provider-confirmed PR position stays fixed after merge.
 		ref = a.Head
 	}
+	if err := s.fetchVerificationHead(ctx, remote, ref, a.Head, a.ID); err != nil {
+		return err
+	}
+	return s.createVerificationWorktree(ctx, a)
+}
+
+func (s *manualVerification) fetchVerificationHead(ctx context.Context, remote, ref, expected, id string) error {
+	privateRef := "refs/steerline/manual-verification/" + id
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, _ = s.git(cleanup, "update-ref", "-d", privateRef)
+	}()
 	if _, err := s.git(ctx, "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", remote, ref+":"+privateRef); err != nil {
-		return fmt.Errorf("无法拉取核验提交 %s: %w", a.Head, err)
+		return fmt.Errorf("无法拉取核验提交 %s: %w", expected, err)
 	}
 	head, err := s.git(ctx, "rev-parse", "--verify", privateRef+"^{commit}")
-	if err != nil || strings.TrimSpace(string(head)) != a.Head {
+	if err != nil || strings.TrimSpace(string(head)) != expected {
 		return errors.New("核验来源的 Head 已变化，请重新启动")
+	}
+	return nil
+}
+
+func (s *manualVerification) createVerificationWorktree(ctx context.Context, a mv.Attempt) error {
+	if err := s.verifyWorktreePath(a); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(a.Worktree), 0700); err != nil {
+		return err
+	}
+	if err := s.verifyWorktreePath(a); err != nil {
+		return err
 	}
 	if _, err := s.git(ctx, "-c", "core.hooksPath="+filepath.Join(filepath.Dir(a.Worktree), "disabled-hooks"), "worktree", "add", "--detach", a.Worktree, a.Head); err != nil {
 		return err
@@ -191,15 +210,27 @@ func (s *manualVerification) run(ctx context.Context, r mv.Record, a mv.Attempt,
 	if err := s.checkout(ctx, a, target, remote, r.Merged); err != nil {
 		return err
 	}
-	launch := r.Definition.Definition.Launch
-	cwd := filepath.Join(a.Worktree, filepath.FromSlash(launch.Cwd))
-	if err := ordinaryVerificationPath(a.Worktree, cwd); err != nil {
+	logDir := filepath.Dir(s.worktree(a.ID))
+	if err := ordinaryVerificationPath(s.config.RunDir, logDir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(logDir, 0700); err != nil {
+		return err
+	}
+	return s.runLaunch(ctx, a, r.Definition.Definition.Launch, a.Worktree, logDir, false, func(update func(*mv.Attempt)) error {
+		return s.patch(r.Candidate, a.ID, update)
+	})
+}
+
+func (s *manualVerification) runLaunch(ctx context.Context, a mv.Attempt, launch mv.Launch, root, logDir string, desktop bool, patch func(func(*mv.Attempt)) error) error {
+	cwd := filepath.Join(root, filepath.FromSlash(launch.Cwd))
+	if err := ordinaryVerificationPath(root, cwd); err != nil {
 		return err
 	}
 	if info, err := os.Stat(cwd); err != nil || !info.IsDir() {
 		return errors.New("核验工作目录不存在")
 	}
-	program, err := verificationProgram(a.Worktree, cwd, launch.Program)
+	program, err := verificationProgram(root, cwd, launch.Program)
 	if err != nil {
 		return err
 	}
@@ -220,23 +251,30 @@ func (s *manualVerification) run(ctx context.Context, r mv.Record, a mv.Attempt,
 		}
 	}
 	a.URL = strings.ReplaceAll(launch.URL, mv.Port, strconv.Itoa(a.Port))
-	tmp := filepath.Join(filepath.Dir(a.Worktree), "tmp")
+	tmp := filepath.Join(logDir, "tmp")
 	if err := os.Mkdir(tmp, 0700); err != nil {
 		return err
 	}
-	stdout, err := openVerificationLog(filepath.Join(filepath.Dir(a.Worktree), "stdout.log"))
+	stdout, err := openVerificationLog(filepath.Join(logDir, "stdout.log"))
 	if err != nil {
 		return err
 	}
 	defer stdout.Close()
-	stderr, err := openVerificationLog(filepath.Join(filepath.Dir(a.Worktree), "stderr.log"))
+	stderr, err := openVerificationLog(filepath.Join(logDir, "stderr.log"))
 	if err != nil {
 		return err
 	}
 	defer stderr.Close()
 	cmd := exec.Command(program, args...)
 	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = cwd, verificationEnvironment(tmp), stdout, stderr
-	if err := s.patch(r.Candidate, a.ID, func(v *mv.Attempt) { v.Program = program; v.Args = args; v.Cwd = cwd; v.URL = a.URL; v.Port = a.Port }); err != nil {
+	if desktop {
+		for _, key := range []string{"USERPROFILE", "APPDATA", "LOCALAPPDATA", "HOMEDRIVE", "HOMEPATH", "HOME", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR"} {
+			if value, ok := os.LookupEnv(key); ok {
+				cmd.Env = append(cmd.Env, key+"="+value)
+			}
+		}
+	}
+	if err := patch(func(v *mv.Attempt) { v.Program = program; v.Args = args; v.Cwd = cwd; v.URL = a.URL; v.Port = a.Port }); err != nil {
 		return err
 	}
 	if err := ctx.Err(); err != nil {
@@ -253,16 +291,19 @@ func (s *manualVerification) run(ctx context.Context, r mv.Record, a mv.Attempt,
 	identity := owned.Identity()
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
-	if err := s.patch(r.Candidate, a.ID, func(v *mv.Attempt) { v.Status = "running"; v.Process = &identity; v.Started = a.URL == "" }); err != nil {
+	if err := patch(func(v *mv.Attempt) { v.Status = "running"; v.Process = &identity; v.Started = a.URL == "" }); err != nil {
 		owned.Kill()
 		<-done
+		if tree, ok := owned.(interface{ WritersAbsent() bool }); !ok || !waitVerificationTree(tree) {
+			_ = patch(func(v *mv.Attempt) { v.Status = "unknown"; v.Diagnostic = "原进程树停止尚未核实" })
+		}
 		return err
 	}
-	status, diagnostic, code := s.monitor(ctx, r.Candidate, a, owned, cmd, done)
+	status, diagnostic, code := monitorVerification(ctx, a, owned, cmd, done, patch)
 	if tree, ok := owned.(interface{ WritersAbsent() bool }); !ok || !waitVerificationTree(tree) {
 		status, diagnostic = "unknown", "原进程树停止尚未核实"
 	}
-	return s.patch(r.Candidate, a.ID, func(v *mv.Attempt) { v.Status = status; v.Diagnostic = diagnostic; v.ExitCode = &code })
+	return patch(func(v *mv.Attempt) { v.Status = status; v.Diagnostic = diagnostic; v.ExitCode = &code })
 }
 
 func (s *manualVerification) reservePort() (net.Listener, int, error) {
@@ -303,7 +344,7 @@ func verificationTreeAbsent(a mv.Attempt) bool {
 	return a.Program == "" || a.Process != nil && processfacts.WorkerTreeAbsent(*a.Process)
 }
 
-func (s *manualVerification) monitor(ctx context.Context, candidate string, a mv.Attempt, owned backend.StopHandle, cmd *exec.Cmd, done <-chan error) (string, string, int) {
+func monitorVerification(ctx context.Context, a mv.Attempt, owned backend.StopHandle, cmd *exec.Cmd, done <-chan error, patch func(func(*mv.Attempt)) error) (string, string, int) {
 	var ticks <-chan time.Time
 	var deadline <-chan time.Time
 	if a.URL != "" {
@@ -341,18 +382,26 @@ func (s *manualVerification) monitor(ctx context.Context, candidate string, a mv
 					ready = true
 					ticks = nil
 					deadline = nil
-					_ = s.patch(candidate, a.ID, func(v *mv.Attempt) { v.Status = "ready"; v.Started = true })
+					_ = patch(func(v *mv.Attempt) { v.Status = "ready"; v.Started = true })
 				}
 			}
 		}
 	}
 }
 
-func (s *manualVerification) verifyWorktree(ctx context.Context, a mv.Attempt, clean bool) error {
-	if a.Worktree != s.worktree(a.ID) {
+func (s *manualVerification) verifyWorktreePath(a mv.Attempt) error {
+	dir := filepath.Dir(a.Worktree)
+	if filepath.Base(a.Worktree) != "worktree" || !projectLaunchRunID.MatchString(a.ID) {
 		return errors.New("核验 worktree 路径不匹配")
 	}
-	if err := ordinaryVerificationPath(s.config.RunDir, a.Worktree); err != nil {
+	if err := s.config.verifyLocalWorktreePath(dir, "manual-verification", a.ID); err != nil {
+		return err
+	}
+	return ordinaryVerificationPath(dir, a.Worktree)
+}
+
+func (s *manualVerification) verifyWorktree(ctx context.Context, a mv.Attempt, clean bool) error {
+	if err := s.verifyWorktreePath(a); err != nil {
 		return err
 	}
 	common, err := s.git(ctx, "-C", a.Worktree, "rev-parse", "--path-format=absolute", "--git-common-dir")
@@ -439,9 +488,13 @@ func (l *verificationLog) Write(p []byte) (int, error) {
 }
 
 func (s *manualVerification) logs(a mv.Attempt) (map[string]string, error) {
+	return s.readLaunchLogs(filepath.Dir(s.worktree(a.ID)))
+}
+
+func (s *manualVerification) readLaunchLogs(logDir string) (map[string]string, error) {
 	result := map[string]string{}
 	for _, name := range []string{"stdout", "stderr"} {
-		path := filepath.Join(filepath.Dir(s.worktree(a.ID)), name+".log")
+		path := filepath.Join(logDir, name+".log")
 		if err := ordinaryVerificationPath(s.config.RunDir, path); err != nil {
 			return nil, err
 		}

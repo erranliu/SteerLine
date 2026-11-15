@@ -78,6 +78,12 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 
 待办状态、来源与记录规则见[人工核验设计](manual-verification.md)。
 
+当前项目启动通过 `GET /manual-verification/project` 查询纳管路径、目标分支、当前提交、可用入口、就绪诊断和最近一次启动。两个命令以项目 ID 和版本 `1` 为目标。`project_launch_start` 提交页面所见的完整 `head` 和 `entry_id`，`project_launch_stop` 提交 `attempt_id`。日志通过 `GET /manual-verification/project/logs/{attempt_id}` 查询。
+
+`GET /manual-verification/pulls` 返回最多 10 个最近更新的开放 PR，`GET /manual-verification/pulls/{number}` 返回指定 PR 的 Head 和启动入口。`project_launch_pr_start` 提交 `pr_number`、完整 `head` 和 `entry_id`。`project_launch_pr_stop` 与 `project_launch_pr_cleanup` 提交 `attempt_id`。通过 `GET /manual-verification/pulls/run` 查询最近一次启动 `latest` 和需清理的旧现场 `retained`。日志在 `GET /manual-verification/pulls/logs/{attempt_id}` 查询。
+
+`GET /settings/worktrees` 读取本机 worktree 目录。使用项目 ID 和版本 `1` 发送 `maintenance_set_worktree_directory`，`directory` 为宿主机绝对路径或表示恢复默认值的空字符串。
+
 POST 正文最大 1,048,576 bytes。登记前检查原信封、固定意图、digest、时间与 JSON framing 聚合编码：无结果摘要最多 1,064,960 bytes，为结果预留 16 KiB；持久读写硬上限 1,081,344 bytes。超限分别返回 HTTP 413 / request_body_too_large 或 request_record_too_large，新 ID 不登记、零业务副作用。持久摘要的 code/diagnostic 各限 1,024 UTF-8 bytes，超长保留前缀与 ` [truncated]`；正式 authority 回执保持完整。仲裁文件只存一份原信封、意图与紧凑结果，typed receipt 从原权威查询，不复制膨胀。
 
 三条受理顺序由同一命令仲裁保护：普通命令先解析映射和大小校验、登记、重读，再核对能力/就绪/目标并派发固定意图；环境动作严格校验信封与端口后登记，再作领域核验；原生查看器核实原会话后先持久化 outcome_unknown，再仅调用一次。未知查看器不得重开。当前实现与验证见[读取/命令边界验收](../../SteerlineFlow/testing/acceptance/product-read-command-web-refactor.md)。

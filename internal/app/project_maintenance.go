@@ -32,6 +32,7 @@ type projectMaintenance struct {
 	config                 Config
 	store                  maintenanceStore
 	mu                     sync.Mutex
+	checkoutMu             sync.Mutex
 	observation            pmm.Observation
 	checking               chan struct{}
 	basisPending           bool

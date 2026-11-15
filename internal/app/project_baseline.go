@@ -281,6 +281,10 @@ func (m *projectMaintenance) updateLocal(ctx context.Context, id string) (any, e
 		}
 		return f, save(f)
 	}
+	if !m.checkoutMu.TryLock() {
+		return nil, errors.New("纳管目录正在用于项目启动或同步")
+	}
+	defer m.checkoutMu.Unlock()
 	if _, e := m.check(ctx); e != nil {
 		return nil, e
 	}

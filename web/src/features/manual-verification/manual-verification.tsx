@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { SafeLink } from "../../shared/ui/status";
+import PRLaunch from "./pr-launch";
 
 type Check = { id: string; title: string; steps: string[]; expected: string };
 type Source = "pr" | "remote_head";
@@ -37,6 +38,20 @@ type Result = {
   at: string;
   evidence?: string[];
 };
+type Launch = { program: string; args: string[]; cwd?: string; url?: string };
+type ProjectRun = Pick<
+  Attempt,
+  "id" | "head" | "status" | "url" | "diagnostic" | "exit_code"
+> & { name: string };
+type ProjectLaunchView = {
+  path: string;
+  branch: string;
+  head: string;
+  ready: boolean;
+  diagnostic?: string;
+  entries: { id: string; name: string; launch: Launch }[];
+  run?: ProjectRun;
+};
 type Review = {
   candidate_id: string;
   task_id: string;
@@ -50,7 +65,7 @@ type Review = {
   diagnostic?: string;
   configuration: {
     definition: {
-      launch: { program: string; args: string[]; cwd?: string; url?: string };
+      launch: Launch;
       checks: Check[];
     };
   };
@@ -141,6 +156,8 @@ export default function ManualVerification() {
   return (
     <section>
       <h1>人工核验</h1>
+      <ProjectLaunch />
+      <PRLaunch key={identity.project_id} />
       <label>
         <input
           type="checkbox"
@@ -190,6 +207,165 @@ export default function ManualVerification() {
           disabled={pending || !online}
           command={command}
         />
+      )}
+    </section>
+  );
+}
+
+function ProjectLaunch() {
+  const { api, identity, online, submit } = useWorkspace();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [logsID, setLogsID] = useState("");
+  const query = useQuery({
+    queryKey: [
+      "project-launch",
+      api.home,
+      identity.project_id,
+      identity.instance_id,
+    ],
+    queryFn: ({ signal }) =>
+      api.get<ProjectLaunchView>("/manual-verification/project", signal),
+    enabled: online,
+    refetchInterval: 5000,
+  });
+  const view = query.data;
+  const run = view?.run;
+  const running =
+    !!run && ["preparing", "running", "ready", "unknown"].includes(run.status);
+  const logs = useQuery({
+    queryKey: [
+      "project-launch-logs",
+      api.home,
+      identity.project_id,
+      identity.instance_id,
+      logsID,
+    ],
+    queryFn: ({ signal }) =>
+      api.get<{ stdout?: string; stderr?: string }>(
+        "/manual-verification/project/logs/" + logsID,
+        signal,
+      ),
+    enabled: online && !!run && run.id === logsID,
+    refetchInterval: running ? 2500 : false,
+  });
+
+  async function command(
+    action: "start" | "stop",
+    payload: Record<string, string>,
+  ) {
+    setPending(true);
+    setError("");
+    try {
+      const response = await submit(
+        api.envelope(
+          "project_launch_" + action,
+          identity.project_id,
+          1,
+          payload,
+        ),
+      );
+      if (response?.status !== "applied") {
+        setError(response?.diagnostic || "操作待核实，请刷新查看。");
+      }
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      await query.refetch();
+      setPending(false);
+    }
+  }
+
+  return (
+    <section aria-label="启动当前项目">
+      <h2>启动当前项目</h2>
+      {view?.path && (
+        <p>
+          <code>{view.path}</code> · {view.branch}
+          {view.head && (
+            <>
+              {" "}
+              · <code>{view.head}</code>
+            </>
+          )}
+        </p>
+      )}
+      {!online && <p>项目连接离线。</p>}
+      {online && query.isPending && <p>正在读取项目启动入口…</p>}
+      {(error || query.error || view?.diagnostic) && (
+        <p className="notice amber" role="alert">
+          {error || (query.error ? String(query.error) : view?.diagnostic)}
+        </p>
+      )}
+      {!!view?.entries?.length && (
+        <ul>
+          {view.entries.map((entry) => (
+            <li key={entry.id}>
+              <button
+                type="button"
+                disabled={
+                  !online || pending || !!query.error || !view.ready || running
+                }
+                onClick={() =>
+                  void command("start", { head: view.head, entry_id: entry.id })
+                }
+              >
+                {entry.name}
+              </button>{" "}
+              <code>
+                {[entry.launch.program, ...entry.launch.args]
+                  .map((arg) => (/\s/.test(arg) ? JSON.stringify(arg) : arg))
+                  .join(" ")}
+              </code>
+              {entry.launch.cwd && (
+                <>
+                  {" "}
+                  · <code>{entry.launch.cwd}</code>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {run && (
+        <div>
+          <p>
+            {run.name} ·{" "}
+            {run.status === "preparing" ? "正在准备启动" : statuses[run.status]}{" "}
+            · <code>{run.head}</code>
+            {run.exit_code !== undefined && <> · 退出码 {run.exit_code}</>}
+          </p>
+          {run.diagnostic && <p>{run.diagnostic}</p>}
+          {run.status === "ready" && run.url && (
+            <a href={run.url} target="_blank" rel="noreferrer">
+              打开项目预览
+            </a>
+          )}{" "}
+          {running && (
+            <button
+              type="button"
+              disabled={!online || pending}
+              onClick={() => void command("stop", { attempt_id: run.id })}
+            >
+              {run.status === "unknown" ? "核对项目进程" : "停止项目启动"}
+            </button>
+          )}{" "}
+          <button
+            type="button"
+            onClick={() => setLogsID(logsID === run.id ? "" : run.id)}
+          >
+            {logsID === run.id ? "隐藏项目启动日志" : "查看项目启动日志"}
+          </button>
+          {logsID === run.id && (
+            <pre>
+              {logs.error
+                ? String(logs.error)
+                : [logs.data?.stdout, logs.data?.stderr]
+                    .filter(Boolean)
+                    .join("\n") || "暂无输出"}
+            </pre>
+          )}
+        </div>
       )}
     </section>
   );
