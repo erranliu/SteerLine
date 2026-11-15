@@ -17,6 +17,7 @@ export type DetectionRecord = {
   blocked?: boolean;
   timed_out?: boolean;
   diagnostic: string;
+  requests?: { request_id: string; action: string; activity_id?: string }[];
   rounds?: {
     number: number;
     submission: string;

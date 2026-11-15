@@ -9,6 +9,7 @@ export type Activity = {
   project_id: string;
   source: string;
   source_id: string;
+  source_revision?: number;
   kind: string;
   steer_agent?: { type: string; operation: string };
   request_ids: string[];
@@ -21,6 +22,7 @@ export type Activity = {
   needs_attention: boolean;
   created_at?: string;
   finished_at?: string;
+  abandoned_at?: string;
   source_observed_at?: string;
   observation: string;
   provisional?: boolean;
@@ -79,11 +81,15 @@ export function steerAgentLabel(a: Activity): string | undefined {
   }
 }
 export const matchesActivity = (a: Activity, filter: ActivityFilter) =>
-  filter === "attention"
-    ? a.needs_attention
-    : filter === "recent"
-      ? ended(a)
-      : !ended(a);
+  a.abandoned_at
+    ? filter === "recent"
+    : filter === "attention"
+      ? a.needs_attention
+      : filter === "recent"
+        ? ended(a)
+        : !ended(a);
+export const activityHistoryTime = (a: Activity) =>
+  a.abandoned_at || a.finished_at;
 export const activityActions = new Set([
   "refactoring_start",
   "refactoring_finish",
@@ -219,7 +225,7 @@ export function activityDestination(project: string, activity: Activity) {
   if (d.kind === "refactoring")
     return `${root}/refactoring?action=${encodeURIComponent(d.target)}`;
   if (d.kind === "advisory")
-    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.candidate_id || "")}&advisory=${encodeURIComponent(d.target)}`;
+    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.candidate_id || "")}&advisory=${encodeURIComponent(d.target)}${activity.abandoned_at ? "&history=1" : ""}`;
   if (d.kind === "roadmap")
     return `${root}/roadmaps?record=${encodeURIComponent(d.target)}${activity.execution_ref?.action && activity.execution_ref.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   if (d.kind === "roadmap-source")
@@ -227,13 +233,13 @@ export function activityDestination(project: string, activity: Activity) {
   if (d.kind === "task-planning")
     return `${root}/roadmap-planning?task=${encodeURIComponent(d.target)}${activity.execution_ref?.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   if (d.kind === "candidate")
-    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.target)}`;
+    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.target)}${activity.abandoned_at ? "&history=1" : ""}`;
   if (d.kind === "task")
     return `${root}/runs?task=${encodeURIComponent(d.target)}`;
   if (d.kind === "environment-profile")
     return `${root}/environment${d.target ? `?profile=${encodeURIComponent(d.target)}` : ""}`;
   if (d.kind === "environment")
-    return `${root}/environment?activity=${encodeURIComponent(d.target)}`;
+    return `${root}/environment?activity=${encodeURIComponent(d.target)}${activity.abandoned_at && activity.execution_ref?.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   return `${root}/status?request_id=${encodeURIComponent(d.target)}`;
 }
 

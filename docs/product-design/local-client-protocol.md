@@ -18,7 +18,7 @@
 | `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务。在线任务详情还提供显式启动资格 |
 | `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
 | `/dispatch` | 已保存的派发模式及版本、默认执行方案、当前派发状态和结构化等待原因 |
-| `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
+| `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合、原请求关联和精确归档状态查询，不调用 Git/Runner 或推进业务 |
 | `/activities/{activity_id}` | 精确活动摘要；仍只读本地事实和有界消息预览 |
 | `/activities/{activity_id}/interactions` | 显式读取已记录交互一页，默认 50、最多 200、1 MiB；游标绑定项目/实例/活动/原成员范围与读取版本，变化失效后显式刷新 |
 | `/activities/{activity_id}/conversation` | 任务候选显式读取原 Runner 会话，核对候选、Run、Attempt、Session 与 generation。首屏读最近一页，`cursor` 继续读取更早一页或指定消息的一段正文。页面与正文读取均只读且无自动轮询 |

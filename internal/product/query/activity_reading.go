@@ -44,7 +44,7 @@ func ReadOneActivity(ctx context.Context, reader ports.AsyncActivityReader, proj
 		return api.AsyncActivity{}, err
 	}
 	if len(facts) != 1 {
-		return api.AsyncActivity{}, errors.New("activity not found")
+		return api.AsyncActivity{}, ports.ErrNotFound
 	}
 	a, err := ProjectAsyncActivity(project, instance, facts[0], time.Now().UTC())
 	if public != "" {

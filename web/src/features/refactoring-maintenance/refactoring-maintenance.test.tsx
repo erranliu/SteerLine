@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
+import { rememberAbandonedActivities } from "../activities/abandonment";
 import {
   RefactoringMaintenance,
   type MaintenanceRecord,
@@ -100,6 +101,7 @@ function setup(
       };
     }
     if (path === "/refactoring/readiness") return readiness();
+    if (path.startsWith("/activities?")) return {};
     return records.find((r) => path.endsWith(r.id));
   });
   const submit = vi.fn(async (envelope) => ({
@@ -116,6 +118,41 @@ function openSheet() {
   fireEvent.click(screen.getByRole("button", { name: "新建维护行动" }));
   return within(screen.getByRole("dialog"));
 }
+
+it("moves a followed action to history and keeps its occupied slot linked", async () => {
+  const action = { ...record, phase: "stopping", slot: true };
+  const { client } = setup([action]);
+  const rowName = new RegExp(builtIn.name);
+  const row = await screen.findByRole("button", { name: rowName });
+  await waitFor(() => expect(row).toHaveAttribute("aria-current", "true"));
+
+  act(() => {
+    rememberAbandonedActivities(
+      client,
+      ["home", identity.project_id, identity.instance_id],
+      [
+        {
+          source: "refactoring",
+          source_id: id,
+          abandoned_at: "2026-11-15T00:00:00Z",
+        },
+      ],
+    );
+  });
+  await screen.findByText("选择一条行动查看详情");
+  expect(screen.getByRole("heading", { name: "进行中 0" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "维护历史" }).nextElementSibling,
+  ).toContainElement(screen.getByRole("button", { name: rowName }));
+  expect(screen.getByText("推进名额 3 / 3")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("link", { name: "核实原行动" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: rowName })).toHaveAttribute(
+      "aria-current",
+      "true",
+    ),
+  );
+});
 
 it("starts at full capacity using a versioned ready environment and the default plan", async () => {
   const { submit } = setup();

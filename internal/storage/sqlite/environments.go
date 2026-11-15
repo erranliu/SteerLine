@@ -57,18 +57,9 @@ func (s *SQLiteStore) Environments(ctx context.Context, project string) ([]env.R
 	return out, rows.Err()
 }
 func (s *SQLiteStore) SaveEnvironment(ctx context.Context, r env.Record, expected uint64) error {
-	if s.readOnly {
-		return errors.New("SQLite reader is read-only")
-	}
-	tx, e := s.db.BeginTx(ctx, nil)
-	if e != nil {
-		return e
-	}
-	defer tx.Rollback()
-	if err := saveEnvironmentTx(ctx, tx, r, expected); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return s.activityOwnerWrite(ctx, "environment_detection", r.Project, r.ID, func(tx *sql.Tx) error {
+		return saveEnvironmentTx(ctx, tx, r, expected)
+	})
 }
 
 func saveEnvironmentTx(ctx context.Context, tx *sql.Tx, r env.Record, expected uint64) error {

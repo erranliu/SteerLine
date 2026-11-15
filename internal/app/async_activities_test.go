@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,5 +122,40 @@ func TestAsyncActivityReadIncludesRoadmapDocumentsWithoutActor(t *testing.T) {
 	stored, err := s.Roadmap(ctx, "p", id)
 	if err != nil || stored.Revision != 1 || stored.State != "queued" {
 		t.Fatalf("GET advanced roadmap: %+v %v", stored, err)
+	}
+}
+
+func TestActivityAbandonmentReadReturnsScopedMarksAndOriginalReceipt(t *testing.T) {
+	ctx := context.Background()
+	s, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "domain.db"))
+	require(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	const project = "p"
+	request := strings.Repeat("a", 32)
+	at := time.Now().UTC()
+	p := &runtimeProjectPort{config: Config{identity: project}, store: s, instance: "i"}
+	command := ports.CommandRecord{ProjectIdentity: project, CommandID: request, IdempotencyKey: request, Kind: activityAbandon, TargetID: "formal", RequestedBy: "test", Payload: []byte(`{}`), Status: "applied", Result: []byte(`{"status":"applied"}`), CreatedAt: at}
+	require(t, s.CommitActivityAbandonment(ctx, "task_candidate", "candidate", command, nil))
+	read, err := p.Read(ctx, "/commands/"+request, nil)
+	require(t, err)
+	if read.(*httpcontract.CommandResponse).Status != "applied" {
+		t.Fatal("abandonment receipt missing")
+	}
+	values := url.Values{"mode": {"abandoned"}, "source": {"task_candidate"}, "source_ids": {"candidate,other"}}
+	read, err = p.Read(ctx, "/activities", values)
+	require(t, err)
+	marks := read.(map[string]string)
+	if len(marks) != 1 || marks["candidate"] != at.Format(time.RFC3339Nano) {
+		t.Fatalf("unexpected archive marks: %v", marks)
+	}
+	values.Set("source", "baseline_check")
+	read, err = p.Read(ctx, "/activities", values)
+	require(t, err)
+	if len(read.(map[string]string)) != 0 {
+		t.Fatal("archive marks escaped their source")
+	}
+	values.Set("filter", "ongoing")
+	if _, err = p.Read(ctx, "/activities", values); err == nil {
+		t.Fatal("archive marks accepted list parameters")
 	}
 }

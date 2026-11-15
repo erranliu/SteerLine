@@ -30,7 +30,8 @@ export function projectQueries(api: Api) {
       queryOptions({
         ...defaults,
         queryKey: [...scope, "dispatch", revision],
-        queryFn: ({ signal }) => api.get<DispatchObservation>("/dispatch", signal),
+        queryFn: ({ signal }) =>
+          api.get<DispatchObservation>("/dispatch", signal),
       }),
     projectReadiness: () =>
       queryOptions({
@@ -293,6 +294,24 @@ export function invalidateCommand(
     predicate: ({ queryKey: key }) => {
       if (key[0] !== home) return false;
       if (key[1] === "local-requests") return true;
+      if (action === "activity_abandon")
+        return (
+          (key[1] === project_id &&
+            key[2] === instance_id &&
+            [
+              "async-activities",
+              "activity-counts",
+              "activity-links",
+              "activity-summary",
+              "abandoned-activities",
+              "advisory",
+              "environment",
+              "refactoring",
+            ].includes(String(key[3]))) ||
+          (key[1] === "roadmaps" &&
+            key[2] === project_id &&
+            key[3] === instance_id)
+        );
       if (action.startsWith("roadmap_") && key[1] === "roadmaps")
         return key[2] === project_id && key[3] === instance_id;
       if (

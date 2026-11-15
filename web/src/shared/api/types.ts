@@ -352,6 +352,7 @@ export interface Envelope {
   payload: Record<string, unknown>;
 }
 export interface Receipt {
+  abandoned_at?: string;
   command?: { status: string };
   refactoring?: unknown;
   roadmap?: unknown;

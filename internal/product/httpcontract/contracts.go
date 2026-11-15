@@ -83,6 +83,7 @@ type CommandEnvelope struct {
 }
 
 type CommandResponse struct {
+	AbandonedAt     *time.Time              `json:"abandoned_at,omitempty"`
 	Refactoring     json.RawMessage         `json:"refactoring,omitempty"`
 	Roadmap         json.RawMessage         `json:"roadmap,omitempty"`
 	Environment     json.RawMessage         `json:"environment,omitempty"`

@@ -156,6 +156,28 @@ function setup(data: () => Promise<ActivityPage> = async () => page()) {
   mountFeature(<Activities />, api, client);
   return { api, read, submit, client };
 }
+it("archives a formal activity after confirmation even while its list response is stale", async () => {
+  const { submit } = setup(async () => page([activity]));
+  submit.mockImplementation(async (envelope) => ({
+    ...envelope,
+    status: "applied",
+    sampled_at: "2026-11-13T10:00:00Z",
+  }));
+  fireEvent.click(await screen.findByRole("button", { name: /^活动 ·/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "放弃活动" }));
+  expect(submit).not.toHaveBeenCalled();
+  expect(screen.getByText(/候选继续参与和运行/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "确认放弃" }));
+  await waitFor(() => expect(screen.queryByText(activity.title)).toBeNull());
+  expect(submit).toHaveBeenCalledTimes(1);
+  expect(submit.mock.calls[0][0]).toMatchObject({
+    action: "activity_abandon",
+    target_id: activity.activity_id,
+  });
+  fireEvent.click(screen.getByRole("button", { name: /最近结束/ }));
+  expect(await screen.findByText("已放弃")).toBeVisible();
+  expect(screen.getByText("实施中")).toBeVisible();
+});
 it("merges local waiting, journal and formal IDs once, without reviving old-instance requests", () => {
   const local: CandidateStart = {
     id: "start",

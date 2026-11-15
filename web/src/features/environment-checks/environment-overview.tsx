@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { queryOptions, useQueries } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
+import { Link } from "react-router-dom";
+import { useAbandonedActivities } from "../activities/abandonment";
 import type { Envelope, Receipt } from "../../shared/api/types";
 import { usePageVisible } from "../../shared/query-visibility";
 import {
@@ -199,6 +201,10 @@ function EnvironmentRow({
 }: RowProps) {
   const { identity, online } = useWorkspace();
   const { activity_id: activityID, environment_key: key, profiles } = e;
+  const abandoned = useAbandonedActivities(
+    "environment_detection",
+    activityID ? [activityID] : [],
+  ).isAbandoned(activityID);
   const record = activity?.data;
   const current = record?.id === activityID ? record : undefined;
   const unsettled =
@@ -225,12 +231,12 @@ function EnvironmentRow({
         <span className="environment-status" data-stage={stage}>
           {label}
         </span>
-        {!confirming && current?.created_at && (
+        {!abandoned && !confirming && current?.created_at && (
           <p className="muted">
             最近检测：{new Date(current.created_at).toLocaleString("zh-CN")}
           </p>
         )}
-        {!confirming && activityID && (
+        {!abandoned && !confirming && activityID && (
           <DetectionID id={activityID} execution={current?.execution_ref} />
         )}
       </td>
@@ -246,27 +252,40 @@ function EnvironmentRow({
                   ? "当前准备要求已通过"
                   : e.reason || "暂无状态说明"}
         </p>
-        {!confirming && unsettled && <p className="muted">本次检测尚未结束</p>}
+        {!confirming && unsettled && (
+          <p className="muted">
+            {abandoned ? (
+              <>
+                原检测仍待结算。{" "}
+                <Link to={"?activity=" + activityID}>查看原检测</Link>
+              </>
+            ) : (
+              "本次检测尚未结束"
+            )}
+          </p>
+        )}
         {!confirming && stage === "ready" && (
           <p className="muted">重新检测会使当前就绪状态失效。</p>
         )}
-        <SubmissionStatus
-          label={
-            sending
-              ? "正在提交检测…"
-              : confirming
-                ? accepted
-                  ? "已受理，正在读取工作信息"
-                  : "提交结果待核实 · 请查看原请求"
-                : activityID
-                  ? "检测进度可在活动中心查看"
-                  : ""
-          }
-          busy={sending}
-          showActivity={!!request || !!activityID}
-          announce={confirming}
-        />
-        {confirming && request && (
+        {!abandoned && (
+          <SubmissionStatus
+            label={
+              sending
+                ? "正在提交检测…"
+                : confirming
+                  ? accepted
+                    ? "已受理，正在读取工作信息"
+                    : "提交结果待核实 · 请查看原请求"
+                  : activityID
+                    ? "检测进度可在活动中心查看"
+                    : ""
+            }
+            busy={sending}
+            showActivity={!!request || !!activityID}
+            announce={confirming}
+          />
+        )}
+        {!abandoned && confirming && request && (
           <CopyExecutionInfo
             info={{
               ...requestExecutionInfo(request, receipt),
@@ -297,7 +316,7 @@ function EnvironmentRow({
         )}
       </td>
       <td>
-        {unsettled && !confirming ? (
+        {unsettled && !confirming && !abandoned ? (
           <Button
             size="sm"
             disabled={
@@ -322,6 +341,7 @@ function EnvironmentRow({
               stage === "unverified" ||
               submitting ||
               confirming ||
+              (abandoned && unsettled) ||
               !key ||
               !selected
             }

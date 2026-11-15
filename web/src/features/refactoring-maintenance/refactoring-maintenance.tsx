@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { SafeLink } from "../../shared/ui/status";
+import { useAbandonedActivities } from "../activities/abandonment";
 import { useActivityFeedback } from "../activities/feedback/feedback";
 import { NewMaintenance } from "./new-maintenance";
 import "./refactoring-maintenance.css";
@@ -141,6 +142,7 @@ export function RefactoringMaintenance() {
   const detailHeading = useRef<HTMLDivElement>(null);
   const listPosition = useRef(0);
   const initialSelection = useRef(false);
+  const currentSelection = useRef("");
   const scope = [
     api.home,
     identity.project_id,
@@ -171,8 +173,18 @@ export function RefactoringMaintenance() {
     refetchInterval: 1500,
   });
   const first = index.data?.pages[0];
-  const ongoing = first?.ongoing ?? [];
-  const active = new Set(ongoing.map(({ id }) => id));
+  const ownerOngoing = first?.ongoing ?? [];
+  const ownerHistory = (index.data?.pages ?? []).flatMap((page) => page.history);
+  const archived = useAbandonedActivities(
+    "refactoring",
+    [...ownerOngoing, ...ownerHistory].map(({ id }) => id),
+  );
+  const ongoing = ownerOngoing.filter(({ id }) => !archived.isAbandoned(id));
+  const archivedOngoing = ownerOngoing.filter(({ id }) =>
+    archived.isAbandoned(id),
+  );
+  const archivedSlots = archivedOngoing.filter(({ slot }) => slot);
+  const active = new Set(ownerOngoing.map(({ id }) => id));
   const waiting = ongoing
     .filter((r) => r.phase === "waiting_input")
     .sort(
@@ -191,14 +203,18 @@ export function RefactoringMaintenance() {
             a.id.localeCompare(b.id);
     });
   const history = [
+    ...archivedOngoing,
     ...new Map(
-      (index.data?.pages ?? [])
-        .flatMap((page) => page.history)
+      ownerHistory
         .filter((r) => !active.has(r.id))
         .map((r) => [r.id, r] as const),
     ).values(),
   ];
-  const suggested = waiting[0]?.id ?? progressing[0]?.id ?? history[0]?.id;
+  const suggested =
+    waiting[0]?.id ??
+    progressing[0]?.id ??
+    history.find(({ id }) => !archived.isAbandoned(id))?.id;
+  const selectedArchived = archived.isAbandoned(selected);
 
   useEffect(() => {
     if (initialSelection.current) return;
@@ -209,11 +225,19 @@ export function RefactoringMaintenance() {
       initialSelection.current = true;
       return;
     }
-    if (suggested) {
+    if (suggested && !archived.pending) {
       initialSelection.current = true;
+      currentSelection.current = suggested;
       setParams({ action: suggested }, { replace: true });
     }
-  }, [selected, suggested, setParams]);
+  }, [selected, suggested, archived.pending, setParams]);
+
+  useEffect(() => {
+    if (selectedArchived && currentSelection.current === selected) {
+      currentSelection.current = "";
+      setParams({}, { replace: true });
+    }
+  }, [selected, selectedArchived, setParams]);
 
   useEffect(() => {
     if (!selected && list.current)
@@ -227,9 +251,10 @@ export function RefactoringMaintenance() {
       row.envelope.project_id === identity.project_id,
   )?.response;
 
-  const openAction = (id: string) => {
+  const openAction = (id: string, followCurrent = false) => {
     listPosition.current = list.current?.scrollTop ?? listPosition.current;
     initialSelection.current = true;
+    currentSelection.current = followCurrent ? id : "";
     setParams({ action: id });
     if (typeof matchMedia === "function" && matchMedia(narrowScreen).matches) {
       requestAnimationFrame(() => detailHeading.current?.focus());
@@ -256,7 +281,7 @@ export function RefactoringMaintenance() {
     void index.refetch();
     if (opened && selected === startFrom) {
       setOpened(false);
-      openAction(id);
+      openAction(id, true);
     } else {
       setOpened(false);
       setAccepted(id);
@@ -321,7 +346,9 @@ export function RefactoringMaintenance() {
               type="button"
               data-action={r.id}
               aria-current={selected === r.id ? "true" : undefined}
-              onClick={() => openAction(r.id)}
+              onClick={() =>
+                openAction(r.id, active.has(r.id) && !archived.isAbandoned(r.id))
+              }
             >
               <strong>{r.direction_name}</strong>
               <span>
@@ -358,6 +385,16 @@ export function RefactoringMaintenance() {
               {(!online || index.isError) && "（上次已知）"}
             </p>
           )}
+          {archivedSlots.map((action) => (
+            <p key={action.id}>
+              {action.direction_name}仍占用推进名额 ·{" "}
+              <Link
+                to={{ search: "?" + new URLSearchParams({ action: action.id }) }}
+              >
+                核实原行动
+              </Link>
+            </p>
+          ))}
         </div>
         <Button
           variant="default"
@@ -427,6 +464,7 @@ export function RefactoringMaintenance() {
               variant="ghost"
               onClick={() => {
                 initialSelection.current = true;
+                currentSelection.current = "";
                 setParams({});
                 requestAnimationFrame(() =>
                   list.current

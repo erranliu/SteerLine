@@ -360,10 +360,27 @@ function EnvironmentWorkspace() {
               </p>
               <p>{requestedRecord.data.diagnostic}</p>
               <DetectionSubmissionHistory record={requestedRecord.data} />
+              {requestedRecord.data.requests?.map((request) => (
+                <p key={request.request_id}>
+                  <Link
+                    to={`?activity=${encodeURIComponent(requestedActivity)}&request_id=${encodeURIComponent(request.request_id)}`}
+                  >
+                    {request.action === "stop"
+                      ? "查看停止请求"
+                      : "查看启动请求"}
+                  </Link>
+                </p>
+              ))}
               {params.get("request_id") && (
                 <OperationResult
                   requestID={params.get("request_id")!}
                   targetID={requestedActivity}
+                  activityID={
+                    requestedRecord.data.requests?.find(
+                      (request) =>
+                        request.request_id === params.get("request_id"),
+                    )?.activity_id
+                  }
                 />
               )}
             </>

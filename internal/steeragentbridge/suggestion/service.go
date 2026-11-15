@@ -311,6 +311,15 @@ func (s *Service) ProcessNext(ctx context.Context) error {
 	return err
 }
 func (s *Service) Cancel(ctx context.Context, id string, expected uint64) (Record, error) {
+	return s.cancel(ctx, id, expected, false)
+}
+
+func (s *Service) StopForAbandonment(ctx context.Context, id string) error {
+	_, err := s.cancel(ctx, id, 0, true)
+	return err
+}
+
+func (s *Service) cancel(ctx context.Context, id string, expected uint64, abandonment bool) (Record, error) {
 	if err := s.enter(ctx); err != nil {
 		return Record{}, err
 	}
@@ -321,8 +330,11 @@ func (s *Service) Cancel(ctx context.Context, id string, expected uint64) (Recor
 	}
 	// The immutable job identity scopes cancellation. Observations may advance
 	// its revision after the user reads it without revoking this monotonic intent.
-	if expected == 0 || expected > r.Revision {
+	if !abandonment && (expected == 0 || expected > r.Revision) {
 		return r, contract.ErrConflict
+	}
+	if abandonment && (r.Cancelled || r.Complete()) {
+		return r, nil
 	}
 	if r.Complete() {
 		if r.State == "cancelled" {
@@ -330,11 +342,14 @@ func (s *Service) Cancel(ctx context.Context, id string, expected uint64) (Recor
 		}
 		return r, errors.New("本次生成已结束，未执行取消")
 	}
-	if cancel, ok := s.inflight.Load(id); ok {
-		cancel.(context.CancelFunc)()
-	}
 	cancelRecord(&r, "本次提示词生成已取消")
-	return s.save(ctx, r)
+	r, err = s.save(ctx, r)
+	if err == nil {
+		if cancel, ok := s.inflight.Load(id); ok {
+			cancel.(context.CancelFunc)()
+		}
+	}
+	return r, err
 }
 
 // Detail is the public host projection, independent of the stored Record shape.

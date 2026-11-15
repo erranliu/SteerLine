@@ -27,6 +27,7 @@ type AsyncActivity struct {
 	CreatedAt          *time.Time                `json:"created_at,omitempty"`
 	BusinessFinishedAt *time.Time                `json:"business_finished_at,omitempty"`
 	FinishedAt         *time.Time                `json:"finished_at,omitempty"`
+	AbandonedAt        *time.Time                `json:"abandoned_at,omitempty"`
 	ObservedAt         *time.Time                `json:"source_observed_at,omitempty"`
 	Observation        string                    `json:"observation"`
 	Progress           *AsyncActivityProgress    `json:"progress,omitempty"`

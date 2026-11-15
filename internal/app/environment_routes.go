@@ -44,7 +44,16 @@ func publicEnvironment(r env.Record) any {
 		}
 		rounds = append(rounds, map[string]any{"number": a.Number, "deadline": a.Deadline, "run_id": a.RunID, "submission": a.Submission, "submission_diagnostic": a.SubmissionDiagnostic, "settled": a.Settled, "timed_out": a.TimedOut, "diagnostic": a.Diagnostic, "result": a.Result, "report": a.Report, "run": run})
 	}
-	return map[string]any{"execution_ref": ref, "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": rounds, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.Files[r.Prepared.Manifest.Script], "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
+	requests := make([]map[string]string, 0, len(r.Requests))
+	for _, q := range r.Requests {
+		request := map[string]string{"request_id": q.ID, "action": q.Action}
+		var envelope httpcontract.CommandEnvelope
+		if json.Unmarshal(q.Original, &envelope) == nil && envelope.Action == activityAbandon {
+			request["activity_id"] = envelope.TargetID
+		}
+		requests = append(requests, request)
+	}
+	return map[string]any{"execution_ref": ref, "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": rounds, "requests": requests, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.Files[r.Prepared.Manifest.Script], "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
 }
 func environmentExcerpt(s string) string {
 	r := []rune(s)

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
+import { useAbandonedActivities } from "../activities/abandonment";
 import { SafeLink } from "../../shared/ui/status";
 import type { Envelope } from "../../shared/api/types";
 import {
@@ -213,7 +214,17 @@ export function Roadmaps({
           : !r.source.planning_id),
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const currentSummary = currentRoadmapRecord(history);
+  const archivedRoadmaps = useAbandonedActivities(
+    "roadmap",
+    history.map((r) => r.id),
+  );
+  const currentSummary = currentRoadmapRecord(
+    history.filter(
+      (r) =>
+        !archivedRoadmaps.isAbandoned(r.id) &&
+        !archivedRoadmaps.isAbandoned(r.parent_id),
+    ),
+  );
   const currentID = currentSummary?.id || "";
   const historicalID = params.get("record");
   const viewingHistory = !!historicalID && historicalID !== currentID;
@@ -237,6 +248,8 @@ export function Roadmaps({
       ? detail.data
       : undefined
     : currentDetail.data;
+  const archivedRecord = !!record && archivedRoadmaps.isAbandoned(record.id);
+  const archivedNextAction = archivedRecord ? roadmapNextAction(record) : "";
   const analysis = record?.analysis;
   const questions = [
     ...(analysis?.questions || []),
@@ -271,8 +284,16 @@ export function Roadmaps({
     roadmap_observe: "正在查询原操作…",
     roadmap_stop: "正在提交停止请求…",
   };
-  const sending = inFlight();
-  const originalRows = (requests || []).filter((r) => belongs(r.envelope));
+  const sending = inFlight().filter(
+    (e) => viewingHistory || !archivedRoadmaps.isAbandoned(e.target_id),
+  );
+  const originalRows = (requests || []).filter((r) => {
+    const bound = r.response?.roadmap as { id?: string } | undefined;
+    return (
+      belongs(r.envelope) &&
+      !archivedRoadmaps.isAbandoned(bound?.id || r.envelope.target_id)
+    );
+  });
   const unresolved = originalRows.find(
     (r) =>
       advancing(r.envelope) &&
@@ -370,7 +391,14 @@ export function Roadmaps({
   ) {
     if (
       !online ||
-      viewingHistory ||
+      (viewingHistory &&
+        !(
+          archivedRecord &&
+          target === record?.id &&
+          (name === "roadmap_observe" ||
+            (name === "roadmap_resume" && archivedNextAction === "resume") ||
+            (name === "roadmap_admit" && archivedNextAction === "admit"))
+        )) ||
       inFlight().some(
         (e) =>
           (advancing(e) && advancing({ action: name } as Envelope)) ||
@@ -408,6 +436,7 @@ export function Roadmaps({
       await Promise.all([
         list.refetch({ cancelRefetch: false }),
         ...(currentID ? [currentDetail.refetch({ cancelRefetch: false })] : []),
+        ...(viewingHistory ? [detail.refetch({ cancelRefetch: false })] : []),
       ]);
     } catch (e) {
       setError(String(e));
@@ -432,6 +461,13 @@ export function Roadmaps({
   const publicationPending = history
     .map((r) => (r.id === current?.id ? current : r))
     .some((r) => !!r.publication && r.state !== "admitted");
+  const archivedPending = history.filter(
+    (r) =>
+      archivedRoadmaps.isAbandoned(r.id) &&
+      (contentPending(r) ||
+        (!!r.publication && r.state !== "admitted") ||
+        r.state === "admission-unknown"),
+  );
   const parseDisabled =
     locked ||
     !source.data ||
@@ -687,8 +723,43 @@ export function Roadmaps({
         )}
         {viewingHistory ? (
           <div className="roadmaps-history-notice" role="note">
-            正在查看历史记录，操作已禁用。
+            {archivedRoadmaps.isAbandoned(record?.id)
+              ? "正在查看已放弃的记录。"
+              : "正在查看历史记录，操作已禁用。"}
             <button onClick={returnToCurrent}>返回当前流程</button>
+            {record && archivedRoadmaps.isAbandoned(record.id) && (
+              <>
+                <button
+                  disabled={
+                    !online ||
+                    sending.some((e) => e.action === "roadmap_observe")
+                  }
+                  onClick={() => void action("roadmap_observe", record.id, 1)}
+                >
+                  查询原操作结果
+                </button>
+                {archivedNextAction === "resume" && (
+                  <button
+                    disabled={!online || sending.length > 0}
+                    onClick={() =>
+                      void action("roadmap_resume", record.id, record.revision)
+                    }
+                  >
+                    继续原操作
+                  </button>
+                )}
+                {archivedNextAction === "admit" && (
+                  <button
+                    disabled={!online || sending.length > 0}
+                    onClick={() =>
+                      void action("roadmap_admit", record.id, record.revision)
+                    }
+                  >
+                    正式入图
+                  </button>
+                )}
+              </>
+            )}
           </div>
         ) : (
           <div className="roadmaps-actions">
@@ -840,6 +911,23 @@ export function Roadmaps({
           </div>
         )}
       </section>
+      {!viewingHistory &&
+        archivedPending.map((r) => (
+          <p key={r.id} className="notice amber">
+            原 Roadmap 操作仍待结算或核实。{" "}
+            <Link
+              to={
+                "?" +
+                new URLSearchParams({
+                  ...(planning ? { task: planning.id } : { source: sourceID }),
+                  record: r.id,
+                })
+              }
+            >
+              查看原记录
+            </Link>
+          </p>
+        ))}
       {record?.generations?.length ? (
         <section className="roadmaps-section" aria-label="逐任务文档生成">
           <h2>逐任务文档生成</h2>

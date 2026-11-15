@@ -97,7 +97,7 @@ func (p *runtimeProjectPort) readActivity(ctx context.Context, route string, val
 			}
 		}
 	}
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, ports.ErrNotFound) {
 		return nil, &httpclient.ClientError{Status: 404, Code: "activity_not_found", Reason: "activity or recorded content not found"}
 	}
 	if sqlite.IsLocked(err) || errors.Is(err, context.DeadlineExceeded) {
