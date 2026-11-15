@@ -23,11 +23,11 @@ import "./activities.css";
 import { useActivityList } from "./use-activity-list";
 import { CopyExecutionInfo, operationNames } from "./execution-info";
 import { useActivityFeedback } from "./feedback/feedback";
+import { AbandonActivity } from "./abandonment";
 import {
-  AbandonActivity,
   rememberAbandonedActivities,
   useAbandonedActivities,
-} from "./abandonment";
+} from "./abandonment-marks";
 
 export type ActivityUI = {
   open: boolean;
@@ -199,7 +199,7 @@ export function Activities({
     ...(query.data?.pages.map((p) => p.request_links) || []),
     associationQuery.data?.links,
   );
-  const marks = useAbandonedActivities("task_candidate");
+  const { applyMark, isAbandoned } = useAbandonedActivities("task_candidate");
   const provisional = provisionalActivities(
     identity.project_id,
     identity.instance_id,
@@ -207,14 +207,10 @@ export function Activities({
     candidateStarts?.items || [],
     links,
     official,
-    marks.isAbandoned,
+    isAbandoned,
   );
-  const markActivity = (a: Activity) =>
-    !a.abandoned_at && marks.mark(a.source, a.source_id)
-      ? { ...a, abandoned_at: marks.mark(a.source, a.source_id) }
-      : a;
   const ordered = [...official, ...provisional]
-    .map(markActivity)
+    .map(applyMark)
     .filter((a) => matchesActivity(a, filter))
     .sort((a, b) => {
       const left = filter === "recent" ? activityHistoryTime(a) : a.created_at,

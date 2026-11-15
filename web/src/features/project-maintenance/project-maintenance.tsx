@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
-import { useAbandonedActivities } from "../activities/abandonment";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import { SafeLink, short } from "../../shared/ui/status";
 import { testPreparationNames as names } from "../tasks/use-test-readiness";
 import type { ProjectReadiness } from "../../shared/api/types";

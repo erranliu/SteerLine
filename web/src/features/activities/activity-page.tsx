@@ -12,6 +12,7 @@ import {
   activityDestination,
   ended,
   formatActivityTime,
+  matchesActivity,
   type Activity,
   type ActivityListFilter,
 } from "./model";
@@ -19,7 +20,8 @@ import { useActivityList } from "./use-activity-list";
 import { ActivityConversation } from "./activity-conversation";
 import { CopyExecutionInfo } from "./execution-info";
 import { readingRoot } from "./reading-api";
-import { AbandonActivity, useAbandonedActivities } from "./abandonment";
+import { AbandonActivity } from "./abandonment";
+import { useAbandonedActivities } from "./abandonment-marks";
 import "./activity-page.css";
 
 function ActivityPhase({ activity }: { activity: Activity }) {
@@ -120,17 +122,13 @@ export function ActivityPage() {
   }, [selected]);
   const visible = usePageVisible();
   const list = useActivityList(api, filter, online && visible, 2000);
-  const marks = useAbandonedActivities();
+  const { applyMark } = useAbandonedActivities();
   const activities = new Map<string, Activity>();
   for (const page of list.data?.pages ?? []) {
     for (const item of page.items) {
-      if (
-        filter !== "history" &&
-        (item.abandoned_at || marks.mark(item.source, item.source_id))
-      )
-        continue;
-      if (!activities.has(item.activity_id))
-        activities.set(item.activity_id, item);
+      const activity = applyMark(item);
+      if (!activities.has(item.activity_id) && matchesActivity(activity, filter))
+        activities.set(item.activity_id, activity);
     }
   }
   const items = [...activities.values()];
@@ -290,7 +288,7 @@ function ActivityDetail({
   onAbandoned: () => void;
 }) {
   const { api, online, identity } = useWorkspace();
-  const marks = useAbandonedActivities();
+  const { applyMark } = useAbandonedActivities();
   const key = [
     api.home,
     identity.project_id,
@@ -315,12 +313,7 @@ function ActivityDetail({
       query.state.data && ended(query.state.data) ? false : "always",
     refetchOnReconnect: false,
   });
-  const data = summary.data;
-  const localMark = data && marks.mark(data.source, data.source_id);
-  const activity =
-    data && localMark && !data.abandoned_at
-      ? { ...data, abandoned_at: localMark }
-      : data;
+  const activity = summary.data && applyMark(summary.data);
   return (
     <section aria-label="所选活动摘要">
       <Button className="reading-back" variant="ghost" onClick={onBack}>

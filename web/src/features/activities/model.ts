@@ -80,14 +80,16 @@ export function steerAgentLabel(a: Activity): string | undefined {
       return "持续维护";
   }
 }
-export const matchesActivity = (a: Activity, filter: ActivityFilter) =>
-  a.abandoned_at
-    ? filter === "recent"
-    : filter === "attention"
-      ? a.needs_attention
-      : filter === "recent"
-        ? ended(a)
-        : !ended(a);
+export function withActivityAbandonmentMark(a: Activity, mark?: string) {
+  return mark && !a.abandoned_at ? { ...a, abandoned_at: mark } : a;
+}
+
+export function matchesActivity(a: Activity, filter: ActivityListFilter) {
+  const history = filter === "recent" || filter === "history";
+  if (a.abandoned_at) return history;
+  if (filter === "attention") return a.needs_attention;
+  return history ? ended(a) : !ended(a);
+}
 export const activityHistoryTime = (a: Activity) =>
   a.abandoned_at || a.finished_at;
 export const activityActions = new Set([

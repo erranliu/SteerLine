@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { useWorkspace } from "../../app/context";
-import { useAbandonedActivities } from "../activities/abandonment";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import type { CandidateStart } from "../../app/use-candidate-starts";
 import type {
   Candidate,

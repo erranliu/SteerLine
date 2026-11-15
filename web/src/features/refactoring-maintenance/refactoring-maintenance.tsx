@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { SafeLink } from "../../shared/ui/status";
-import { useAbandonedActivities } from "../activities/abandonment";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import { useActivityFeedback } from "../activities/feedback/feedback";
 import { NewMaintenance } from "./new-maintenance";
 import "./refactoring-maintenance.css";

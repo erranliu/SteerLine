@@ -1,14 +1,11 @@
 import { useState } from "react";
-import {
-  useQueries,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import type { Envelope } from "../../shared/api/types";
 import { invalidateCommand } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { ended, type Activity } from "./model";
+import { rememberAbandonedActivities } from "./abandonment-marks";
 
 const stopNotes: Record<string, string> = {
   environment_detection:
@@ -21,82 +18,6 @@ const stopNotes: Record<string, string> = {
   baseline_check: "原检查继续，可通过原请求核实结果。",
   task_candidate: "候选继续参与和运行，可在原候选详情查看或处理。",
 };
-
-export function rememberAbandonedActivities(
-  client: QueryClient,
-  scope: string[],
-  activities: Pick<Activity, "source" | "source_id" | "abandoned_at">[],
-) {
-  const marks = Object.fromEntries(
-    activities.flatMap((a) =>
-      a.abandoned_at ? [[a.source + "/" + a.source_id, a.abandoned_at]] : [],
-    ),
-  );
-  if (Object.keys(marks).length) {
-    client.setQueryData<Record<string, string>>(
-      [...scope, "abandoned-activity-marks"],
-      (old) => ({ ...old, ...marks }),
-    );
-  }
-}
-
-export function useAbandonedActivities(source = "", ids: string[] = []) {
-  const { api, identity, online } = useWorkspace();
-  const client = useQueryClient();
-  const scope = [api.home, identity.project_id, identity.instance_id];
-  const localKey = [...scope, "abandoned-activity-marks"];
-  const unique = [...new Set(ids.filter(Boolean))].sort();
-  const batches = Array.from(
-    { length: Math.ceil(unique.length / 100) },
-    (_, i) => unique.slice(i * 100, i * 100 + 100),
-  );
-  const [local, ...remote] = useQueries({
-    queries: [
-      {
-        queryKey: localKey,
-        enabled: false,
-        queryFn: async () => ({}) as Record<string, string>,
-      },
-      ...batches.map((batch) => ({
-        queryKey: [...scope, "abandoned-activities", source, batch],
-        queryFn: async ({ signal }: { signal: AbortSignal }) => {
-          const params = new URLSearchParams({
-            mode: "abandoned",
-            source,
-            source_ids: batch.join(","),
-          });
-          const marks = await api.get<Record<string, string>>(
-            "/activities?" + params,
-            signal,
-          );
-          if (marks && !Array.isArray(marks) && typeof marks === "object") {
-            const found = Object.fromEntries(
-              batch.flatMap((id) =>
-                typeof marks[id] === "string"
-                  ? [[source + "/" + id, marks[id]]]
-                  : [],
-              ),
-            );
-            if (Object.keys(found).length)
-              client.setQueryData<Record<string, string>>(localKey, (old) => ({
-                ...old,
-                ...found,
-              }));
-          }
-          return marks;
-        },
-        enabled: online,
-        retry: false,
-        staleTime: 5000,
-      })),
-    ],
-  });
-  return {
-    isAbandoned: (id?: string) => !!id && !!local.data?.[source + "/" + id],
-    mark: (name: string, id: string) => local.data?.[name + "/" + id],
-    pending: online && remote.some((query) => query.isPending),
-  };
-}
 
 export function AbandonActivity({
   activity,
@@ -118,15 +39,19 @@ export function AbandonActivity({
     (!confirming && ended(activity) && !activity.needs_attention)
   )
     return null;
+  const matchesTarget = (envelope: Envelope) =>
+    envelope.action === "activity_abandon" &&
+    envelope.target_id === activity.activity_id &&
+    envelope.project_id === identity.project_id &&
+    envelope.instance_id === identity.instance_id;
   const outstanding =
-    original ??
-    requests?.find(
-      (row) =>
-        row.envelope.action === "activity_abandon" &&
-        row.envelope.target_id === activity.activity_id &&
-        row.envelope.project_id === identity.project_id &&
-        !["applied", "rejected"].includes(row.response?.status ?? ""),
-    )?.envelope;
+    original && matchesTarget(original)
+      ? original
+      : requests?.find(
+          (row) =>
+            matchesTarget(row.envelope) &&
+            !["applied", "rejected"].includes(row.response?.status ?? ""),
+        )?.envelope;
 
   async function abandon() {
     if (!online || sending) return;

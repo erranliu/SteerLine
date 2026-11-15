@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../app/context";
-import { useAbandonedActivities } from "../activities/abandonment";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import {
   readDraftValue,
   requestByID,

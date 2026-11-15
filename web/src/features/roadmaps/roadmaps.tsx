@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
-import { useAbandonedActivities } from "../activities/abandonment";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import { SafeLink } from "../../shared/ui/status";
 import type { Envelope } from "../../shared/api/types";
 import {
