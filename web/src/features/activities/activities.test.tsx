@@ -217,6 +217,17 @@ it("merges local waiting, journal and formal IDs once, without reviving old-inst
   expect(
     provisionalActivities("project", "new-instance", [stored], [], {}, []),
   ).toHaveLength(0);
+  expect(
+    provisionalActivities(
+      "project",
+      "instance",
+      [stored],
+      [local],
+      {},
+      [],
+      (id) => id === "start",
+    ),
+  ).toHaveLength(0);
 });
 it("keeps a zero-activity entry, opens only on click, closes with focus restored, and sends no command", async () => {
   const { submit } = setup();

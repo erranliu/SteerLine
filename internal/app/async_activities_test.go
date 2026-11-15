@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
@@ -157,5 +159,20 @@ func TestActivityAbandonmentReadReturnsScopedMarksAndOriginalReceipt(t *testing.
 	values.Set("filter", "ongoing")
 	if _, err = p.Read(ctx, "/activities", values); err == nil {
 		t.Fatal("archive marks accepted list parameters")
+	}
+}
+
+func TestActivityAbandonmentRejectsPayloadOtherThanEmptyObject(t *testing.T) {
+	p := &runtimeProjectPort{config: Config{identity: "p"}, instance: "i"}
+	for _, payload := range []string{`null`, `[]`, `{"unexpected":true}`} {
+		_, err := p.abandonActivity(t.Context(), httpcontract.CommandEnvelope{
+			ProjectID: httpcontract.ProjectID("p"), InstanceID: "i",
+			RequestID: strings.Repeat("a", 32), Action: activityAbandon,
+			TargetID: "activity", Payload: []byte(payload),
+		})
+		var rejection *httpclient.ClientError
+		if !errors.As(err, &rejection) || rejection.Code != "invalid_payload" || rejection.Status != 400 {
+			t.Errorf("payload %s: expected invalid_payload, got %v", payload, err)
+		}
 	}
 }

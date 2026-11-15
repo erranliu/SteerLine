@@ -118,6 +118,7 @@ export function provisionalActivities(
   starts: CandidateStart[],
   links: Record<string, Activity>,
   official: Activity[],
+  isAbandonedCandidate?: (id: string) => boolean,
 ) {
   const known = new Set(
     [...official, ...Object.values(links)].flatMap((a) => [
@@ -132,7 +133,9 @@ export function provisionalActivities(
       e.project_id !== project ||
       e.instance_id !== instance ||
       !activityActions.has(e.action) ||
-      known.has(e.request_id)
+      known.has(e.request_id) ||
+      ((e.action === "start_task" || e.action === "start_candidate") &&
+        isAbandonedCandidate?.(e.request_id))
     )
       continue;
     const rejected = r.response?.status === "rejected";
@@ -196,7 +199,7 @@ export function provisionalActivities(
     });
   }
   for (const s of starts) {
-    if (known.has(s.id)) continue;
+    if (known.has(s.id) || isAbandonedCandidate?.(s.id)) continue;
     const previous = result.get(s.id);
     result.set(s.id, {
       ...previous,

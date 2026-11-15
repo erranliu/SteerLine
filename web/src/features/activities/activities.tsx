@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Activity as ActivityIcon, X, AlertCircle } from "lucide-react";
 import { useWorkspace } from "../../app/context";
@@ -23,7 +23,11 @@ import "./activities.css";
 import { useActivityList } from "./use-activity-list";
 import { CopyExecutionInfo, operationNames } from "./execution-info";
 import { useActivityFeedback } from "./feedback/feedback";
-import { AbandonActivity, useAbandonedActivities } from "./abandonment";
+import {
+  AbandonActivity,
+  rememberAbandonedActivities,
+  useAbandonedActivities,
+} from "./abandonment";
 
 export type ActivityUI = {
   open: boolean;
@@ -60,6 +64,7 @@ export function Activities({
   projectName?: string;
 }) {
   const feedback = useActivityFeedback();
+  const client = useQueryClient();
   const {
     api,
     identity,
@@ -156,6 +161,11 @@ export function Activities({
         for (const s of linked.sources)
           if (s.diagnostic) diagnostics.push(s.diagnostic);
       }
+      rememberAbandonedActivities(
+        client,
+        [api.home, identity.project_id, identity.instance_id],
+        Object.values(links),
+      );
       return { links, diagnostics };
     },
     enabled: online && visible && ids.length > 0,
@@ -189,6 +199,7 @@ export function Activities({
     ...(query.data?.pages.map((p) => p.request_links) || []),
     associationQuery.data?.links,
   );
+  const marks = useAbandonedActivities("task_candidate");
   const provisional = provisionalActivities(
     identity.project_id,
     identity.instance_id,
@@ -196,8 +207,8 @@ export function Activities({
     candidateStarts?.items || [],
     links,
     official,
+    marks.isAbandoned,
   );
-  const marks = useAbandonedActivities();
   const markActivity = (a: Activity) =>
     !a.abandoned_at && marks.mark(a.source, a.source_id)
       ? { ...a, abandoned_at: marks.mark(a.source, a.source_id) }

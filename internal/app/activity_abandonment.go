@@ -20,8 +20,9 @@ func (p *runtimeProjectPort) abandonActivity(ctx context.Context, in httpcontrac
 	if err := in.Validate(httpcontract.ProjectID(project), p.instance); err != nil {
 		return out, err
 	}
-	if err := decodeStrictJSON(in.Payload, &struct{}{}); err != nil {
-		return out, err
+	var payload *struct{}
+	if err := decodeStrictJSON(in.Payload, &payload); err != nil || payload == nil {
+		return out, &httpclient.ClientError{Status: 400, Code: "invalid_payload", Reason: "放弃活动的载荷必须是空对象"}
 	}
 	source, id, err := query.DecodeActivityID(project, in.TargetID)
 	if err != nil {

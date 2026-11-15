@@ -296,9 +296,16 @@ export function Runs() {
   const [showStopped, setShowStopped] = useState(false);
   const page = snapshot?.connection.snapshot.page;
   const runs = page?.runs ?? [];
+  const unobservedStarts =
+    candidateStarts?.items.filter(
+      (entry) => !runs.some((run) => run.run_id === entry.id),
+    ) ?? [];
   const archivedRuns = useAbandonedActivities(
     "task_candidate",
-    runs.map((run) => run.run_id),
+    [
+      ...runs.map((run) => run.run_id),
+      ...unobservedStarts.map((entry) => entry.id),
+    ],
   );
   const explicitRun = params.get("history") === "1" || params.has("advisory");
   const stopApplied = (id: string) =>
@@ -311,10 +318,9 @@ export function Runs() {
         row.envelope.target_id === id &&
         row.response?.status === "applied",
     );
-  const starts =
-    candidateStarts?.items.filter(
-      (entry) => !runs.some((run) => run.run_id === entry.id),
-    ) ?? [];
+  const starts = unobservedStarts.filter(
+    (entry) => !archivedRuns.isAbandoned(entry.id),
+  );
   const initialStarts = latestTaskStarts(candidateStarts?.items);
   const visibleRuns = runs.filter(
     (run) =>
