@@ -80,7 +80,7 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 
 当前项目启动通过 `GET /manual-verification/project` 查询纳管路径、目标分支、当前提交、可用入口、就绪诊断和最近一次启动。两个命令以项目 ID 和版本 `1` 为目标。`project_launch_start` 提交页面所见的完整 `head` 和 `entry_id`，`project_launch_stop` 提交 `attempt_id`。日志通过 `GET /manual-verification/project/logs/{attempt_id}` 查询。
 
-`GET /manual-verification/pulls` 返回最多 10 个最近更新的开放 PR，`GET /manual-verification/pulls/{number}` 返回指定 PR 的 Head 和启动入口。`project_launch_pr_start` 提交 `pr_number`、完整 `head` 和 `entry_id`。`project_launch_pr_stop` 与 `project_launch_pr_cleanup` 提交 `attempt_id`。通过 `GET /manual-verification/pulls/run` 查询最近一次启动 `latest` 和需清理的旧现场 `retained`。日志在 `GET /manual-verification/pulls/logs/{attempt_id}` 查询。
+`GET /manual-verification/pulls` 返回最近更新的最多 10 个可核实 PR，包含开放中、已合入及已关闭状态。`GET /manual-verification/pulls/{number}` 返回指定 PR 的 Head 和启动入口。`project_launch_pr_start` 提交 `pr_number`、完整 `head` 和 `entry_id`。`project_launch_pr_stop` 与 `project_launch_pr_cleanup` 提交 `attempt_id`。通过 `GET /manual-verification/pulls/run` 查询最近一次启动 `latest` 和需清理的旧现场 `retained`。日志在 `GET /manual-verification/pulls/logs/{attempt_id}` 查询。
 
 `GET /settings/worktrees` 读取本机 worktree 目录。使用项目 ID 和版本 `1` 发送 `maintenance_set_worktree_directory`，`directory` 为宿主机绝对路径或表示恢复默认值的空字符串。
 

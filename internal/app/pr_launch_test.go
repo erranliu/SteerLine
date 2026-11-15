@@ -52,20 +52,28 @@ func TestPRLaunchUsesSelectedHeadAndOriginalWorktreeDirectory(t *testing.T) {
 	pmGit(t, repo, "push", remote, "feature:refs/pull/7/head")
 	pmGit(t, remote, "update-server-info")
 	fixturePull := func(r *http.Request, number int) roadmapPR {
-		fact := roadmapPR{URL: fmt.Sprintf("http://%s/owner/project/pulls/%d", r.Host, number), Title: "Preview", State: "open", Number: number}
+		fact := roadmapPR{URL: fmt.Sprintf("http://%s/owner/project/pulls/%d", r.Host, number), Title: "Preview", State: "closed", Number: number, Merged: number == 7}
+		if number == 20 {
+			mergedAt := time.Date(2026, time.November, 15, 0, 0, 0, 0, time.UTC)
+			fact.MergedAt = &mergedAt
+		}
 		fact.Head.Ref, fact.Head.SHA = "feature", head
 		return fact
 	}
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/repos/owner/project/pulls":
-			if r.URL.RawQuery != "state=open&sort=recentupdate&limit=10" {
+			if r.URL.RawQuery != "state=all&sort=recentupdate&limit=10" {
 				http.Error(w, "unexpected query", 400)
 				return
 			}
 			var facts []roadmapPR
 			for number := 20; number > 8; number-- {
-				facts = append(facts, fixturePull(r, number))
+				fact := fixturePull(r, number)
+				if number == 19 {
+					fact.Head.SHA = ""
+				}
+				facts = append(facts, fact)
 			}
 			_ = json.NewEncoder(w).Encode(facts)
 		case "/api/v1/repos/owner/project/pulls/7":
@@ -89,14 +97,14 @@ func TestPRLaunchUsesSelectedHeadAndOriginalWorktreeDirectory(t *testing.T) {
 	result, err := port.Read(ctx, "/manual-verification/pulls", nil)
 	require(t, err)
 	rows := result.([]launchPR)
-	if len(rows) != 10 || rows[0].Number != 20 || rows[9].Number != 11 {
+	if len(rows) != 9 || rows[0].Number != 20 || rows[0].State != "merged" || rows[1].Number != 18 || rows[1].State != "closed" || rows[8].Number != 11 {
 		t.Fatalf("recent PRs: %+v", rows)
 	}
 	detail, err := port.Read(ctx, "/manual-verification/pulls/7", nil)
 	require(t, err)
 	detailJSON, err := json.Marshal(detail)
 	require(t, err)
-	if !strings.Contains(string(detailJSON), `"name":"Preview"`) || strings.Contains(string(detailJSON), `"diagnostic"`) {
+	if !strings.Contains(string(detailJSON), `"name":"Preview"`) || !strings.Contains(string(detailJSON), `"state":"merged"`) || strings.Contains(string(detailJSON), `"diagnostic"`) {
 		t.Fatalf("entry must come from the selected Head: %s", detailJSON)
 	}
 	if _, err := cfg.setWorktreeDirectory(repo); err == nil {

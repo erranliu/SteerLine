@@ -19,8 +19,9 @@ type Pull = {
   url: string;
   branch: string;
   head: string;
-  state: string;
+  state: "open" | "merged" | "closed";
 };
+const pullState = { open: "开放中", merged: "已合入", closed: "已关闭" };
 type PullDetail = {
   pr: Pull;
   entries?: {
@@ -149,7 +150,7 @@ export default function PRLaunch({
     >
       {!online && <p className="mv-meta">项目连接离线。</p>}
       <div className="mv-fields">
-        <label htmlFor="recent-launch-pr">最近更新的开放 PR</label>
+        <label htmlFor="recent-launch-pr">最近更新的 PR</label>
         <div className="mv-input-row">
           <select
             id="recent-launch-pr"
@@ -165,12 +166,12 @@ export default function PRLaunch({
               {recent.isFetching
                 ? "正在读取…"
                 : recent.data?.length === 0
-                  ? "暂无开放 PR"
+                  ? "暂无可选 PR"
                   : "选择 PR"}
             </option>
             {(recent.data ?? []).slice(0, 10).map((pr) => (
               <option key={pr.number} value={pr.number}>
-                #{pr.number} {pr.title}
+                #{pr.number} {pr.title} · {pullState[pr.state]}
               </option>
             ))}
           </select>

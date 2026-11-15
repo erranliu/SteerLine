@@ -25,12 +25,13 @@ import (
 )
 
 type roadmapPR struct {
-	Title       string `json:"title"`
-	URL         string `json:"html_url"`
-	Number      int    `json:"number"`
-	Merged      bool   `json:"merged"`
-	MergeCommit string `json:"merge_commit_sha"`
-	State       string `json:"state"`
+	Title       string     `json:"title"`
+	URL         string     `json:"html_url"`
+	Number      int        `json:"number"`
+	Merged      bool       `json:"merged"`
+	MergedAt    *time.Time `json:"merged_at"`
+	MergeCommit string     `json:"merge_commit_sha"`
+	State       string     `json:"state"`
 	Head        struct {
 		Ref  string `json:"ref"`
 		SHA  string `json:"sha"`
