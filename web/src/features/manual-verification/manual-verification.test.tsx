@@ -52,6 +52,8 @@ it("lists current-project launches with no PRs and gates start on readiness", as
   const client = testClient();
   mountFeature(<ManualVerification />, api, client);
   await screen.findByText("暂无待核验 PR。");
+  expect(screen.getByRole("button", { name: "从 PR 启动" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "启动当前项目" }));
   const play = await screen.findByRole("button", { name: "进入 Play Mode" });
   expect(play).toBeDisabled();
   expect(
@@ -131,7 +133,7 @@ it("offers only ten recent PRs and can launch a numbered PR while the managed ch
     .spyOn(api, "submit")
     .mockResolvedValue({ status: "applied" } as never);
   mountFeature(<ManualVerification />, api, testClient());
-  fireEvent.click(screen.getByRole("button", { name: "选择项目 PR" }));
+  fireEvent.click(screen.getByRole("button", { name: "从 PR 启动" }));
   await screen.findByRole("option", { name: "#17 Recent 9" });
   expect(screen.queryByRole("option", { name: "#18 Recent 10" })).toBeNull();
   fireEvent.change(screen.getByLabelText("PR 编号"), {
