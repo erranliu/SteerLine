@@ -31,6 +31,7 @@ test("starts and records the draft PR head through the real verification page", 
   const row = page.getByRole("button", { name: /PR #.*0\/1/ });
   await row.click();
   await expect(page).toHaveURL(new RegExp(`candidate=${candidate}$`));
+  await page.locator("summary").filter({ hasText: head.slice(0, 8) }).click();
   await expect(page.getByText(head, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "创建 worktree 并启动" }).click();
   const preview = page.getByRole("link", { name: "打开预览" });
