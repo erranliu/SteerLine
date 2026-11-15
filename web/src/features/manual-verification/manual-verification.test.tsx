@@ -79,7 +79,7 @@ it("lists current-project launches with no PRs and gates start on readiness", as
   );
 });
 
-it("offers only ten recent PRs and can launch a numbered PR while the managed checkout is not ready", async () => {
+it("selects a recent merged PR with no open PRs and still looks up older PRs by number", async () => {
   const head = "a".repeat(40);
   const api = new Api(identity, "csrf");
   const pull = {
@@ -94,6 +94,7 @@ it("offers only ten recent PRs and can launch a numbered PR while the managed ch
     ...pull,
     number: index + 8,
     title: "Recent " + index,
+    state: index === 0 ? "merged" : "closed",
   }));
   vi.spyOn(api, "get").mockImplementation(async (route) => {
     switch (route) {
@@ -102,8 +103,9 @@ it("offers only ten recent PRs and can launch a numbered PR while the managed ch
       case "/manual-verification/pulls":
         return recent as never;
       case "/manual-verification/pulls/7":
+      case "/manual-verification/pulls/8":
         return {
-          pr: pull,
+          pr: route.endsWith("/8") ? recent[0] : pull,
           entries: [
             {
               id: "preview",
@@ -134,8 +136,17 @@ it("offers only ten recent PRs and can launch a numbered PR while the managed ch
     .mockResolvedValue({ status: "applied" } as never);
   mountFeature(<ManualVerification />, api, testClient());
   fireEvent.click(screen.getByRole("button", { name: "从 PR 启动" }));
-  await screen.findByRole("option", { name: "#17 Recent 9" });
-  expect(screen.queryByRole("option", { name: "#18 Recent 10" })).toBeNull();
+  await screen.findByRole("option", { name: "#17 Recent 9 · 已关闭" });
+  expect(
+    screen.queryByRole("option", { name: "#18 Recent 10 · 已关闭" }),
+  ).toBeNull();
+  fireEvent.change(screen.getByLabelText("最近更新的 PR"), {
+    target: { value: "8" },
+  });
+  expect(
+    await screen.findByRole("link", { name: "#8 Recent 0" }),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "启动 PR 预览" })).toBeEnabled();
   fireEvent.change(screen.getByLabelText("PR 编号"), {
     target: { value: "7" },
   });

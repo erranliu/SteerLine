@@ -81,16 +81,16 @@ func (s *manualVerification) launchPR(fact roadmapPR) (launchPR, error) {
 		return launchPR{}, errors.New("PR 仓库、状态或提交无法核实")
 	}
 	state := fact.State
-	if fact.Merged {
+	if fact.Merged || fact.MergedAt != nil {
 		state = "merged"
 	}
 	return launchPR{Number: number, Title: fact.Title, URL: fact.URL, Head: fact.Head.SHA, Branch: fact.Head.Ref, State: state}, nil
 }
 
 func (s *manualVerification) recentLaunchPRs(ctx context.Context) ([]launchPR, error) {
-	query := "?state=open&sort=updated&direction=desc&per_page=10"
+	query := "?state=all&sort=updated&direction=desc&per_page=10"
 	if s.config.PR.Kind == "gitea" {
-		query = "?state=open&sort=recentupdate&limit=10"
+		query = "?state=all&sort=recentupdate&limit=10"
 	}
 	var facts []roadmapPR
 	if err := s.config.repositoryPRRequest(ctx, "GET", "repos/"+s.config.PR.Repository+"/pulls"+query, nil, &facts); err != nil {
@@ -99,10 +99,9 @@ func (s *manualVerification) recentLaunchPRs(ctx context.Context) ([]launchPR, e
 	rows := make([]launchPR, 0, min(len(facts), 10))
 	for _, fact := range facts[:min(len(facts), 10)] {
 		pr, err := s.launchPR(fact)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			rows = append(rows, pr)
 		}
-		rows = append(rows, pr)
 	}
 	return rows, nil
 }
