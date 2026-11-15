@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
-	"strings"
-
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -71,7 +72,7 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		payload = `json_object('command_id',a.command_id,'status',a.status,'payload',json(CAST(a.payload AS TEXT)),'created_at',a.created_at,'updated_at',a.updated_at,'result',CASE WHEN a.result IS NULL THEN NULL ELSE json(CAST(a.result AS TEXT)) END)`
 		created = "a.created_at"
 		finished = "CASE WHEN a.status IN ('applied','rejected') THEN a.updated_at ELSE NULL END"
-		related = `json_object('current',a.command_id=(SELECT command_id FROM commands c WHERE c.project_identity=a.project_identity AND c.kind='project_maintenance' AND json_extract(CAST(c.payload AS TEXT),'$.action')='maintenance_check' ORDER BY c.created_at DESC,c.command_id DESC LIMIT 1))`
+		related = `json_object('current',a.command_id=(SELECT command_id FROM commands c WHERE c.project_identity=a.project_identity AND c.kind='project_maintenance' AND json_extract(CASE WHEN json_valid(CAST(c.payload AS TEXT)) THEN CAST(c.payload AS TEXT) ELSE '{}' END,'$.action')='maintenance_check' ORDER BY c.created_at DESC,c.command_id DESC LIMIT 1))`
 		request = "a.command_id IN (%s)"
 	case "task_candidate":
 		table = "runner_candidates a"
@@ -124,10 +125,13 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		args = append(args, in.SourceID)
 	}
 	if in.Source == "baseline_check" {
-		where += " AND a.kind='project_maintenance' AND json_extract(CAST(a.payload AS TEXT),'$.action')='maintenance_check'"
+		where += " AND a.kind='project_maintenance' AND json_extract(CASE WHEN json_valid(CAST(a.payload AS TEXT)) THEN CAST(a.payload AS TEXT) ELSE '{}' END,'$.action')='maintenance_check'"
 	}
 
 	if len(in.RequestIDs) == 0 && in.Filter != "summary" && in.SourceID == "" {
+		baseWhere := where
+		where = ""
+		history := in.Filter == "recent" || in.Filter == "history"
 		terminal := "COALESCE(json_extract(CAST(a.payload AS TEXT),'$.state'),'') IN ('ready','failed','cancelled')"
 		switch in.Source {
 		case "main_agent_advisory":
@@ -157,6 +161,13 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 				where += " AND (COALESCE(json_type(CAST(a.payload AS TEXT),'$.projection'),'null')='null' OR json_extract(CAST(a.payload AS TEXT),'$.participation')='active' OR json_extract(CAST(a.payload AS TEXT),'$.stop_requested')=1 AND COALESCE(json_extract(CAST(a.payload AS TEXT),'$.projection.stop_status'),'')<>'stopped' OR json_extract(CAST(a.payload AS TEXT),'$.submit_state')='unknown' OR EXISTS(SELECT 1 FROM json_each(CAST(a.payload AS TEXT),'$.actions') action WHERE json_extract(action.value,'$.state')='unknown' OR json_extract(action.value,'$.state')='accepted' AND COALESCE(json_extract(action.value,'$.action_status'),'') NOT IN ('completed','failed','rejected','cancelled')))"
 			}
 		}
+		if history && where != "" {
+			where = baseWhere + " AND (b.abandoned_at IS NOT NULL OR (" + strings.TrimPrefix(where, " AND ") + "))"
+		} else if history {
+			where = baseWhere
+		} else {
+			where = baseWhere + " AND b.abandoned_at IS NULL" + where
+		}
 	}
 	if len(in.RequestIDs) > 0 {
 		if len(in.RequestIDs) > 100 {
@@ -174,6 +185,7 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	}
 	desc := in.Filter == "recent" || in.Filter == "history"
 	if desc {
+		finished = "COALESCE(b.abandoned_at," + finished + ")"
 		sortAt = "COALESCE(" + finished + ",'')"
 	} else {
 		sortAt = "COALESCE(" + created + ",'')"
@@ -188,7 +200,7 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	if in.Limit < 1 || in.Limit > 500 {
 		return nil, false, fmt.Errorf("activity source limit outside 1..500")
 	}
-	query := `SELECT id,sort_at,payload,related FROM (SELECT ` + id + ` AS id,` + sortAt + ` AS sort_at,` + payload + ` AS payload,` + related + ` AS related FROM ` + table + ` WHERE ` + where + `)`
+	query := `SELECT id,sort_at,payload,related,abandoned_at FROM (SELECT ` + id + ` AS id,` + sortAt + ` AS sort_at,` + payload + ` AS payload,` + related + ` AS related,b.abandoned_at FROM ` + table + ` LEFT JOIN abandoned_activities b ON b.project_identity=a.project_identity AND b.source='` + in.Source + `' AND b.source_id=` + id + ` WHERE ` + where + `)`
 	if in.AfterID != "" {
 		query += " WHERE sort_at " + cmp + " ? OR (sort_at=? AND '" + in.Source + "/'||id>?)"
 		args = append(args, in.AfterTime, in.AfterTime, in.AfterID)
@@ -209,8 +221,16 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		var f ports.AsyncActivityFact
 		f.Source = in.Source
 		var payload, related string
-		if err = rows.Scan(&f.ID, &f.SortAt, &payload, &related); err != nil {
+		var abandoned *string
+		if err = rows.Scan(&f.ID, &f.SortAt, &payload, &related, &abandoned); err != nil {
 			return nil, false, err
+		}
+		if abandoned != nil {
+			stamp, err := time.Parse(time.RFC3339Nano, *abandoned)
+			if err != nil {
+				return nil, false, err
+			}
+			f.AbandonedAt = &stamp
 		}
 		size := len(payload) + len(related)
 		if size > 2<<20 {

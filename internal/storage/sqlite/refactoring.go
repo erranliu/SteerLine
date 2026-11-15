@@ -86,11 +86,12 @@ func (s *SQLiteStore) SaveRefactoring(ctx context.Context, r refactoring.Record,
 	if e != nil {
 		return e
 	}
-	tx, e := s.db.BeginTx(ctx, nil)
-	if e != nil {
-		return e
-	}
-	defer tx.Rollback()
+	return s.activityOwnerWrite(ctx, "refactoring", r.Project, r.ID, func(tx *sql.Tx) error {
+		return saveRefactoringTx(ctx, tx, r, expected, cmd, raw, proof)
+	})
+}
+
+func saveRefactoringTx(ctx context.Context, tx *sql.Tx, r refactoring.Record, expected uint64, cmd *refactoring.Command, raw []byte, proof []env.Admission) error {
 	if len(proof) > 0 {
 		current, err := readEnvironmentCurrent(ctx, tx, r.Project, proof[0].Key)
 		if errors.Is(err, env.ErrNotFound) {
@@ -110,6 +111,7 @@ func (s *SQLiteStore) SaveRefactoring(ctx context.Context, r refactoring.Record,
 			return refactoring.ErrEnvironmentChanged
 		}
 	}
+	var e error
 	if r.Slot {
 		var n int
 		if e = tx.QueryRowContext(ctx, `SELECT count(*) FROM refactoring_actions WHERE project_identity=? AND action_id<>? AND slot=1`, r.Project, r.ID).Scan(&n); e != nil {
@@ -150,5 +152,5 @@ func (s *SQLiteStore) SaveRefactoring(ctx context.Context, r refactoring.Record,
 	if e = indexRefactoringReading(ctx, tx, r); e != nil {
 		return e
 	}
-	return tx.Commit()
+	return nil
 }

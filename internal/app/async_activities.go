@@ -3,7 +3,10 @@ package app
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
@@ -14,6 +17,25 @@ import (
 func (p *runtimeProjectPort) readAsyncActivities(ctx context.Context, values url.Values) (any, error) {
 	invalid := func() (any, error) {
 		return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "invalid activities query"}
+	}
+	if values.Get("mode") == "abandoned" {
+		source := values.Get("source")
+		ids := strings.Split(values.Get("source_ids"), ",")
+		if len(values) != 3 || len(values["mode"]) != 1 || len(values["source"]) != 1 || len(values["source_ids"]) != 1 || !slices.Contains(query.AsyncActivitySources, source) || len(ids) > 100 {
+			return invalid()
+		}
+		for _, id := range ids {
+			if id == "" || len(id) > 128 {
+				return invalid()
+			}
+		}
+		store, ok := p.store.(ports.ActivityAbandonmentStore)
+		if !ok {
+			return nil, &httpclient.ClientError{Status: 503, Code: "activities_unavailable", Reason: "activity reader unavailable"}
+		}
+		ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+		return store.ReadAbandonedActivities(ctx, p.config.Identity(), source, ids)
 	}
 	for key, list := range values {
 		if len(list) != 1 || key != "filter" && key != "cursor" && key != "limit" && key != "request_ids" && key != "mode" {

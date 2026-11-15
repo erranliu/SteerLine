@@ -459,6 +459,17 @@ func (s *Service) Confirm(ctx context.Context, id, request string, expected uint
 	return s.save(ctx, r)
 }
 func (s *Service) Stop(ctx context.Context, id, request string) (model.Record, error) {
+	return s.stop(ctx, id, request, false)
+}
+
+func (s *Service) StopForAbandonment(ctx context.Context, id, request string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.stop(ctx, id, request, true)
+	return err
+}
+
+func (s *Service) stop(ctx context.Context, id, request string, abandonment bool) (model.Record, error) {
 	if !model.IDPattern.MatchString(request) {
 		return model.Record{}, errors.New("invalid request_id")
 	}
@@ -467,9 +478,12 @@ func (s *Service) Stop(ctx context.Context, id, request string) (model.Record, e
 		return r, e
 	}
 	if r.Cancelled {
-		if r.StopID != request {
+		if r.StopID != request && !abandonment {
 			return r, errors.New("已存在原停止请求")
 		}
+		return r, nil
+	}
+	if abandonment && r.Settled() {
 		return r, nil
 	}
 	if r.ObservationComplete() {

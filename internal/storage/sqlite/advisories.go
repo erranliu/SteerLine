@@ -23,15 +23,9 @@ func (s *SQLiteStore) SaveAdvisory(ctx context.Context, project, id, candidate s
 	if s.readOnly || project == "" || !contract.ID.MatchString(id) || !contract.ID.MatchString(candidate) || !json.Valid(raw) {
 		return errors.New("invalid advisory storage identity or payload")
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err = saveAdvisoryReadingTx(ctx, tx, project, id, candidate, raw, expected); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return s.activityOwnerWrite(ctx, "main_agent_advisory", project, id, func(tx *sql.Tx) error {
+		return saveAdvisoryReadingTx(ctx, tx, project, id, candidate, raw, expected)
+	})
 }
 
 func saveAdvisoryReadingTx(ctx context.Context, tx *sql.Tx, project, id, candidate string, raw []byte, expected uint64) error {

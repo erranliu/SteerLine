@@ -29,6 +29,7 @@ import {
 } from "../../test/workspace";
 import { Runs } from "./runs";
 import { RunnerWorkflow } from "./runner-workflow";
+import { rememberAbandonedActivities } from "../activities/abandonment";
 
 afterEach(() => {
   cleanup();
@@ -967,6 +968,45 @@ it("includes starting candidates in the running filter without counting unknown 
   });
   expect(screen.getByText("运行中：1 个任务 / 1 个候选")).toBeVisible();
   expect(selectedMatch()).toHaveTextContent("排队中");
+  w.client.clear();
+});
+
+it("does not restore an archived candidate from its start receipt when the execution snapshot omits it", () => {
+  const w = stopWorkspace();
+  const [archived, sibling] = w.runs;
+  act(() => {
+    rememberAbandonedActivities(
+      w.client,
+      [w.api.home, identity.project_id, identity.instance_id],
+      [
+        {
+          source: "task_candidate",
+          source_id: archived.run_id,
+          abandoned_at: "2026-11-15T05:00:00Z",
+        },
+      ],
+    );
+  });
+  w.update({
+    snapshot: w.state([sibling]),
+    candidateStarts: {
+      start: vi.fn(),
+      items: [
+        {
+          id: archived.run_id,
+          taskID: "1",
+          title: "归档候选的旧启动",
+          profile: "旧方案",
+          status: "等待执行信息",
+          phase: "applied",
+          participating: true,
+        },
+      ],
+    },
+  });
+  expect(screen.getByRole("button", { name: /候选 C2/ })).toBeVisible();
+  expect(screen.queryByText("等待执行信息")).toBeNull();
+  expect(screen.getByText("全部：1 个任务 / 1 个候选")).toBeVisible();
   w.client.clear();
 });
 

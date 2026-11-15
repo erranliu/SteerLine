@@ -171,6 +171,15 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 }
 
 func (s *Service) Stop(ctx context.Context, id, request string, revision uint64, original json.RawMessage) (envmodel.Record, error) {
+	return s.stop(ctx, id, request, revision, original, false)
+}
+
+func (s *Service) StopForAbandonment(ctx context.Context, id, request string, original json.RawMessage) error {
+	_, err := s.stop(ctx, id, request, 0, original, true)
+	return err
+}
+
+func (s *Service) stop(ctx context.Context, id, request string, revision uint64, original json.RawMessage, abandonment bool) (envmodel.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !envmodel.IDPattern.MatchString(request) || !json.Valid(original) {
@@ -183,7 +192,10 @@ func (s *Service) Stop(ctx context.Context, id, request string, revision uint64,
 	if e != nil {
 		return r, e
 	}
-	if r.Revision != revision {
+	if abandonment && (r.Cancelled || r.Settled()) {
+		return r, nil
+	}
+	if !abandonment && r.Revision != revision {
 		return r, errors.New("stale_revision: refresh environment activity")
 	}
 	if r.Settled() {

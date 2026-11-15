@@ -10,6 +10,7 @@ import (
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
+	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/roadmap"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
@@ -120,11 +121,40 @@ func AsyncActivities(s *Scenario) {
 	if after.Runner.Candidates[0].RunID != candidate.RunID {
 		s.t.Fatal("observation replaced original Run")
 	}
+	project, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
+	s.Must(err)
+	instance := project.Identity().InstanceID
+	project.Close()
+	client, err := applicationclient.Open(s.Context, p.Home)
+	s.Must(err)
+	defer client.Close()
+	request := httpcontract.CommandEnvelope{RequestID: roadmap.Token(), ProjectID: publicID, InstanceID: instance, Action: "activity_abandon", TargetID: originalID, Payload: json.RawMessage(`{}`)}
+	commandRoute := "/projects/" + publicID + "/commands"
+	var receipt, replay httpcontract.CommandResponse
+	s.Must(client.Post(s.Context, commandRoute, request, &receipt))
+	s.Must(client.Get(s.Context, commandRoute+"/"+request.RequestID, &replay))
+	if receipt.Status != "applied" || receipt.AbandonedAt == nil || replay.AbandonedAt == nil || !replay.AbandonedAt.Equal(*receipt.AbandonedAt) {
+		s.t.Fatalf("original abandonment receipt differs: %+v %+v", receipt, replay)
+	}
+	for _, a := range read("ongoing").Items {
+		if a.ID == originalID {
+			s.t.Fatal("archived candidate still appears in the ongoing list")
+		}
+	}
+	archived := false
+	for _, a := range read("history").Items {
+		if a.ID == originalID && a.AbandonedAt != nil && a.State == "waiting" {
+			archived = true
+		}
+	}
+	if !archived {
+		s.t.Fatal("candidate history lost the original active business state")
+	}
 	p.Merge()
 	p.WaitPhase("completed")
 	p.WaitStoppedCandidates()
 	p.StopService()
-	s.Must(controlled.Write(filepath.Join(s.Output, "activity-proof.json"), map[string]any{"passed": true, "original_activity_id": originalID, "observed_kinds": kinds, "no_extra_execution_inputs": true, "restarted_original_run": true, "resources_settled": true}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "activity-proof.json"), map[string]any{"passed": true, "original_activity_id": originalID, "observed_kinds": kinds, "no_extra_execution_inputs": true, "restarted_original_run": true, "archived_candidate_delivered": true, "resources_settled": true}))
 	s.activityFeedback(web, node)
 	s.Must(s.FinishBody())
 }

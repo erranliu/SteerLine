@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
+import { useAbandonedActivities } from "../activities/abandonment";
 import type { Candidate } from "../../shared/api/types";
 import { Button } from "../../shared/ui/button";
 
@@ -82,7 +83,14 @@ export function ContinuationSuggestion({
         : false,
   });
   const currentRecord = current.data?.record;
+  const marks = useAbandonedActivities(
+    "main_agent_advisory",
+    currentRecord ? [currentRecord.id] : [],
+  );
+  const archived = marks.isAbandoned(currentRecord?.id);
   const matched =
+    !archived &&
+    !marks.pending &&
     currentRecord?.candidate_id === run.run_id &&
     currentRecord.occurrence === occurrence
       ? currentRecord

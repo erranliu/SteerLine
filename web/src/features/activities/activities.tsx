@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Activity as ActivityIcon, X, AlertCircle } from "lucide-react";
 import { useWorkspace } from "../../app/context";
@@ -8,6 +8,7 @@ import { usePageVisible } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
 import {
   activityActions,
+  activityHistoryTime,
   steerAgentLabel,
   activityDestination,
   ended,
@@ -22,6 +23,11 @@ import "./activities.css";
 import { useActivityList } from "./use-activity-list";
 import { CopyExecutionInfo, operationNames } from "./execution-info";
 import { useActivityFeedback } from "./feedback/feedback";
+import {
+  AbandonActivity,
+  rememberAbandonedActivities,
+  useAbandonedActivities,
+} from "./abandonment";
 
 export type ActivityUI = {
   open: boolean;
@@ -58,6 +64,7 @@ export function Activities({
   projectName?: string;
 }) {
   const feedback = useActivityFeedback();
+  const client = useQueryClient();
   const {
     api,
     identity,
@@ -154,6 +161,11 @@ export function Activities({
         for (const s of linked.sources)
           if (s.diagnostic) diagnostics.push(s.diagnostic);
       }
+      rememberAbandonedActivities(
+        client,
+        [api.home, identity.project_id, identity.instance_id],
+        Object.values(links),
+      );
       return { links, diagnostics };
     },
     enabled: online && visible && ids.length > 0,
@@ -187,6 +199,7 @@ export function Activities({
     ...(query.data?.pages.map((p) => p.request_links) || []),
     associationQuery.data?.links,
   );
+  const marks = useAbandonedActivities("task_candidate");
   const provisional = provisionalActivities(
     identity.project_id,
     identity.instance_id,
@@ -194,12 +207,18 @@ export function Activities({
     candidateStarts?.items || [],
     links,
     official,
+    marks.isAbandoned,
   );
+  const markActivity = (a: Activity) =>
+    !a.abandoned_at && marks.mark(a.source, a.source_id)
+      ? { ...a, abandoned_at: marks.mark(a.source, a.source_id) }
+      : a;
   const ordered = [...official, ...provisional]
+    .map(markActivity)
     .filter((a) => matchesActivity(a, filter))
     .sort((a, b) => {
-      const left = filter === "recent" ? a.finished_at : a.created_at,
-        right = filter === "recent" ? b.finished_at : b.created_at;
+      const left = filter === "recent" ? activityHistoryTime(a) : a.created_at,
+        right = filter === "recent" ? activityHistoryTime(b) : b.created_at;
       if (!left || !right)
         return left
           ? -1
@@ -481,7 +500,11 @@ export function Activities({
                         {steerAgentLabel(a)}
                       </small>
                     )}
-                    {a.needs_attention && <small>需处理</small>}
+                    {a.abandoned_at ? (
+                      <small>已放弃</small>
+                    ) : (
+                      a.needs_attention && <small>需处理</small>
+                    )}
                     <p>{a.phase || "状态待核实"}</p>
                     {a.summary && <p className="muted">{a.summary}</p>}
                     {a.progress && (
@@ -502,9 +525,11 @@ export function Activities({
                         <p className="muted">上次已知状态 · 当前待核实</p>
                       )}
                     <small>
-                      {ended(a)
-                        ? "结束于 " + clock(a.finished_at)
-                        : "最后确认于 " + clock(a.source_observed_at)}
+                      {a.abandoned_at
+                        ? "放弃于 " + clock(a.abandoned_at)
+                        : ended(a)
+                          ? "结束于 " + clock(a.finished_at)
+                          : "最后确认于 " + clock(a.source_observed_at)}
                       {!ended(a) &&
                         a.created_at &&
                         ` · 已持续 ${Math.max(0, Math.floor((now - Date.parse(a.created_at)) / 60000))} 分钟`}
@@ -585,7 +610,7 @@ export function Activities({
                       {a.details_ref.kind === "preparation" &&
                       a.details_ref.historical
                         ? "查看历史摘要"
-                        : a.needs_attention
+                        : a.needs_attention && !a.abandoned_at
                           ? "去处理"
                           : "查看详情"}
                     </Button>
@@ -594,13 +619,24 @@ export function Activities({
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          destination.current = `/projects/${identity.project_id}/activities?activity=${encodeURIComponent(a.activity_id)}`;
+                          destination.current = `/projects/${identity.project_id}/activities?${a.abandoned_at ? "filter=history&" : ""}activity=${encodeURIComponent(a.activity_id)}`;
                           navigate(destination.current);
                         }}
                       >
                         在独立页阅读
                       </Button>
                     )}
+                    <AbandonActivity
+                      activity={a}
+                      onApplied={() => {
+                        drawer.current
+                          ?.querySelector<HTMLButtonElement>(
+                            ".activity-filters button[aria-pressed=true]",
+                          )
+                          ?.focus();
+                        void query.refetch().catch(() => {});
+                      }}
+                    />
                   </article>
                 ))}
                 {query.hasNextPage && (

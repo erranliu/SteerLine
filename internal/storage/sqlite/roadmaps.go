@@ -77,11 +77,12 @@ func (s *SQLiteStore) SaveRoadmap(ctx context.Context, r roadmap.Record, expecte
 		}
 		ids[g.ID], requests[g.Request.RequestID] = true, true
 	}
-	tx, e := s.db.BeginTx(ctx, nil)
-	if e != nil {
-		return e
-	}
-	defer tx.Rollback()
+	return s.activityOwnerWrite(ctx, "roadmap", r.Project, r.ID, func(tx *sql.Tx) error {
+		return saveRoadmapTx(ctx, tx, r, expected)
+	})
+}
+
+func saveRoadmapTx(ctx context.Context, tx *sql.Tx, r roadmap.Record, expected uint64) error {
 	old, readErr := readRoadmap(ctx, tx, r.Project, r.ID)
 	if expected == 0 {
 		if !errors.Is(readErr, roadmap.ErrNotFound) {
@@ -171,7 +172,7 @@ func (s *SQLiteStore) SaveRoadmap(ctx context.Context, r roadmap.Record, expecte
 	if err := indexRoadmapReading(ctx, tx, r); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 func (s *SQLiteStore) RoadmapRequest(ctx context.Context, project, id string) (roadmap.Record, error) {
 	var bound string

@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+活动中心放弃活动（2026-11-13）。[验收记录](activity-abandonment.md)
+
 配置二级导航与独立计费页（2026-11-13）。[实现与验收](configuration-sections.md)
 
 Roadmap 结构化结果的 Final 来源校验（2026-11-13）。[实现与验收](roadmap-verified-final.md)

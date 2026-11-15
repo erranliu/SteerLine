@@ -403,6 +403,9 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 		return httpcontract.CommandResponse{}, err
 	}
 	defer p.users.RUnlock()
+	if in.Action == activityAbandon {
+		return p.abandonActivity(ctx, in)
+	}
 	if strings.HasPrefix(in.Action, "manual_verification_") {
 		return p.manualVerificationCommand(ctx, in)
 	}
@@ -612,6 +615,11 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 				out.Status = "applied"
 				return out, nil
 			}
+		}
+		if r, e := p.activityAbandonmentReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
+			return nil, e
+		} else if r != nil {
+			return r, nil
 		}
 		if p.config.runtimeRefactoring != nil {
 			if r, e := p.refactoringReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {

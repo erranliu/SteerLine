@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { useWorkspace } from "../../app/context";
+import { useAbandonedActivities } from "../activities/abandonment";
 import type { CandidateStart } from "../../app/use-candidate-starts";
 import type {
   Candidate,
@@ -146,7 +147,9 @@ function CandidateDetail({
                   >
                     {stale
                       ? observedAt.toLocaleString("zh-CN", { hour12: false })
-                      : observedAt.toLocaleTimeString("zh-CN", { hour12: false })}
+                      : observedAt.toLocaleTimeString("zh-CN", {
+                          hour12: false,
+                        })}
                   </time>
                 </p>
               )}
@@ -237,10 +240,10 @@ function CandidateDetail({
           </p>
         ))}
         {run.runner_delivery?.resume_required &&
-          !(answerVisible &&
-            run.decision?.request.interaction_kind === "runner_resume") && (
-            <p className="notice amber">需处理 · 核验原执行后显式恢复。</p>
-          )}
+          !(
+            answerVisible &&
+            run.decision?.request.interaction_kind === "runner_resume"
+          ) && <p className="notice amber">需处理 · 核验原执行后显式恢复。</p>}
         {stopApplied && run.participation === "active" && (
           <p className="notice amber">
             停止已生效，列表刷新中；可使用页面刷新重取。
@@ -293,6 +296,18 @@ export function Runs() {
   const [showStopped, setShowStopped] = useState(false);
   const page = snapshot?.connection.snapshot.page;
   const runs = page?.runs ?? [];
+  const unobservedStarts =
+    candidateStarts?.items.filter(
+      (entry) => !runs.some((run) => run.run_id === entry.id),
+    ) ?? [];
+  const archivedRuns = useAbandonedActivities(
+    "task_candidate",
+    [
+      ...runs.map((run) => run.run_id),
+      ...unobservedStarts.map((entry) => entry.id),
+    ],
+  );
+  const explicitRun = params.get("history") === "1" || params.has("advisory");
   const stopApplied = (id: string) =>
     (pending?.envelope.target_id === id &&
       pending.receipt?.status === "applied") ||
@@ -303,13 +318,14 @@ export function Runs() {
         row.envelope.target_id === id &&
         row.response?.status === "applied",
     );
-  const starts =
-    candidateStarts?.items.filter(
-      (entry) => !runs.some((run) => run.run_id === entry.id),
-    ) ?? [];
+  const starts = unobservedStarts.filter(
+    (entry) => !archivedRuns.isAbandoned(entry.id),
+  );
   const initialStarts = latestTaskStarts(candidateStarts?.items);
   const visibleRuns = runs.filter(
-    (run) => showStopped || run.participation !== "abandoned",
+    (run) =>
+      !archivedRuns.isAbandoned(run.run_id) &&
+      (showStopped || run.participation !== "abandoned"),
   );
   const tasks = useQuery({
     ...projectQueries(api).tasks(),
@@ -324,7 +340,7 @@ export function Runs() {
   const selectableTasks = (tasks.data?.tasks ?? []).filter(
     (task) => !blockedTasks.has(task.task_id),
   );
-  const firstRun = runs.find(
+  const firstRun = visibleRuns.find(
     (run) => !blockedTasks.has(run.domain_task_id || run.task_id),
   );
   const selectedTask =
@@ -333,12 +349,15 @@ export function Runs() {
     firstRun?.task_id ||
     selectableTasks[0]?.task_id ||
     "";
-  const runID = blockedTasks.has(taskID) ? "" : params.get("run") ?? "";
+  const runID = blockedTasks.has(taskID) ? "" : (params.get("run") ?? "");
   const taskCandidates = runs.filter(
     (r) => (r.domain_task_id || r.task_id) === selectedTask,
   );
   const candidates = visibleRuns.filter(
     (r) => (r.domain_task_id || r.task_id) === selectedTask,
+  );
+  const archivedTaskCandidates = taskCandidates.filter((run) =>
+    archivedRuns.isAbandoned(run.run_id),
   );
   const pendingCandidates = starts.filter(
     (entry) => entry.taskID === selectedTask,
@@ -349,13 +368,17 @@ export function Runs() {
   );
   const requested = runID
     ? taskCandidates.find((r) => r.run_id === runID)
-    : taskCandidates[0];
+    : candidates[0];
   // Keep the current stop target until its original receipt is reconciled.
   const awaitingStop =
     pending?.envelope.target_id === requested?.run_id &&
     pending?.epoch === selectionEpoch.current;
   const selected =
-    !showStopped && requested?.participation === "abandoned" && !awaitingStop
+    (!explicitRun && archivedRuns.isAbandoned(requested?.run_id)) ||
+    (!explicitRun &&
+      !showStopped &&
+      requested?.participation === "abandoned" &&
+      !awaitingStop)
       ? candidates[0]
       : requested;
   const groups = selectableTasks.map((task) => {
@@ -592,6 +615,30 @@ export function Runs() {
           {tasks.error && <p className="notice amber">{String(tasks.error)}</p>}
         </aside>
         <section className="execution-panel">
+          {archivedTaskCandidates.some(
+            (run) => run.decision || run.stop_requested,
+          ) && (
+            <p className="muted">
+              已放弃跟进的候选仍有待处理事项。
+              {archivedTaskCandidates
+                .filter((run) => run.decision || run.stop_requested)
+                .map((run) => (
+                  <Link
+                    key={run.run_id}
+                    to={
+                      "?" +
+                      new URLSearchParams({
+                        task: selectedTask,
+                        run: run.run_id,
+                        history: "1",
+                      })
+                    }
+                  >
+                    查看候选 C{run.candidate_number}
+                  </Link>
+                ))}
+            </p>
+          )}
           {filter !== "all" &&
             (selected || selectedStart) &&
             !selectedMatches(filter) && (
@@ -621,9 +668,7 @@ export function Runs() {
                   <span>候选 C{r.candidate_number || "—"}</span>
                   <strong>{r.execution_profile?.name || r.agent}</strong>
                   <CandidateStatuses run={r} states={states} />
-                  {matches && (
-                    <span className="candidate-match">符合筛选</span>
-                  )}
+                  {matches && <span className="candidate-match">符合筛选</span>}
                   {wait && (
                     <span className="muted">{executionWaitTitle(wait)}</span>
                   )}

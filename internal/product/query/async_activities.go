@@ -195,7 +195,7 @@ func ReadAsyncActivities(ctx context.Context, reader ports.AsyncActivityReader, 
 // ProjectAsyncActivity converts committed facts without inventing progress or
 // treating read availability as a business outcome.
 func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, now time.Time) (api.AsyncActivity, error) {
-	a := api.AsyncActivity{ID: base64.RawURLEncoding.EncodeToString([]byte(project + "\x00" + f.Source + "\x00" + f.ID)), ProjectID: project, Source: f.Source, SourceID: f.ID, RequestIDs: []string{}, State: "waiting", Observation: "unverified"}
+	a := api.AsyncActivity{ID: base64.RawURLEncoding.EncodeToString([]byte(project + "\x00" + f.Source + "\x00" + f.ID)), ProjectID: project, Source: f.Source, SourceID: f.ID, RequestIDs: []string{}, State: "waiting", Observation: "unverified", AbandonedAt: f.AbandonedAt}
 	var related struct {
 		Observation *struct {
 			ObservedAt *time.Time `json:"observed_at"`
@@ -574,5 +574,8 @@ func ParseAsyncActivityRequestIDs(value string) []string {
 // MatchesAsyncActivity is the final product predicate. SQL may only prune a
 // conservative superset; it does not own the activity classification.
 func MatchesAsyncActivity(a api.AsyncActivity, filter string) bool {
+	if a.AbandonedAt != nil {
+		return filter == "recent" || filter == "history"
+	}
 	return filter == "ongoing" && !activityTerminal(a.State) || filter == "attention" && a.NeedsAttention || (filter == "recent" || filter == "history") && activityTerminal(a.State)
 }

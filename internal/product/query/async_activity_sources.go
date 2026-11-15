@@ -81,13 +81,13 @@ func sampleActivitySource(parent context.Context, reader ports.AsyncActivityRead
 				}
 				continue
 			}
-			if activityTerminal(a.State) {
+			if MatchesAsyncActivity(a, "history") {
 				s.counts["recent"]++
 				s.counts["history"]++
 			} else {
 				s.counts["ongoing"]++
 			}
-			if a.NeedsAttention {
+			if MatchesAsyncActivity(a, "attention") {
 				s.counts["attention"]++
 			}
 		}

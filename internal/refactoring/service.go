@@ -101,6 +101,31 @@ func (s *Service) update(ctx context.Context, id string, apply func(*model.Recor
 	}
 	return r, e
 }
+
+func (s *Service) StopForAbandonment(ctx context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.Store.Refactoring(ctx, s.Project, id)
+	if err != nil || !r.Active() || r.StopRequested {
+		return err
+	}
+	s.requestStop(&r)
+	return s.save(ctx, &r, nil)
+}
+
+func (s *Service) requestStop(r *model.Record) {
+	r.StopRequested = true
+	r.Phase = "stopping"
+	r.Pause(s.now())
+	r.Question = nil
+	r.WaitReason = ""
+	if n := len(r.Operations); n > 0 && r.Operations[n-1].State == "pending" {
+		r.Operations[n-1].State = "cancelled"
+	}
+	if !r.Unsettled() {
+		r.Phase = "stopped"
+	}
+}
 func (s *Service) replay(ctx context.Context, c model.Command) (model.Record, bool, error) {
 	raw, result, e := s.Store.RefactoringCommand(ctx, s.Project, c.ID)
 	if e == nil {
@@ -179,17 +204,7 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		if !r.Active() || r.StopRequested {
 			return r, errors.New("当前行动不可停止")
 		}
-		r.StopRequested = true
-		r.Phase = "stopping"
-		r.Pause(s.now())
-		r.Question = nil
-		r.WaitReason = ""
-		if n := len(r.Operations); n > 0 && r.Operations[n-1].State == "pending" {
-			r.Operations[n-1].State = "cancelled"
-		}
-		if !r.Unsettled() {
-			r.Phase = "stopped"
-		}
+		s.requestStop(&r)
 	case "refactoring_finish":
 		if !r.CanFinish() {
 			return r, errors.New("当前行动不可收尾")
