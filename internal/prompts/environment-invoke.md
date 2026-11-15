@@ -1,1 +1,1 @@
-在本次固定提交的工作区根，按参数数组调用 {{.Interpreter}} {{if eq .Interpreter "powershell.exe"}}-NoProfile -NonInteractive -File {{end}}{{.Script}} 一次；入口通过 STEERLINE_RESULT_FILE 读取关联信息并写最终结果。保留原始退出结果、失败及未知；不重跑、不修改材料、不代写报告。入口返回后直接结束本次调用，不追加发布步骤。
+在本次固定提交的工作区根，按参数数组调用 {{.Interpreter}} {{if eq .Interpreter "powershell.exe"}}-NoProfile -NonInteractive -File {{end}}{{.Script}} 一次；入口通过 STEERLINE_RESULT_FILE 读取关联信息并写最终结果。保留命令工具返回的会话 ID 和退出码；命令仍在运行时，继续等待同一会话（exec_command 的 session_id 用 write_stdin 传空输入轮询），直到脚本实际退出。通过包装 shell 调用时原样传出脚本退出码。取得实际退出码后如实报告并结束本轮；若工具明确无法继续观察，报告原错误及未知状态。不重跑、不修改材料、不代写报告、不追加发布步骤。
