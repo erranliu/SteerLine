@@ -33,3 +33,11 @@
 | L4 `go.storage` | 完整专项通过，含此前触发读预算的候选活动筛选矩阵，原预算和断言保留。报告 `C:\SteerlineDebug\wt-915c-activity-abandonment\test-results\L4\20261115-tb84f6cab-go.storage\summary.json`。 |
 | L4 `web.unit` | 受管全集通过，54 个测试文件、490 项，包含上次失败的活动深链接和分页请求数用例。报告 `C:\SteerlineDebug\wt-915c-activity-abandonment\test-results\L4\20261115-web-unit-rerun\summary.json`。 |
 | Web 定向 | 候选启动 hook、活动组件共 29 项通过。浏览器驱动独立 TypeScript 严格检查通过。Vitest 证据 `C:\SteerlineDebug\wt-915c-activity-abandonment\diagnostics\20261115-candidate-start-hook-web.log`。 |
+
+## PR 合入基线复验
+
+PR 基线为 `68829335`。上表保留 `07a5c769` 上的失败和修复证据。合入基线采用 #556 明确的发布观察语义。本地已持久化的发布进度可推进观察时间，缺失远端 PR 回执时原状态仍为 `pr_unknown`，核实沿原 PR 继续。该行为及用例修正见 [Roadmap 规划验收](roadmap-planning-workspace.md)。
+
+维护放弃沿用 #515 的原停止转换、队列和名额释放规则。放弃后退出维护当前列表，历史及占用名额提示仍可打开原行动。维护、活动和 Roadmap 定向 Web 69 项及生产构建通过，覆盖当前选择退出和原名额核实。
+
+`main` 已使用 SQLite 版本 50，新增归档表递增至 51。当前结构初始化、旧结构拒绝及归档事务定向测试通过，证据 `C:\SteerlineDebug\wt-915c-activity-abandonment\diagnostics\20261115-pr-rebase-schema.log`。

@@ -560,7 +560,15 @@ func (p *roadmapPort) resumePublication(ctx context.Context, r roadmap.Record) (
 	return p.continuePublication(ctx, r)
 }
 
-func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record) (roadmap.Record, error) {
+func (p *roadmapPort) continuePublication(ctx context.Context, r roadmap.Record) (out roadmap.Record, err error) {
+	initialRevision := r.Revision
+	defer func() {
+		// Publishing records new local progress even when a remote result is
+		// unknown. Only a failed observation marks the provider unavailable.
+		if out.Revision > initialRevision && out.Publication != nil && out.State == "publishing" {
+			p.recordPublicationObservation(ctx, out, out, nil)
+		}
+	}()
 	var e error
 	if r.Publication.State == "preparing" {
 		if e = p.preparePublication(ctx, &r); e != nil {
