@@ -124,7 +124,7 @@ Web 只作受限同源 `/api/v2/application/...` 转接；原生 `/native/identi
 
 环境结果以原 Run 绑定、停止结算、封存的 result-file、脚本报告及 verified 成功 final 共同核验；进度/回复或命令 applied 不单独授予 ready。最终结果 closed/0 保留采集失败，closed/1 才有文件，封存后不重采。失效只阻断新候选，未知按原号核实，不因 not_found 补交。当前单次执行和准入以[服务实现](../../internal/environmentadaptation/service.go)及[模型](../../internal/environmentadaptation/model/model.go)为准；[适配 Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)记录原交付范围。
 
-检测详情和历史的 `blocked` 是原 Run 阻断事实的只读投影，`timed_out` 表示整次检测已超时；两者不改写 `state`、`settled` 或停止资格。未就绪时，顶层诊断优先保留原活动原因，缺少说明时读取当前轮及原 Run 诊断。回执待核实时顶层诊断会显示首次提交诊断；确认后，详情通过轮次的 `submission_diagnostic` 保留历史，顶层诊断展示当前原因。未结算阻断在环境页显示“检测阻断”，活动中心列入进行中及需要关注；指定检测 ID 的详情沿原号轮询，不自动停止或重试。
+检测详情和历史用 `stage` 投影检测阶段和已结算结果。`verifying` 表示检测中，`closing` 表示正在核实原执行停止及结果封存。收尾时 `diagnostic` 显示原故障和待确认步骤，`closing_action` 给出处理说明。活动中心将收尾列入进行中，当前检测也列入需要关注。等待回执时保留首次提交诊断，受理后可在轮次的 `submission_diagnostic` 查看。原检测结算（`settled` 为真）后才允许重新检测。查询沿原 ID 读取。检测观察器负责原 Run 的停止和结算。
 
 ## 项目维护动作与能力边界
 

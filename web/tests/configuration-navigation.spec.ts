@@ -603,7 +603,7 @@ test("runtime environments keep row actions, failed observations and task return
     "已就绪",
     "待准备与检测",
     "检测中",
-    "检测阻断",
+    "环境无法核验",
     "已失效",
     "未准备",
   ];

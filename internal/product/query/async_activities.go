@@ -20,13 +20,13 @@ var AsyncActivitySources = []string{"environment_detection", "baseline_check", "
 // Private read shapes contain only fields used by the observation projection.
 // Domain qualification/settlement is supplied by the read port, not recreated.
 type activityEnvironment struct {
-	Project, ID, State, Diagnostic string
-	Profile                        string     `json:"profile_id"`
-	CreatedAt                      time.Time  `json:"created_at"`
-	ObservedAt                     *time.Time `json:"observed_at"`
-	ObservationDiagnostic          string     `json:"observation_diagnostic"`
-	Revision                       uint64
-	Requests                       []struct {
+	Project, ID           string
+	Profile               string     `json:"profile_id"`
+	CreatedAt             time.Time  `json:"created_at"`
+	ObservedAt            *time.Time `json:"observed_at"`
+	ObservationDiagnostic string     `json:"observation_diagnostic"`
+	Revision              uint64
+	Requests              []struct {
 		ID     string `json:"request_id"`
 		Action string
 	}
@@ -203,7 +203,7 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 		} `json:"observation"`
 		Settled          bool                `json:"settled"`
 		DomainDiagnostic string              `json:"domain_diagnostic"`
-		Blocked          bool                `json:"blocked"`
+		EnvironmentStage string              `json:"environment_stage"`
 		Current          int                 `json:"current"`
 		Requests         []string            `json:"requests"`
 		TaskStatus       string              `json:"task_status"`
@@ -305,32 +305,21 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 				a.RequestIDs = append(a.RequestIDs, q.ID)
 			}
 		}
-		switch r.State {
-		case "queued":
-			a.State = "queued"
-			a.Phase = "等待检测"
-		case "running":
-			a.State = "running"
-			a.Phase = "检测中"
-		case "stopping":
-			a.Phase = "停止收尾中"
+		switch related.EnvironmentStage {
+		case "closing":
+			a.State, a.Phase = "running", "收尾中"
 		case "ready":
-			if related.Settled {
-				a.State = "succeeded"
-				a.Phase = "检测通过"
-			}
+			a.State, a.Phase = "succeeded", "检测通过"
 		case "failed":
-			if related.Settled {
-				a.State = "failed"
-				a.Phase = "检测失败"
-			}
+			a.State, a.Phase = "failed", "检测失败"
+		case "not_ready":
+			a.State, a.Phase = "failed", "环境未就绪"
+		case "timed_out":
+			a.State, a.Phase = "failed", "检测超时"
 		case "cancelled":
-			if related.Settled {
-				a.State = "cancelled"
-				a.Phase = "检测已取消"
-			}
+			a.State, a.Phase = "cancelled", "已停止"
 		default:
-			a.Phase = "检测状态待核实"
+			a.State, a.Phase = "running", "检测中"
 		}
 		for _, round := range r.Rounds {
 			if round.Run != nil {
@@ -339,11 +328,7 @@ func ProjectAsyncActivity(project, instance string, f ports.AsyncActivityFact, n
 				}
 			}
 		}
-		if related.Blocked {
-			a.State = "waiting"
-			a.Phase = "检测阻断"
-		}
-		a.NeedsAttention = related.Current == 1 && (related.Blocked || a.State == "failed" || r.State == "unverified")
+		a.NeedsAttention = related.Current == 1 && (a.State == "failed" || related.EnvironmentStage == "closing")
 	case "baseline_check":
 		var r struct {
 			ID        string    `json:"command_id"`

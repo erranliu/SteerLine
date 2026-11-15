@@ -11,26 +11,26 @@ import (
 func TestProjectEnvironmentBlockedObservationPreservesLifecycle(t *testing.T) {
 	const cause = "cannot query Orca repository inventory: context deadline exceeded; Could not connect to the remote Orca runtime."
 	for _, tc := range []struct {
-		name, runStatus, stopStatus, state    string
-		cancelled, timedOut, settled, blocked bool
+		name, runStatus, stopStatus, state, stage string
+		cancelled, timedOut, settled              bool
 	}{
-		{"rejected preparation", "blocked", "", "running", false, false, false, true},
-		{"normal execution", "running", "", "running", false, false, false, false},
-		{"waiting input", "waiting_input", "", "running", false, false, false, false},
-		{"stopping", "blocked", "", "stopping", true, false, false, false},
-		{"total timeout", "blocked", "", "running", false, true, false, false},
-		{"stop verified", "blocked", "stopped", "unverified", false, false, false, false},
-		{"settled", "blocked", "stopped", "failed", false, false, true, false},
+		{"rejected preparation", "blocked", "", "running", "verifying", false, false, false},
+		{"normal execution", "running", "", "running", "verifying", false, false, false},
+		{"waiting input", "waiting_input", "", "running", "verifying", false, false, false},
+		{"stopping", "blocked", "", "stopping", "closing", true, false, false},
+		{"total timeout", "blocked", "", "running", "closing", false, true, false},
+		{"stop verified", "blocked", "stopped", "unverified", "closing", false, false, false},
+		{"settled", "blocked", "stopped", "failed", "failed", false, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := Record{ID: "activity", State: tc.state, Cancelled: tc.cancelled, Rounds: []Round{{Settled: tc.settled, TimedOut: tc.timedOut, Run: &runnercontract.Run{Status: tc.runStatus, StopStatus: tc.stopStatus, Phase: "operation_rejected", Diagnostic: cause}}}}
 			before, _ := json.Marshal(r)
-			if r.Blocked() != tc.blocked || r.DiagnosticText() != cause || r.Status() != "not_ready" || r.Settled() != tc.settled {
+			if r.DiagnosticText() != cause || r.Status() != "not_ready" || r.Settled() != tc.settled {
 				t.Fatal("observation lost the cause or changed lifecycle", r)
 			}
 			_, stage, reason := View(Current{ActivityID: r.ID}, r, "", nil)
-			if tc.blocked && (stage != "blocked" || reason != cause) {
-				t.Fatal("blocked Run hidden until settlement", stage, reason)
+			if stage != tc.stage || !strings.Contains(reason, cause) {
+				t.Fatal("detection phase or diagnosis differs", stage, reason)
 			}
 			after, _ := json.Marshal(r)
 			if string(before) != string(after) {

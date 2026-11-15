@@ -28,9 +28,17 @@ func environmentExecutionReference(r env.Record) api.ExecutionReference {
 	}
 	return ref
 }
+
+func environmentSummary(r env.Record) map[string]any {
+	diagnostic, closingAction := r.ClosingStatus()
+	if diagnostic == "" {
+		diagnostic = r.DiagnosticText()
+	}
+	return map[string]any{"execution_ref": environmentExecutionReference(r), "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "stage": r.DetectionStage(), "status": r.Status(), "settled": r.Settled(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": diagnostic, "closing_action": closingAction, "rounds": []any{}}
+}
+
 func publicEnvironment(r env.Record) any {
 	rounds := []any{}
-	ref := environmentExecutionReference(r)
 	for _, a := range r.Rounds {
 		var run any
 		if a.Run != nil {
@@ -53,7 +61,11 @@ func publicEnvironment(r env.Record) any {
 		}
 		requests = append(requests, request)
 	}
-	return map[string]any{"execution_ref": ref, "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": rounds, "requests": requests, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.Files[r.Prepared.Manifest.Script], "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
+	out := environmentSummary(r)
+	out["rounds"], out["requests"] = rounds, requests
+	out["source_commit"], out["script_digest"], out["inputs"] = r.Prepared.Commit, r.Prepared.Files[r.Prepared.Manifest.Script], r.Prepared.Inputs
+	out["round_timeout_seconds"] = r.TimeoutSeconds
+	return out
 }
 func environmentExcerpt(s string) string {
 	r := []rune(s)
@@ -247,7 +259,7 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 			if len(out) == 20 {
 				break
 			}
-			out = append(out, map[string]any{"execution_ref": environmentExecutionReference(r), "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": []any{}})
+			out = append(out, environmentSummary(r))
 		}
 		return map[string]any{"records": out}, nil
 	}

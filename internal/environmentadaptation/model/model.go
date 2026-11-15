@@ -138,6 +138,7 @@ type Round struct {
 	Diagnostic           string                     `json:"diagnostic,omitempty"`
 	Stop                 *runnercontract.Request    `json:"stop,omitempty"`
 	StopState            string                     `json:"stop_state,omitempty"`
+	StopCause            string                     `json:"stop_cause,omitempty"`
 	RejectedStops        []runnercontract.Request   `json:"rejected_stops,omitempty"`
 	Settled              bool                       `json:"settled"`
 	TimedOut             bool                       `json:"timed_out"`
@@ -176,13 +177,62 @@ func (r Record) TimedOut() bool {
 	return len(r.Rounds) > 0 && r.Rounds[len(r.Rounds)-1].TimedOut
 }
 
-// Blocked is an observation, not a terminal state or permission to stop a Run.
-func (r Record) Blocked() bool {
-	if r.Settled() || r.Cancelled || r.TimedOut() || r.State == "stopping" || len(r.Rounds) == 0 {
+func (r Record) Closing() bool {
+	if r.Settled() || len(r.Rounds) == 0 {
 		return false
 	}
-	run := r.Rounds[len(r.Rounds)-1].Run
-	return run != nil && run.Status == "blocked" && run.StopStatus != "stopped"
+	a := r.Rounds[len(r.Rounds)-1]
+	return r.Cancelled || r.State == "stopping" || r.State == "unverified" || a.TimedOut || a.StopState != "" || a.StopCause != ""
+}
+
+func (r Record) DetectionStage() string {
+	switch {
+	case r.Closing():
+		return "closing"
+	case !r.Settled():
+		return "verifying"
+	case r.Cancelled || r.State == "cancelled":
+		return "cancelled"
+	case r.TimedOut():
+		return "timed_out"
+	case r.Status() == "ready":
+		return "ready"
+	case len(r.Rounds) > 0:
+		a := r.Rounds[len(r.Rounds)-1]
+		if a.StopCause == "" && a.Report != nil && a.Report.Completed && !a.Report.Ready {
+			return "not_ready"
+		}
+	}
+	return "failed"
+}
+
+// ClosingStatus gives the operator the exact confirmation still pending.
+func (r Record) ClosingStatus() (reason, action string) {
+	if !r.Closing() {
+		return "", ""
+	}
+	a := r.Rounds[len(r.Rounds)-1]
+	switch {
+	case a.RunID == "":
+		reason = "等待核实 Runner 是否受理了原检测"
+		action = "请检查 Runner 服务连接。恢复后系统会继续核实原请求。"
+	case a.Run != nil && a.Run.StopStatus == "stopped":
+		reason = "原执行已停止，等待 Runner 封存检测结果"
+		action = "如果结果迟迟未封存，请检查原 Runner 服务及其结果采集日志。"
+	case a.StopState == "unknown":
+		reason = "等待核实 Runner 是否受理了原停止请求"
+		action = "请检查 Runner 服务连接。恢复后系统会继续核实原停止请求。"
+	case a.StopState == "rejected":
+		reason = "Runner 未能执行停止请求，等待重新核实原执行"
+		action = "请查看原检测详情，检查 Runner 停止请求的诊断。"
+	default:
+		reason = "等待 Runner 确认原执行已停止"
+		action = "如果长时间未确认，请检查 Runner 服务和原执行端的连接。恢复后系统会继续核实。"
+	}
+	if diagnostic := r.DiagnosticText(); diagnostic != "" {
+		reason += "：" + diagnostic
+	}
+	return reason, action
 }
 
 func (r Record) Status() string {
@@ -214,6 +264,12 @@ func (r Record) DiagnosticText() string {
 				return "首次提交：" + original
 			}
 			return "首次提交：" + original + "；当前观察：" + diagnostic
+		}
+		if round.StopCause != "" && !strings.Contains(diagnostic, round.StopCause) {
+			if diagnostic == "" {
+				return round.StopCause
+			}
+			return round.StopCause + "；" + diagnostic
 		}
 	}
 	return diagnostic

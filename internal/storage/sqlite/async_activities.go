@@ -57,7 +57,11 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 		'number',json_extract(r.value,'$.number'),'run_id',json_extract(r.value,'$.run_id'),'submission',json_extract(r.value,'$.submission'),
 		'settled',json(CASE WHEN json_extract(r.value,'$.settled') THEN 'true' ELSE 'false' END),
 		'timed_out',json(CASE WHEN json_extract(r.value,'$.timed_out') THEN 'true' ELSE 'false' END),
+		'stop_state',json_extract(r.value,'$.stop_state'),'stop_cause',json_extract(r.value,'$.stop_cause'),
 		'diagnostic',json_extract(r.value,'$.diagnostic'),'submission_diagnostic',json_extract(r.value,'$.submission_diagnostic'),
+		'report',CASE WHEN json_type(r.value,'$.report')='object' THEN json_object(
+		'completed',json(CASE WHEN json_extract(r.value,'$.report.completed') THEN 'true' ELSE 'false' END),
+		'ready',json(CASE WHEN json_extract(r.value,'$.report.ready') THEN 'true' ELSE 'false' END)) ELSE NULL END,
 		'run',CASE WHEN json_type(r.value,'$.run')='object' THEN json_object(
 		'status',json_extract(r.value,'$.run.status'),'stop_status',json_extract(r.value,'$.run.stop_status'),
 		'diagnostic',json_extract(r.value,'$.run.diagnostic'),'updated_at',json_extract(r.value,'$.run.updated_at'),
@@ -253,9 +257,12 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 			if err = json.Unmarshal(f.Payload, &record); err != nil {
 				return nil, false, err
 			}
-			relation["settled"] = record.Settled()
-			relation["domain_diagnostic"] = record.DiagnosticText()
-			relation["blocked"] = record.Blocked()
+			relation["environment_stage"] = record.DetectionStage()
+			diagnostic, _ := record.ClosingStatus()
+			if diagnostic == "" {
+				diagnostic = record.DiagnosticText()
+			}
+			relation["domain_diagnostic"] = diagnostic
 		}
 		if in.Source == "roadmap" {
 			var record roadmap.Stored

@@ -1799,8 +1799,8 @@ textarea {
 .environment-row-selected { background: var(--ui-selected); }
 .environment-status { font-weight: 600; }
 .environment-status[data-stage="ready"] { color: var(--color-primary); }
-.environment-status[data-stage="blocked"], .environment-status[data-stage="timed_out"] { color: #f4a0a0; }
-.environment-status[data-stage="stale"], .environment-status[data-stage="awaiting_user"], .environment-status[data-stage="unprepared"] { color: #e7bf77; }
+.environment-status[data-stage="blocked"], .environment-status[data-stage="failed"], .environment-status[data-stage="not_ready"], .environment-status[data-stage="timed_out"] { color: #f4a0a0; }
+.environment-status[data-stage="closing"], .environment-status[data-stage="stale"], .environment-status[data-stage="awaiting_user"], .environment-status[data-stage="unprepared"] { color: #e7bf77; }
 .environment-status[data-stage="unverified"] { color: var(--color-muted); }
 .environment-table p { margin-top: 0; }
 .environment-overview-reason { white-space: pre-line; }

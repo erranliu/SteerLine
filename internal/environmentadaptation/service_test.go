@@ -396,9 +396,55 @@ func TestProjectEnvironmentRejectedPreparationRemainsObservableWithoutStopping(t
 	for i := 0; i < 2; i++ {
 		observe(t, s)
 		got := read(t, s, r.ID)
-		if !got.Blocked() || got.DiagnosticText() != remote.run.Diagnostic || got.State != "running" || got.Settled() || got.Rounds[0].TimedOut || got.Rounds[0].Stop != nil || remote.stops != 0 || remote.resultReads != 0 {
+		if got.DetectionStage() != "verifying" || got.DiagnosticText() != remote.run.Diagnostic || got.State != "running" || got.Settled() || got.Rounds[0].TimedOut || got.Rounds[0].Stop != nil || remote.stops != 0 || remote.resultReads != 0 {
 			t.Fatal("blocked observation changed execution lifecycle", got)
 		}
+	}
+}
+
+func TestProjectEnvironmentRequiresInterventionStopsBeforeDeadline(t *testing.T) {
+	s, remote, _, now := setup(t)
+	r := start(t, s)
+	observe(t, s)
+	remote.run.Status, remote.run.Phase = "blocked", "manual_intervention_required"
+	remote.run.ResumeRequired = true
+	remote.run.Operations = []runnercontract.Operation{{Status: "outcome_unknown", Diagnostic: "Orca state streaming connection failed: timeout"}}
+	remote.stopUnknown = true
+	if err := s.Observe(ctx); err == nil {
+		t.Fatal("expected an unknown stop receipt")
+	}
+	got := read(t, s, r.ID)
+	a := got.Rounds[0]
+	if remote.stops != 1 || a.Stop == nil || a.RunID != remote.run.RunID || got.DetectionStage() != "closing" || a.TimedOut || got.Cancelled || !now.Before(a.Deadline) {
+		t.Fatalf("original Run not immediately stopped before its deadline: %+v", got)
+	}
+	reason, action := got.ClosingStatus()
+	if !strings.Contains(reason, "Orca state streaming connection failed") || !strings.Contains(reason, "outcome_unknown") || action == "" {
+		t.Fatal("missing original failure, stop failure or operator action", reason, action)
+	}
+	// A changed Run and an elapsed deadline cannot erase the stop obligation.
+	remote.run.Status, remote.run.ResumeRequired = "running", false
+	remote.run.Revision++
+	*now = a.Deadline.Add(time.Minute)
+	observe(t, s)
+	if got := read(t, s, r.ID); remote.stops != 1 || got.Rounds[0].Stop.RequestID != a.Stop.RequestID || got.DetectionStage() != "closing" {
+		t.Fatal("stop obligation was replaced or lost")
+	}
+	remote.run.Status, remote.run.StopStatus = "stopped", "stopped"
+	remote.resultPending = true
+	if err := s.Observe(ctx); err == nil {
+		t.Fatal("expected a pending result seal")
+	}
+	got = read(t, s, r.ID)
+	reason, action = got.ClosingStatus()
+	if got.Settled() || !strings.Contains(reason, "等待 Runner 封存") || action == "" {
+		t.Fatal("pending seal did not remain in cleanup", reason, action)
+	}
+	remote.resultPending = false
+	observe(t, s)
+	got = read(t, s, r.ID)
+	if remote.submits != 1 || remote.stops != 1 || !got.Settled() || got.DetectionStage() != "failed" || !strings.Contains(got.DiagnosticText(), "Orca state streaming connection failed") {
+		t.Fatal("settled check lost its original failure or created another Run", got)
 	}
 }
 

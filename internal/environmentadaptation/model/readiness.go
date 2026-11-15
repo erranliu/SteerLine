@@ -73,19 +73,15 @@ func Qualify(current Current, record Record, basis string) (Admission, error) {
 func View(current Current, record Record, basis string, materialError error) (status, stage, reason string) {
 	status = "not_ready"
 	switch {
+	case record.Closing():
+		reason, _ = record.ClosingStatus()
+		return status, "closing", reason
 	case current.Invalidated:
 		return status, "stale", current.Reason
-	case record.TimedOut() && !record.Cancelled:
-		if !record.Settled() {
-			return status, "timed_out", "等待原检测停止并核实结果"
-		}
-		return status, "timed_out", record.DiagnosticText()
-	case record.Blocked():
-		return status, "blocked", record.DiagnosticText()
 	case record.ID != "" && !record.Settled():
 		reason = record.DiagnosticText()
 		if strings.TrimSpace(reason) == "" {
-			reason = "原检测正在执行或停止待核实"
+			reason = "等待本次检测结果"
 		}
 		return status, "verifying", reason
 	case current.ActivityID == "":
@@ -94,7 +90,10 @@ func View(current Current, record Record, basis string, materialError error) (st
 		}
 		return status, "awaiting_user", "请按项目要求准备环境并开始检测"
 	case record.Status() != "ready":
-		return status, "blocked", "当前检测未就绪：" + record.DiagnosticText()
+		if record.ID == "" {
+			return status, "blocked", "无法读取当前检测记录"
+		}
+		return status, record.DetectionStage(), record.DiagnosticText()
 	case materialError != nil:
 		return status, "blocked", materialError.Error()
 	default:
