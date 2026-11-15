@@ -25,6 +25,7 @@ import (
 )
 
 type roadmapPR struct {
+	Title       string `json:"title"`
 	URL         string `json:"html_url"`
 	Number      int    `json:"number"`
 	Merged      bool   `json:"merged"`
@@ -43,7 +44,11 @@ type roadmapPR struct {
 }
 
 func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, input any, out any) error {
-	config := p.config.PR
+	return p.config.repositoryPRRequest(ctx, method, endpoint, input, out)
+}
+
+func (c Config) repositoryPRRequest(ctx context.Context, method, endpoint string, input any, out any) error {
+	config := c.PR
 	if !strings.HasPrefix(endpoint, "repos/"+config.Repository+"/") {
 		return errors.New("provider target differs")
 	}
@@ -58,7 +63,7 @@ func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, inp
 	if config.Kind == "command" && strings.TrimRight(config.BaseURL, "/") == "https://github.com" {
 		args := []string{"api", "--hostname", "github.com", "--method", method, endpoint}
 		if len(body) > 0 {
-			file, e := os.CreateTemp(p.config.RunDir, "roadmap-provider-*.json")
+			file, e := os.CreateTemp(c.RunDir, "roadmap-provider-*.json")
 			if e != nil {
 				return e
 			}
@@ -79,9 +84,9 @@ func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, inp
 				env["GH_TOKEN"] = token
 			}
 		}
-		raw, e := (commandRunner{Dir: p.config.Repository, Timeout: 30 * time.Second, ProcessHost: p.config.ProcessHost, Env: env}).Output(ctx, backend.Command{Executable: "gh"}, args...)
+		raw, e := (commandRunner{Dir: c.Repository, Timeout: 30 * time.Second, ProcessHost: c.ProcessHost, Env: env}).Output(ctx, backend.Command{Executable: "gh"}, args...)
 		if e != nil {
-			return errors.New("文档 PR provider 操作失败，请查询原 PR 核实")
+			return errors.New("GitHub PR 请求失败，请检查仓库和认证")
 		}
 		if out != nil {
 			return json.Unmarshal(raw, out)
@@ -89,7 +94,7 @@ func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, inp
 		return nil
 	}
 	if config.Kind != "gitea" {
-		return errors.New("当前 provider 不支持文档 PR 发布")
+		return errors.New("当前 PR provider 不支持此操作")
 	}
 	request, e := http.NewRequestWithContext(ctx, method, strings.TrimRight(config.BaseURL, "/")+"/api/v1/"+endpoint, bytes.NewReader(body))
 	if e != nil {
@@ -99,18 +104,18 @@ func (p *roadmapPort) provider(ctx context.Context, method, endpoint string, inp
 	if config.TokenEnv != "" {
 		token := os.Getenv(config.TokenEnv)
 		if token == "" {
-			return errors.New("文档发布认证未配置")
+			return errors.New("Gitea PR 认证未配置")
 		}
 		request.Header.Set("Authorization", "token "+token)
 	}
 	client := http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, e := client.Do(request)
 	if e != nil {
-		return errors.New("文档 PR 请求结果待核实")
+		return errors.New("Gitea PR 请求结果待核实")
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("文档 PR provider 返回 HTTP %d，请查询原操作", response.StatusCode)
+		return fmt.Errorf("Gitea PR 请求返回 HTTP %d", response.StatusCode)
 	}
 	if out != nil {
 		return json.NewDecoder(io.LimitReader(response.Body, roadmap.MaxBytes+1)).Decode(out)
@@ -279,7 +284,16 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 	if e != nil {
 		return e
 	}
-	directory := filepath.Join(p.config.RunDir, "roadmap-publications", r.ID)
+	directory := pub.Worktree
+	if directory == "" {
+		directory, e = p.config.localWorktreePath("roadmap-publications", r.ID)
+		if e != nil {
+			return e
+		}
+		pub.Worktree = directory
+	} else if e = p.config.verifyLocalWorktreePath(directory, "roadmap-publications", r.ID); e != nil {
+		return e
+	}
 	if _, e = os.Stat(directory); os.IsNotExist(e) {
 		if e = os.MkdirAll(filepath.Dir(directory), 0700); e != nil {
 			return e
@@ -494,6 +508,10 @@ func (p *roadmapPort) publish(ctx context.Context, r roadmap.Record, request, re
 	if roadmap.GraphDigest(graph) != r.GraphDigest || baseline.Commit != r.CodeCommit {
 		return r, errors.New("来源、图材料或代码基线已变化，请重新核对生成文档")
 	}
+	directory, err := p.config.localWorktreePath("roadmap-publications", r.ID)
+	if err != nil {
+		return r, err
+	}
 	p.generationMu.Lock()
 	if gateErr := p.verifyCurrentTaskCard(ctx, r); gateErr != nil {
 		p.generationMu.Unlock()
@@ -510,7 +528,7 @@ func (p *roadmapPort) publish(ctx context.Context, r roadmap.Record, request, re
 			return r, errors.New("同来源存在其它活动或在途发布")
 		}
 	}
-	r.Publication = &roadmap.Publication{RequestID: request, ReviewDigest: review, Branch: "codex/roadmap-" + r.ID, Base: r.CodeCommit, Merge: merge, State: "preparing"}
+	r.Publication = &roadmap.Publication{RequestID: request, ReviewDigest: review, Branch: "codex/roadmap-" + r.ID, Base: r.CodeCommit, Merge: merge, State: "preparing", Worktree: directory}
 	r.State = "publishing"
 	r, e = p.serviceSave(ctx, r)
 	p.generationMu.Unlock()

@@ -250,6 +250,12 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if err := r.port.manual.recover(ctx); err != nil {
 		return result, err
 	}
+	if err := r.port.manual.recoverProjectLaunch(maintenance); err != nil {
+		return result, err
+	}
+	if err := r.port.manual.recoverPRLaunch(ctx); err != nil {
+		return result, err
+	}
 	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -400,6 +406,9 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 	if strings.HasPrefix(in.Action, "manual_verification_") {
 		return p.manualVerificationCommand(ctx, in)
 	}
+	if strings.HasPrefix(in.Action, "project_launch_") {
+		return p.projectLaunchCommand(ctx, in)
+	}
 	if strings.HasPrefix(in.Action, "refactoring_") {
 		return p.refactoringCommand(ctx, in)
 	}
@@ -520,6 +529,12 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 	if route == "/activities" {
 		return p.readAsyncActivities(ctx, values)
 	}
+	if route == "/settings/worktrees" {
+		if len(values) != 0 {
+			return nil, errors.New("Worktree 设置查询不接受参数")
+		}
+		return p.config.worktreeSettings()
+	}
 	if route == "/manual-verification" || strings.HasPrefix(route, "/manual-verification/") {
 		if len(values) != 0 {
 			return nil, errors.New("人工核验查询不接受参数")
@@ -580,6 +595,9 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.maintenanceRead(ctx, route, values.Get("page"), values.Get("scope"))
 	}
 	if strings.HasPrefix(route, "/commands/") {
+		if out, err := p.projectLaunchReceipt(ctx, strings.TrimPrefix(route, "/commands/")); err != nil || out != nil {
+			return out, err
+		}
 		if p.manual != nil {
 			raw, err := p.manual.store.ManualVerificationReceipt(ctx, p.config.Identity(), strings.TrimPrefix(route, "/commands/"))
 			if err != nil {

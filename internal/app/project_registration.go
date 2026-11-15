@@ -18,6 +18,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
+	mv "github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
@@ -167,6 +168,13 @@ func (d *ApplicationDirectory) checkProjectRegistration(ctx context.Context, in 
 	reader := taskDocuments{repository: repo.Path, git: c.Git, timeout: 15 * time.Second, processHost: process}
 	if err = checkProjectInitialization(materialReads(ctx), reader, commit); err != nil {
 		return invalid(err.Error())
+	}
+	launches, err := reader.readCommittedMaterial(ctx, commit, mv.ProjectLaunchPath)
+	if err == nil {
+		_, err = mv.DecodeProjectLaunches(launches)
+	}
+	if err != nil {
+		return invalid(fmt.Sprintf("%s：%v", mv.ProjectLaunchPath, err))
 	}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {

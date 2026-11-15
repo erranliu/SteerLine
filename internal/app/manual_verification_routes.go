@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -145,7 +146,11 @@ func (p *runtimeProjectPort) manualVerificationCommand(ctx context.Context, in h
 				return reject(err)
 			}
 		}
-		a := mv.Attempt{ID: in.RequestID, Head: head, Source: source, Worktree: s.worktree(in.RequestID), Status: "preparing"}
+		worktree, err := s.newVerificationWorktree(in.RequestID)
+		if err != nil {
+			return reject(err)
+		}
+		a := mv.Attempt{ID: in.RequestID, Head: head, Source: source, Worktree: worktree, Status: "preparing"}
 		created := false
 		err = s.store.ApplyManualVerification(ctx, command, func(current *mv.Record) error {
 			if current.Head != payload.Head || !current.Allows(a.Source, a.Head) {
@@ -276,9 +281,27 @@ func (p *runtimeProjectPort) manualVerificationRead(ctx context.Context, route s
 	if route == "/manual-verification" {
 		return p.manual.records(ctx)
 	}
+	if route == "/manual-verification/project" {
+		if p.config.runtimeMaintenance == nil {
+			return nil, errors.New("项目启动不可用")
+		}
+		return p.manual.projectLaunchView(ctx, p.config.runtimeMaintenance)
+	}
+	if route == "/manual-verification/pulls" || strings.HasPrefix(route, "/manual-verification/pulls/") {
+		return p.manual.readPRLaunch(ctx, p.config.runtimeMaintenance, route)
+	}
 	parts := strings.Split(strings.TrimPrefix(route, "/manual-verification/"), "/")
 	if len(parts) != 3 || parts[1] != "logs" {
 		return nil, errors.New("未知的人工核验查询")
+	}
+	if parts[0] == "project" {
+		p.manual.mu.Lock()
+		run := p.manual.projectRun
+		p.manual.mu.Unlock()
+		if run == nil || run.ID != parts[2] {
+			return nil, errors.New("找不到项目启动日志")
+		}
+		return p.manual.readLaunchLogs(filepath.Join(p.manual.projectLaunchDir(), run.ID))
 	}
 	r, err := p.manual.store.ManualVerification(ctx, p.config.Identity(), parts[0])
 	if err != nil {

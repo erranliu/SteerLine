@@ -1,5 +1,17 @@
 # 人工核验验收计划
 
+## 当前项目启动
+
+在 SteerLine `fd6c31f5` 加工作区实现上，Go 定向测试覆盖未提交清单无法被读取或通过接入、项目未就绪与旧提交拒绝启动、实际进程工作目录、原请求重放、运行中同步拒绝，以及停止后释放目录。Web 组件测试覆盖 PR 待办为空时显示两个具名入口、就绪前禁用、启动与停止载荷。Web 生产构建通过。固定 L1、L2 均通过，报告分别位于本机 `%TEMP%/steerline-test-feedback/20261113T113019.216921500Z/summary.json` 和 `%TEMP%/steerline-test-feedback/20261113T113118.930752700Z/summary.json`。
+
+308 在 `b1025085e32b1a9f4dc3572e32290be12f0188e7` 加启动入口改动上分别直接运行两个命令。PlayMode 以 Unity 2022.3.62f2 打开纳管路径中的 `Merge-Blast`，日志记录 `EditorPlay`、`test_bundle` 及地图 `9990902` 的 `startup runtime_ready`。编辑器命令加载同一工程，启动参数未请求自动 Play。新版本页面到 308 的联合验收需在 308 启动材料进入目标分支且更新纳管目录后进行。
+
+## 从 PR 启动和 Worktree 设置
+
+真实 Git 与隔离 Gitea HTTP 夹具验证了最多返回 10 个开放 PR、旧 Head 被拒绝、纳管目录未就绪时从指定 PR Head 读取并运行入口，以及不同根目录下的两个现场各自保留和清理。Web 验证了最近 PR、按编号查找、项目设置的保存与恢复，以及旧现场保留时仍可启动。生产构建通过。固定 L1、L2 通过，原报告分别位于本机 `%TEMP%/steerline-test-feedback/20261115T043957.546065500Z/summary.json` 和 `%TEMP%/steerline-test-feedback/20261115T044038.110116700Z/summary.json`。随后对旧现场保留的改动补跑了 Git 夹具和前端人工核验测试。
+
+原有 PR 核验、规划草稿发布和 CRLF 文档发布的定向回归通过。扩展组合达到 Go 的 10 分钟总时限时，正在执行文档发布的待规划测试场景。该场景拆分补跑通过。GitHub 和 308 的线上页面到启动的链路待实机验收。
+
 SteerLine 已接入实现，使用独立 Runner 构建验证。真人签收待安排。[Spec](../../spec/manual-verification.spec.md) · [Plan](../../plans/manual-verification.plan.md) · [测试选择](../../plans/manual-verification.tests.json)
 
 | ID | 方式 | 步骤与通过条件 | 触发与范围 |

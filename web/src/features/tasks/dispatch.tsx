@@ -6,6 +6,7 @@ import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { projectQueries } from "../../shared/api/queries";
 import { usePageVisible } from "../../shared/query-visibility";
+import { WorktreeSettings } from "./worktree-settings";
 
 const dispatchSettingsId = "task-dispatch";
 
@@ -56,6 +57,7 @@ export function DispatchStatus() {
 }
 
 export function Dispatch() {
+  const { identity } = useWorkspace();
   const panel = useRef<HTMLElement>(null);
   const location = useLocation();
   useEffect(() => {
@@ -65,16 +67,20 @@ export function Dispatch() {
   }, [location.hash, location.key]);
 
   return (
-    <section
-      className="settings-panel"
-      id={dispatchSettingsId}
-      aria-labelledby={`${dispatchSettingsId}-title`}
-      ref={panel}
-      tabIndex={-1}
-    >
-      <h1 id={`${dispatchSettingsId}-title`}>任务自动派发</h1>
-      <DispatchControls />
-    </section>
+    <div>
+      <h1>项目设置</h1>
+      <section
+        className="settings-panel"
+        id={dispatchSettingsId}
+        aria-labelledby={`${dispatchSettingsId}-title`}
+        ref={panel}
+        tabIndex={-1}
+      >
+        <h2 id={`${dispatchSettingsId}-title`}>任务自动派发</h2>
+        <DispatchControls />
+      </section>
+      <WorktreeSettings key={identity.project_id} />
+    </div>
   );
 }
 

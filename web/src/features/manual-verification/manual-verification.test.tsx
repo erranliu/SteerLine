@@ -6,6 +6,150 @@ import ManualVerification from "./manual-verification";
 
 afterEach(cleanup);
 
+it("lists current-project launches with no PRs and gates start on readiness", async () => {
+  const head = "a".repeat(40);
+  const attempt = "b".repeat(32);
+  const api = new Api(identity, "csrf");
+  const entries = [
+    {
+      id: "playmode",
+      name: "进入 Play Mode",
+      launch: { program: "node", args: ["play.js"] },
+    },
+    {
+      id: "editor",
+      name: "打开 Unity 编辑器",
+      launch: { program: "node", args: ["editor.js"] },
+    },
+  ];
+  let view: Record<string, unknown> = {
+    path: "C:/project",
+    branch: "main",
+    head,
+    ready: false,
+    diagnostic: "项目未就绪",
+    entries,
+  };
+  vi.spyOn(api, "get").mockImplementation(
+    async (path) =>
+      (path.endsWith("/project")
+        ? view
+        : path.endsWith("/pulls/run")
+          ? null
+          : []) as never,
+  );
+  const submit = vi
+    .spyOn(api, "submit")
+    .mockImplementation(async (envelope) => {
+      if (envelope.action === "project_launch_start") {
+        view = {
+          ...view,
+          run: { id: attempt, head, status: "running", name: "进入 Play Mode" },
+        };
+      }
+      return { status: "applied" } as never;
+    });
+  const client = testClient();
+  mountFeature(<ManualVerification />, api, client);
+  await screen.findByText("暂无待核验 PR。");
+  const play = await screen.findByRole("button", { name: "进入 Play Mode" });
+  expect(play).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "打开 Unity 编辑器" }),
+  ).toBeDisabled();
+  view = { ...view, ready: true, diagnostic: undefined };
+  await client.invalidateQueries({ queryKey: ["project-launch"] });
+  await waitFor(() => expect(play).toBeEnabled());
+  fireEvent.click(play);
+  const stop = await screen.findByRole("button", { name: "停止项目启动" });
+  expect(submit.mock.calls[0][0]).toMatchObject({
+    action: "project_launch_start",
+    target_id: identity.project_id,
+    payload: { head, entry_id: "playmode" },
+  });
+  expect(play).toBeDisabled();
+  fireEvent.click(stop);
+  await waitFor(() =>
+    expect(submit.mock.calls[1][0]).toMatchObject({
+      action: "project_launch_stop",
+      payload: { attempt_id: attempt },
+    }),
+  );
+});
+
+it("offers only ten recent PRs and can launch a numbered PR while the managed checkout is not ready", async () => {
+  const head = "a".repeat(40);
+  const api = new Api(identity, "csrf");
+  const pull = {
+    number: 7,
+    title: "Older PR",
+    url: "https://github.com/example/project/pull/7",
+    branch: "feature",
+    head,
+    state: "closed",
+  };
+  const recent = Array.from({ length: 11 }, (_, index) => ({
+    ...pull,
+    number: index + 8,
+    title: "Recent " + index,
+  }));
+  vi.spyOn(api, "get").mockImplementation(async (route) => {
+    switch (route) {
+      case "/manual-verification/project":
+        return { ready: false, diagnostic: "项目未就绪", entries: [] } as never;
+      case "/manual-verification/pulls":
+        return recent as never;
+      case "/manual-verification/pulls/7":
+        return {
+          pr: pull,
+          entries: [
+            {
+              id: "preview",
+              name: "启动 PR 预览",
+              launch: { program: "node", args: [] },
+            },
+          ],
+        } as never;
+      case "/manual-verification/pulls/run":
+        return {
+          latest: {
+            id: "b".repeat(32),
+            head,
+            pr_number: 12,
+            name: "旧预览",
+            status: "exited",
+            worktree: "D:/old-worktree",
+            removed: false,
+            cleanup_diagnostic: "有本地修改",
+          },
+        } as never;
+      default:
+        return [] as never;
+    }
+  });
+  const submit = vi
+    .spyOn(api, "submit")
+    .mockResolvedValue({ status: "applied" } as never);
+  mountFeature(<ManualVerification />, api, testClient());
+  fireEvent.click(screen.getByRole("button", { name: "选择项目 PR" }));
+  await screen.findByRole("option", { name: "#17 Recent 9" });
+  expect(screen.queryByRole("option", { name: "#18 Recent 10" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("PR 编号"), {
+    target: { value: "7" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "查找 PR" }));
+  const start = await screen.findByRole("button", { name: "启动 PR 预览" });
+  expect(start).toBeEnabled();
+  expect(screen.getByRole("button", { name: "重试清理" })).toBeVisible();
+  fireEvent.click(start);
+  await waitFor(() =>
+    expect(submit.mock.calls[0][0]).toMatchObject({
+      action: "project_launch_pr_start",
+      payload: { pr_number: 7, head, entry_id: "preview" },
+    }),
+  );
+});
+
 it("starts the selected PR Head and records only its current attempt", async () => {
   const head = "a".repeat(40);
   const next = "b".repeat(40);
@@ -45,7 +189,10 @@ it("starts the selected PR Head and records only its current attempt", async () 
   };
   let current = original;
   const api = new Api(identity, "csrf");
-  vi.spyOn(api, "get").mockImplementation(async () => [current] as never);
+  vi.spyOn(api, "get").mockImplementation(
+    async (path) =>
+      (path === "/manual-verification" ? [current] : null) as never,
+  );
   const submit = vi
     .spyOn(api, "submit")
     .mockImplementation(async (envelope) => {
@@ -140,7 +287,10 @@ it("closes a merged PR's selected remote snapshot after recording its own result
     ] as Record<string, unknown>[],
   };
   const api = new Api(identity, "csrf");
-  vi.spyOn(api, "get").mockImplementation(async () => [current] as never);
+  vi.spyOn(api, "get").mockImplementation(
+    async (path) =>
+      (path === "/manual-verification" ? [current] : null) as never,
+  );
   const submit = vi
     .spyOn(api, "submit")
     .mockImplementation(async (envelope) => {

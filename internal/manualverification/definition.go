@@ -92,9 +92,11 @@ type fields map[string]any
 
 var definitionFields = fields{
 	"version": float64(0),
-	"launch":  fields{"program": "", "args": []any{""}, "cwd": "", "url": ""},
+	"launch":  launchFields,
 	"checks":  []any{fields{"id": "", "title": "", "steps": []any{""}, "expected": ""}},
 }
+
+var launchFields = fields{"program": "", "args": []any{""}, "cwd": "", "url": ""}
 
 func validateShape(value any, name string, expected any) error {
 	switch expected := expected.(type) {
@@ -139,25 +141,8 @@ func (d Definition) validate() error {
 	if d.Version != 1 {
 		return fmt.Errorf("version: expected integer 1")
 	}
-	launch := d.Launch
-	if len(launch.Program) > 256 || !(executableName.MatchString(launch.Program) || strings.HasPrefix(launch.Program, "./") && relativePath(launch.Program[2:])) {
-		return fmt.Errorf("launch.program: expected a system executable name or a normalized ./ path")
-	}
-	if len(launch.Cwd) > 512 || launch.Cwd != "" && launch.Cwd != "." && !relativePath(launch.Cwd) {
-		return fmt.Errorf("launch.cwd: expected a normalized relative directory")
-	}
-	if launch.Args == nil || len(launch.Args) > 64 {
-		return fmt.Errorf("launch.args: expected an array of up to 64 strings")
-	}
-	usesPort := false
-	for i, arg := range launch.Args {
-		if len(arg) > 2048 || strings.ContainsFunc(arg, unicode.IsControl) || invalidPlaceholder(arg) {
-			return fmt.Errorf("launch.args[%d]: exceeds the limit or contains a control character or invalid placeholder", i)
-		}
-		usesPort = usesPort || strings.Contains(arg, Port)
-	}
-	if launch.URL != "" && (!usesPort || !validLaunchURL(launch.URL)) {
-		return fmt.Errorf("launch.url: expected http://127.0.0.1:${PORT} with the same port used in launch.args")
+	if err := d.Launch.validate(); err != nil {
+		return err
 	}
 	if len(d.Checks) < 1 || len(d.Checks) > 32 {
 		return fmt.Errorf("checks: expected 1 to 32 items")
@@ -182,6 +167,29 @@ func (d Definition) validate() error {
 		if !validText(check.Expected, 2048) {
 			return fmt.Errorf("checks[%d].expected: expected nonblank text of at most 2048 bytes", i)
 		}
+	}
+	return nil
+}
+
+func (launch Launch) validate() error {
+	if len(launch.Program) > 256 || !(executableName.MatchString(launch.Program) || strings.HasPrefix(launch.Program, "./") && relativePath(launch.Program[2:])) {
+		return fmt.Errorf("launch.program: expected a system executable name or a normalized ./ path")
+	}
+	if len(launch.Cwd) > 512 || launch.Cwd != "" && launch.Cwd != "." && !relativePath(launch.Cwd) {
+		return fmt.Errorf("launch.cwd: expected a normalized relative directory")
+	}
+	if launch.Args == nil || len(launch.Args) > 64 {
+		return fmt.Errorf("launch.args: expected an array of up to 64 strings")
+	}
+	usesPort := false
+	for i, arg := range launch.Args {
+		if len(arg) > 2048 || strings.ContainsFunc(arg, unicode.IsControl) || invalidPlaceholder(arg) {
+			return fmt.Errorf("launch.args[%d]: exceeds the limit or contains a control character or invalid placeholder", i)
+		}
+		usesPort = usesPort || strings.Contains(arg, Port)
+	}
+	if launch.URL != "" && (!usesPort || !validLaunchURL(launch.URL)) {
+		return fmt.Errorf("launch.url: expected http://127.0.0.1:${PORT} with the same port used in launch.args")
 	}
 	return nil
 }

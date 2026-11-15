@@ -1,5 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { Api } from "../../shared/api/client";
 import { projectQueries } from "../../shared/api/queries";
 import type { DispatchObservation } from "../../shared/api/types";
@@ -31,7 +37,10 @@ it("allows enabling automatic dispatch before the readiness observation has retu
   const toggle = screen.getByRole("switch", { name: "自动派发" });
   expect(toggle).toBeEnabled();
   expect(toggle).toHaveAttribute("aria-checked", "false");
-  expect(read.mock.calls.map(([path]) => path)).toEqual(["/dispatch"]);
+  expect(read.mock.calls.map(([path]) => path)).toEqual([
+    "/dispatch",
+    "/settings/worktrees",
+  ]);
   fireEvent.click(toggle);
   expect(send).toHaveBeenCalledWith(
     "set_dispatch_mode",
@@ -41,6 +50,49 @@ it("allows enabling automatic dispatch before the readiness observation has retu
     { expected_control_revision: 1 },
   );
   client.clear();
+});
+
+it("saves and restores the worktree directory in project settings", async () => {
+  const api = new Api(identity, "csrf");
+  let settings = {
+    directory: "",
+    effective: "C:/state",
+    default_directory: "C:/state",
+  };
+  vi.spyOn(api, "get").mockImplementation(
+    async (path) =>
+      (path === "/settings/worktrees" ? settings : ready) as never,
+  );
+  const submit = vi
+    .spyOn(api, "submit")
+    .mockImplementation(async (envelope) => {
+      const directory = envelope.payload.directory as string;
+      settings = {
+        ...settings,
+        directory,
+        effective: directory ? directory + "/project" : "C:/state",
+      };
+      return { status: "applied" } as never;
+    });
+  mountFeature(<Dispatch />, api, testClient());
+  expect(
+    screen.getByRole("heading", { name: "项目设置", level: 1 }),
+  ).toBeVisible();
+  const directory = screen.getByLabelText("目录");
+  await waitFor(() => expect(directory).toBeEnabled());
+  fireEvent.change(directory, { target: { value: "D:/worktrees" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存目录" }));
+  await screen.findByText("D:/worktrees/project");
+  expect(submit.mock.calls[0][0]).toMatchObject({
+    action: "maintenance_set_worktree_directory",
+    target_id: identity.project_id,
+    payload: { directory: "D:/worktrees" },
+  });
+  const restore = screen.getByRole("button", { name: "恢复默认目录" });
+  await waitFor(() => expect(restore).toBeEnabled());
+  fireEvent.click(restore);
+  await screen.findByText("C:/state");
+  expect(submit.mock.calls[1][0].payload).toEqual({ directory: "" });
 });
 
 it("uses the same server verdict in settings and the header and can turn off while waiting", async () => {
