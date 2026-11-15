@@ -20,6 +20,7 @@ export type Environment = {
   adapter: string;
   agent: string;
   activity_settled: boolean;
+  closing_action?: string;
   script_path?: string;
   environment_key: string;
   name: string;
@@ -45,9 +46,13 @@ export const environmentStage: Record<string, string> = {
   unprepared: "未准备",
   awaiting_user: "待准备与检测",
   verifying: "检测中",
+  closing: "收尾中",
   timed_out: "检测超时",
   ready: "已就绪",
-  blocked: "检测阻断",
+  failed: "检测失败",
+  not_ready: "环境未就绪",
+  cancelled: "已停止",
+  blocked: "环境无法核验",
   stale: "已失效",
   unverified: "待核实",
 };

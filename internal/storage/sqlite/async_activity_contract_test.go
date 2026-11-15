@@ -132,7 +132,7 @@ func TestAsyncActivitySQLDetectionFiltersAreProjectionSupersets(t *testing.T) {
 	for n, state := range []string{"queued", "running", "stopping", "ready", "failed", "cancelled", "unverified", "future_state", ""} {
 		for round := 0; round < 3; round++ {
 			id := fmt.Sprintf("e%d-%d", n, round)
-			payload := map[string]any{"project": "p", "id": id, "state": state, "created_at": at}
+			payload := map[string]any{"project": "p", "id": id, "kind": "adaptation", "state": state, "created_at": at}
 			if state == "" {
 				delete(payload, "state")
 			}
@@ -143,7 +143,12 @@ func TestAsyncActivitySQLDetectionFiltersAreProjectionSupersets(t *testing.T) {
 					run["phase"] = "operation_rejected"
 					run["diagnostic"] = "remote Orca repository query timed out"
 				}
-				payload["rounds"] = []any{map[string]any{"settled": round == 2, "run": run}}
+				row := map[string]any{"settled": round == 2, "run": run}
+				if state == "running" && round == 1 {
+					row["run_id"] = "original-run"
+					row["stop_cause"] = run["diagnostic"]
+				}
+				payload["rounds"] = []any{row}
 			}
 			raw, _ := json.Marshal(payload)
 			_, err = s.db.Exec(`INSERT INTO project_environments VALUES(?,?,1,?)`, "p", id, raw)
@@ -162,8 +167,8 @@ func TestAsyncActivitySQLDetectionFiltersAreProjectionSupersets(t *testing.T) {
 				continue
 			}
 			found = true
-			if a.Phase != "检测阻断" || a.Diagnostic != "remote Orca repository query timed out" || !a.NeedsAttention || a.FinishedAt != nil || a.State != "waiting" {
-				t.Fatalf("blocked detection lost original cause or appeared finished: %+v", a)
+			if a.Phase != "收尾中" || a.Diagnostic != "等待 Runner 确认原执行已停止：remote Orca repository query timed out" || !a.NeedsAttention || a.FinishedAt != nil || a.State != "running" {
+				t.Fatalf("cleanup lost original cause or appeared finished: %+v", a)
 			}
 		}
 		if found != (filter != "recent") {

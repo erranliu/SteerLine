@@ -49,7 +49,7 @@ const overview = () => screen.getByRole("region", { name: "全部运行环境" }
 const environmentRow = (name: string) =>
   within(overview()).getByRole("row", { name: new RegExp(name) });
 async function loaded() {
-  await screen.findByText("检测阻断", { exact: true });
+  await screen.findByText("检测失败", { exact: true });
 }
 async function updateOptions(
   client: ReturnType<typeof testClient>,
@@ -313,6 +313,7 @@ it("uses the default timeout and correct profile and prevents duplicate detectio
 it("shows a recorded detection timeout in the row and in history", async () => {
   const { client, record } = fixture();
   record.timed_out = true;
+  record.stage = "timed_out";
   await loaded();
   await updateOptions(client, ({ environments }) => {
     environments[0].stage = "timed_out";
@@ -324,46 +325,69 @@ it("shows a recorded detection timeout in the row and in history", async () => {
   ).toBeVisible();
 });
 
-it("shows an unsettled blocked Run in the row and in history without restarting or stopping it", async () => {
-  const { client, record, send } = fixture();
-  record.state = "running";
-  record.settled = false;
-  record.blocked = true;
-  record.diagnostic = "远端 Orca 仓库查询超时，无法连接远端运行时";
+it("shows cleanup guidance and enables recheck only after the original Run settles", async () => {
+  const { api, client, record, send } = fixture();
   await loaded();
+  record.state = "stopping";
+  record.stage = "closing";
+  record.settled = false;
+  record.diagnostic = "远端 Orca 仓库查询超时，无法连接远端运行时";
+  record.closing_action = "请恢复原执行端连接，系统会继续核实。";
   await updateOptions(client, ({ environments }) => {
-    environments[0].stage = "blocked";
+    environments[0].stage = "closing";
     environments[0].reason = record.diagnostic;
+    environments[0].closing_action = record.closing_action;
     environments[0].activity_settled = false;
   });
-  expect(within(remoteRow()).getByText(record.diagnostic)).toBeVisible();
-  expect(within(remoteRow()).getByText("本次检测尚未结束")).toBeVisible();
+  const row = within(remoteRow());
+  expect(row.getByText("收尾中", { exact: true })).toBeVisible();
+  expect(row.getByText(record.diagnostic)).toBeVisible();
+  expect(row.getByText(record.closing_action)).toBeVisible();
+  expect(row.getByRole("link", { name: "查看收尾详情" })).toBeVisible();
   expect(
-    within(remoteRow()).queryByRole("button", { name: "重新检测" }),
+    row.queryByRole("button", { name: /重新检测|停止检测/ }),
   ).not.toBeInTheDocument();
+  const get = vi.mocked(api.get).getMockImplementation()!;
+  const recordKey = [...optionsKey.slice(0, -1), "record", record.id];
+  vi.mocked(api.get).mockImplementation(async (path, signal) => {
+    if (path === "/environment/" + record.id)
+      throw new Error("detail unavailable");
+    return get(path, signal);
+  });
+  await act(async () => {
+    await client.refetchQueries({ queryKey: recordKey });
+  });
+  expect(row.getByText("收尾中", { exact: true })).toBeVisible();
+  expect(row.getByText(record.diagnostic)).toBeVisible();
+  vi.mocked(api.get).mockImplementation(get);
+  await act(async () => {
+    await client.refetchQueries({ queryKey: recordKey });
+  });
   await openHistory();
   const history = screen
     .getByText("检测历史", { selector: "summary" })
     .closest("details")!;
   expect(
-    await within(history).findByText("检测阻断", { selector: "strong" }),
+    await within(history).findByText("收尾中", { selector: "strong" }),
   ).toBeVisible();
   expect(within(history).getByText(record.diagnostic)).toBeVisible();
+  expect(
+    within(history).queryByRole("button", { name: "停止检测" }),
+  ).not.toBeInTheDocument();
+  record.state = "failed";
+  record.stage = "failed";
+  record.settled = true;
+  record.closing_action = "";
+  await updateOptions(client, ({ environments }) => {
+    environments[0].stage = "failed";
+    environments[0].activity_settled = true;
+    environments[0].closing_action = undefined;
+  });
+  expect(row.getByRole("button", { name: "重新检测" })).toBeEnabled();
   expect(send).not.toHaveBeenCalled();
-  fireEvent.click(
-    within(remoteRow()).getByRole("button", { name: "停止检测" }),
-  );
-  await waitFor(() =>
-    expect(send).toHaveBeenCalledWith(
-      "environment_stop",
-      record.id,
-      record.revision,
-      {},
-    ),
-  );
 });
 
-it("polls the requested detection ID and shows a later blocked observation", async () => {
+it("polls the requested detection ID and shows when Runner starts cleanup", async () => {
   const { api, record, send } = fixture(
     true,
     undefined,
@@ -371,6 +395,7 @@ it("polls the requested detection ID and shows a later blocked observation", asy
     `/projects/project/environment?activity=${"a".repeat(32)}`,
   );
   record.state = "running";
+  record.stage = "verifying";
   record.settled = false;
   const get = vi.mocked(api.get).getMockImplementation()!;
   vi.mocked(api.get).mockImplementation(async (path, signal) =>
@@ -380,11 +405,12 @@ it("polls the requested detection ID and shows a later blocked observation", asy
   );
   const detail = await screen.findByRole("region", { name: "指定检测详情" });
   expect(await within(detail).findByText(/检测中 · remote/)).toBeVisible();
-  record.blocked = true;
+  record.stage = "closing";
+  record.state = "stopping";
   record.diagnostic = "远端 Orca 连接超时";
   await waitFor(
     () => {
-      expect(within(detail).getByText(/检测阻断 · remote/)).toBeVisible();
+      expect(within(detail).getByText(/收尾中 · remote/)).toBeVisible();
       expect(within(detail).getByText(record.diagnostic)).toBeVisible();
     },
     { timeout: 4500 },
@@ -616,7 +642,7 @@ it("keeps collapsed history concise and filters by environment or project", asyn
     ).toHaveLength(2),
   );
   expect(screen.queryByText(record.id)).toBeNull();
-  expect(screen.getByText("未通过", { selector: "strong" })).toBeVisible();
+  expect(screen.getByText("检测失败", { selector: "strong" })).toBeVisible();
   expect(
     screen.queryByText("original-run", { exact: false }),
   ).not.toBeInTheDocument();
@@ -689,7 +715,7 @@ it("does not turn a project ready report into platform qualification", async () 
     },
   });
   await loaded();
-  expect(screen.getByText("检测阻断", { exact: true })).toBeVisible();
+  expect(screen.getByText("检测失败", { exact: true })).toBeVisible();
   expect(screen.queryByText("project ready")).not.toBeInTheDocument();
   expect(screen.queryByText(/opaque data/)).not.toBeInTheDocument();
 });
@@ -940,7 +966,7 @@ it("shows disabled readiness enforcement separately from actual qualification", 
     "1/4 已就绪",
   );
   expect(
-    within(environmentRow("远程工作站 · Orca → Codex")).getByText("检测阻断"),
+    within(environmentRow("远程工作站 · Orca → Codex")).getByText("检测失败"),
   ).toBeVisible();
 });
 
@@ -1043,7 +1069,8 @@ function fixture(
     state: "failed",
     status: "not_ready",
     settled: true,
-    blocked: false,
+    stage: "failed",
+    closing_action: "",
     timed_out: false,
     diagnostic: "",
     rounds: [round],
@@ -1081,7 +1108,7 @@ function fixture(
                 id: "remote",
                 name: "远端一",
                 status: "not_ready",
-                stage: "blocked",
+                stage: "failed",
                 environment_key: "e".repeat(64),
                 current_revision: 2,
                 reason: "缺少工具",
@@ -1099,7 +1126,7 @@ function fixture(
                 agent: "Codex",
                 activity_settled: true,
                 status: "not_ready",
-                stage: "blocked",
+                stage: "failed",
                 reason: "缺少工具",
                 current_revision: 2,
                 document_path: "SteerlineFlow/environment.md",

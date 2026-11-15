@@ -213,13 +213,15 @@ func (f *environmentWorkflowPeer) ResultFile(context.Context, string) (runnercon
 }
 
 func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.T) {
-	t.Run("blocked detail and history", func(t *testing.T) {
+	t.Run("cleanup detail and history", func(t *testing.T) {
 		port, c, store := environmentFixture(t)
 		key, _ := env.Key(c.RunnerExecution.Profiles[1].Execution, nativefixture.ExecutionIdentity(c.RunnerExecution.Profiles[1].Execution))
 		r, err := port.service.Start(context.Background(), env.ID(), json.RawMessage(`{}`), env.Start{EnvironmentKey: key, Profile: "remote", TimeoutSeconds: 60})
 		require(t, err)
-		r.State = "running"
-		r.Rounds[0].Run = &runnercontract.Run{Status: "blocked", Phase: "operation_rejected", Diagnostic: "remote Orca query timed out"}
+		r.State = "stopping"
+		r.Rounds[0].RunID = "original-run"
+		r.Rounds[0].StopCause = "remote Orca query timed out"
+		r.Rounds[0].Run = &runnercontract.Run{Status: "blocked", ResumeRequired: true}
 		r.Revision++
 		require(t, store.SaveEnvironment(context.Background(), r, r.Revision-1))
 		runtime := &runtimeProjectPort{config: c, store: store}
@@ -228,9 +230,9 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.
 			require(t, err)
 			raw, err := json.Marshal(value)
 			require(t, err)
-			for _, fact := range []string{`"blocked":true`, `"settled":false`, `"state":"running"`, `"timed_out":false`, `"diagnostic":"remote Orca query timed out"`} {
+			for _, fact := range []string{`"stage":"closing"`, `"settled":false`, `"state":"stopping"`, `"timed_out":false`, `"closing_action":"如果长时间未确认，请检查 Runner 服务和原执行端的连接`, "remote Orca query timed out"} {
 				if !strings.Contains(string(raw), fact) {
-					t.Fatal("public observation lost original blocked facts", route, fact, string(raw))
+					t.Fatal("public observation lost cleanup facts", route, fact, string(raw))
 				}
 			}
 		}

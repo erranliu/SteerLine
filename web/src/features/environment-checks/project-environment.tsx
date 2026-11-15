@@ -13,6 +13,7 @@ import {
 import {
   DetectionID,
   DetectionSubmissionHistory,
+  isDetectionClosing,
   recordLabel,
   type DetectionRecord,
 } from "./detection-record";
@@ -359,6 +360,9 @@ function EnvironmentWorkspace() {
                 {requestedRecord.data.profile_id}
               </p>
               <p>{requestedRecord.data.diagnostic}</p>
+              {requestedRecord.data.closing_action && (
+                <p>{requestedRecord.data.closing_action}</p>
+              )}
               <DetectionSubmissionHistory record={requestedRecord.data} />
               {requestedRecord.data.requests?.map((request) => (
                 <p key={request.request_id}>
@@ -461,11 +465,12 @@ function EnvironmentWorkspace() {
               {r.diagnostic && r.status !== "ready" && (
                 <p className="environment-reason">{r.diagnostic}</p>
               )}
+              {r.closing_action && <p>{r.closing_action}</p>}
               <DetectionID id={r.id} execution={r.execution_ref} />
               <Link to={`?activity=${encodeURIComponent(r.id)}`}>
                 查看检测结果
               </Link>
-              {!r.settled && (
+              {!r.settled && !isDetectionClosing(r) && (
                 <Button
                   size="sm"
                   variant="ghost"

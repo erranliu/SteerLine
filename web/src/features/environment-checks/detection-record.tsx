@@ -3,6 +3,7 @@ import {
   CopyExecutionInfo,
   type ExecutionReference,
 } from "../activities/execution-info";
+import { environmentStage } from "./use-readiness";
 
 export type DetectionRecord = {
   execution_ref?: ExecutionReference;
@@ -11,11 +12,10 @@ export type DetectionRecord = {
   profile_id: string;
   environment_key: string;
   created_at?: string;
-  state: string;
+  stage: string;
   status: string;
   settled: boolean;
-  blocked?: boolean;
-  timed_out?: boolean;
+  closing_action?: string;
   diagnostic: string;
   requests?: { request_id: string; action: string; activity_id?: string }[];
   rounds?: {
@@ -25,21 +25,20 @@ export type DetectionRecord = {
     submission_diagnostic?: string;
   }[];
 };
-const recordState: { [key: string]: string } = {
-  ready: "已通过",
-  failed: "未通过",
-  cancelled: "已停止",
-  running: "检测中",
-  queued: "等待检测",
-  stopping: "正在停止",
-  unverified: "结果待核实",
+export const recordLabel = (record: DetectionRecord) => {
+  if (!record.settled) {
+    return isDetectionClosing(record)
+      ? environmentStage.closing
+      : environmentStage.verifying;
+  }
+  const stage = record.stage;
+  return stage === "ready"
+    ? "检测通过"
+    : environmentStage[stage] || environmentStage.unverified;
 };
-export const recordLabel = (record: DetectionRecord) =>
-  record.timed_out
-    ? "检测超时"
-    : record.blocked
-      ? "检测阻断"
-      : recordState[record.state] || "结果待核实";
+
+export const isDetectionClosing = (record?: DetectionRecord) =>
+  record?.stage === "closing" && !record.settled;
 
 export function DetectionSubmissionHistory({
   record,

@@ -90,7 +90,7 @@ func prepareEnvironmentStopsWith(ctx context.Context, c Config, store env.Store,
 			if !runnerbinding.SamePath(r.Build.StateDir, build.StateDir) {
 				return nil, errors.New("environment activity belongs to another Runner namespace")
 			}
-			if !r.Cancelled || a.Settled {
+			if (!r.Cancelled && a.Stop == nil) || a.Settled {
 				continue
 			}
 			selector, id := "run-id", a.RunID
@@ -126,7 +126,7 @@ func prepareEnvironmentStopsWith(ctx context.Context, c Config, store env.Store,
 			changed = true
 			// Closed permanently revokes further input. Its existing internal stop
 			// must be allowed to settle on startup, rather than replaced by another.
-			if run.Closed || run.StopStatus == "stopped" && (run.Status == "completed" || run.Status == "stopped") {
+			if run.Closed || run.StopStatus == "stopped" {
 				continue
 			}
 			if a.Stop != nil && a.StopState != "rejected" {

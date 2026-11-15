@@ -192,7 +192,7 @@ func (s *Service) stop(ctx context.Context, id, request string, revision uint64,
 	if e != nil {
 		return r, e
 	}
-	if abandonment && (r.Cancelled || r.Settled()) {
+	if abandonment && (r.Closing() || r.Settled()) {
 		return r, nil
 	}
 	if !abandonment && r.Revision != revision {
@@ -200,6 +200,9 @@ func (s *Service) stop(ctx context.Context, id, request string, revision uint64,
 	}
 	if r.Settled() {
 		return r, errors.New("environment activity already settled")
+	}
+	if r.Closing() {
+		return r, errors.New("environment activity is already closing")
 	}
 	r.Requests = append(r.Requests, envmodel.Request{ID: request, Original: original, Action: "stop"})
 	r.Cancelled = true
@@ -351,13 +354,32 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 		r.ObservedAt = &at
 	}
 	a.Submission = "accepted"
-	due := !s.now().Before(a.Deadline)
+	// A blocked Run that requires explicit resume cannot complete this unattended
+	// check. Stop that same Run and retain the cause through stop and result sealing.
+	if !r.Cancelled && a.Stop == nil && !a.TimedOut && run.Status == "blocked" && run.ResumeRequired && !run.Closed && run.StopStatus != "stopped" {
+		a.StopCause = run.Diagnostic
+		for i := len(run.Operations) - 1; i >= 0; i-- {
+			op := run.Operations[i]
+			if (op.Status == "outcome_unknown" || op.Status == "rejected") && op.Diagnostic != "" {
+				a.StopCause = op.Diagnostic
+				break
+			}
+		}
+		if a.StopCause == "" {
+			a.StopCause = "Runner 需要人工介入，原检测无法自动继续"
+		}
+	}
+	due := a.StopCause == "" && !s.now().Before(a.Deadline)
 	if due {
 		a.TimedOut = true
 	}
 	terminal := run.Closed || run.Status == "completed" || run.Status == "stopped" || run.Status == "failed" || run.Status == "cancelled" || run.StopStatus == "stopped" || r.Kind == "adaptation" && (run.Status == "waiting_input" || run.Status == "blocked") && run.Final != nil && run.Final.Verified
-	stop := r.Cancelled || due || terminal
+	stop := r.Cancelled || a.TimedOut || terminal || a.StopCause != "" || a.Stop != nil
 	if stop && run.StopStatus != "stopped" {
+		r.State = "stopping"
+	}
+	// A permanently closed Run already has its own stop obligation.
+	if stop && run.StopStatus != "stopped" && !run.Closed {
 		if due {
 			a.Diagnostic = "单轮期限已到，等待原执行停止核实"
 		}
@@ -393,6 +415,11 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 			}
 			if v.Command != nil && (v.Command.ReceiptStatus == "rejected" || v.Command.ActionStatus == "rejected" || v.Command.ActionStatus == "failed") {
 				a.StopState = "rejected"
+				if v.Command.Error != nil {
+					return v.Command.Error
+				}
+			} else if v.Command != nil && v.Command.ReceiptStatus == "accepted" {
+				a.StopState = "accepted"
 			}
 		}
 	}
@@ -449,6 +476,8 @@ func (s *Service) next(ctx context.Context, r *envmodel.Record) error {
 	r.Diagnostic = a.Diagnostic
 	if r.Cancelled {
 		r.State = "cancelled"
+	} else if a.StopCause != "" {
+		r.State = "failed"
 	} else if !a.TimedOut && a.Report != nil && a.Report.Passed() && envmodel.TrustedFinal(a) {
 		r.State = "ready"
 	} else {
@@ -466,7 +495,7 @@ func (s *Service) Close(ctx context.Context) error {
 	rows, e := s.Store.Environments(ctx, s.Project)
 	if e == nil {
 		for _, r := range rows {
-			if !r.Settled() {
+			if !r.Settled() && !r.Closing() {
 				r.Cancelled = true
 				r.State = "stopping"
 				if err := s.save(ctx, &r); err != nil {

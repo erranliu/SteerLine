@@ -32,6 +32,7 @@ type environmentView struct {
 	Status             string                         `json:"status"`
 	Stage              string                         `json:"stage"`
 	Reason             string                         `json:"reason"`
+	ClosingAction      string                         `json:"closing_action,omitempty"`
 	CurrentRevision    uint64                         `json:"current_revision"`
 	ActivityID         string                         `json:"activity_id,omitempty"`
 	SourceCommit       string                         `json:"source_commit,omitempty"`
@@ -115,6 +116,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			}
 		}
 		item.Status, item.Stage, item.Reason = env.View(current, record, basis, materialErr)
+		_, item.ClosingAction = record.ClosingStatus()
 		if !current.Invalidated && materialErr == nil && item.Stage == "stale" && basis != "" && basis != record.Prepared.Inputs {
 			item.Reason = environmentBasisChange(record.Prepared, prepared) + "；须重新检测"
 		}
