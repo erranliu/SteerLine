@@ -24,3 +24,5 @@ Gitea 1.27.1 通过实例配置的 WIP 标题前缀创建草稿。新增固定�
 真实 Codex 使用固定发布正文和自定义 `Review:` 前缀创建 Gitea PR #1。Runner 与平台同时确认初始草稿状态，待办出现后 Edge 从页面启动 `3efe2fed7871131bc7674e66da34035fc7b72e94`，预览返回该提交的内容并保存失败结论。推送 `650fd3b4c45b382c42304cc4f9abbcecfc95e1be` 后，旧提交写入被拒绝，新提交从独立 worktree 启动并保存通过结论。待办和 PR 随后关闭，源分支删除，记录继续绑定原 PR 并归档。两个预览均确认停止，两个 worktree 均已移除。通过正式任务废弃接口结算此未合并夹具的原 Run，应用正常停机，报告记录 `cleanup_complete=true`。
 
 此验收覆盖本机 Codex 与隔离 Gitea，使用开发构建跳过环境就绪门禁。308 安装现场和项目仓库未参与写入，正式安装待部署。
+
+提交 PR 前在 `05581540` 基线上复验。SteerLine 和 Web 从 `e67ecf59` 构建，Edge 执行期间使用 `c05f8352` 的浏览器脚本展开新版页面的 Head 详情。两提交间仅有这处测试操作变化。复跑的真实 Gitea L4 和清理均通过，Web 生产构建与 4 项人工核验组件测试通过。报告位于 `C:/SteerlineDebug/wt-4bd2-gitea-manual/pr-rebase-8b229177c18b440190277501ef2c5d6a/summary.json`。
