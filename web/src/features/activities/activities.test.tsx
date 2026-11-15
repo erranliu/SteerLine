@@ -147,15 +147,53 @@ function page(items: Activity[] = []): ActivityPage {
     has_more: false,
   };
 }
-function setup(data: () => Promise<ActivityPage> = async () => page()) {
+function setup(
+  data: () => Promise<ActivityPage> = async () => page(),
+  requests: StoredRequest[] = [],
+) {
   const api = new Api(identity, "csrf", "home");
   const read = vi.spyOn(api, "get").mockImplementation(data);
   const submit = vi.spyOn(api, "submit");
   const client = testClient();
   clients.push(client);
-  mountFeature(<Activities />, api, client);
+  mountFeature(<Activities />, api, client, true, { requests });
   return { api, read, submit, client };
 }
+
+it("starts a current-instance abandonment when the journal contains an older unresolved request", async () => {
+  const old: StoredRequest = {
+    envelope: {
+      request_id: "previous-abandonment",
+      project_id: identity.project_id,
+      instance_id: "previous-instance",
+      action: "activity_abandon",
+      target_id: activity.activity_id,
+      expected_version: 0,
+      payload: {},
+    },
+    created_at: "2026-11-13T09:00:00Z",
+  };
+  const { api, submit } = setup(async () => page([activity]), [old]);
+  const reconcile = vi.spyOn(api, "reconcile");
+  submit.mockImplementation(async (envelope) => ({
+    ...envelope,
+    status: "applied",
+    sampled_at: "2026-11-13T10:00:00Z",
+  }));
+  fireEvent.click(await screen.findByRole("button", { name: /^活动 ·/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "放弃活动" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认放弃" }));
+  await waitFor(() => expect(screen.queryByText(activity.title)).toBeNull());
+  expect(reconcile).not.toHaveBeenCalled();
+  expect(submit).toHaveBeenCalledTimes(1);
+  expect(submit.mock.calls[0][0]).toMatchObject({
+    instance_id: identity.instance_id,
+    action: "activity_abandon",
+    target_id: activity.activity_id,
+  });
+  expect(submit.mock.calls[0][0].request_id).not.toBe(old.envelope.request_id);
+});
+
 it("archives a formal activity after confirmation even while its list response is stale", async () => {
   const { submit } = setup(async () => page([activity]));
   submit.mockImplementation(async (envelope) => ({

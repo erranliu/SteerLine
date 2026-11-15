@@ -293,6 +293,64 @@ it("keeps the pagination snapshot when a background refresh races with loading t
   expect(submit).not.toHaveBeenCalled();
 });
 
+it("keeps an abandoned activity out of ongoing when a stale later page is loaded again", async () => {
+  const { api, client, submit } = setup();
+  await screen.findByRole("button", { name: /活动一/ });
+  const initial = client.getQueryData<ActivityListPage>([
+    "home",
+    "project",
+    "instance",
+    "async-activities",
+    "head",
+    "ongoing",
+  ])!;
+  const archived = {
+    ...activity,
+    activity_id: "b",
+    source_id: "second-candidate",
+    title: "第二页待放弃活动",
+  };
+  const stalePage = {
+    ...initial,
+    items: [
+      archived,
+      {
+        ...activity,
+        activity_id: "c",
+        source_id: "other",
+        title: "第二页其他活动",
+      },
+    ],
+    has_more: false,
+    next_cursor: undefined,
+  };
+  vi.mocked(api.get).mockImplementation(async (path) => {
+    if (path === "/activities/b") return archived;
+    return path.includes("cursor=") ? stalePage : initial;
+  });
+  submit.mockImplementation(async (envelope) => ({
+    ...envelope,
+    status: "applied",
+    sampled_at: "2026-11-13T10:00:00Z",
+  }));
+
+  fireEvent.click(screen.getByRole("button", { name: "加载更多活动" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /第二页待放弃活动/ }),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "放弃活动" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认放弃" }));
+  await screen.findByText(/选择活动查看摘要/);
+  await waitFor(() => expect(screen.queryByText("第二页其他活动")).toBeNull());
+  const loadMore = screen.getByRole("button", { name: "加载更多活动" });
+  await waitFor(() => expect(loadMore).toBeEnabled());
+  fireEvent.click(loadMore);
+
+  expect(await screen.findByText("第二页其他活动")).toBeVisible();
+  expect(screen.queryByText(archived.title)).toBeNull();
+  expect(submit).toHaveBeenCalledTimes(1);
+});
+
 it("loads only summary until explicit expansion and reads one index page and body segment per action", async () => {
   const { calls, submit } = setup();
   fireEvent.click(await screen.findByRole("button", { name: /活动一/ }));

@@ -9,7 +9,7 @@ import {
 import type { Api } from "../../shared/api/client";
 import { usePageVisible } from "../../shared/query-visibility";
 import type { ActivityPage, ActivityListFilter } from "./model";
-import { rememberAbandonedActivities } from "./abandonment";
+import { rememberAbandonedActivities } from "./abandonment-marks";
 
 // Both surfaces share single-page requests. Only the head has a timer; loaded
 // pages are user-driven, including on focus/reconnect and in history.

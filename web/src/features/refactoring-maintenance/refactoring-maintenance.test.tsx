@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
-import { rememberAbandonedActivities } from "../activities/abandonment";
+import { rememberAbandonedActivities } from "../activities/abandonment-marks";
 import {
   RefactoringMaintenance,
   type MaintenanceRecord,

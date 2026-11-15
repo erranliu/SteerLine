@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { queryOptions, useQueries } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { Link } from "react-router-dom";
-import { useAbandonedActivities } from "../activities/abandonment";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import type { Envelope, Receipt } from "../../shared/api/types";
 import { usePageVisible } from "../../shared/query-visibility";
 import {

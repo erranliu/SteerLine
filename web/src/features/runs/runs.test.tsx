@@ -29,7 +29,7 @@ import {
 } from "../../test/workspace";
 import { Runs } from "./runs";
 import { RunnerWorkflow } from "./runner-workflow";
-import { rememberAbandonedActivities } from "../activities/abandonment";
+import { rememberAbandonedActivities } from "../activities/abandonment-marks";
 
 afterEach(() => {
   cleanup();

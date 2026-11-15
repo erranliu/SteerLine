@@ -47,3 +47,11 @@ PR 基线为 `68829335`。上表保留 `07a5c769` 上的失败和修复证据。
 `main` 已使用 SQLite 版本 50，新增归档表递增至 51。当前结构初始化、旧结构拒绝及归档事务定向测试通过，证据 `C:\SteerlineDebug\wt-915c-activity-abandonment\diagnostics\20261115-pr-rebase-schema.log`。
 
 最终功能提交 `e5d7b5de` 的 Roadmap 丢失回执发布及入图、活动读取和归档应用测试通过，证据 `C:\SteerlineDebug\wt-915c-activity-abandonment\diagnostics\20261115-pr-final-app.log`。同一提交的 L3 `runtime.async-activities` 整体通过，第二个候选独立提交，已放弃候选继续交付，资源结算和清理均完成。报告 `C:\SteerlineDebug\wt-915c-activity-abandonment\test-results\L3\20261115-pr-final\summary.json`。
+
+## 前端归档规则复验
+
+以 `65a40d51` 为基线，放弃按钮只复用当前实例的未决请求，归档查询和缓存独立于确认组件，抽屉和独立页共用归档标记与筛选判断。旧实例用例在修复前复现入口被占用，修复后确认发送当前实例的新请求。旧分页用例确认放弃后再次加载原第二页只恢复其他活动，被放弃的活动仍退出进行中。
+
+`web.unit` 54 个文件、495 项通过，含上述两项回归。生产构建、L1、L2 均通过，L2 清理完成。原报告根目录 `C:\SteerlineDebug\wt-915c-activity-abandonment-frontend\test-results`，对应 `L4\20261115-frontend-web`、`L1\20261115-frontend-check`、`L2\20261115-frontend-check`。
+
+PR #561 接入 #559 审查修复后，Web 全集 496 项及生产构建通过，包含旧实例、旧分页和候选旧启动回执三项回归。报告 `C:\SteerlineDebug\wt-915c-pr-review\test-results\L4\20261115-pr561-review\summary.json`。

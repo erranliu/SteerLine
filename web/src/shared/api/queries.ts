@@ -18,6 +18,8 @@ import type {
   DispatchObservation,
 } from "./types";
 
+export const abandonedActivitiesResource = "abandoned-activities";
+
 export function projectQueries(api: Api) {
   const scope = [
     api.home,
@@ -303,7 +305,7 @@ export function invalidateCommand(
               "activity-counts",
               "activity-links",
               "activity-summary",
-              "abandoned-activities",
+              abandonedActivitiesResource,
               "advisory",
               "environment",
               "refactoring",
