@@ -31,7 +31,7 @@ function rememberProject(home: string, project: string) {
 }
 
 const projectRoute =
-  /^\/projects\/([^/]+)\/(roadmaps|roadmap-planning|dag|runs|tests|status|settings|environment|activities|refactoring)$/;
+  /^\/projects\/([^/]+)\/(roadmaps|roadmap-planning|dag|runs|tests|status|settings|environment|activities|refactoring|manual-verification)$/;
 
 function projectReturnTarget(
   home: string,
@@ -70,12 +70,14 @@ export function useApplicationProjects(initial: BrowserSession) {
   const catalog = useQuery({
     queryKey: [home, "projects"],
     queryFn: ({ signal }) =>
-      json<{ projects: ConfiguredProject[]; loaded_execution_digest?: string }>(
-        "/api/v2/application/projects",
-        {
-          signal,
-        },
-      ),
+      json<{
+        projects: ConfiguredProject[];
+        loaded_execution_digest?: string;
+        execution_restart_required?: boolean;
+        execution_reload_error?: string;
+      }>("/api/v2/application/projects", {
+        signal,
+      }),
     enabled: sessionValid,
     refetchInterval: 5000,
     retry: false,

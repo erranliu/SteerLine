@@ -80,6 +80,7 @@ type Publication struct {
 	BaseBranch string          `json:"base_branch"`
 	Settings   json.RawMessage `json:"settings"`
 }
+
 type EnvironmentCheckInput struct {
 	VerifyOnly     bool              `json:"verify_only,omitempty"`
 	Interpreter    string            `json:"interpreter"`
@@ -92,7 +93,7 @@ type RunInput struct {
 	FastForward            bool                   `json:"checkout_fast_forward,omitempty"`
 	EnvironmentCheck       *EnvironmentCheckInput `json:"checkout_probe,omitempty"`
 	ReuseWorktreeFromRunID string                 `json:"reuse_worktree_from_run_id,omitempty"`
-	ResultFile             *ProgressFileInput     `json:"result_file,omitempty"`
+	ResultFile             *ResultFileInput       `json:"result_file,omitempty"`
 	ProgressFile           *ProgressFileInput     `json:"progress_file,omitempty"`
 	Title                  string                 `json:"title"`
 	NamePrefix             string                 `json:"name_prefix,omitempty"`

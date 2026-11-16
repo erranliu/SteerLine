@@ -22,11 +22,13 @@ func confirmedEnvironmentBasisError(err error) bool {
 }
 
 func (p *environmentPort) observeBasis(ctx context.Context, commit string) error {
+	ctx = materialReads(ctx)
 	if p.store == nil {
 		return nil
 	}
+	ctx = p.config.withProfiles(ctx)
 	seen := map[string]bool{}
-	for _, profile := range p.config.RunnerExecution.Profiles {
+	for _, profile := range p.config.executionConfig(ctx).Profiles {
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}
@@ -42,7 +44,7 @@ func (p *environmentPort) observeBasis(ctx context.Context, commit string) error
 		if current.ActivityID == "" || current.Invalidated {
 			continue
 		}
-		material, err := p.materialAt(ctx, profile.ID, commit)
+		material, err := p.basisAt(ctx, profile.ID, commit)
 		if err != nil && !confirmedEnvironmentBasisError(err) {
 			return err
 		}

@@ -30,7 +30,7 @@ $env:STEERLINE_HOME = '<所选 home>'
 
 安装目录双击 `start.bat`（等价 `steerline start`），短协调器依次启动并核验同 home 的共享后端和 Web，然后委托本 home 的 Web `open` 授权打开浏览器。重复启动复用实例；`--no-open` 适合自动化。`steerline status --json` 展示宿主、Web、项目和最近停机结果，`stop.bat` / `steerline stop` 正常停止两者并核验各项目收尾。
 
-后端低层入口为 `steerline serve`，自动冻结并装载 `etc/*.json`，所有项目在同一 PID 内分别拥有数据库、actor、实例和锁。配置修改在下次宿主启动生效。Web 可通过 `steerline-web stop`、`serve`、`open` 独立重启，项目服务和原 Runner Run 继续运行。
+后端低层入口为 `steerline serve`，自动冻结并装载 `etc/*.json`，所有项目在同一 PID 内分别拥有数据库、actor、实例和锁。项目配置和全局启动设置在下次宿主启动生效。Web 可通过 `steerline-web stop`、`serve`、`open` 独立重启，项目服务和原 Runner Run 继续运行。
 
 Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742"}`；缺文件时采用该默认值并在启动时保存。稳定端口冲突明确失败。项目配置的 `web_address` 和旧 `steerline web -config` 已删除，旧配置需要显式移除该字段，不自动迁移。
 
@@ -87,7 +87,7 @@ go run ./cmd/test-feedback -level=L1
 
 项目页 `/projects/{project_id}/environment` 直接列出全部运行环境的当前状态、原因与关联执行方案，按环境而非方案统计就绪数量。首次成功观察时异常优先，轮询保持行顺序；点击行内详情查看原检测、准备要求、设置和历史。窄屏以纵向行布局保留全部环境。查询失败时总览与详情显示待核实，上次状态只作参考；关闭环境就绪阻塞单独提示，不改变检测结果。状态来自现有 options 查询，材料和历史仍按需读取，详见[总览验收](../SteerlineFlow/testing/acceptance/project-environment-overview.md)。
 
-全局入口 `/settings/execution-configs` 支持本机 Codex、本机 Orca/Codex、Pi、DSH（Windows/amd64）、已配对远端 Orca/Codex 的配置编辑、复制、默认选择及条件保存。Web 通过固定 Runner EXE 的无服务目录和配置接口处理原生语义，保留逻辑编辑及条件保存；`execution.json` 是唯一执行配置文件，Go 后端消费启动快照。保存后通过 `steerline restart --no-open` 生效；浏览器不会自动重启。目录结果标明原生默认账号范围，不等于项目执行资格。冻结调试包拒绝保存，换方案须生成新包。
+全局入口 `/settings/execution-configs` 支持本机 Codex、本机 Orca/Codex、Pi、DSH（Windows/amd64）、已配对远端 Orca/Codex 的配置编辑、复制、默认选择及条件保存。Web 通过固定 Runner EXE 的无服务目录和配置接口处理原生语义。应用服务读取并核验保存到 `execution.json` 的执行方案，页面显示加载状态，新任务可在同一服务实例中使用更新后的方案。目录结果标明原生默认账号范围，不等于项目执行资格。冻结调试包拒绝保存，换方案须生成新包。
 
 定向验证：
 
@@ -96,6 +96,6 @@ go run ./cmd/test-feedback -level=L3 -suite=configuration -scenario=configuratio
 ./scripts/test-execution-profile-discovery.ps1 -SteerRunnerExe '<固定Runner绝对路径>' -OrcaEnvironment '<已登记环境ID>'
 ```
 
-前者使用独立 controlled 现场覆盖保存/正式重启/CLI消费；后者内部先生成新调试包，只验证真实目录查询并正常清理，不运行模型任务。结果见[专属验收](../SteerlineFlow/testing/acceptance/web-execution-config.md)。
+前者使用独立 controlled 现场覆盖浏览器保存、同一实例加载和关闭 Web 后 CLI 消费；后者内部先生成新调试包，只验证真实目录查询并正常清理，不运行模型任务。结果见[专属验收](../SteerlineFlow/testing/acceptance/web-execution-config.md)。
 
 本机和远端原生目录协议、连接与元数据进程归 Runner，Web 只合并同上下文在途请求、判断产品支持并展示。发现 Agent 或模型不代表支持其执行；provider 凭据由目标 Agent 原生配置，页面不管理或复制。当前能力与来源校验见[Runner 接入](../docs/integration/steerrunner.md#配置与能力要求)，原版本页面验证与后续边界收口分别按对应验收判断。

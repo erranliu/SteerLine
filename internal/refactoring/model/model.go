@@ -9,15 +9,30 @@ import (
 	"errors"
 	"math/big"
 	"regexp"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/erranliu/SteerLine/internal/billing"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 var ErrNotFound = errors.New("维护行动不存在")
-var ErrConflict = errors.New("维护版本或项目在途名额冲突，请刷新")
+var ErrConflict = errors.New("维护版本或推进名额冲突，请刷新")
+var ErrEnvironmentChanged = errors.New("运行环境资格已变化，请重新核实")
+var ErrQualificationUnverified = errors.New("运行环境资格待重新核实")
+var ErrPRClosed = errors.New("原PR已关闭或合并")
+
+const Concurrency = 3
+
+const (
+	WaitSharedCapacity = "shared_capacity"
+	WaitRunnerCapacity = "runner_capacity"
+	WaitEnvironment    = "environment_unverified"
+)
+
 var validID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var revisionID = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 var decimal = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]{1,18})?$`)
@@ -48,12 +63,16 @@ type Budget struct {
 	Rounds  int    `json:"rounds,omitempty"`
 }
 type Start struct {
-	Direction         string `json:"direction"`
-	DirectionRevision string `json:"direction_revision"`
-	Requirements      string `json:"requirements"`
-	Profile           string `json:"profile"`
-	Strategy          string `json:"strategy"`
-	Budget            Budget `json:"budget"`
+	Direction           string `json:"direction"`
+	DirectionRevision   string `json:"direction_revision"`
+	Requirements        string `json:"requirements"`
+	Profile             string `json:"profile"`
+	ProfileVersion      string `json:"profile_version"`
+	EnvironmentKey      string `json:"environment_key"`
+	EnvironmentRevision uint64 `json:"environment_revision"`
+	BaseCommit          string `json:"base_commit"`
+	Strategy            string `json:"strategy"`
+	Budget              Budget `json:"budget"`
 }
 
 func (s Start) Validate() error {
@@ -81,21 +100,28 @@ func (s Start) Validate() error {
 }
 
 type Frozen struct {
-	Direction   Direction                     `json:"direction"`
-	Publication map[string]string             `json:"publication"`
-	Repository  runnercontract.Repository     `json:"repository"`
-	Documents   runnercontract.Documents      `json:"documents"`
-	Write       runnercontract.ExecutionInput `json:"write"`
-	Read        runnercontract.ExecutionInput `json:"read"`
-	Runner      runnercontract.BuildPin       `json:"runner"`
-	Rules       string                        `json:"rules"`
-	Pricing     *billing.Policy               `json:"pricing,omitempty"`
+	Environment     *env.Admission                `json:"environment,omitempty"`
+	EnvironmentName string                        `json:"environment_name,omitempty"`
+	ProfileName     string                        `json:"profile_name,omitempty"`
+	Direction       Direction                     `json:"direction"`
+	Publication     map[string]string             `json:"publication"`
+	Repository      runnercontract.Repository     `json:"repository"`
+	Documents       runnercontract.Documents      `json:"documents"`
+	Write           runnercontract.ExecutionInput `json:"write"`
+	Read            runnercontract.ExecutionInput `json:"read"`
+	Runner          runnercontract.BuildPin       `json:"runner"`
+	FirstRules      string                        `json:"first_rules"`
+	FollowRules     string                        `json:"follow_rules"`
+	ReportRules     string                        `json:"report_rules"`
+	Strategy        string                        `json:"strategy_prompt"`
+	Pricing         *billing.Policy               `json:"pricing,omitempty"`
 }
 type Command struct {
 	ID, Action, Target string
 	Expected           uint64
 	Raw                json.RawMessage
-	Answer             string
+	OptionID           string
+	Note               string
 	QuestionID         string
 }
 type Cost struct {
@@ -107,13 +133,28 @@ type Cost struct {
 	Untracked  []string  `json:"untracked"`
 }
 type Question struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
-	Mode string `json:"mode"`
+	ID          string `json:"id"`
+	Mode        string `json:"mode"`
+	OperationID string `json:"operation_id"`
+	QuestionBody
+}
+type QuestionBody struct {
+	Prompt               string           `json:"prompt"`
+	Facts                []string         `json:"facts"`
+	Attempts             []string         `json:"attempts"`
+	Options              []QuestionOption `json:"options"`
+	RecommendedOptionID  string           `json:"recommended_option_id"`
+	RecommendationReason string           `json:"recommendation_reason"`
+}
+type QuestionOption struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Impact string `json:"impact"`
 }
 type Answer struct {
-	QuestionID string `json:"question_id"`
-	Text       string `json:"text"`
+	QuestionID string         `json:"question_id"`
+	Option     QuestionOption `json:"option"`
+	Note       string         `json:"note,omitempty"`
 }
 type Result struct {
 	ActionID    string `json:"action_id"`
@@ -123,53 +164,82 @@ type Result struct {
 	Head        string `json:"head"`
 	Base        string `json:"base"`
 	PR          string `json:"pr"`
-	Report      string `json:"report"`
 	NoChanges   bool   `json:"no_changes"`
 	Question    string `json:"question"`
 }
+
+// PRURL separates a trailing status note from the URL in the sealed result.
+// The provider still validates the extracted URL against the frozen target.
+func (r Result) PRURL() string {
+	value := strings.TrimSpace(r.PR)
+	end := strings.IndexFunc(value, unicode.IsSpace)
+	if end < 0 || strings.Contains(value[end:], "://") {
+		return value
+	}
+	return value[:end]
+}
+
 type Report struct {
-	AsOf      time.Time `json:"as_of"`
-	Body      string    `json:"body"`
-	Head      string    `json:"head"`
-	Base      string    `json:"base"`
-	PR        string    `json:"pr"`
-	CreatedAt time.Time `json:"created_at"`
-	Cost      *string   `json:"cost,omitempty"`
+	Body           string    `json:"body"`
+	Recommendation string    `json:"recommendation"`
+	Head           string    `json:"head"`
+	Base           string    `json:"base"`
+	PR             string    `json:"pr"`
+	Checks         string    `json:"checks,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type ReviewEvidence struct {
+	Diff       string `json:"diff"`
+	Checks     string `json:"checks"`
+	Limitation string `json:"limitation,omitempty"`
 }
 type StopAttempt struct {
 	Request runnercontract.Request `json:"request"`
 	State   string                 `json:"state"`
 }
 type Operation struct {
-	Closing      bool                         `json:"closing"`
-	ReportAsOf   time.Time                    `json:"report_as_of,omitempty"`
-	PriorStops   []StopAttempt                `json:"prior_stops,omitempty"`
-	ReportCost   *string                      `json:"report_cost,omitempty"`
-	Prompt       string                       `json:"prompt"`
-	ID           string                       `json:"id"`
-	Purpose      string                       `json:"purpose"`
-	Round        int                          `json:"round"`
-	Request      runnercontract.Request       `json:"request"`
-	InputDigest  string                       `json:"input_digest,omitempty"`
-	RunID        string                       `json:"run_id,omitempty"`
-	State        string                       `json:"state"`
-	Run          *runnercontract.Run          `json:"run,omitempty"`
-	WorkspaceGit *runnercontract.WorkspaceGit `json:"workspace_git,omitempty"`
-	Stop         *runnercontract.Request      `json:"stop,omitempty"`
-	StopState    string                       `json:"stop_state,omitempty"`
-	Feedback     string                       `json:"feedback,omitempty"`
-	Result       *Result                      `json:"result,omitempty"`
-	Cost         Cost                         `json:"cost"`
-	CreatedAt    time.Time                    `json:"created_at"`
-	CompletedAt  *time.Time                   `json:"completed_at,omitempty"`
+	Closing           bool                         `json:"closing"`
+	PriorStops        []StopAttempt                `json:"prior_stops,omitempty"`
+	Prompt            string                       `json:"prompt"`
+	Investigation     string                       `json:"investigation,omitempty"`
+	DecisionSummary   string                       `json:"decision_summary,omitempty"`
+	DecisionKind      string                       `json:"decision_kind,omitempty"`
+	PRVersion         string                       `json:"pr_version,omitempty"`
+	ReviewChecks      string                       `json:"review_checks,omitempty"`
+	AcceptedOperation string                       `json:"accepted_operation,omitempty"`
+	Question          *Question                    `json:"question,omitempty"`
+	ID                string                       `json:"id"`
+	Purpose           string                       `json:"purpose"`
+	Round             int                          `json:"round"`
+	Request           runnercontract.Request       `json:"request"`
+	InputDigest       string                       `json:"input_digest,omitempty"`
+	RunID             string                       `json:"run_id,omitempty"`
+	State             string                       `json:"state"`
+	Run               *runnercontract.Run          `json:"run,omitempty"`
+	WorkspaceGit      *runnercontract.WorkspaceGit `json:"workspace_git,omitempty"`
+	Stop              *runnercontract.Request      `json:"stop,omitempty"`
+	StopState         string                       `json:"stop_state,omitempty"`
+	Feedback          string                       `json:"feedback,omitempty"`
+	Result            *Result                      `json:"result,omitempty"`
+	Cost              Cost                         `json:"cost"`
+	CreatedAt         time.Time                    `json:"created_at"`
+	CompletedAt       *time.Time                   `json:"completed_at,omitempty"`
 }
 
 func (o Operation) Settled() bool {
 	return o.State == "complete" || o.State == "rejected" || o.State == "cancelled"
 }
+
+// ObserveRun records an already validated observation.
+func (o *Operation) ObserveRun(run *runnercontract.Run) {
+	o.RunID, o.InputDigest, o.Run = run.RunID, run.InputDigest, run
+}
+
 func (o Operation) Content(r Record) runnerbinding.Content {
 	w := "execute"
-	if o.Purpose == "select" || o.Purpose == "audit" || o.Purpose == "finish" {
+	switch o.Purpose {
+	case "first", "select", "audit", "finish", "report":
 		w = "generate"
 	}
 	var rev uint64
@@ -186,6 +256,14 @@ type Record struct {
 	Input           Start                  `json:"input"`
 	Frozen          Frozen                 `json:"frozen"`
 	Phase           string                 `json:"phase"`
+	Slot            bool                   `json:"slot"`
+	EnqueuedAt      time.Time              `json:"enqueued_at"`
+	WaitReason      string                 `json:"wait_reason,omitempty"`
+	RetryAt         *time.Time             `json:"retry_at,omitempty"`
+	RetryUntil      *time.Time             `json:"retry_until,omitempty"`
+	Authorized      bool                   `json:"authorized"`
+	ConflictPending bool                   `json:"conflict_pending,omitempty"`
+	ConflictReview  bool                   `json:"conflict_review,omitempty"`
 	FinishRequested bool                   `json:"finish_requested"`
 	StopRequested   bool                   `json:"stop_requested"`
 	Round           int                    `json:"round"`
@@ -211,12 +289,44 @@ type Record struct {
 }
 
 func (r Record) Active() bool {
+	return r.Unsettled() || r.Phase != "delivered" && r.Phase != "stopped" && r.Phase != "blocked"
+}
+
+func (r Record) Unsettled() bool {
 	for _, o := range r.Operations {
 		if !o.Settled() {
 			return true
 		}
 	}
-	return r.Phase != "delivered" && r.Phase != "stopped" && r.Phase != "blocked"
+	return false
+}
+
+func (r Record) DisplayPhase() string {
+	if r.Active() && !r.Slot && r.Phase != "waiting_input" && r.Phase != "stopping" {
+		return "queued"
+	}
+	if r.Phase != "stopping" && len(r.Operations) != 0 {
+		last := r.Operations[len(r.Operations)-1]
+		if last.State == "submitted" && last.RunID == "" {
+			return "submission_unknown"
+		}
+	}
+	return r.Phase
+}
+
+func (r Record) CanFinish() bool {
+	return r.Authorized && (r.Phase == "stopped" || r.Phase == "blocked" ||
+		r.Active() && !r.FinishRequested && !r.StopRequested)
+}
+
+func (r *Record) Resume(now time.Time) {
+	if r.ActiveSince == nil {
+		r.ActiveSince = &now
+	}
+}
+
+func (r Record) CanReview() bool {
+	return !r.Active() && r.PR != nil && !r.PR.Merged && r.PR.State == "open" && r.WriteKind != "conflict"
 }
 func (r Record) Elapsed(now time.Time) time.Duration {
 	d := time.Duration(r.ElapsedNanos)

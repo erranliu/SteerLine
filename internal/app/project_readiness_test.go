@@ -30,7 +30,7 @@ func TestProjectReadinessGatesAllUnfinishedTasksAndNewCandidates(t *testing.T) {
 	work := taskmodel.FixedWork{Record: store.graph.Tasks[0], Contract: store.contract}
 	port := &runtimeProjectPort{readiness: m}
 	baseCalls := 0
-	base := func(context.Context, taskmodel.FixedWork, bool) (string, error) {
+	base := func(context.Context, taskmodel.FixedWork, string) (string, error) {
 		baseCalls++
 		return m.current().Commit, nil
 	}
@@ -52,16 +52,14 @@ func TestProjectReadinessGatesAllUnfinishedTasksAndNewCandidates(t *testing.T) {
 			!slices.Equal(maintenance.Readiness.Blockers, readiness.Blockers) {
 			t.Fatalf("maintenance and admission disagree: %+v %+v", readiness, maintenance.Readiness)
 		}
-		for _, candidate := range []bool{false, true} {
-			before := baseCalls
-			_, _, err := m.prepare(ctx, work, candidate, base)
-			if ready {
-				require(t, err)
-			} else {
-				var rejected *taskmodel.Error
-				if !errors.As(err, &rejected) || rejected.Code != "project_not_ready" || baseCalls != before {
-					t.Fatalf("unready project reached base/candidate creation: %v", err)
-				}
+		before := baseCalls
+		_, _, err = m.prepareLatest(ctx, work, m.current().Commit, base)
+		if ready {
+			require(t, err)
+		} else {
+			var rejected *taskmodel.Error
+			if !errors.As(err, &rejected) || rejected.Code != "project_not_ready" || baseCalls != before {
+				t.Fatalf("unready project reached base/candidate creation: %v", err)
 			}
 		}
 	}
@@ -179,7 +177,10 @@ func TestMaintenanceCandidateAdmissionNeverGeneratesMaterials(t *testing.T) {
 	pmGit(t, m.config.Repository, "rm", "task.tests.json")
 	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "-qm", "missing arrangement")
 	pmGit(t, m.config.Repository, "push", "origin", "main")
-	_, _, err := m.prepareLatest(context.Background(), taskmodel.FixedWork{Record: store.graph.Tasks[0]}, false, func(context.Context, taskmodel.FixedWork, bool) (string, error) {
+	ctx := t.Context()
+	observed, err := m.check(ctx)
+	require(t, err)
+	_, _, err = m.prepareLatest(ctx, taskmodel.FixedWork{Record: store.graph.Tasks[0]}, observed.Commit, func(context.Context, taskmodel.FixedWork, string) (string, error) {
 		t.Fatal("invalid material reached base")
 		return "", nil
 	})

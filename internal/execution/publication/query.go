@@ -87,6 +87,7 @@ func queryGitea(ctx context.Context, p model.PRProviderConfig, number int) (mode
 	}
 	type ref struct {
 		Branch   string `json:"ref"`
+		Label    string `json:"label"`
 		Revision string `json:"sha"`
 		Repo     struct {
 			Name string `json:"full_name"`
@@ -97,6 +98,7 @@ func queryGitea(ctx context.Context, p model.PRProviderConfig, number int) (mode
 		URL         string     `json:"html_url"`
 		Number      int        `json:"number"`
 		State       string     `json:"state"`
+		Draft       *bool      `json:"draft"`
 		Merged      *bool      `json:"merged"`
 		MergedAt    *time.Time `json:"merged_at"`
 		MergeCommit *string    `json:"merge_commit_sha"`
@@ -113,6 +115,10 @@ func queryGitea(ctx context.Context, p model.PRProviderConfig, number int) (mode
 	} else if state == "closed" {
 		state = "closed_unmerged"
 	}
-	return model.PRInfo{Body: pr.Body, URL: pr.URL, Repository: pr.Base.Repo.Name, BaseBranch: pr.Base.Branch, HeadRepository: pr.Head.Repo.Name,
-		HeadBranch: pr.Head.Branch, HeadRevision: pr.Head.Revision, State: state, Merged: *pr.Merged, MergedAt: pr.MergedAt, MergeCommit: pr.MergeCommit}, nil
+	// Gitea switches to the PR ref when the source branch is gone.
+	if pr.Head.Branch == fmt.Sprintf("refs/pull/%d/head", number) {
+		pr.Head.Branch = pr.Head.Label
+	}
+	return model.PRInfo{Body: pr.Body, URL: pr.URL, Repository: pr.Base.Repo.Name, BaseBranch: pr.Base.Branch, BaseRevision: pr.Base.Revision, HeadRepository: pr.Head.Repo.Name,
+		HeadBranch: pr.Head.Branch, HeadRevision: pr.Head.Revision, Draft: pr.Draft, State: state, Merged: *pr.Merged, MergedAt: pr.MergedAt, MergeCommit: pr.MergeCommit}, nil
 }

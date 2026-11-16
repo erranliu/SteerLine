@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	refactoring "github.com/erranliu/SteerLine/internal/refactoring/model"
 )
 
@@ -77,7 +78,7 @@ func (s *SQLiteStore) RefactoringCommand(ctx context.Context, project, id string
 	}
 	return raw, result, nil
 }
-func (s *SQLiteStore) SaveRefactoring(ctx context.Context, r refactoring.Record, expected uint64, cmd *refactoring.Command) error {
+func (s *SQLiteStore) SaveRefactoring(ctx context.Context, r refactoring.Record, expected uint64, cmd *refactoring.Command, proof ...env.Admission) error {
 	if s.readOnly || r.ID == "" || r.Project == "" || r.Revision != expected+1 {
 		return errors.New("无效维护写入")
 	}
@@ -85,29 +86,46 @@ func (s *SQLiteStore) SaveRefactoring(ctx context.Context, r refactoring.Record,
 	if e != nil {
 		return e
 	}
-	tx, e := s.db.BeginTx(ctx, nil)
-	if e != nil {
-		return e
+	return s.activityOwnerWrite(ctx, "refactoring", r.Project, r.ID, func(tx *sql.Tx) error {
+		return saveRefactoringTx(ctx, tx, r, expected, cmd, raw, proof)
+	})
+}
+
+func saveRefactoringTx(ctx context.Context, tx *sql.Tx, r refactoring.Record, expected uint64, cmd *refactoring.Command, raw []byte, proof []env.Admission) error {
+	if len(proof) > 0 {
+		current, err := readEnvironmentCurrent(ctx, tx, r.Project, proof[0].Key)
+		if errors.Is(err, env.ErrNotFound) {
+			return refactoring.ErrEnvironmentChanged
+		}
+		if err != nil {
+			return err
+		}
+		if current.Invalidated || current.Revision != proof[0].Revision || current.ActivityID != proof[0].ActivityID {
+			return refactoring.ErrEnvironmentChanged
+		}
+		record, err := readEnvironment(ctx, tx, r.Project, current.ActivityID)
+		if err != nil {
+			return err
+		}
+		if _, err = env.Qualify(current, record, proof[0].Basis); err != nil {
+			return refactoring.ErrEnvironmentChanged
+		}
 	}
-	defer tx.Rollback()
-	active := 0
-	if r.Active() {
-		active = 1
-	}
-	if active == 1 {
+	var e error
+	if r.Slot {
 		var n int
-		if e = tx.QueryRowContext(ctx, `SELECT count(*) FROM refactoring_actions WHERE project_identity=? AND action_id<>? AND active=1`, r.Project, r.ID).Scan(&n); e != nil {
+		if e = tx.QueryRowContext(ctx, `SELECT count(*) FROM refactoring_actions WHERE project_identity=? AND action_id<>? AND slot=1`, r.Project, r.ID).Scan(&n); e != nil {
 			return e
 		}
-		if n > 0 {
+		if n >= refactoring.Concurrency {
 			return refactoring.ErrConflict
 		}
 	}
 	if expected == 0 {
-		_, e = tx.ExecContext(ctx, `INSERT INTO refactoring_actions VALUES(?,?,?,?,?)`, r.Project, r.ID, r.Revision, active, raw)
+		_, e = tx.ExecContext(ctx, `INSERT INTO refactoring_actions VALUES(?,?,?,?,?)`, r.Project, r.ID, r.Revision, r.Slot, raw)
 	} else {
 		var result sql.Result
-		result, e = tx.ExecContext(ctx, `UPDATE refactoring_actions SET revision=?,active=?,payload=? WHERE project_identity=? AND action_id=? AND revision=?`, r.Revision, active, raw, r.Project, r.ID, expected)
+		result, e = tx.ExecContext(ctx, `UPDATE refactoring_actions SET revision=?,slot=?,payload=? WHERE project_identity=? AND action_id=? AND revision=?`, r.Revision, r.Slot, raw, r.Project, r.ID, expected)
 		if e == nil {
 			n, err := result.RowsAffected()
 			if err != nil {
@@ -134,5 +152,5 @@ func (s *SQLiteStore) SaveRefactoring(ctx context.Context, r refactoring.Record,
 	if e = indexRefactoringReading(ctx, tx, r); e != nil {
 		return e
 	}
-	return tx.Commit()
+	return nil
 }

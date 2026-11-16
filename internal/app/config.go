@@ -121,7 +121,7 @@ func loadConfigSnapshotWithValidation(path string, projectBytes, globalBytes []b
 	config.ProcessHost = processHost
 	config.RunnerExecution = global
 	config.resolveCapabilities()
-	config.bindApplicationFiles(projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
+	config.bindApplicationFiles(projectPath, globalPath, loadedConfigDigest(projectBytes, global.startupSettings()), true)
 	base := filepath.Dir(projectPath)
 	if config.Repository == "" || config.Branch == "" {
 		return config, errors.New("repository and branch are required")

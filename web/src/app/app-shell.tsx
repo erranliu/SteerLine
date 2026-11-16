@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Activity,
+  ClipboardCheck,
   GitBranch,
   Layers,
   PanelLeftClose,
@@ -49,6 +50,7 @@ export function AppShell({
       "roadmap-planning": "任务规划",
       dag: "任务 DAG",
       runs: "任务执行",
+      "manual-verification": "人工核验",
       refactoring: "重构与维护",
       activities: "活动中心",
       add: "添加已初始化项目",
@@ -97,6 +99,13 @@ export function AppShell({
                 {questions > 0 && (
                   <span className="nav-count">{questions}</span>
                 )}
+              </NavLink>
+              <NavLink
+                aria-label="人工核验"
+                to={`/projects/${projectId}/manual-verification`}
+              >
+                <ClipboardCheck size={17} />
+                <span>人工核验</span>
               </NavLink>
               <NavLink
                 aria-label="活动中心"

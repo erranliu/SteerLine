@@ -65,7 +65,7 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 	}
 	run.ProgressFile = progress
 	run.Workflow = workflow
-	run.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(arrangement)}
+	run.ResultFile = &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(arrangement)}
 	return append(json.RawMessage(nil), work.FrozenTestPlan...), nil
 }
 

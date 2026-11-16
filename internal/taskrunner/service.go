@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -40,16 +41,20 @@ type Profile struct {
 type Service struct {
 	Project, Claimant, StateDir, DefaultProfile string
 	Profiles                                    map[string]Profile
+	CurrentProfiles                             func(context.Context) (string, map[string]Profile)
+	PinProfiles                                 func(context.Context) context.Context
 	Tasks                                       taskapp.Service
 	Store                                       Store
 	Bridge                                      *runnerbridge.Bridge
 	QueryPR                                     storageports.RunnerPRQuery
+	ObserveManualPR                             func(context.Context, storageports.RunnerPRObservation, error) error
 	ResolveBase                                 func(context.Context, taskmodel.FixedWork, bool) (string, error)
 	Admit                                       func(context.Context) error
 	RunnerBuild                                 runnercontract.BuildPin
 	ReserveExecution                            func(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
-	PrepareExecution                            func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error)
+	PrepareExecution                            func(context.Context, taskmodel.FixedWork, string) (taskmodel.FixedWork, string, error)
 	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (json.RawMessage, error)
+	PrepareManualChecks                         func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (*manualverification.Snapshot, error)
 	CheckExecution                              func(context.Context, string, bool) error
 	mu                                          sync.Mutex
 }
@@ -91,6 +96,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	} else if !errors.Is(err, storageports.ErrNotFound) {
 		return runnerbridge.Candidate{}, err
 	}
+	ctx = s.pinProfiles(ctx)
 	if s.Admit != nil {
 		if err := s.Admit(ctx); err != nil {
 			return runnerbridge.Candidate{}, failure("runner_unavailable", err.Error())
@@ -106,21 +112,22 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if !s.Tasks.CanExecuteType(work.Record.Type) {
 		return runnerbridge.Candidate{}, failure("task_not_ready", "task type cannot execute")
 	}
+	defaultID, profiles := s.currentProfiles(ctx)
 	profileID := input.ProfileID
 	if profileID == "" {
-		profileID = s.DefaultProfile
+		profileID = defaultID
 	}
-	profile, err := s.startProfile(profileID)
+	profile, err := startProfile(profiles, profileID)
 	if err != nil {
-		return runnerbridge.Candidate{}, err
-	}
-	if err := s.checkExecution(ctx, profileID, true); err != nil {
 		return runnerbridge.Candidate{}, err
 	}
 	var base string
 	if s.PrepareExecution != nil {
-		work, base, err = s.PrepareExecution(ctx, work, input.Candidate)
+		work, base, err = s.PrepareExecution(ctx, work, profileID)
 	} else {
+		if err := s.checkExecution(ctx, profileID, true); err != nil {
+			return runnerbridge.Candidate{}, err
+		}
 		base, err = s.ResolveBase(ctx, work, input.Candidate)
 	}
 	if err != nil {
@@ -162,6 +169,13 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 			return runnerbridge.Candidate{}, err
 		}
 	}
+	var manualChecks *manualverification.Snapshot
+	if s.PrepareManualChecks != nil {
+		manualChecks, err = s.PrepareManualChecks(ctx, work, &run)
+		if err != nil {
+			return runnerbridge.Candidate{}, err
+		}
+	}
 
 	run.Correlation["steerline_project"] = s.Project
 	run.Correlation["steerline_task_id"], run.Correlation["steerline_candidate_id"] = input.TaskID, input.RequestID
@@ -175,6 +189,12 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	}
 	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(profile.Input.Execution, profile.Input.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: id(), Input: raw}}
 	c.TestPlan = testPlan
+	if manualChecks != nil {
+		c.ManualChecks, err = json.Marshal(manualChecks)
+		if err != nil {
+			return runnerbridge.Candidate{}, err
+		}
+	}
 	c.Contract = work.Contract
 	c.MaterialDigest = work.MaterialDigest
 	reserve := s.Store.ReserveRunnerCandidate
@@ -243,8 +263,22 @@ func (s *Service) checkExecution(ctx context.Context, profile string, refresh bo
 	return s.CheckExecution(ctx, profile, refresh)
 }
 
-func (s *Service) startProfile(id string) (Profile, error) {
-	profile, ok := s.Profiles[id]
+func (s *Service) pinProfiles(ctx context.Context) context.Context {
+	if s.PinProfiles != nil {
+		return s.PinProfiles(ctx)
+	}
+	return ctx
+}
+
+func (s *Service) currentProfiles(ctx context.Context) (string, map[string]Profile) {
+	if s.CurrentProfiles != nil {
+		return s.CurrentProfiles(ctx)
+	}
+	return s.DefaultProfile, s.Profiles
+}
+
+func startProfile(profiles map[string]Profile, id string) (Profile, error) {
+	profile, ok := profiles[id]
 	switch {
 	case !ok:
 		return profile, failure("profile_not_found", "所选执行方案不可用")
@@ -260,7 +294,9 @@ func (s *Service) startProfile(id string) (Profile, error) {
 }
 
 func (s *Service) Dispatch(ctx context.Context) error {
-	if err := s.checkExecution(ctx, s.DefaultProfile, false); err != nil {
+	ctx = s.pinProfiles(ctx)
+	defaultID, _ := s.currentProfiles(ctx)
+	if err := s.checkExecution(ctx, defaultID, false); err != nil {
 		var blocked *taskmodel.Error
 		if errors.As(err, &blocked) && blocked.Code == "environment_not_ready" {
 			return nil

@@ -34,7 +34,7 @@ func TestPRConflictControlRetainsIntentAfterReceiptLoss(t *testing.T) {
 	candidate.Revision++
 	require(t, s.SaveCandidate(ctx, candidate, previous, nil))
 	bridge := &runnerbridge.Bridge{Store: s}
-	controls := taskrunner.Controls{Tasks: &taskrunner.Service{Project: project, Store: s, Bridge: bridge}, Store: s, ResolveProfile: func(string, string) (string, error) {
+	controls := taskrunner.Controls{Tasks: &taskrunner.Service{Project: project, Store: s, Bridge: bridge}, Store: s, ResolveProfile: func(context.Context, string, string) (string, error) {
 		t.Fatal("conflict resolution consulted a new profile")
 		return "", nil
 	}}

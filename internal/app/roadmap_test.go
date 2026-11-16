@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -22,7 +23,7 @@ import (
 
 func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 	ctx := context.Background()
-	c, _ := nativeTaskFixture(t)
+	c, beforeDocuments := nativeTaskFixture(t)
 	files := map[string]string{"SteerlineFlow/spec/roadmap/a.spec.md": "# Spec\n目标", "SteerlineFlow/plans/roadmap/a.plan.md": "# Plan\n实施", "SteerlineFlow/testing/acceptance/roadmap/a.md": "# Acceptance\n通过条件"}
 	for name, body := range files {
 		full := filepath.Join(c.Repository, filepath.FromSlash(name))
@@ -58,6 +59,18 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 		return out
 	}
 	commands := NewTaskCommands(store, c)
+	port := newRoadmapPort(c, nil, runnerclient.Client{}, nil, c.committedDocuments(), store, nil, nil, nil)
+	specPath := "SteerlineFlow/spec/roadmap/a.spec.md"
+	bodies, e := port.service.ReadCommittedFiles(ctx, commit, []string{specPath})
+	require(t, e)
+	if string(bodies[specPath]) != files[specPath] {
+		t.Fatalf("Roadmap batch reader returned the wrong committed Spec: %q", bodies[specPath])
+	}
+	empty, e := port.graph(ctx)
+	require(t, e)
+	if empty == nil || len(empty) != 0 {
+		t.Fatalf("empty graph should return an empty slice without refreshing the baseline: %+v", empty)
+	}
 	one := batch("one", 2)
 	request := strings.Repeat("1", 32)
 	first, e := commands.AdmitRoadmap(ctx, "roadmap-one", one, request, 1, "fixture")
@@ -70,6 +83,43 @@ func TestRoadmapAdmissionAtomicNumbersSourceAndReplay(t *testing.T) {
 	if len(graph.Tasks) != 2 || len(graph.Edges) != 1 || graph.Edges[0].PredecessorID != "0" || graph.Edges[0].SuccessorID != "1" {
 		t.Fatal(graph)
 	}
+	t.Run("existing graph reads one refreshed commit", func(t *testing.T) {
+		refreshes := 0
+		port.mergeHistory = mergeHistoryFixture{refresh: func(context.Context) (string, error) {
+			refreshes++
+			if refreshes == 1 {
+				return commit, nil
+			}
+			return beforeDocuments, nil
+		}}
+		existing, err := port.graph(ctx)
+		require(t, err)
+		if refreshes != 1 || len(existing) != 2 {
+			t.Fatalf("expected two tasks from one baseline refresh, got %d tasks and %d refreshes", len(existing), refreshes)
+		}
+		specPath := one.Tasks[0].Contract.SpecRef.Path
+		for _, task := range existing {
+			if task.Spec != specPath || task.SpecText != files[specPath] || task.MaterialDigest != roadmap.Digest([]byte(files[specPath])) {
+				t.Fatalf("unexpected committed Spec for task #%s: %+v", task.ID, task)
+			}
+		}
+		if existing[0].ID != "0" || existing[1].ID != "1" || len(existing[1].Predecessors) != 1 || existing[1].Predecessors[0] != "0" {
+			t.Fatalf("unexpected existing graph order or dependencies: %+v", existing)
+		}
+		existing, err = port.graph(ctx)
+		if refreshes != 2 || existing != nil || err == nil || !strings.Contains(err.Error(), "已有任务 #"+graph.Tasks[0].TaskID+" 的 Spec 无法读取") || errors.Unwrap(err) == nil {
+			t.Fatalf("missing Spec at the refreshed commit did not return a task-specific error: %+v, %v", existing, err)
+		}
+
+		unavailable := errors.New("baseline unavailable")
+		port.mergeHistory = mergeHistoryFixture{refresh: func(context.Context) (string, error) {
+			return commit, unavailable
+		}}
+		existing, err = port.graph(ctx)
+		if existing != nil || !errors.Is(err, unavailable) {
+			t.Fatalf("failed baseline refresh returned a graph: %+v, %v", existing, err)
+		}
+	})
 	// Replay does not reread Git or allocate, even when the observer has a newer authority version.
 	replayCommands := commands
 	replayCommands.Documents = nil

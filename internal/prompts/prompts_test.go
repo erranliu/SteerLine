@@ -20,7 +20,10 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		render func() (string, error)
 	}{
 		{"maintenance-decision", MaintenanceDecision},
-		{"maintenance-execute", MaintenanceExecute},
+		{"maintenance-decision-json-retry", MaintenanceDecisionJSONRetry},
+		{"maintenance-execute", func() (string, error) {
+			return MaintenanceExecute([]byte(`{"action_id":"a","operation_id":"o","instruction":"用户原文 {{.Ignore}}\r\n下一行  "}`))
+		}},
 		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot)) }},
 		{"testing-readonly", TestingReadOnly},
 		{"main-agent", func() (string, error) { return MainAgentAdvisory(`{"goal":"clarify","materials":[]}`) }},
@@ -40,6 +43,9 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		}},
 		{"task-planning", func() (string, error) {
 			return TaskPlanning("rules.md", "cards/topic.json", "用户目标原文\r\n下一行")
+		}},
+		{"task-planning-followup", func() (string, error) {
+			return TaskPlanning("rules.md", "cards/topic.json", "")
 		}},
 		{"task-planning-documents", func() (string, error) { return TaskPlanningDocuments("fixed", "T1") }},
 		{"roadmap-planning-conflict", func() (string, error) { return RoadmapPlanningConflict("保留原定范围。") }},
@@ -117,13 +123,19 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		read         func() ([]byte, error)
 	}{
 		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
-		{"maintenance", "3216610f7879af8c8b94f8bf6bc93c1a83187eaa494a6eb284147fdf1f12b04f", MaintenanceRules},
-		{"main-agent", "1fa5687dcca43dc78f5a91b0114dd3892c5918d626d0c86105e540d5ae5f2128", MainAgentRules},
+
+		{"maintenance-first", "ac9c1d8c7abb827251e0d6ed68a79cc033a0920014e2e59b458fea053acd312d", func() ([]byte, error) { return MaintenanceRules("first") }},
+		{"maintenance-followup", "30dba11410c152e7c02b511b201a5dc92ca9f663cba44e24b6735b2371065301", func() ([]byte, error) { return MaintenanceRules("followup") }},
+		{"maintenance-report", "77a94a8fa2e9eac5e5e11f55ac0f0bc3437718a17b39533885d57a309b34a098", func() ([]byte, error) { return MaintenanceRules("report") }},
+		{"maintenance-cautious", "36fb56b30ba9e12306c3066b0f9315752bb5e880dbaaa7261cf543612657c7f4", func() ([]byte, error) { return MaintenanceStrategy("cautious") }},
+		{"maintenance-autonomous", "f0c2470a07e019911ae36c30046e1ad320a5ea60b9a5db46a7d67b404ef57776", func() ([]byte, error) { return MaintenanceStrategy("autonomous") }},
+		{"maintenance-aggressive", "e9ed219ceaf5abdab0b467664db2d247ddf3f57a8da853d918246c993a08130b", func() ([]byte, error) { return MaintenanceStrategy("aggressive") }},
+		{"main-agent", "aa6419dea3bc11e04708face11a55b941c07262842533f8b29ff3860acd063dd", MainAgentRules},
 		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
-		{"roadmap-documents", "f6689144083f2e09e3f5dd0b37fcea1b1696c3ff5676a7de72f45ccd27e07721", RoadmapDocumentRules},
+		{"roadmap-documents", "62f392fc7d180d272949910dc7a7b32514bd43040c8f5655d354db16bdaff7ea", RoadmapDocumentRules},
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
 		{"roadmap-planning", "d405343c050b42dad6cd74d63d2d53e52ee34551965bd21ecb79fa49bb362261", RoadmapPlanningRules},
-		{"task-planning", "62818dbf7dc3186cdbaee93ee5feb5caa13c056a960e0a3e24126f1f39880e42", TaskPlanningRules},
+		{"task-planning", "a5b7292f94a899eac4908c3bd3b34007d6a19ffdb63addfa085b506f09029ff6", TaskPlanningRules},
 	}
 	for _, direction := range []struct{ id, sha256 string }{
 		{"simplify", "0eae9dbb8636492f585982d01964e43b8a3116d6957ed5fb92f39437477b1abd"},

@@ -210,7 +210,7 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 	}
 	settings, _ := json.Marshal(map[string]string{"executable": engine, "access_mode": "full_access"})
 	publication, _ := json.Marshal(map[string]any{"base_url": "https://controlled.invalid", "query": map[string]any{"executable": native, "args": []string{"--query", provider}}})
-	input := runnercontract.RunInput{Title: "Caller result contract", Repository: runnercontract.Repository{URL: "https://controlled.invalid/owner/repo.git", LocalPath: source, Remote: "origin", BaseBranch: "main", BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: spec}, Plan: runnercontract.Document{Path: plan}}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Publication: runnercontract.Publication{Provider: "command", Repository: "owner/repo", BaseBranch: "main", Settings: publication}, ProgressFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"test.one":false}`))}, ResultFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte("seed"))}}
+	input := runnercontract.RunInput{Title: "Caller result contract", Repository: runnercontract.Repository{URL: "https://controlled.invalid/owner/repo.git", LocalPath: source, Remote: "origin", BaseBranch: "main", BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: spec}, Plan: runnercontract.Document{Path: plan}}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Publication: runnercontract.Publication{Provider: "command", Repository: "owner/repo", BaseBranch: "main", Settings: publication}, ProgressFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte(`{"test.one":false}`))}, ResultFile: &runnercontract.ResultFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte("seed"))}}
 	if arrangementMode != "" {
 		input.Title = "Native 101"
 		input.Workflow.ProjectPolicySlots = []string{}
@@ -339,13 +339,13 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat *Catalog, base runnercontract.RunInput, nativeState string) {
 	t.Helper()
 	input := base
-	executePrompt, promptErr := prompts.MaintenanceExecute()
+	executePrompt, promptErr := prompts.MaintenanceExecute([]byte(`{"action_id":"fixture","operation_id":"fixture","instruction":"controlled maintenance writer"}`))
 	if promptErr != nil {
 		t.Fatal(promptErr)
 	}
 	input.Workflow = runnercontract.Workflow{ID: "execute", Version: 1, PromptOverrides: map[string]string{"execute": executePrompt}}
 	input.Publication = runnercontract.Publication{}
-	input.ProgressFile = nil
+	input.ProgressFile, input.ResultFile = nil, nil
 	read, err := c.ConfigureExecution(ctx, cat, runnercontract.ExecutionConfigurationRequest{Operation: "derive", Execution: &input.Execution, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, AccessMode: "read_only"})
 	if err != nil || read.Execution == nil {
 		t.Fatal(read, err)
@@ -388,7 +388,7 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	sessions := map[string]bool{}
 	for i := 0; i < 4; i++ {
 		input.ReuseWorktreeFromRunID = latest
-		input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString([]byte("maintenance seed"))}
+
 		body, _ := json.Marshal(input)
 		receipt, e := c.Submit(ctx, Request{Protocol: Protocol, RequestID: fmt.Sprintf("maintenance-reuse-%d", i), Input: body})
 		if e != nil {
@@ -422,27 +422,24 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 			t.Fatal(e)
 		}
 		wait(run.RunID, true)
-		sealed, e := c.ResultFile(ctx, run.RunID)
-		if e != nil || sealed.CollectionStatus != "closed" {
-			t.Fatal("source result not sealed", sealed, e)
-		}
+
 		latest = run.RunID
 	}
 	// Maintenance decisions use the original project directory while the
 	// writable Run keeps its worktree and untracked changes.
-	decision := `{"kind":"finish","prompt":"","summary":"controlled read-only result","question":""}`
+	decision := `{"kind":"finish","summary":"controlled read-only result"}`
 	if err = os.WriteFile(filepath.Join(nativeState, "content-final"), []byte(decision), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err = os.Remove(filepath.Join(nativeState, "hold-turn")); err != nil {
 		t.Fatal(err)
 	}
-	rules, contextBody := "controlled immutable file", "{\"mode\":\"audit\"}"
+	rules, contextBody := "controlled immutable file", "{\"mode\":\"first\"}"
 	readPrompt, promptErr := prompts.MaintenanceDecision()
 	if promptErr != nil {
 		t.Fatal(promptErr)
 	}
-	g := runnercontract.GenerateRunInput{Title: "Maintenance readonly caller fixture", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: *read.Execution, Generate: runnercontract.GenerateInput{Directory: &runnercontract.DirectoryAccess{Path: input.Repository.LocalPath, Access: "read_only"}, Instruction: readPrompt, OutputSchema: maintenance.Schema(), Materials: []runnercontract.Document{{Kind: "file", Path: "maintenance/rules.md", Content: &rules}, {Kind: "file", Path: "maintenance/context.json", Content: &contextBody}}}}
+	g := runnercontract.GenerateRunInput{Title: "Maintenance readonly caller fixture", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: *read.Execution, Generate: runnercontract.GenerateInput{Directory: &runnercontract.DirectoryAccess{Path: input.Repository.LocalPath, Access: "read_only"}, Instruction: readPrompt, OutputSchema: maintenance.Schema("first"), Materials: []runnercontract.Document{{Kind: "file", Path: "maintenance/rules.md", Content: &rules}, {Kind: "file", Path: "maintenance/context.json", Content: &contextBody}}}}
 	if err = cat.ValidateGenerate(g); err != nil {
 		t.Fatal(err)
 	}
@@ -462,6 +459,27 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	if err = VerifyFileMaterials(g.Generate.Materials, run.ContentResult.FileMaterials); err != nil {
 		t.Fatal(err)
 	}
+	g.Generate.Directory = nil
+	g.Generate.OutputSchema = maintenance.Schema("select")
+	contextBody = "{\"mode\":\"select\"}"
+	if err = cat.ValidateGenerate(g); err != nil {
+		t.Fatal(err)
+	}
+	body, _ = json.Marshal(g)
+	receipt, err = c.Submit(ctx, Request{Protocol: Protocol, RequestID: "maintenance-context-only", Input: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs = append(runs, receipt.RunID)
+	later := wait(receipt.RunID, true)
+	if !runnerbinding.SamePath(later.Execution.Workspace, filepath.Join(c.StateDir, "runs", later.RunID, "content")) ||
+		later.RepositorySource != nil || later.ContentResult == nil || later.ContentResult.Status != "succeeded" ||
+		later.Final == nil || !later.Final.Verified {
+		t.Fatal("directory-free generate did not produce a verified result", later)
+	}
+	if err = VerifyFileMaterials(g.Generate.Materials, later.ContentResult.FileMaterials); err != nil {
+		t.Fatal(err)
+	}
 	input.ReuseWorktreeFromRunID = latest
 	body, _ = json.Marshal(input)
 	receipt, err = c.Submit(ctx, Request{Protocol: Protocol, RequestID: "maintenance-after-readonly", Input: body})
@@ -473,5 +491,5 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	if after.WorkspaceIdentity != identity || after.ReuseWorktreeFromRunID != latest {
 		t.Fatal("readonly changed original writer chain", after)
 	}
-	t.Logf("fixed EXE maintenance: four execute Runs share origin=%s identity=%s workspace=%s branch=%s; distinct sessions; dirty file retained; readonly directory/file manifests verified", origin, identity, workspace, branch)
+	t.Logf("fixed EXE maintenance: four execute Runs share origin=%s identity=%s workspace=%s branch=%s; distinct sessions; dirty file retained without result files; readonly directory/file manifests verified", origin, identity, workspace, branch)
 }

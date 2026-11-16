@@ -28,9 +28,17 @@ func environmentExecutionReference(r env.Record) api.ExecutionReference {
 	}
 	return ref
 }
+
+func environmentSummary(r env.Record) map[string]any {
+	diagnostic, closingAction := r.ClosingStatus()
+	if diagnostic == "" {
+		diagnostic = r.DiagnosticText()
+	}
+	return map[string]any{"execution_ref": environmentExecutionReference(r), "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "stage": r.DetectionStage(), "status": r.Status(), "settled": r.Settled(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": diagnostic, "closing_action": closingAction, "rounds": []any{}}
+}
+
 func publicEnvironment(r env.Record) any {
 	rounds := []any{}
-	ref := environmentExecutionReference(r)
 	for _, a := range r.Rounds {
 		var run any
 		if a.Run != nil {
@@ -44,7 +52,20 @@ func publicEnvironment(r env.Record) any {
 		}
 		rounds = append(rounds, map[string]any{"number": a.Number, "deadline": a.Deadline, "run_id": a.RunID, "submission": a.Submission, "submission_diagnostic": a.SubmissionDiagnostic, "settled": a.Settled, "timed_out": a.TimedOut, "diagnostic": a.Diagnostic, "result": a.Result, "report": a.Report, "run": run})
 	}
-	return map[string]any{"execution_ref": ref, "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": rounds, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.Files[r.Prepared.Manifest.Script], "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
+	requests := make([]map[string]string, 0, len(r.Requests))
+	for _, q := range r.Requests {
+		request := map[string]string{"request_id": q.ID, "action": q.Action}
+		var envelope httpcontract.CommandEnvelope
+		if json.Unmarshal(q.Original, &envelope) == nil && envelope.Action == activityAbandon {
+			request["activity_id"] = envelope.TargetID
+		}
+		requests = append(requests, request)
+	}
+	out := environmentSummary(r)
+	out["rounds"], out["requests"] = rounds, requests
+	out["source_commit"], out["script_digest"], out["inputs"] = r.Prepared.Commit, r.Prepared.Files[r.Prepared.Manifest.Script], r.Prepared.Inputs
+	out["round_timeout_seconds"] = r.TimeoutSeconds
+	return out
 }
 func environmentExcerpt(s string) string {
 	r := []rune(s)
@@ -62,6 +83,9 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 		return out, projectStoppingError()
 	}
 	e := p.actor.Call(ctx, func(ctx context.Context) error {
+		if in.Action == "environment_start" || in.Action == "environment_invalidate" {
+			ctx = p.config.withProfiles(ctx)
+		}
 		raw, _ := json.Marshal(in)
 		old, found, e := p.store.LookupCommand(ctx, p.config.Identity(), in.RequestID)
 		if e != nil {
@@ -113,7 +137,7 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 			if e = decodeStrictJSON(in.Payload, &invalidate); e != nil {
 				break
 			}
-			if invalidate.Revision == nil || !p.config.runtimeEnvironment.supportsEnvironment(invalidate.Key) {
+			if invalidate.Revision == nil || !p.config.runtimeEnvironment.supportsEnvironment(ctx, invalidate.Key) {
 				e = errors.New("invalid current environment target/version")
 				break
 			}
@@ -211,7 +235,7 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 	}
 	key := values.Get("environment_key")
 	if route == "/environment/options" && len(values) == 1 && len(values["configuration"]) == 1 && values.Get("configuration") == "true" {
-		options := port.configurationOptions()
+		options := port.configurationOptions(ctx)
 		var err error
 		options.RepairPrompt, err = prompts.EnvironmentRepair(env.DocumentPath())
 		return options, err
@@ -235,7 +259,7 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 			if len(out) == 20 {
 				break
 			}
-			out = append(out, map[string]any{"execution_ref": environmentExecutionReference(r), "id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "blocked": r.Blocked(), "timed_out": r.TimedOut() && !r.Cancelled, "created_at": r.CreatedAt, "diagnostic": r.DiagnosticText(), "rounds": []any{}})
+			out = append(out, environmentSummary(r))
 		}
 		return map[string]any{"records": out}, nil
 	}

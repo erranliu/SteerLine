@@ -23,7 +23,7 @@ func (s *Server) CommandContinuationSuggestion(ctx context.Context, e CommandEnv
 }
 
 func (c *commandRegistry) submitContinuationSuggestion(ctx context.Context, e CommandEnvelope, port ContinuationSuggestionCommandPort) (CommandResponse, error) {
-	if port == nil || e.Action != "main_agent_cancel" {
+	if port == nil || (e.Action != "main_agent_cancel" && e.Action != "main_agent_regenerate") {
 		return CommandResponse{}, &protocolError{status: 400, code: "request_invalid", reason: "invalid ContinuationSuggestion application command"}
 	}
 	unlock, err := c.lockRequest(ctx, e.RequestID)

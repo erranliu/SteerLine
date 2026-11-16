@@ -45,8 +45,10 @@ type ProjectShutdown struct {
 	Diagnostic    string `json:"diagnostic,omitempty"`
 }
 type Catalog struct {
-	LoadedExecutionDigest string    `json:"loaded_execution_digest,omitempty"`
-	Projects              []Project `json:"projects"`
+	LoadedExecutionDigest    string    `json:"loaded_execution_digest,omitempty"`
+	ExecutionRestartRequired bool      `json:"execution_restart_required,omitempty"`
+	ExecutionReloadError     string    `json:"execution_reload_error,omitempty"`
+	Projects                 []Project `json:"projects"`
 }
 
 const ProjectRegistrationPath = "/projects/registration"

@@ -199,6 +199,7 @@ export interface Candidate {
     native_outcome?: string;
     final_verified: boolean;
     content_status?: string;
+    manual_verification?: boolean;
     pr_state?: string;
     pr_checked_at?: string;
     pr_query_error?: string;
@@ -351,6 +352,7 @@ export interface Envelope {
   payload: Record<string, unknown>;
 }
 export interface Receipt {
+  abandoned_at?: string;
   command?: { status: string };
   refactoring?: unknown;
   roadmap?: unknown;

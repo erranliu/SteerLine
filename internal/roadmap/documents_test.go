@@ -85,6 +85,17 @@ func documentPlanningSetup(t *testing.T, confirmed bool) (*Service, *memoryRoadm
 	f.files["SteerlineFlow/environment-project.json"] = []byte(`{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`)
 	f.files["quality/cases.json"] = []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)
 	f.files["code.go"] = []byte("fixed code\n")
+	s.ReadCommittedFiles = func(ctx context.Context, commit string, paths []string) (map[string][]byte, error) {
+		files := make(map[string][]byte, len(paths))
+		for _, path := range paths {
+			body, err := s.ReadCommitted(ctx, commit, path)
+			if err != nil {
+				return nil, err
+			}
+			files[path] = body
+		}
+		return files, nil
+	}
 	return s, store, f, r
 }
 
@@ -215,6 +226,7 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	}
 	out, source := documentResult(r)
 	out.Documents[0].ProvidesTests = []string{"new.content"}
+	out.Documents[0].ManualChecks = json.RawMessage(`{"version":1,"launch":{"program":"node","args":["preview.cjs"]},"checks":[{"id":"M01","title":"Review preview","steps":["Open preview"],"expected":"The result is visible"}]}`)
 	out.Documents[1].Tests = []string{"one", "new.content"}
 	source.LocalPath = s.Repository
 	readCommitted := s.ReadCommitted
@@ -246,6 +258,9 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	}
 	if !done.ObservationComplete() || len(done.Mapping) != 0 {
 		t.Fatal(done)
+	}
+	if len(done.Documents[0].ManualChecks) == 0 || len(done.Documents[1].ManualChecks) != 0 {
+		t.Fatal("optional manual checks were not preserved with their generated Plan")
 	}
 	if !readCode || len(done.Investigation) != 1 || done.Investigation[0].SHA256 != model.Digest([]byte("fixed code\n")) {
 		t.Fatal("platform did not derive original Git digest", done.Investigation)
@@ -447,7 +462,7 @@ func TestRoadmapDocumentInvestigationSeparatesInputFiles(t *testing.T) {
 }
 
 func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
-	for _, mismatch := range []string{"digest", "size", "missing", "read_error", "changed_bytes", "batch", "interrupted_batch"} {
+	for _, mismatch := range []string{"digest", "size", "missing", "read_error", "changed_bytes", "missing_reader", "missing_batch_entry", "batch", "interrupted_batch"} {
 		t.Run(mismatch, func(t *testing.T) {
 			s, _, f, parent := documentSetup(t)
 			r, err := startDocumentTest(s, context.Background(), parent.ID, strings.Repeat("d", 32), parent.Revision)
@@ -467,6 +482,14 @@ func TestRoadmapInvestigationChecksOriginalGitBytes(t *testing.T) {
 				s.ReadCommitted = func(context.Context, string, string) ([]byte, error) { return nil, os.ErrPermission }
 			case "changed_bytes":
 				f.files["code.go"] = []byte("changed code\n")
+			case "missing_reader":
+				s.ReadCommittedFiles = nil
+			case "missing_batch_entry":
+				source.Files[0].SHA256 = model.Digest(nil)
+				source.Files[0].SizeBytes = 0
+				s.ReadCommittedFiles = func(context.Context, string, []string) (map[string][]byte, error) {
+					return map[string][]byte{}, nil
+				}
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

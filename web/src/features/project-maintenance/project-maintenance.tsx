@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import { SafeLink, short } from "../../shared/ui/status";
 import { testPreparationNames as names } from "../tasks/use-test-readiness";
 import type { ProjectReadiness } from "../../shared/api/types";
@@ -203,7 +204,7 @@ export function ProjectMaintenance() {
     ) || [];
   const checking = () =>
     (pendingRequests?.() || []).some((e) => e.action === "maintenance_check");
-  const latestCheck = (requests || [])
+  const checkRequests = (requests || [])
     .filter(
       (r) =>
         r.envelope.project_id === identity.project_id &&
@@ -211,15 +212,25 @@ export function ProjectMaintenance() {
         r.envelope.action === "maintenance_check",
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-  const checkLabel = checking()
-    ? "正在检查更新…"
-    : latestCheck?.response?.status === "applied"
-      ? "本次检查完成"
-      : latestCheck?.response?.status === "rejected"
-        ? "检查未启动 · " + (latestCheck.response.diagnostic || "请查看原请求")
-        : pending.some((r) => r.envelope.action === "maintenance_check")
-          ? "检查结果待核实 · 请查看原请求"
-          : "";
+  const checkID = checkRequests?.envelope.request_id;
+  const checkMarks = useAbandonedActivities(
+    "baseline_check",
+    checkID ? [checkID] : [],
+  );
+  const archivedCheck = checkMarks.isAbandoned(checkID);
+  const latestCheck = archivedCheck ? undefined : checkRequests;
+  const checkLabel = archivedCheck
+    ? ""
+    : checking()
+      ? "正在检查更新…"
+      : latestCheck?.response?.status === "applied"
+        ? "本次检查完成"
+        : latestCheck?.response?.status === "rejected"
+          ? "检查未启动 · " +
+            (latestCheck.response.diagnostic || "请查看原请求")
+          : pending.some((r) => r.envelope.action === "maintenance_check")
+            ? "检查结果待核实 · 请查看原请求"
+            : "";
   return (
     <section aria-label="项目状态" className="settings-panel maintenance-panel">
       <h1>项目状态</h1>
@@ -312,7 +323,7 @@ export function ProjectMaintenance() {
               void action("maintenance_check", identity.project_id)
             }
           >
-            {checking() ? "正在检查更新…" : "检查更新"}
+            {checking() && !archivedCheck ? "正在检查更新…" : "检查更新"}
           </button>{" "}
           <button
             disabled={
@@ -334,9 +345,21 @@ export function ProjectMaintenance() {
         </p>
         <SubmissionStatus
           label={checkLabel}
-          busy={checking()}
+          busy={!archivedCheck && checking()}
           showActivity={!!latestCheck}
         />
+        {archivedCheck &&
+          checkRequests &&
+          pending.some(
+            (r) => r.envelope.request_id === checkRequests.envelope.request_id,
+          ) && (
+            <p className="muted">
+              原检查结果仍待核实。{" "}
+              <Link to={"?request_id=" + checkRequests.envelope.request_id}>
+                查看原请求
+              </Link>
+            </p>
+          )}
         {latestCheck && (
           <CopyExecutionInfo
             key={latestCheck.envelope.request_id}

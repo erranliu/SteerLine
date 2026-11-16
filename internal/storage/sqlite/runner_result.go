@@ -72,6 +72,11 @@ func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerRe
 		if !f.Merged {
 			return nativeErr("merge_state_unknown", "PR requires a fresh complete provider-confirmed merge")
 		}
+		if len(c.ManualChecks) > 0 {
+			if err := tx.observeManualPR(ctx, input.Project, input.PR, nil); err != nil && !errors.Is(err, errAtomicReplay) {
+				return err
+			}
+		}
 		proof := taskmodel.TaskDeliveryEvidence{PRInstance: strings.TrimSuffix(target.Provider.BaseURL, "/"), URL: f.URL, Repository: f.Repository, PRNumber: int64(target.Number), BaseBranch: target.Base, State: f.State, Merged: true, MergedAt: *f.MergedAt, MergeCommit: *f.MergeCommit}
 		var reused int
 		if err := tx.tx.QueryRowContext(ctx, `SELECT count(*) FROM runner_candidates WHERE project_identity=? AND candidate_id<>? AND json_extract(payload,'$.pr_url')=?`, input.Project, c.ID, proof.URL).Scan(&reused); err != nil {

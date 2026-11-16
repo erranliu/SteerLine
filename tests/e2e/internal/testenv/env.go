@@ -35,6 +35,7 @@ import (
 
 type Run struct {
 	Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, SourceCommit, SourceDirty, ExecutionModel, AuditModel, Web string
+	Gitea                                                                                                                      string
 	Remote                                                                                                                     *remotetest.Input
 }
 type Scenario struct {
@@ -69,6 +70,7 @@ type Project struct {
 	Tasks                                                                             map[string]Task
 	Chain                                                                             string
 	RealPR                                                                            bool
+	Gitea                                                                             executionmodel.PRProviderConfig
 	BaseBranch, DefaultBranch                                                         string
 	RealPRProof                                                                       *executionmodel.PRInfo
 }
@@ -118,14 +120,17 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 	}
 	// Two independently prepared projects: observation-only, then explicit UI
 	// submissions. This is a scenario budget, never a production owner timeout.
-	if id == "runtime.async-activities" {
+	if id == "runtime.async-activities" || id == "runtime.refactoring-maintenance" {
 		timeout = 10 * time.Minute
 	}
-	if id == "testing.project-environment-readiness" || id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "testing.project-progress-local-codex" || id == "recovery.waiting-merge-restart" || id == "recovery.runner-wait-retry" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
+	if id == "testing.project-environment-readiness" || id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "testing.project-progress-local-codex" || id == "recovery.waiting-merge-restart" || id == "recovery.runner-wait-retry" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" || id == ManualVerificationLiveID {
 		timeout = 10 * time.Minute
 	}
 	if id == "workflow.local-codex-audited" {
 		timeout = 20 * time.Minute
+	}
+	if id == ManualVerificationGiteaLiveID {
+		timeout = 10 * time.Minute
 	}
 	if run.Remote != nil {
 		timeout = run.Remote.Timeout(id)
@@ -635,8 +640,12 @@ func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 		return snap, errors.New("project snapshot differs from its validated project/database identity")
 	}
 	snap.Helper, err = controlled.Read(p.Provider)
-	if err == nil && p.RealPR {
-		snap.Helper.PR, err = p.githubPRContext(ctx, snap)
+	if err == nil {
+		if p.Gitea.Kind != "" {
+			snap.Helper.PR, err = p.giteaPR(ctx, snap)
+		} else if p.RealPR {
+			snap.Helper.PR, err = p.githubPRContext(ctx, snap)
+		}
 	}
 	return snap, err
 }
@@ -659,7 +668,7 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 		if c.Projection == nil {
 			return false, nil
 		}
-		if (p.Scenario.ID == "smoke.local-codex" || p.Scenario.ID == "workflow.local-codex-audited") && phase != "waiting_decision" && (c.Projection.Status == "waiting_input" || c.Projection.Status == "blocked" || c.Projection.Status == "failed") {
+		if (p.Scenario.ID == "smoke.local-codex" || p.Scenario.ID == "workflow.local-codex-audited" || p.Scenario.ID == ManualVerificationLiveID || p.Scenario.ID == ManualVerificationGiteaLiveID) && phase != "waiting_decision" && (c.Projection.Status == "waiting_input" || c.Projection.Status == "blocked" || c.Projection.Status == "failed") {
 			p.Record("blocked", snap)
 			conversation, readErr := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, p.ProjectID, c.ID, c.RunID)
 			if readErr == nil {
@@ -840,6 +849,10 @@ func (s *Scenario) cleanup() {
 		}
 		if p.RealPR {
 			provider = "github/" + githubRepository
+			realPR = p.RealPRProof
+		}
+		if p.Gitea.Kind != "" {
+			provider = "gitea/" + p.Gitea.Repository + " (isolated loopback)"
 			realPR = p.RealPRProof
 		}
 	}

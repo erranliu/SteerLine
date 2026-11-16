@@ -108,7 +108,8 @@ func testEnvironmentObserverSubmission(t *testing.T, shutdown bool) {
 	} else if peer.submits != 1 || saved.Rounds[0].Submission != "accepted" {
 		t.Fatal("six-second submission did not finish under its own budget", saved, peer.submits)
 	}
-	// Both the detail and history DTOs retain the first cause alongside reads.
+	// Both DTOs expose the current observation. The detail also keeps the first
+	// cause after the submission is confirmed.
 	saved.Diagnostic = "request_not_found"
 	if saved.Rounds[0].SubmissionDiagnostic == "" {
 		saved.Rounds[0].SubmissionDiagnostic = "original submit timed out"
@@ -122,11 +123,22 @@ func testEnvironmentObserverSubmission(t *testing.T, shutdown bool) {
 		require(t, err)
 		raw, err := json.Marshal(view)
 		require(t, err)
-		if !strings.Contains(string(raw), original) || !strings.Contains(string(raw), "request_not_found") {
-			t.Fatal("public diagnostic lost one of the causes", string(raw))
+		detail := route != "/environment"
+		if strings.Contains(string(raw), original) != (detail || shutdown) || !strings.Contains(string(raw), "request_not_found") {
+			t.Fatal("incorrect submission or observation diagnostic", string(raw))
 		}
-		if route != "/environment" && !strings.Contains(string(raw), `"submission_diagnostic"`) {
-			t.Fatal("detail omitted separate submission cause", string(raw))
+		if detail {
+			var projection struct {
+				Diagnostic string `json:"diagnostic"`
+				Rounds     []struct {
+					SubmissionDiagnostic string `json:"submission_diagnostic"`
+				} `json:"rounds"`
+			}
+			require(t, json.Unmarshal(raw, &projection))
+			if len(projection.Rounds) != 1 || projection.Rounds[0].SubmissionDiagnostic != original ||
+				strings.Contains(projection.Diagnostic, original) != shutdown {
+				t.Fatal("detail did not preserve the original cause separately", string(raw))
+			}
 		}
 	}
 }
@@ -201,13 +213,15 @@ func (f *environmentWorkflowPeer) ResultFile(context.Context, string) (runnercon
 }
 
 func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.T) {
-	t.Run("blocked detail and history", func(t *testing.T) {
+	t.Run("cleanup detail and history", func(t *testing.T) {
 		port, c, store := environmentFixture(t)
 		key, _ := env.Key(c.RunnerExecution.Profiles[1].Execution, nativefixture.ExecutionIdentity(c.RunnerExecution.Profiles[1].Execution))
 		r, err := port.service.Start(context.Background(), env.ID(), json.RawMessage(`{}`), env.Start{EnvironmentKey: key, Profile: "remote", TimeoutSeconds: 60})
 		require(t, err)
-		r.State = "running"
-		r.Rounds[0].Run = &runnercontract.Run{Status: "blocked", Phase: "operation_rejected", Diagnostic: "remote Orca query timed out"}
+		r.State = "stopping"
+		r.Rounds[0].RunID = "original-run"
+		r.Rounds[0].StopCause = "remote Orca query timed out"
+		r.Rounds[0].Run = &runnercontract.Run{Status: "blocked", ResumeRequired: true}
 		r.Revision++
 		require(t, store.SaveEnvironment(context.Background(), r, r.Revision-1))
 		runtime := &runtimeProjectPort{config: c, store: store}
@@ -216,9 +230,9 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.
 			require(t, err)
 			raw, err := json.Marshal(value)
 			require(t, err)
-			for _, fact := range []string{`"blocked":true`, `"settled":false`, `"state":"running"`, `"timed_out":false`, `"diagnostic":"remote Orca query timed out"`} {
+			for _, fact := range []string{`"stage":"closing"`, `"settled":false`, `"state":"stopping"`, `"timed_out":false`, `"closing_action":"如果长时间未确认，请检查 Runner 服务和原执行端的连接`, "remote Orca query timed out"} {
 				if !strings.Contains(string(raw), fact) {
-					t.Fatal("public observation lost original blocked facts", route, fact, string(raw))
+					t.Fatal("public observation lost cleanup facts", route, fact, string(raw))
 				}
 			}
 		}
@@ -233,7 +247,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.
 			port.service.Runner = peer
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			taskService := runnerTaskService(c, store, runnerclient.Client{}, nil, nil)
+			taskService := runnerTaskService(c, store, runnerclient.Client{}, nil)
 			actor, e := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: taskService, Store: store, Host: host.NewServiceHost(host.Config{RunDir: c.RunDir, ProcessFacts: executionprocess.NewServiceFacts()}, "off", io.Discard, nil), Repository: hostcontract.Repository{Identity: c.Identity()}, Mode: "manual", Heartbeat: time.Second, Control: func(context.Context, api.ControlRequest) (api.ControlReceipt, error) {
 				return api.ControlReceipt{}, nil
 			}})
@@ -300,7 +314,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.
 				t.Fatal("environment readiness differs from complete sealed report", e)
 			}
 			probe := &environmentReserveProbe{SQLiteStore: store}
-			gate := runnerTaskService(c, probe, runnerclient.Client{}, nil, nil)
+			gate := runnerTaskService(c, probe, runnerclient.Client{}, nil)
 			profile, e := c.RunnerExecution.Profile("remote", "")
 			require(t, e)
 			input, _ := json.Marshal(runnercontract.RunInput{Execution: profile.Execution})

@@ -73,7 +73,7 @@ export function UsageSettings({
       client.setQueryData([home, "execution-config"], result);
       setDraft(undefined);
       void client.invalidateQueries({
-        queryKey: [home, "execution-config-status"],
+        queryKey: [home, "projects"],
       });
       setNotice("采集设置已保存，是否生效以上方运行中策略为准。");
     } catch (e) {

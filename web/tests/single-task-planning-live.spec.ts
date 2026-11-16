@@ -122,10 +122,10 @@ test("single-task planning uses native conversation and admits only after the re
   await page
     .getByLabel("规划目标")
     .fill(
-      "在绑定路径写一张单任务卡。目标为在已有 logic 包规划纯函数 Sum(a,b int) int。范围为加法和 Go 单元测试，验收为 Sum(2,3)=5。约束为仅整数。直接用工具写任务卡，保持现有代码。",
+      "我想在已有 logic 包规划纯函数 Sum(a,b int) int。范围为加法和 Go 单元测试，验收为 Sum(2,3)=5，约束为仅整数。请先讨论这项任务。",
     );
   const created = await command("roadmap_planning_create", () =>
-    page.getByRole("button", { name: "开始规划" }).click(),
+    page.getByRole("button", { name: "开始沟通" }).click(),
   );
   expect(created.status, created.diagnostic).toBe("applied");
   facts.planning_id = created.roadmap.id;
@@ -135,6 +135,11 @@ test("single-task planning uses native conversation and admits only after the re
   );
   const stable = page.url();
   const card = page.getByRole("form", { name: "任务卡" });
+  await expect(card).toHaveCount(0);
+  const planned = await command("roadmap_planning_plan_task", () =>
+    page.getByRole("button", { name: "开始规划任务" }).click(),
+  );
+  expect(planned.status, planned.diagnostic).toBe("applied");
   await expect
     .poll(
       () =>
@@ -144,31 +149,48 @@ test("single-task planning uses native conversation and admits only after the re
       { timeout: 360_000 },
     )
     .toContain("Sum");
+  await card
+    .getByRole("checkbox", { name: "#0 Arithmetic foundation" })
+    .check();
+  await card
+    .getByRole("textbox", { name: "约束", exact: true })
+    .fill("手工约束：仅使用整数");
   await page
     .getByLabel("消息", { exact: true })
-    .fill(
-      "在原任务卡的 constraints 中补充确定性约束“保持现有 Go 模块路径”，保留其它字段，然后等待。",
-    );
+    .fill("补充一项验收条件：保持现有 Go 模块路径。请复述，等我发起重新规划。");
   const replied = await command("roadmap_planning_message", () =>
     page.getByRole("button", { name: "发送", exact: true }).click(),
   );
   expect(replied.status, replied.diagnostic).toBe("applied");
+  const replanned = await command("roadmap_planning_plan_task", () =>
+    page.getByRole("button", { name: "重新规划任务" }).click(),
+  );
+  expect(replanned.status, replanned.diagnostic).toBe("applied");
   await expect
     .poll(
       () =>
         card
-          .getByRole("textbox", { name: "约束", exact: true })
+          .getByRole("textbox", { name: "验收条件", exact: true })
           .inputValue({ timeout: 8_000 }),
       { timeout: 360_000 },
     )
-    .toContain("保持现有 Go 模块路径");
+    .toMatch(/Go 模块路径|Go module path/);
+  await expect(
+    card.getByRole("textbox", { name: "约束", exact: true }),
+  ).toHaveValue("手工约束：仅使用整数");
+  await expect(
+    card.getByRole("checkbox", { name: "#0 Arithmetic foundation" }),
+  ).toBeChecked();
   stage("Original native conversation wrote and then revised the task card");
 
-  await card
-    .getByRole("checkbox", { name: "#0 Arithmetic foundation" })
-    .check();
+  await page.setViewportSize({ width: 600, height: 900 });
+  await expect(page.getByText("任务卡已就绪，点开查看。")).toBeVisible();
+  await expect(card).toBeHidden();
+  await page.getByRole("button", { name: "任务卡", exact: true }).click();
+  await expect(card).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const queued = await command("roadmap_task_generate", () =>
-    page.getByRole("button", { name: "确认并生成 Spec / Plan" }).click(),
+    page.getByRole("button", { name: "确认任务卡并生成文档" }).click(),
   );
   expect(queued.status, queued.diagnostic).toBe("applied");
   facts.document_id = queued.roadmap.id;

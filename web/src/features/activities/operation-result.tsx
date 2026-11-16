@@ -12,10 +12,12 @@ import {
 export function OperationResult({
   requestID,
   targetID,
+  activityID,
   sourceID,
 }: {
   requestID: string;
   targetID: string;
+  activityID?: string;
   sourceID?: string;
 }) {
   const { api, identity, online } = useWorkspace();
@@ -44,6 +46,7 @@ export function OperationResult({
     r?.request_id === requestID &&
     r.project_id === identity.project_id &&
     (r.target_id === targetID ||
+      (r.action === "activity_abandon" && r.target_id === activityID) ||
       related?.id === targetID ||
       (["roadmap_parse", "roadmap_task_generate"].includes(r.action) &&
         r.target_id === sourceID) ||

@@ -19,19 +19,24 @@ func (s *SQLiteStore) LoadAdvisory(ctx context.Context, project, id string) ([]b
 	}
 	return raw, rev, err
 }
+
+func (s *SQLiteStore) CurrentAdvisoryID(ctx context.Context, project, candidate, occurrence string) (string, error) {
+	var id string
+	err := s.db.QueryRowContext(ctx, `SELECT request_id FROM advisory_jobs
+		WHERE project_identity=? AND candidate_id=? AND json_extract(payload,'$.source.occurrence')=?
+		ORDER BY COALESCE(json_extract(payload,'$.generation'),0) DESC,request_id DESC LIMIT 1`, project, candidate, occurrence).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = contract.ErrNotFound
+	}
+	return id, err
+}
 func (s *SQLiteStore) SaveAdvisory(ctx context.Context, project, id, candidate string, raw []byte, expected uint64) error {
 	if s.readOnly || project == "" || !contract.ID.MatchString(id) || !contract.ID.MatchString(candidate) || !json.Valid(raw) {
 		return errors.New("invalid advisory storage identity or payload")
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err = saveAdvisoryReadingTx(ctx, tx, project, id, candidate, raw, expected); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return s.activityOwnerWrite(ctx, "main_agent_advisory", project, id, func(tx *sql.Tx) error {
+		return saveAdvisoryReadingTx(ctx, tx, project, id, candidate, raw, expected)
+	})
 }
 
 func saveAdvisoryReadingTx(ctx context.Context, tx *sql.Tx, project, id, candidate string, raw []byte, expected uint64) error {

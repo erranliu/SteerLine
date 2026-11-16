@@ -26,7 +26,8 @@ func (r *clientReader) taskStartEligibility(ctx context.Context, mode string, ta
 		}
 	}
 	if len(view.Blockers) == 0 {
-		for _, profile := range r.config.RunnerExecution.Profiles {
+		ctx = r.config.withProfiles(ctx)
+		for _, profile := range r.config.executionConfig(ctx).Profiles {
 			view.ProfileBlockers[profile.ID] = nil
 			if err := r.startActor.CheckStartProfile(ctx, profile.ID); err != nil {
 				blocker := startBlocker(err)

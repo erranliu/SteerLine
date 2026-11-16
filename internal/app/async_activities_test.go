@@ -2,12 +2,15 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
@@ -15,16 +18,26 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-func assertRoadmapActivityState(t *testing.T, store *sqlite.SQLiteStore, project, request, state string, attention bool, observation string) {
+func readRoadmapActivity(t *testing.T, store *sqlite.SQLiteStore, project, request string) (api.AsyncActivity, time.Time) {
 	t.Helper()
-	links, err := query.ReadAsyncActivityLinks(context.Background(), store, project, "fixture", query.AsyncActivityOptions{RequestIDs: []string{request}})
+	links, err := query.ReadAsyncActivityLinks(context.Background(), store, project, "fixture", query.AsyncActivityOptions{Sources: []string{"roadmap"}, RequestIDs: []string{request}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := links.Links[request]
+	a, ok := links.Links[request]
+	if !ok {
+		t.Fatalf("roadmap activity for %s is missing: %+v", request, links.Sources)
+	}
+	return a, links.SampledAt
+}
+
+func assertRoadmapActivityState(t *testing.T, store *sqlite.SQLiteStore, project, request, state string, attention bool, observation string) api.AsyncActivity {
+	t.Helper()
+	a, _ := readRoadmapActivity(t, store, project, request)
 	if a.State != state || a.NeedsAttention != attention || a.Observation != observation {
 		t.Fatalf("roadmap activity mismatch: %+v (want %s attention=%v observation=%s)", a, state, attention, observation)
 	}
+	return a
 }
 
 func TestAsyncActivityReadUsesPublicIdentityAndNoActor(t *testing.T) {
@@ -111,5 +124,55 @@ func TestAsyncActivityReadIncludesRoadmapDocumentsWithoutActor(t *testing.T) {
 	stored, err := s.Roadmap(ctx, "p", id)
 	if err != nil || stored.Revision != 1 || stored.State != "queued" {
 		t.Fatalf("GET advanced roadmap: %+v %v", stored, err)
+	}
+}
+
+func TestActivityAbandonmentReadReturnsScopedMarksAndOriginalReceipt(t *testing.T) {
+	ctx := context.Background()
+	s, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "domain.db"))
+	require(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	const project = "p"
+	request := strings.Repeat("a", 32)
+	at := time.Now().UTC()
+	p := &runtimeProjectPort{config: Config{identity: project}, store: s, instance: "i"}
+	command := ports.CommandRecord{ProjectIdentity: project, CommandID: request, IdempotencyKey: request, Kind: activityAbandon, TargetID: "formal", RequestedBy: "test", Payload: []byte(`{}`), Status: "applied", Result: []byte(`{"status":"applied"}`), CreatedAt: at}
+	require(t, s.CommitActivityAbandonment(ctx, "task_candidate", "candidate", command, nil))
+	read, err := p.Read(ctx, "/commands/"+request, nil)
+	require(t, err)
+	if read.(*httpcontract.CommandResponse).Status != "applied" {
+		t.Fatal("abandonment receipt missing")
+	}
+	values := url.Values{"mode": {"abandoned"}, "source": {"task_candidate"}, "source_ids": {"candidate,other"}}
+	read, err = p.Read(ctx, "/activities", values)
+	require(t, err)
+	marks := read.(map[string]string)
+	if len(marks) != 1 || marks["candidate"] != at.Format(time.RFC3339Nano) {
+		t.Fatalf("unexpected archive marks: %v", marks)
+	}
+	values.Set("source", "baseline_check")
+	read, err = p.Read(ctx, "/activities", values)
+	require(t, err)
+	if len(read.(map[string]string)) != 0 {
+		t.Fatal("archive marks escaped their source")
+	}
+	values.Set("filter", "ongoing")
+	if _, err = p.Read(ctx, "/activities", values); err == nil {
+		t.Fatal("archive marks accepted list parameters")
+	}
+}
+
+func TestActivityAbandonmentRejectsPayloadOtherThanEmptyObject(t *testing.T) {
+	p := &runtimeProjectPort{config: Config{identity: "p"}, instance: "i"}
+	for _, payload := range []string{`null`, `[]`, `{"unexpected":true}`} {
+		_, err := p.abandonActivity(t.Context(), httpcontract.CommandEnvelope{
+			ProjectID: httpcontract.ProjectID("p"), InstanceID: "i",
+			RequestID: strings.Repeat("a", 32), Action: activityAbandon,
+			TargetID: "activity", Payload: []byte(payload),
+		})
+		var rejection *httpclient.ClientError
+		if !errors.As(err, &rejection) || rejection.Code != "invalid_payload" || rejection.Status != 400 {
+			t.Errorf("payload %s: expected invalid_payload, got %v", payload, err)
+		}
 	}
 }

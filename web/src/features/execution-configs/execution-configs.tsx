@@ -49,11 +49,15 @@ export function ExecutionConfigs({
   csrf,
   loadedDigest,
   applicationConnected,
+  restartRequired,
+  reloadError,
 }: {
   home: string;
   csrf: string;
   loadedDigest?: string;
   applicationConnected: boolean;
+  restartRequired?: boolean;
+  reloadError?: string;
 }) {
   const api = useMemo(() => executionConfigAPI(csrf), [csrf]);
   const client = useQueryClient();
@@ -272,7 +276,7 @@ export function ExecutionConfigs({
         (!modelHasEffort || !!effort || manual) &&
         (!effort || schemaEfforts.includes(effort))));
   const applied = applicationConnected && !!loadedDigest && !!base;
-  const pendingRestart = applied && loadedDigest !== base.saved_digest;
+  const pendingActivation = applied && loadedDigest !== base.saved_digest;
   const go = (action: () => void) => {
     if (dirty) setPending(() => action);
     else action();
@@ -474,11 +478,8 @@ export function ExecutionConfigs({
       setDefaultChoice(p.id === result.config.default_execution_profile);
       setDeleting(false);
       setPending(null);
-      setNotice("配置已保存。重启 SteerLine 后生效。");
-      void client.invalidateQueries({ queryKey: [home, "projects"] });
-      void client.invalidateQueries({
-        queryKey: [home, "execution-config-status"],
-      });
+      setNotice("执行方案已保存。");
+      await client.invalidateQueries({ queryKey: [home, "projects"] });
     } catch (e) {
       setError(
         e instanceof ApiError && e.status === 412
@@ -600,15 +601,18 @@ export function ExecutionConfigs({
           新建方案
         </button>
       </div>
-      {pendingRestart && (
+      {pendingActivation && (
         <div className="sl-alert" role="status">
           <Clock3 />
           <div>
-            <strong>配置已保存，待重启生效</strong>
-            <p>
-              请通过现有入口重启
-              SteerLine。已有执行保留原参数，刷新页面不会应用新配置。
-            </p>
+            <strong>
+              {restartRequired
+                ? "全局启动设置已保存，待重启生效"
+                : reloadError
+                  ? "服务未能加载已保存的执行方案"
+                  : "正在等待服务加载已保存的执行方案"}
+            </strong>
+            {reloadError && !restartRequired && <p>{reloadError}</p>}
           </div>
         </div>
       )}
@@ -1232,15 +1236,17 @@ export function ExecutionConfigs({
         </span>
         <span
           className={
-            "sl-status " + (!applied || pendingRestart ? "pending" : "")
+            "sl-status " + (!applied || pendingActivation ? "pending" : "")
           }
         >
           <span
-            className={"sl-dot " + (!applied || pendingRestart ? "warn" : "")}
+            className={
+              "sl-dot " + (!applied || pendingActivation ? "warn" : "")
+            }
           />
           {!applied
             ? "服务配置生效状态未知"
-            : pendingRestart
+            : pendingActivation
               ? "服务仍使用已加载配置"
               : "当前服务已加载保存配置"}
         </span>

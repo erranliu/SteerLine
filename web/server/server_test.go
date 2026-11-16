@@ -209,6 +209,13 @@ func TestRoadmapBrowserRoutes(t *testing.T) {
 			t.Fatal("roadmap read was not forwarded", w.Code, w.Body.String(), client.route)
 		}
 	}
+	events := base + "/roadmap-planning/" + strings.Repeat("a", 32) + "/conversation-events?after=original"
+	if w := request(s, "GET", events, "", cookie, ""); w.Code != 200 || !strings.HasSuffix(client.route, "/conversation-events?after=original") {
+		t.Fatal("planning events did not preserve the original query", w.Code, client.route)
+	}
+	if w := request(s, "GET", events, "", nil, ""); w.Code != 401 {
+		t.Fatal("planning events bypassed authentication", w.Code)
+	}
 	e := httpcontract.CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: client.identity.ProjectID, InstanceID: client.identity.InstanceID, Action: "roadmap_parse", TargetID: strings.Repeat("b", 32), ExpectedVersion: 1, Payload: json.RawMessage(`{}`)}
 	body, _ := json.Marshal(e)
 	if w := request(s, "POST", base+"/commands", string(body), cookie, csrf); w.Code != 200 || client.envelope.Action != "roadmap_parse" {

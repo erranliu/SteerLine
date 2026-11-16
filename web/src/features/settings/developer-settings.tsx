@@ -80,9 +80,6 @@ export function DeveloperSettings({
       });
       client.setQueryData([home, "execution-config"], result);
       setDraft(undefined);
-      void client.invalidateQueries({
-        queryKey: [home, "execution-config-status"],
-      });
       void client.invalidateQueries({ queryKey: [home, "projects"] });
       setNotice("开发者配置已保存。重启 SteerLine 后生效。");
     } catch (e) {

@@ -22,7 +22,7 @@ func setCheckoutStep(r *envmodel.Record, a *envmodel.Round, step string) error {
 	}
 	input.Title = "环境检测仓库准备: " + r.Profile
 	input.Correlation["checkout_preparation"] = step
-	input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: "e30="}
+	input.ResultFile = &runnercontract.ResultFileInput{InitialContentBase64: "e30="}
 	if step == "fast_forward" {
 		input.FastForward = true
 		input.EnvironmentCheck = nil

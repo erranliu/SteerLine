@@ -67,6 +67,7 @@ export function useOriginalRequests(api: Api, online: boolean) {
     },
     onError: async (e, envelope) => {
       if (current.current !== api) return;
+      if (envelope.action.startsWith("refactoring_")) return;
       if (
         envelope.action === "environment_start" &&
         (await requestByID(envelope.request_id).catch(() => undefined))
@@ -76,8 +77,9 @@ export function useOriginalRequests(api: Api, online: boolean) {
       setError(String(e));
       setErrorRequest(envelope.request_id);
     },
-    onSuccess: () => {
+    onSuccess: (_result, envelope) => {
       if (current.current !== api) return;
+      if (envelope.action.startsWith("refactoring_")) return;
       setError("");
       setErrorRequest("");
     },
@@ -206,12 +208,13 @@ export function useOriginalRequests(api: Api, online: boolean) {
       const result = await mutation.mutateAsync(envelope);
       if (current.current !== api) return result;
       if (
-        result.status === "rejected" ||
-        (result.status === "outcome_unknown" &&
-          result.code !== "request_receipt_persist_failed" &&
-          !["environment_start", "start_task", "start_candidate"].includes(
-            envelope.action,
-          ))
+        !envelope.action.startsWith("refactoring_") &&
+        (result.status === "rejected" ||
+          (result.status === "outcome_unknown" &&
+            result.code !== "request_receipt_persist_failed" &&
+            !["environment_start", "start_task", "start_candidate"].includes(
+              envelope.action,
+            )))
       ) {
         setError(result.diagnostic || "操作结果待核实，请查询原请求");
         setErrorRequest(result.request_id);
@@ -249,6 +252,7 @@ export function useOriginalRequests(api: Api, online: boolean) {
       if (current.current !== api) return;
       if (
         row.envelope.action === "environment_start" ||
+        row.envelope.action.startsWith("refactoring_") ||
         row.response?.code === "request_receipt_persist_failed" ||
         ["start_task", "start_candidate"].includes(row.envelope.action)
       )

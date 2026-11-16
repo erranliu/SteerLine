@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
@@ -90,11 +91,13 @@ func DocumentSchema(r Record) json.RawMessage {
 		if d.Key != r.TargetKey() {
 			continue
 		}
-		entries = append(entries, object(map[string]any{
+		entry := object(map[string]any{
 			"local_key": map[string]any{"const": d.Key}, "spec": file(d.Spec.Path), "plan": file(d.Plan.Path),
 			"tests":          map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}},
 			"provides_tests": map[string]any{"const": d.ProvidesTests},
-			"acceptance":     map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": []any{file(d.Acceptance[0].Path)}}}))
+			"acceptance":     map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": []any{file(d.Acceptance[0].Path)}}})
+		entry["properties"].(map[string]any)["manual_checks"] = manualverification.Schema()
+		entries = append(entries, entry)
 	}
 	props := map[string]any{
 		"source_digest":    map[string]any{"const": r.Source.Digest},

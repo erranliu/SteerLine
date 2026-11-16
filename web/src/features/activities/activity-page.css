@@ -227,6 +227,17 @@
   margin-bottom: 8px;
 }
 
+.reading-interaction .reading-message-header {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+}
+
+.reading-message-header time {
+  font-size: 12px;
+}
+
 .reading-interaction :is(.reading-role, header strong) {
   font-size: 13px;
 }

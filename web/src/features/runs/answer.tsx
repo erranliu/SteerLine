@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../app/context";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import {
   readDraftValue,
   requestByID,
@@ -36,7 +37,11 @@ export function Answer({ run }: { run: Candidate }) {
     draftKey(api.identity.project_id, api.identity.instance_id, run);
   const [note, setNote] = useState<string>();
   const [suggestion, setSuggestion] = useState<AdvisoryDetail>();
-  const answer = note ?? suggestion?.prompt ?? "";
+  const archivedSuggestion = useAbandonedActivities(
+    "main_agent_advisory",
+    suggestion ? [suggestion.id] : [],
+  ).isAbandoned(suggestion?.id);
+  const answer = note ?? (archivedSuggestion ? "" : suggestion?.prompt) ?? "";
   const [option, setOption] = useState("");
   const bytes = resume ? 0 : replyBytes(decision.request, option, answer);
   const excessBytes = bytes - replyMaxBytes;
@@ -58,13 +63,16 @@ export function Answer({ run }: { run: Candidate }) {
       row.envelope.payload.source_attempt_id === run.attempt_id &&
       (!resume ||
         row.response?.status !== "applied" ||
-        row.envelope.payload.expected_recovery_version === run.recovery_version) &&
+        row.envelope.payload.expected_recovery_version ===
+          run.recovery_version) &&
       row.response?.status !== "rejected" &&
       (row.response?.status !== "applied" ||
         decision.request.interaction_kind !== "business_feedback"),
   );
   const restored = resume
-    ? matchingRequests?.sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+    ? matchingRequests?.sort((a, b) =>
+        b.created_at.localeCompare(a.created_at),
+      )[0]
     : matchingRequests?.[0];
   const envelope = pending?.envelope ?? restored?.envelope;
   const receipt =
@@ -154,7 +162,7 @@ export function Answer({ run }: { run: Candidate }) {
       active = false;
     };
   }, [key, resume]);
-  const update = (value: string) => {
+  const update = (value: string | undefined) => {
     setNote(value);
     writeDraft(key, value)
       .then(() => setStorageError(""))
@@ -317,6 +325,16 @@ export function Answer({ run }: { run: Candidate }) {
               run={run}
               inline
               onSuggestion={setSuggestion}
+              actionsDisabled={!loaded || checking || composing}
+              onRestore={
+                note !== undefined
+                  ? (record) => {
+                      setSuggestion(record);
+                      update(undefined);
+                      setOpened(true);
+                    }
+                  : undefined
+              }
             />
           )}
           {answered ? (

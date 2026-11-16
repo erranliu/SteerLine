@@ -98,7 +98,10 @@ func testBlockedCandidateStop(t *testing.T, mode string) {
 	cli := &blockedObservation{run: *first.Projection, entered: make(chan struct{})}
 	bridge := &runnerbridge.Bridge{Store: s, Client: func(string) runnerbridge.CLI { return cli }}
 	svc := &taskrunner.Service{Project: project, Store: s, Bridge: bridge}
-	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(string, string) (string, error) { t.Fatal("stop consulted execution profile"); return "", nil }}
+	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(context.Context, string, string) (string, error) {
+		t.Fatal("stop consulted execution profile")
+		return "", nil
+	}}
 	h := &stopHost{done: make(chan api.ControlReceipt, 1)}
 	if mode == "ordinary_control" {
 		h.request = &api.ControlRequest{RequestID: strings.Repeat("f", 32), Action: "start_candidate"}

@@ -347,6 +347,9 @@ func TestContinuationSuggestionAdvisoryPersistedQuestionAutomaticallyGeneratesWi
 	if record.SourceActive || record.State != "ready" {
 		t.Fatal("resolved source rewrote history", record)
 	}
+	if err := restarted.regenerate(ctx, id, record.Revision, "resolved-question"); err == nil {
+		t.Fatal("resolved question accepted regeneration")
+	}
 	originalGoal := record.Request.Context.Goal
 	candidate.Revision++
 	candidate.Projection.Question = &runnercontract.Question{ID: "real-owner-question", Text: "different later display"}
@@ -364,6 +367,22 @@ func TestContinuationSuggestionAdvisoryPersistedQuestionAutomaticallyGeneratesWi
 	require(t, e)
 	if !activity.NeedsAttention {
 		t.Fatal("returning question did not restore attention")
+	}
+	require(t, restarted.regenerate(ctx, id, restored.Revision, "regenerate-original"))
+	for range 3 {
+		require(t, restarted.tick(ctx))
+	}
+	current, e := restarted.service.Current(ctx, source)
+	require(t, e)
+	if current.ID == id || current.State != "ready" || current.Request.Context.Goal != originalGoal || fake.submits != 2 {
+		t.Fatal("regeneration did not reuse only the frozen question", current.State, fake.submits)
+	}
+	view, e := restarted.read(ctx, "/main-agent", url.Values{"candidate_id": {source.CandidateID}, "occurrence": {source.Occurrence}})
+	require(t, e)
+	data, e := json.Marshal(view)
+	require(t, e)
+	if !bytes.Contains(data, []byte(current.ID)) {
+		t.Fatal("current question did not expose the regenerated suggestion", string(data))
 	}
 }
 

@@ -6,6 +6,8 @@
 
 删除 environment-invoke.md 全文，规范 UTF-8 源文件 412 → 0 字节。代表 PowerShell 请求正文从 396 → 0 字节，完整删除差异见该 golden 文件和原模板的 Git diff。删除原组装函数、发送接线和对应源码守卫例外。命令参数和材料摘要由结构化请求传入，模型不参与项目检测。独立审核核对了实际请求与源码守卫，并独立运行提示词和边界测试通过。
 
+合入 `main` 的 `21f78813238c0f792099044be39da8fbf67ae62d` 后，基线包含 [PR #562 的等待退出补丁](https://github.com/erranliu/SteerLine/pull/562/files)。相对该基线，[短提示模板](https://github.com/erranliu/SteerLine/blob/21f78813238c0f792099044be39da8fbf67ae62d/internal/prompts/environment-invoke.md)和[代表 PowerShell 请求正文](https://github.com/erranliu/SteerLine/blob/21f78813238c0f792099044be39da8fbf67ae62d/internal/prompts/testdata/environment-invoke.golden.md)均为整文件删除，UTF-8 分别为 704 → 0 和 688 → 0 字节。独立审核确认请求只传调用参数和材料摘要，Runner 等待原脚本实际退出并核实退出结果后封存。合并保留主干的材料缓存和独立结果文件类型。
+
 ## 合并前验证
 
 - L1 通过。sl-environment-checkout-final-l1-dfc3fd110cd24515b5953d5002a9fab9/summary.json。

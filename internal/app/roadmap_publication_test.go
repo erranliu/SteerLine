@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
@@ -239,7 +240,7 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	require(t, e)
 	defer store.Close()
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
-	port := &roadmapPort{config: c, materials: c.runtimeMaintenance, store: store, mergeHistory: c.runtimeMaintenance,
+	port := &roadmapPort{config: c, materials: c.committedDocuments(), store: store, taskGraph: store, mergeHistory: c.runtimeMaintenance,
 		taskAdmission: newRoadmapTaskCommands(store, c, func(ctx context.Context, run func(context.Context) error) error { return run(ctx) })}
 	configurePromotionGeneration(t, port, live)
 	if len(planned) > 0 && planned[0] {
@@ -404,10 +405,11 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	var r roadmap.Record
 	if single {
 		id := strings.Repeat("a", 32)
+		card := roadmap.TaskCard{Goal: "Sum integers", Scope: "Pure function", Acceptance: "Sum(2,3)=5", Predecessors: []string{"0"}}
 		require(t, store.SavePlanning(ctx, c.Identity(), "", nil, roadmap.PlanningTask{
 			ID: id, Project: c.Identity(), Kind: roadmap.SingleTaskPlanning, Title: "Sum function", Path: roadmap.TaskCardPath(id), Revision: 1, Status: "ready",
+			Body: string(mustJSON(card)), CardVersion: 1,
 		}))
-		card := roadmap.TaskCard{Goal: "Sum integers", Scope: "Pure function", Acceptance: "Sum(2,3)=5", Predecessors: []string{"0"}}
 		r = promotionAction(t, port, taskPlanningGenerate, id, strings.Repeat("2", 32), 1, card)
 		if r.Source.PlanningID != id || len(r.Generations) != 1 {
 			t.Fatal("task card identity or single generation missing", r.Source, r.Generations)
@@ -475,9 +477,16 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 		}
 	}
 	r = awaitPromotion(t, port, r, "documents-review")
-	assertRoadmapActivityState(t, store, c.Identity(), r.ID, "succeeded", true, "current")
+	reviewActivity := assertRoadmapActivityState(t, store, c.Identity(), r.ID, "succeeded", true, "current")
+	if reviewActivity.ObservedAt == nil {
+		t.Fatal("document review has no successful source observation")
+	}
 	if r.CodeCommit != code || len(r.Documents) != expectedTasks || len(r.Mapping) != 0 || len(r.Investigation) == 0 {
 		t.Fatal("unverified document result", r)
+	}
+	if crlf {
+		body := `{"version":1,"launch":{"program":"node","args":["preview.cjs"]},"checks":[{"id":"M01","title":"Preview","steps":["Open it"],"expected":"It renders"}]}`
+		r = promotionAction(t, port, "roadmap_edit_documents", r.ID, strings.Repeat("8", 32), r.Revision, map[string]string{"local_key": r.Documents[0].Key, "kind": "manual_checks", "body": body})
 	}
 	view, e := port.read(ctx, "/roadmaps/"+r.ID, nil)
 	require(t, e)
@@ -513,7 +522,12 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 	if e == nil || pub.Publication.State != "pr_unknown" {
 		t.Fatal("missing PR receipt was treated as applied", pub, e)
 	}
-	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
+	activity, _ := readRoadmapActivity(t, store, c.Identity(), pub.ID)
+	// Local publication progress remains observable while the remote receipt is unknown.
+	if activity.State != "waiting" || !activity.NeedsAttention || activity.ObservedAt == nil ||
+		!activity.ObservedAt.After(*reviewActivity.ObservedAt) || activity.Observation != "current" {
+		t.Fatalf("lost PR receipt did not retain current local progress while awaiting the remote result: %+v", activity)
+	}
 	wrong := pub
 	wrongPublication := *pub.Publication
 	wrongPublication.Commit = strings.Repeat("0", 40)
@@ -546,6 +560,26 @@ func roadmapPromotionChainWithDependencies(t *testing.T, live, crlf, formal bool
 		t.Fatal(pub)
 	}
 	assertRoadmapActivityState(t, store, c.Identity(), pub.ID, "waiting", true, "current")
+	if crlf {
+		name, err := manualverification.CompanionPath(r.Documents[0].Plan.Path)
+		require(t, err)
+		old, err := port.materials.readCommittedMaterial(ctx, pub.Publication.MergedCommit, name)
+		require(t, err)
+		if _, err := manualverification.Decode(old); err != nil {
+			t.Fatal(err)
+		}
+		retry := r
+		retry.ID = strings.Repeat("9", 32)
+		retry.CodeCommit = pub.Publication.MergedCommit
+		retry.Documents = append([]roadmap.Documents{}, r.Documents...)
+		retry.Documents[0].ManualChecks = nil
+		retry.ConfirmedDigest = roadmap.ConfirmationDigest(retry)
+		retry.Publication = &roadmap.Publication{Base: retry.CodeCommit, Branch: "fixture/remove-old-manual-checks"}
+		require(t, port.preparePublication(ctx, &retry))
+		if _, err := port.materials.readCommittedMaterial(ctx, retry.Publication.Commit, name); !isMissingRoadmapFile(err) {
+			t.Fatal("old owned manual checks were not deleted", err)
+		}
+	}
 	graph, e := store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, e)
 	if len(graph.Tasks) != seedCount {

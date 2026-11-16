@@ -10,7 +10,7 @@
 
 | 正式资产 | UTF-8/LF 字节（修改前 → 修改后） | 迁移的方向正文 |
 | --- | --- | --- |
-| [公共规则](../../../internal/prompts/materials/maintenance.md) | 4955 → 4905 | 读取实际选择的方向及单次补充要求 |
+| [当时的公共规则](https://github.com/erranliu/SteerLine/blob/371ef2d6939eec90557c17506d38f39c94de324c/internal/prompts/materials/maintenance.md) | 4955 → 4905 | 读取实际选择的方向及单次补充要求 |
 | [简化设计](../../../internal/prompts/materials/refactoring-directions/simplify.md) | 0 → 56 | 简化不必要的抽象与控制流。 |
 | [清理冗余](../../../internal/prompts/materials/refactoring-directions/cleanup.md) | 0 → 59 | 清理已证实无用或重复的代码。 |
 | [理顺职责](../../../internal/prompts/materials/refactoring-directions/boundaries.md) | 0 → 47 | 理顺模块职责与依赖。 |

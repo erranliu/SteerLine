@@ -1,0 +1,13 @@
+{
+  "tests": [
+    "l1.minimum",
+    "smoke.delivery",
+    "go.storage",
+    "go.http",
+    "go.environment",
+    "runtime.service-lifecycle",
+    "runtime.async-activities",
+    "runtime.refactoring-maintenance",
+    "refactoring.local-codex"
+  ]
+}

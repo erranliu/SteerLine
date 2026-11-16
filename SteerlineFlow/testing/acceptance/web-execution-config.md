@@ -194,3 +194,9 @@ Web 前后端独立负责能力查询、配置生成和文件管理；Go 执行�
 按用户要求仅同步主干 `b9e5002d38da4722dc8457338e063ce56817fb48`，保留文档归档和现行契约修订；唯一内容冲突为Spec导航，保留执行配置入口并采用主干最新测试管理说明。相对原PR head `a683a730` 没有生产/测试代码变化，文档链接检查通过（523份Markdown、3424个本地导航链接、0错误），无冲突标记及diff空白错误；不重复运行功能测试、不将旧验证称为本轮复跑。原边界保持。
 
 执行配置与机器/项目环境验证的整合设计/原型已按用户意见停止继续推进。该轮未提交设计单独保存在具名Git stash中，不进入本PR；当前规格与产品实现维持整合前的独立功能范围，不实施U12–U15或相应界面改动。现有人工调试环境未改动。
+
+## 保存执行方案后生效（2026-11-13）
+
+源码基线 `07a5c769`，验证包含工作区改动。受控 `configuration.execution-profiles` 通过。Edge 保存本机 Orca/Codex 和 Pi 方案并切换默认项，页面在同一服务实例中确认配置已加载。关闭 Web 后，CLI 仍能受理两个新方案，提交参数与保存值一致，原候选输入摘要和项目实例 ID 保持一致。证据根为 `C:/SteerlineDebug/wt-a397-profile-reload-a5d91810`，报告在 `L3/summary.json`，浏览器和执行证据在对应的场景目录。
+
+同一证据根的 `L1/summary.json`、`L2/summary.json` 均通过。最终生产 Web 构建及 `npm --prefix web test -- src/app src/features/execution-configs src/features/settings --maxWorkers=1` 通过，共 94 项。`go test ./internal/app -run TestWebExecutionConfig -count=1 -v` 补验最终 Go 差异，覆盖新旧受理快照、写入前版本核对、无效配置、启动设置和冻结调试包。未运行真实模型和安装版验收。

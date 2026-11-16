@@ -96,7 +96,7 @@ func TestExecutionProfiles(t *testing.T) {
 		_, err := s.RunCommandFor(cmd, "browser-"+phase, 90*time.Second)
 		s.Must(err)
 	}
-	firstWeb := startWeb()
+	webProcess := startWeb()
 	browser("edit")
 	startCandidate := func(profile, requestID string) (driver.CandidateReceipt, error) {
 		snap, e := p.Snapshot()
@@ -111,13 +111,6 @@ func TestExecutionProfiles(t *testing.T) {
 		}
 		return p.Driver.Candidate(s.Context, s.Run.Helper, driver.CandidateCommand{Action: "start_candidate", RequestID: requestID, TaskID: p.Tasks["a"].ID, TaskVersion: version, GraphRevision: snap.Page.GraphRevision, ProfileID: profile})
 	}
-	rejected, rejectErr := startCandidate("controlled", strings.Repeat("a", 32))
-	if rejectErr == nil && (rejected.Control == nil || rejected.Control.Status != "rejected" && rejected.Control.Status != "failed") {
-		t.Fatalf("changed file allowed new candidate: %+v", rejected)
-	}
-	if rejectErr != nil && !(strings.Contains(rejectErr.Error(), "identity-error") && strings.Contains(rejectErr.Error(), "cannot verify that this process instance owns the configured run_dir")) {
-		t.Fatalf("unexpected failure instead of configuration gate: %v", rejectErr)
-	}
 	afterSave, err := p.Snapshot()
 	s.Must(err)
 	for _, candidate := range afterSave.Runner.Candidates {
@@ -125,19 +118,13 @@ func TestExecutionProfiles(t *testing.T) {
 			t.Fatal("saved profile rewrote old input")
 		}
 	}
-	p.StopService()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	s.Must(firstWeb.Wait(ctx))
-	cancel()
-	p.StartService()
-	secondWeb := startWeb()
 	browser("loaded")
 	// Stop only the Web surface. The execution consumer must continue without
 	// Web caches or a capability query receipt.
 	_, err = p.Driver.RunHelper(s.Context, web, "stop")
 	s.Must(err)
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	s.Must(secondWeb.Wait(ctx))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	s.Must(webProcess.Wait(ctx))
 	cancel()
 	raw, err = os.ReadFile(path)
 	s.Must(err)
@@ -151,6 +138,9 @@ func TestExecutionProfiles(t *testing.T) {
 	}
 	if len(expected) != 2 {
 		t.Fatalf("missing browser Agent combinations: %d", len(expected))
+	}
+	if _, ok := expected[c.DefaultProfile]; !ok {
+		t.Fatalf("new default was not saved: %s", c.DefaultProfile)
 	}
 	// The saved agents have distinct environment keys. Commit their fixture
 	// entrypoints, refresh the public baseline/materials, then prepare each key.
@@ -227,7 +217,10 @@ func TestExecutionProfiles(t *testing.T) {
 	})
 	snap, err := p.Snapshot()
 	s.Must(err)
-	p.Record("after-restart-and-web-off", snap)
+	if snap.Runner.Checkpoint.Service.InstanceID != before.Runner.Checkpoint.Service.InstanceID {
+		t.Fatal("project service restarted during profile reload")
+	}
+	p.Record("after-profile-reload-and-web-off", snap)
 	p.StopService()
 	s.Must(s.FinishBody())
 }

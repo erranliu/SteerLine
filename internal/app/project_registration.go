@@ -18,6 +18,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
+	mv "github.com/erranliu/SteerLine/internal/manualverification"
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
@@ -108,8 +109,8 @@ func (d *ApplicationDirectory) checkProjectRegistration(ctx context.Context, in 
 		c.PR.Kind = "command"
 		// The browser chooses the provider, never an executable or command arguments.
 		c.PR.Query = backend.Command{Executable: "gh", Args: []string{"pr", "view", "{pr_url}", "--json",
-			"url,baseRefName,headRefOid,state,mergedAt,mergeCommit", "--jq",
-			`{url,repository:"{repository}",base_branch:.baseRefName,head_revision:.headRefOid,state:(if .state=="MERGED" then "merged" elif .state=="CLOSED" then "closed_unmerged" else "open" end),merged:(.state=="MERGED"),merged_at:(if .state=="MERGED" then .mergedAt else null end),merge_commit:(.mergeCommit.oid // null)}`}}
+			"url,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner,isDraft,state,mergedAt,mergeCommit", "--jq",
+			`{url,repository:"{repository}",base_branch:.baseRefName,head_repository:(if .headRepository and .headRepositoryOwner then .headRepositoryOwner.login + "/" + .headRepository.name else "" end),head_branch:.headRefName,head_revision:.headRefOid,draft:.isDraft,state:(if .state=="MERGED" then "merged" elif .state=="CLOSED" then "closed_unmerged" else "open" end),merged:(.state=="MERGED"),merged_at:(if .state=="MERGED" then .mergedAt else null end),merge_commit:(.mergeCommit.oid // null)}`}}
 	default:
 		return invalid("请选择 Gitea 或 GitHub 发布目标")
 	}
@@ -167,6 +168,13 @@ func (d *ApplicationDirectory) checkProjectRegistration(ctx context.Context, in 
 	reader := taskDocuments{repository: repo.Path, git: c.Git, timeout: 15 * time.Second, processHost: process}
 	if err = checkProjectInitialization(materialReads(ctx), reader, commit); err != nil {
 		return invalid(err.Error())
+	}
+	launches, err := reader.readCommittedMaterial(ctx, commit, mv.ProjectLaunchPath)
+	if err == nil {
+		_, err = mv.DecodeProjectLaunches(launches)
+	}
+	if err != nil {
+		return invalid(fmt.Sprintf("%s：%v", mv.ProjectLaunchPath, err))
 	}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {

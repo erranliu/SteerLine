@@ -6,14 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"strings"
-	"time"
 )
 
 type environmentBaseline interface {
@@ -27,6 +29,13 @@ type environmentPort struct {
 	config   Config
 	store    *sqlite.SQLiteStore
 	baseline environmentBaseline
+	basisMu  sync.Mutex
+	bases    map[environmentBasisKey]envmodel.Prepared
+}
+
+type environmentBasisKey struct {
+	repository  string
+	environment string
 }
 
 // Environment submissions use the project's lifetime, independently of the
@@ -55,11 +64,12 @@ func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Cl
 	p.service = s
 	s.Prepare = p.prepare
 	s.WithTarget = func(ctx context.Context, target, owner, commit string, create func() error) error {
+		save := func() error { return c.reserveCurrentProfiles(ctx, create) }
 		selectCurrent := func() error {
 			if p.baseline != nil {
-				return p.baseline.reserveBaseline(commit, create)
+				return p.baseline.reserveBaseline(commit, save)
 			}
-			return create()
+			return save()
 		}
 		// Match candidate admission's target -> baseline -> storage lock order.
 		if admission := p.config.runtimeEnvironmentAdmission; admission != nil {
@@ -93,10 +103,11 @@ func (p *environmentPort) read(ctx context.Context, commit, path string) ([]byte
 	return r.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
 }
 func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prepared, error) {
+	ctx = p.config.withProfiles(ctx)
 	if p.config.runtimeCatalog == nil {
 		return envmodel.Prepared{}, errors.New("Runner能力目录不可用")
 	}
-	profile, e := p.config.RunnerExecution.Profile(id, "")
+	profile, e := p.config.executionConfig(ctx).Profile(id, "")
 	if e != nil {
 		return envmodel.Prepared{}, e
 	}
@@ -114,26 +125,69 @@ func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prep
 	return prepared, err
 }
 func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (envmodel.Prepared, error) {
+	c := p.config
+	ctx = c.withProfiles(ctx)
+	if commit == "" {
+		var err error
+		commit, err = p.refreshSource(ctx)
+		if err != nil {
+			return envmodel.Prepared{}, err
+		}
+	}
+	out, e := p.basisAt(ctx, id, commit)
+	if e != nil {
+		return out, e
+	}
+	profile, e := c.executionConfig(ctx).Profile(id, "")
+	if e != nil {
+		return out, e
+	}
+	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Repository: runnercontract.Repository{LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath()}, Plan: runnercontract.Document{Path: out.Manifest.Script}}}
+	input.EnvironmentCheck = out.Input.EnvironmentCheck
+	input.Repository.URL, e = c.TaskRepositoryTarget(ctx)
+	if e != nil {
+		return out, e
+	}
+	derived, e := p.config.deriveProfile(ctx, profile, "execute", "full_access")
+	if e != nil || derived.Execution == nil {
+		return out, e
+	}
+	out.DerivedExecution, out.Input = *derived.Execution, input
+	description, e := c.describeProfile(ctx, profile)
+	if e != nil || description.Identity == nil {
+		return envmodel.Prepared{}, e
+	}
+	out.Identity = *description.Identity
+	return out, nil
+}
+
+// Cache only successful immutable material, never Current or a readiness decision.
+// Keep one commit per environment so the cache stays bounded across observations.
+func (p *environmentPort) basisAt(ctx context.Context, id, commit string) (envmodel.Prepared, error) {
+	if err := ctx.Err(); err != nil {
+		return envmodel.Prepared{}, err
+	}
 	ctx = materialReads(ctx)
 	var out envmodel.Prepared
 	c := p.config
-	profile, e := c.RunnerExecution.Profile(id, "")
+	profile, e := c.executionConfig(ctx).Profile(id, "")
 	if e != nil {
 		return out, e
 	}
-	_, e = p.config.describeProfile(ctx, profile)
+	description, e := c.describeProfile(ctx, profile)
+	if e != nil || description.Identity == nil {
+		return out, e
+	}
+	key, e := envmodel.Key(profile.Execution, *description.Identity)
 	if e != nil {
 		return out, e
 	}
-	key, e := p.config.profileEnvironmentKey(ctx, profile)
-	if e != nil {
-		return out, e
-	}
-	if commit == "" {
-		commit, e = p.refreshSource(ctx)
-		if e != nil {
-			return out, e
-		}
+	cacheKey := environmentBasisKey{repository: c.identityQueryKey(), environment: key}
+	p.basisMu.Lock()
+	cached := p.bases[cacheKey]
+	p.basisMu.Unlock()
+	if cached.Commit == commit && cached.Inputs != "" {
+		return cached, nil
 	}
 	document, manifest, script, e := p.invocationAt(ctx, commit)
 	if e != nil {
@@ -160,10 +214,6 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if total > 1<<20 {
 		return out, &invalidEnvironmentBasis{errors.New("环境调用材料超限")}
 	}
-	description, e := p.config.describeProfile(ctx, profile)
-	if e != nil || description.Identity == nil {
-		return out, e
-	}
 	execution, e := envmodel.Context(profile.Execution, *description.Identity)
 	if e != nil {
 		return out, e
@@ -183,20 +233,17 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	if e != nil {
 		return out, e
 	}
-	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Repository: runnercontract.Repository{LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath()}, Plan: runnercontract.Document{Path: manifest.Script}}}
-	input.EnvironmentCheck = &runnercontract.EnvironmentCheckInput{
+	out = envmodel.Prepared{Commit: commit, Inputs: envmodel.Digest(basis), Files: files, Manifest: manifest}
+	out.Input.EnvironmentCheck = &runnercontract.EnvironmentCheckInput{
 		Interpreter: manifest.Interpreter, Script: manifest.Script,
 		ManifestSHA256: envmodel.Digest(manifestBlock), Files: checkoutFiles,
 	}
-	input.Repository.URL, e = c.TaskRepositoryTarget(ctx)
-	if e != nil {
-		return out, e
+	p.basisMu.Lock()
+	if p.bases == nil {
+		p.bases = make(map[environmentBasisKey]envmodel.Prepared)
 	}
-	derived, e := p.config.deriveProfile(ctx, profile, "execute", "full_access")
-	if e != nil || derived.Execution == nil {
-		return out, e
-	}
-	out = envmodel.Prepared{Identity: *description.Identity, DerivedExecution: *derived.Execution, Commit: commit, Inputs: envmodel.Digest(basis), Files: files, Manifest: manifest, Input: input}
+	p.bases[cacheKey] = out
+	p.basisMu.Unlock()
 	return out, nil
 }
 
@@ -239,7 +286,7 @@ func (p *environmentPort) observedSource(ctx context.Context, waitForCheck bool)
 	return strings.TrimSpace(string(raw)), err
 }
 func (p *environmentPort) current(ctx context.Context, id string) (envmodel.Current, envmodel.Record, error) {
-	profile, err := p.config.RunnerExecution.Profile(id, "")
+	profile, err := p.config.executionConfig(ctx).Profile(id, "")
 	if err != nil {
 		return envmodel.Current{}, envmodel.Record{}, err
 	}
@@ -261,13 +308,9 @@ func (p *environmentPort) current(ctx context.Context, id string) (envmodel.Curr
 	return current, record, err
 }
 func (p *environmentPort) admission(ctx context.Context, id, candidateCommit string, refresh bool) (envmodel.Admission, envmodel.Record, error) {
+	ctx = p.config.withProfiles(ctx)
 	if refresh {
-		p.config.runtimeNative.RefreshFailures()
-		profile, err := p.config.RunnerExecution.Profile(id, "")
-		if err != nil {
-			return envmodel.Admission{}, envmodel.Record{}, err
-		}
-		if _, err = p.config.describeProfile(ctx, profile); err != nil {
+		if err := p.refreshExecutionConfiguration(ctx, id); err != nil {
 			return envmodel.Admission{}, envmodel.Record{}, err
 		}
 	}
@@ -279,7 +322,18 @@ func (p *environmentPort) admission(ctx context.Context, id, candidateCommit str
 	})
 }
 
+func (p *environmentPort) refreshExecutionConfiguration(ctx context.Context, id string) error {
+	p.config.runtimeNative.RefreshFailures()
+	profile, err := p.config.executionConfig(ctx).Profile(id, "")
+	if err != nil {
+		return err
+	}
+	_, err = p.config.describeProfile(ctx, profile)
+	return err
+}
+
 func (p *environmentPort) qualifyEnvironment(ctx context.Context, id, candidateCommit string, source func(context.Context) (string, error)) (envmodel.Admission, envmodel.Record, error) {
+	ctx = p.config.withProfiles(ctx)
 	current, record, err := p.current(ctx, id)
 	if err != nil {
 		return envmodel.Admission{}, record, err
@@ -291,24 +345,24 @@ func (p *environmentPort) qualifyEnvironment(ctx context.Context, id, candidateC
 	if err != nil {
 		return envmodel.Admission{}, record, err
 	}
-	prepared, err := p.materialAt(ctx, id, commit)
+	prepared, err := p.basisAt(ctx, id, commit)
 	if err != nil {
 		return envmodel.Admission{}, record, err
 	}
 	proof, err := envmodel.Qualify(current, record, prepared.Inputs)
 	if err != nil {
 		if record.Prepared.Inputs != prepared.Inputs {
-			err = errors.New("环境未就绪：" + environmentBasisChange(record.Prepared, prepared) + "；须重新检测")
+			err = &envmodel.QualificationError{Reason: "" + environmentBasisChange(record.Prepared, prepared) + "；须重新检测"}
 		}
 		return envmodel.Admission{}, record, err
 	}
 	if candidateCommit != "" && candidateCommit != commit {
-		candidate, err := p.materialAt(ctx, id, candidateCommit)
+		candidate, err := p.basisAt(ctx, id, candidateCommit)
 		if err != nil {
 			return envmodel.Admission{}, record, err
 		}
 		if candidate.Inputs != prepared.Inputs {
-			return envmodel.Admission{}, record, errors.New("环境未就绪：候选固定提交与当前依据不同（候选 → 当前）；" + environmentBasisChange(candidate, prepared) + "；请更新候选来源")
+			return envmodel.Admission{}, record, &envmodel.QualificationError{Reason: "候选固定提交与当前依据不同（候选 → 当前）；" + environmentBasisChange(candidate, prepared) + "；请更新候选来源"}
 		}
 	}
 	return proof, record, nil

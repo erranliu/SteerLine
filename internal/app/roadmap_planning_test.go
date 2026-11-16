@@ -14,10 +14,13 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	process "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func planningGitFixture(t *testing.T) (*planningPort, roadmap.PlanningTask, string) {
@@ -48,6 +51,8 @@ func planningGitFixture(t *testing.T) (*planningPort, roadmap.PlanningTask, stri
 	maintenance := newProjectMaintenance(config, store)
 	port := &planningPort{
 		roadmapPort:                &roadmapPort{config: config, store: store, materials: maintenance, mergeHistory: maintenance},
+		store:                      store,
+		readAdmissionMapping:       store.RoadmapMapping,
 		refreshBaselineWithRewrite: maintenance.refreshBaselineWithRewrite,
 	}
 	task := roadmap.PlanningTask{ID: strings.Repeat("a", 32), Project: config.Identity(), Revision: 1,
@@ -316,10 +321,74 @@ type planningLeaseFixture struct {
 	command    *runnercontract.Command
 	stale      bool
 	inspectErr error
+	requestID  string
+}
+
+func testPlanningInterruptUsesOriginalTurn(t *testing.T) {
+	ctx := context.Background()
+	config := Config{}
+	task := roadmap.PlanningTask{
+		ID: "planning", Project: config.Identity(), Revision: 8,
+		Run: &runnercontract.Run{
+			RunID: "run", Revision: 12, Correlation: map[string]string{"steerline_planning": "planning"},
+			Workflow:          runnercontract.Workflow{ID: "conversation", Version: 2},
+			Execution:         runnercontract.Execution{SessionID: "session", TurnID: "turn", Workspace: "workspace"},
+			WorkspaceIdentity: "identity", WorkspaceWrite: &runnercontract.WorkspaceWrite{Owner: "runner"},
+			Controls: runnercontract.Controls{CanInterrupt: true},
+		},
+	}
+	store := &planningStoreFixture{task: mustJSON(task)}
+	port := &planningPort{roadmapPort: &roadmapPort{config: config}, store: store}
+	in := httpcontract.CommandEnvelope{Action: planningAction + "interrupt", TargetID: task.ID, ExpectedVersion: task.Revision}
+	in.Payload = []byte(`{"turn_id":"previous"}`)
+	if _, _, err := port.prepare(ctx, in); err == nil {
+		t.Fatal("stale turn was accepted")
+	}
+	in.Payload = []byte(`{"turn_id":"turn"}`)
+	tasks, info, err := port.prepare(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queued := tasks[0]
+	view := info.(planningView)
+	if !view.Interrupting || view.CanMessage || view.InterruptTurn != "" ||
+		queued.Revision != task.Revision+1 || string(queued.Interrupt.Request.Input) != `{"expected_revision":12}` {
+		t.Fatalf("unexpected queued interrupt: %+v %+v", queued.Interrupt, view)
+	}
+	t.Run("new turn before first dispatch", func(t *testing.T) {
+		changed := queued
+		run := *queued.Run
+		run.Execution.TurnID = "next"
+		changed.Run = &run
+		port.runner = planningLeaseFixture{stale: true, requestID: changed.Interrupt.Request.RequestID}
+		if err := port.advancePlanningInterrupt(ctx, &changed); err != nil || changed.Interrupt != nil {
+			t.Fatalf("obsolete interrupt attempted dispatch or remained pending: %v, %+v", err, changed.Interrupt)
+		}
+	})
+	t.Run("recovery confirms completion before continuing", func(t *testing.T) {
+		stopped := queued
+		run := *queued.Run
+		receipt := runnercontract.Command{Command: "interrupt", RequestID: stopped.Interrupt.Request.RequestID, ActionStatus: "running"}
+		port.runner = planningLeaseFixture{run: &run, command: &receipt, requestID: receipt.RequestID}
+		if err := port.advancePlanningInterrupt(ctx, &stopped); err != nil || stopped.Interrupt == nil {
+			t.Fatalf("unsettled interrupt was lost: %v", err)
+		}
+		receipt.ActionStatus = "completed"
+		run.Execution.NativeOutcome = "cancelled"
+		run.Controls = runnercontract.Controls{CanMessage: true}
+		if err := port.advancePlanningInterrupt(ctx, &stopped); err != nil || stopped.Interrupt != nil || !viewPlanning(stopped).CanMessage ||
+			stopped.Run.RunID != task.Run.RunID || stopped.Run.Execution.SessionID != task.Run.Execution.SessionID ||
+			stopped.Run.WorkspaceIdentity != task.Run.WorkspaceIdentity {
+			t.Fatalf("original session could not continue: %v, %+v", err, stopped)
+		}
+	})
 }
 
 func (f planningLeaseFixture) BuildPin() runnercontract.BuildPin { return runnercontract.BuildPin{} }
-func (f planningLeaseFixture) Inspect(_ context.Context, selector, _ string) (runnercontract.Inspection, error) {
+func (f planningLeaseFixture) Inspect(_ context.Context, selector, id string) (runnercontract.Inspection, error) {
+	if selector == "request-id" && f.requestID != "" && id != f.requestID {
+		return runnercontract.Inspection{}, errors.New("unexpected recovery request ID")
+	}
 	if f.inspectErr != nil {
 		return runnercontract.Inspection{}, f.inspectErr
 	}
@@ -335,7 +404,100 @@ func (f planningLeaseFixture) Call(context.Context, string, []string, *runnercon
 	return runnerclient.Response{}, errors.New("recovery must use the original receipt")
 }
 
+type planningStoreFixture struct {
+	planningStore
+	task    []byte
+	receipt []byte
+	saves   int
+}
+
+func (s *planningStoreFixture) PlanningTask(context.Context, string, string) (roadmap.PlanningTask, error) {
+	var task roadmap.PlanningTask
+	err := json.Unmarshal(s.task, &task)
+	return task, err
+}
+
+func (s *planningStoreFixture) PlanningReceipt(context.Context, string, string) ([]byte, error) {
+	return s.receipt, nil
+}
+
+func (s *planningStoreFixture) SavePlanning(_ context.Context, _ string, request string, receipt []byte, tasks ...roadmap.PlanningTask) error {
+	if len(tasks) != 1 || request != "" && s.receipt != nil {
+		return errors.New("unexpected planning write")
+	}
+	s.task = mustJSON(tasks[0])
+	if request != "" {
+		s.receipt = receipt
+	}
+	s.saves++
+	return nil
+}
+
+type planningReplayAuthority struct{ heldRuntimePort }
+
+type planningReplayTaskStore struct{ taskStorage }
+
+func (planningReplayTaskStore) LookupCommand(context.Context, string, string) (storageports.CommandRecord, bool, error) {
+	return storageports.CommandRecord{}, false, nil
+}
+
+func (*planningReplayAuthority) Command(context.Context, string) (api.CommandReceipt, error) {
+	return api.CommandReceipt{}, &api.Error{Kind: api.UnknownRecord, Message: "command not found"}
+}
+
+func (*planningReplayAuthority) Request(context.Context, string) (*api.ControlRequest, error) {
+	return nil, os.ErrNotExist
+}
+
+func testPlanningStoreReplayAndRecovery(t *testing.T) {
+	ctx := context.Background()
+	authority := &planningReplayAuthority{}
+	config := Config{identity: authority.Project().Identity}
+	id := strings.Repeat("a", 32)
+	run := &runnercontract.Run{
+		RunID: "run", Revision: 5, Workflow: runnercontract.Workflow{ID: "conversation", Version: 2},
+		Correlation: map[string]string{"steerline_planning": id}, WorkspaceWrite: &runnercontract.WorkspaceWrite{Owner: "runner"},
+	}
+	run.Controls.CanMessage = true
+	store := &planningStoreFixture{task: mustJSON(roadmap.PlanningTask{ID: id, Project: config.Identity(), Revision: 1, Run: run})}
+	newRuntime := func(runner planningRunner) *runtimeProjectPort {
+		server, err := httpapi.NewProject(httpapi.Ports{Query: authority, Commands: authority, Authority: authority, NativeViewer: authority},
+			httpapi.Options{RunDir: t.TempDir(), ProjectIdentity: config.Identity(), InstanceID: "instance"})
+		require(t, err)
+		require(t, server.SetReady("instance", true, ""))
+		roadmaps := &roadmapPort{config: config}
+		roadmaps.planning = &planningPort{roadmapPort: roadmaps, store: store, runner: runner}
+		return &runtimeProjectPort{Server: server, config: Config{identity: config.Identity(), runtimeRoadmaps: roadmaps}, store: planningReplayTaskStore{}}
+	}
+	in := httpcontract.CommandEnvelope{RequestID: strings.Repeat("b", 32), ProjectID: httpcontract.ProjectID(config.Identity()),
+		InstanceID: "instance", Action: planningAction + "message", TargetID: id, ExpectedVersion: 1, Payload: []byte(`{"text":"original"}`)}
+	first := newRuntime(nil)
+	receipt, err := first.Server.CommandRoadmap(ctx, in, first)
+	require(t, err)
+	task, err := store.PlanningTask(ctx, config.Identity(), id)
+	require(t, err)
+	if receipt.Status != "applied" || store.saves != 1 || task.Operation == nil || task.Operation.Request == nil {
+		t.Fatalf("command did not save the original operation and receipt: %+v", receipt)
+	}
+
+	restarted := newRuntime(planningLeaseFixture{run: run, requestID: task.Operation.Request.RequestID,
+		command: &runnercontract.Command{Command: "message", ActionStatus: "completed"}})
+	restarted.config.runtimeRoadmaps.planning.tick(ctx, task)
+	recovered, err := store.PlanningTask(ctx, config.Identity(), id)
+	require(t, err)
+	if recovered.Operation != nil || recovered.Revision != task.Revision+1 || store.saves != 2 {
+		t.Fatalf("restart did not settle the original operation: %+v", recovered)
+	}
+	replayed, err := restarted.Server.CommandRoadmap(ctx, in, restarted)
+	require(t, err)
+	if string(mustJSON(replayed)) != string(mustJSON(receipt)) || store.saves != 2 {
+		t.Fatal("replay changed the original receipt or resubmitted the command")
+	}
+}
+
 func TestRoadmapPlanningRecoveryRejectsHistoricalLease(t *testing.T) {
+	t.Run("interrupt remains bound to original turn", testPlanningInterruptUsesOriginalTurn)
+	t.Run("store port replays receipt and recovers original operation", testPlanningStoreReplayAndRecovery)
 	task := roadmap.PlanningTask{ID: "plan", Operation: &roadmap.PlanningOperation{Command: "workspace acquire", Kind: "rebase", Request: &runnercontract.Request{RequestID: "original"}}}
 	run := &runnercontract.Run{RunID: "run", Correlation: map[string]string{"steerline_planning": task.ID}, Workflow: runnercontract.Workflow{ID: "conversation", Version: 2},
 		WorkspaceWrite: &runnercontract.WorkspaceWrite{Owner: "steerline", LeaseID: "another-lease"}}
@@ -400,7 +562,7 @@ func TestRoadmapPlanningRecoveryRejectsHistoricalLease(t *testing.T) {
 		// A new port has no in-memory acquire response. Recover the original
 		// receipt and verify the current owner before capturing the review.
 		acquire := planningLeaseFixture{run: task.Run, command: &runnercontract.Command{Command: "workspace acquire", CommandID: "lease", ActionStatus: "completed"}}
-		reopened := &planningPort{roadmapPort: owner.roadmapPort, runner: acquire}
+		reopened := &planningPort{roadmapPort: owner.roadmapPort, store: owner.store, runner: acquire}
 		state, err := owner.store.PlanningTask(ctx, task.Project, task.ID)
 		require(t, err)
 		_, err = reopened.runPlanningControl(ctx, &state)
@@ -443,7 +605,7 @@ func TestRoadmapPlanningRecoveryRejectsHistoricalLease(t *testing.T) {
 		if len(startup(&released)) != 0 {
 			t.Fatal("startup stop was queued before reconciling the original lease release")
 		}
-		finish := &planningPort{roadmapPort: owner.roadmapPort, runner: planningLeaseFixture{run: &released, command: &runnercontract.Command{Command: "workspace release", ActionStatus: "completed"}}}
+		finish := &planningPort{roadmapPort: owner.roadmapPort, store: owner.store, runner: planningLeaseFixture{run: &released, command: &runnercontract.Command{Command: "workspace release", ActionStatus: "completed"}}}
 		state, err = owner.store.PlanningTask(ctx, task.Project, task.ID)
 		require(t, err)
 		_, err = finish.runPlanningControl(ctx, &state)
@@ -535,6 +697,7 @@ func (f *planningSubmitFixture) Call(_ context.Context, _ string, _ []string, re
 
 func TestRoadmapPlanningMaterialSendAndOriginalRecovery(t *testing.T) {
 	t.Run("create at refreshed target", testPlanningCreateAtRefreshedTarget)
+	t.Run("task card uses the original session and settles only the planning turn", testTaskCardPlanningTurn)
 	ctx := context.Background()
 	file := filepath.Join(t.TempDir(), "rules.md")
 	rules := []byte("fixed rules")
@@ -566,6 +729,66 @@ func TestRoadmapPlanningMaterialSendAndOriginalRecovery(t *testing.T) {
 	require(t, err)
 	if task.Run == nil || task.Run.RunID != "run" || task.Operation != nil || fixture.sent != nil {
 		t.Fatal("accepted original was not reconciled")
+	}
+}
+
+func testTaskCardPlanningTurn(t *testing.T) {
+	ctx := context.Background()
+	port, task, _ := planningGitFixture(t)
+	task.Kind, task.Path = roadmap.SingleTaskPlanning, roadmap.TaskCardPath(task.ID)
+	task.Material = ""
+	task.Goal = "Discuss a release"
+	task.Run.Controls.CanMessage = true
+	task.Run.WorkspaceWrite = &runnercontract.WorkspaceWrite{Owner: "runner"}
+	task.Run.Execution.TurnID = "discussion"
+	port.store = &planningStoreFixture{task: mustJSON(task)}
+	port.readAdmissionMapping = func(context.Context, string, string) (map[string]string, error) { return nil, nil }
+	oldCard := `{"goal":"Old","scope":"Scope","constraints":"","acceptance":"Check"}`
+	newCard := `{"goal":"New","scope":"Scope","constraints":"","acceptance":"Check"}`
+	writePlanningFixture(t, task.Run.Execution.Workspace, task.Path, oldCard)
+	in := httpcontract.CommandEnvelope{Action: planningAction + taskCardOperation, TargetID: task.ID, ExpectedVersion: task.Revision, Payload: []byte(`{}`)}
+	rows, _, err := port.prepare(ctx, in)
+	require(t, err)
+	task = rows[0]
+	if task.Operation.Previous != "discussion" || task.Operation.Command != "message" || !viewPlanning(task).PlanningCard {
+		t.Fatalf("task card operation did not bind the original turn: %+v", task.Operation)
+	}
+	var control struct{ Text string }
+	require(t, json.Unmarshal(task.Operation.Request.Input, &control))
+	if !strings.Contains(control.Text, task.Material) || !strings.Contains(control.Text, task.Path) || strings.Contains(control.Text, task.Goal) {
+		t.Fatalf("unexpected follow-up instruction: %q", control.Text)
+	}
+	receipt := &runnercontract.Command{Command: "message", ActionStatus: "completed"}
+	finished, err := finishTaskCardPlanning(&task, receipt)
+	require(t, err)
+	if finished || task.Operation == nil {
+		t.Fatal("accepted message was treated as completed before the new turn")
+	}
+	task.Run.Execution.TurnID = "planning"
+	task.Run.Execution.NativeOutcome = "succeeded"
+	if _, err = finishTaskCardPlanning(&task, receipt); err == nil || task.Body != "" {
+		t.Fatal("file from discussion was incorrectly adopted as a new task card")
+	}
+	task.Operation = rows[0].Operation
+	writePlanningFixture(t, task.Run.Execution.Workspace, task.Path, newCard)
+	finished, err = finishTaskCardPlanning(&task, receipt)
+	require(t, err)
+	if !finished || task.Body != newCard || task.CardVersion != 1 {
+		t.Fatal("completed planning turn did not adopt the new card")
+	}
+	task.Operation = &roadmap.PlanningOperation{Kind: taskCardOperation, Previous: "planning"}
+	task.Run.Execution.TurnID = "replanning"
+	task.Run.Execution.NativeOutcome = "failed"
+	writePlanningFixture(t, task.Run.Execution.Workspace, task.Path, oldCard)
+	if _, err = finishTaskCardPlanning(&task, receipt); err == nil || task.Body != newCard || task.CardVersion != 1 {
+		t.Fatal("a failed turn replaced the verified card")
+	}
+	task.Operation = rows[0].Operation
+	fixture := &planningSubmitFixture{}
+	port.runner = fixture
+	require(t, os.Remove(task.Material))
+	if _, err = port.runPlanningControl(ctx, &task); err == nil || fixture.sent != nil || task.Operation != nil || task.Body != newCard {
+		t.Fatal("a missing rules file sent an instruction, held the original session busy or replaced the card")
 	}
 }
 
@@ -604,9 +827,11 @@ func testPlanningCreateAtRefreshedTarget(t *testing.T) {
 		}
 	}
 	cardID := strings.Repeat("c", 32)
+	discussID := strings.Repeat("d", 32)
 	for _, tc := range []struct{ id, payload, kind, path string }{
 		{strings.Repeat("b", 32), `{"title":"Planning","goal":"Plan a release","file":"fresh.md"}`, "", roadmap.Root + "fresh.md"},
 		{cardID, `{"title":"Planning","goal":"Plan a release","kind":"task"}`, roadmap.SingleTaskPlanning, roadmap.TaskCardPath(cardID)},
+		{discussID, `{"title":"Planning","goal":"  Discuss a release\r\n","kind":"task","discuss":true}`, roadmap.SingleTaskPlanning, roadmap.TaskCardPath(discussID)},
 	} {
 		in.RequestID = tc.id
 		in.Payload = []byte(tc.payload)
@@ -619,6 +844,12 @@ func testPlanningCreateAtRefreshedTarget(t *testing.T) {
 		require(t, json.Unmarshal(created[0].Submission.Input, &submission))
 		if submission.Repository.BaseRevision != target {
 			t.Fatalf("Runner submission did not use the frozen target: %+v", submission.Repository)
+		}
+		if tc.id == discussID && (submission.Conversation.Instruction != "  Discuss a release\r\n" || created[0].Material != "" || viewPlanning(created[0]).PlanningCard) {
+			t.Fatal("discussion creation changed the first message or injected planning rules")
+		}
+		if tc.id == cardID && (!strings.Contains(submission.Conversation.Instruction, "Plan a release") || !strings.Contains(submission.Conversation.Instruction, tc.path) || !viewPlanning(created[0]).PlanningCard) {
+			t.Fatal("direct creation did not start a planning turn")
 		}
 	}
 }

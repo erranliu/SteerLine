@@ -9,6 +9,7 @@ import {
 import type { Api } from "../../shared/api/client";
 import { usePageVisible } from "../../shared/query-visibility";
 import type { ActivityPage, ActivityListFilter } from "./model";
+import { rememberAbandonedActivities } from "./abandonment-marks";
 
 // Both surfaces share single-page requests. Only the head has a timer; loaded
 // pages are user-driven, including on focus/reconnect and in history.
@@ -37,6 +38,12 @@ export function useActivityList(
       page.instance_id !== api.identity.instance_id
     )
       throw new Error("活动范围已变化，等待重新读取");
+    rememberAbandonedActivities(client, scope, page.items);
+    rememberAbandonedActivities(
+      client,
+      scope,
+      Object.values(page.request_links),
+    );
     if (!cursor) {
       const prior = client.getQueryData<ActivityPage>(headKey);
       const failed = new Set(

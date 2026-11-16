@@ -18,6 +18,8 @@ import type {
   DispatchObservation,
 } from "./types";
 
+export const abandonedActivitiesResource = "abandoned-activities";
+
 export function projectQueries(api: Api) {
   const scope = [
     api.home,
@@ -30,7 +32,8 @@ export function projectQueries(api: Api) {
       queryOptions({
         ...defaults,
         queryKey: [...scope, "dispatch", revision],
-        queryFn: ({ signal }) => api.get<DispatchObservation>("/dispatch", signal),
+        queryFn: ({ signal }) =>
+          api.get<DispatchObservation>("/dispatch", signal),
       }),
     projectReadiness: () =>
       queryOptions({
@@ -293,6 +296,24 @@ export function invalidateCommand(
     predicate: ({ queryKey: key }) => {
       if (key[0] !== home) return false;
       if (key[1] === "local-requests") return true;
+      if (action === "activity_abandon")
+        return (
+          (key[1] === project_id &&
+            key[2] === instance_id &&
+            [
+              "async-activities",
+              "activity-counts",
+              "activity-links",
+              "activity-summary",
+              abandonedActivitiesResource,
+              "advisory",
+              "environment",
+              "refactoring",
+            ].includes(String(key[3]))) ||
+          (key[1] === "roadmaps" &&
+            key[2] === project_id &&
+            key[3] === instance_id)
+        );
       if (action.startsWith("roadmap_") && key[1] === "roadmaps")
         return key[2] === project_id && key[3] === instance_id;
       if (
@@ -302,6 +323,10 @@ export function invalidateCommand(
       )
         return false;
       const resource = String(key[3]);
+      if (action.startsWith("refactoring_"))
+        return ["refactoring", "async-activities", "activity-links"].includes(
+          resource,
+        );
       if (
         action === "maintenance_check" &&
         ["maintenance", "project-readiness", "dispatch"].includes(resource)
@@ -320,7 +345,10 @@ export function invalidateCommand(
       )
         return true;
       if (action.startsWith("environment_"))
-        return resource === "environment" || resource === "dispatch";
+        return (
+          resource === "environment" ||
+          (resource === "refactoring" && key[4] === "readiness")
+        );
       if (taskActions.has(action)) return taskResources.has(resource);
       if (affectsOutput && typeof runID === "string" && runID) {
         return (

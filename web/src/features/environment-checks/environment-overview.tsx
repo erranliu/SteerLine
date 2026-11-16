@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { queryOptions, useQueries } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
+import { Link } from "react-router-dom";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import type { Envelope, Receipt } from "../../shared/api/types";
 import { usePageVisible } from "../../shared/query-visibility";
 import {
@@ -8,12 +10,16 @@ import {
   requestExecutionInfo,
 } from "../activities/execution-info";
 import { SubmissionStatus } from "../activities/feedback/feedback";
-import { DetectionID, type DetectionRecord } from "./detection-record";
+import {
+  DetectionID,
+  isDetectionClosing,
+  type DetectionRecord,
+} from "./detection-record";
 import { Button } from "../../shared/ui/button";
 import { environmentStage, type Environment } from "./use-readiness";
 
 const priority = (stage: string) =>
-  stage === "ready" ? 2 : stage === "verifying" ? 1 : 0;
+  stage === "ready" ? 2 : stage === "verifying" || stage === "closing" ? 1 : 0;
 
 export type DetectionSubmission = {
   sending: boolean;
@@ -101,21 +107,29 @@ export function EnvironmentOverview({
   const observedRows = rows.map((environment) => {
     const submission = startState(environment);
     const activity = byID.get(environment.activity_id ?? "");
+    const current =
+      activity?.data?.id === environment.activity_id ? activity?.data : undefined;
+    const closing = environment.stage === "closing" || isDetectionClosing(current);
     const stage = submission.confirming
       ? "verifying"
-      : verified && !activity?.isError
-        ? environment.stage
-        : "unverified";
+      : !verified
+        ? "unverified"
+        : closing
+          ? "closing"
+          : activity?.isError
+            ? "unverified"
+            : environment.stage;
     return { environment, submission, activity, stage };
   });
   const ready = observedRows.filter(({ stage }) => stage === "ready").length;
   const running = observedRows.filter(
     ({ stage }) => stage === "verifying",
   ).length;
+  const closing = observedRows.filter(({ stage }) => stage === "closing").length;
   const unverified = observedRows.filter(
     ({ stage }) => stage === "unverified",
   ).length;
-  const attention = environments.length - ready - running - unverified;
+  const attention = environments.length - ready - running - closing - unverified;
   return (
     <section aria-label="全部运行环境" className="environment-overview">
       <div className="environment-totals" role="status">
@@ -128,6 +142,7 @@ export function EnvironmentOverview({
               已就绪
             </span>
             <span>检测中 {running}</span>
+            {closing > 0 && <span>收尾中 {closing}</span>}
             <span>需要处理 {attention}</span>
             {unverified > 0 && <span>待核实 {unverified}</span>}
           </>
@@ -199,10 +214,15 @@ function EnvironmentRow({
 }: RowProps) {
   const { identity, online } = useWorkspace();
   const { activity_id: activityID, environment_key: key, profiles } = e;
+  const abandoned = useAbandonedActivities(
+    "environment_detection",
+    activityID ? [activityID] : [],
+  ).isAbandoned(activityID);
   const record = activity?.data;
   const current = record?.id === activityID ? record : undefined;
+  const closing = e.stage === "closing" || isDetectionClosing(current);
   const unsettled =
-    e.stage === "verifying" ||
+    closing || e.stage === "verifying" ||
     (!!activityID && (!e.activity_settled || current?.settled === false));
   const { confirming, sending, accepted, request, receipt } = submission;
   const label = confirming
@@ -225,12 +245,12 @@ function EnvironmentRow({
         <span className="environment-status" data-stage={stage}>
           {label}
         </span>
-        {!confirming && current?.created_at && (
+        {!abandoned && !confirming && current?.created_at && (
           <p className="muted">
             最近检测：{new Date(current.created_at).toLocaleString("zh-CN")}
           </p>
         )}
-        {!confirming && activityID && (
+        {!abandoned && !confirming && activityID && (
           <DetectionID id={activityID} execution={current?.execution_ref} />
         )}
       </td>
@@ -240,33 +260,45 @@ function EnvironmentRow({
             ? "正在核实原请求，请勿重复提交。"
             : !verified
               ? `上次状态：${environmentStage[e.stage] || "待核实"}`
-              : activity?.isError
-                ? "检测状态查询失败，请刷新重试。"
-                : e.stage === "ready"
-                  ? "当前准备要求已通过"
-                  : e.reason || "暂无状态说明"}
+              : closing
+                ? (!activity?.isError && current?.diagnostic) || e.reason
+                : activity?.isError
+                  ? "检测状态查询失败，请刷新重试。"
+                  : e.stage === "ready"
+                    ? "当前准备要求已通过"
+                    : e.reason || "暂无状态说明"}
         </p>
-        {!confirming && unsettled && <p className="muted">本次检测尚未结束</p>}
+        {!confirming && closing && (current?.closing_action || e.closing_action) && (
+          <p className="muted">{current?.closing_action || e.closing_action}</p>
+        )}
+        {!confirming && unsettled && abandoned && !closing && (
+          <p className="muted">
+            原检测仍待结算。{" "}
+            <Link to={"?activity=" + activityID}>查看原检测</Link>
+          </p>
+        )}
         {!confirming && stage === "ready" && (
           <p className="muted">重新检测会使当前就绪状态失效。</p>
         )}
-        <SubmissionStatus
-          label={
-            sending
-              ? "正在提交检测…"
-              : confirming
-                ? accepted
-                  ? "已受理，正在读取工作信息"
-                  : "提交结果待核实 · 请查看原请求"
-                : activityID
-                  ? "检测进度可在活动中心查看"
-                  : ""
-          }
-          busy={sending}
-          showActivity={!!request || !!activityID}
-          announce={confirming}
-        />
-        {confirming && request && (
+        {!abandoned && (
+          <SubmissionStatus
+            label={
+              sending
+                ? "正在提交检测…"
+                : confirming
+                  ? accepted
+                    ? "已受理，正在读取工作信息"
+                    : "提交结果待核实 · 请查看原请求"
+                  : activityID
+                    ? "检测进度可在活动中心查看"
+                    : ""
+            }
+            busy={sending}
+            showActivity={!!request || !!activityID}
+            announce={confirming}
+          />
+        )}
+        {!abandoned && confirming && request && (
           <CopyExecutionInfo
             info={{
               ...requestExecutionInfo(request, receipt),
@@ -297,7 +329,9 @@ function EnvironmentRow({
         )}
       </td>
       <td>
-        {unsettled && !confirming ? (
+        {!confirming && closing ? (
+          <Link to={"?activity=" + activityID}>查看收尾详情</Link>
+        ) : unsettled && !confirming && !abandoned ? (
           <Button
             size="sm"
             disabled={
@@ -314,7 +348,7 @@ function EnvironmentRow({
           >
             停止检测
           </Button>
-        ) : (
+        ) : unsettled && !confirming ? null : (
           <Button
             size="sm"
             disabled={
@@ -322,6 +356,7 @@ function EnvironmentRow({
               stage === "unverified" ||
               submitting ||
               confirming ||
+              unsettled ||
               !key ||
               !selected
             }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,8 +28,8 @@ type catalogEntry struct {
 	startupConfig *Config // decoded once during recovery; queries never cross ownership phases
 }
 
-// ApplicationDirectory owns the frozen configuration collection and independent
-// project runtimes. Catalog and Connect never initialize storage.
+// ApplicationDirectory owns project membership, the current execution profiles,
+// and independent project runtimes. Catalog and Connect never initialize storage.
 type ApplicationDirectory struct {
 	home              string
 	mu                sync.RWMutex
@@ -44,12 +43,13 @@ type ApplicationDirectory struct {
 	startedAt         time.Time
 	doneOnce          sync.Once
 	runner            applicationRunner
+	profiles          *executionProfiles
 }
 
 func NewApplicationDirectory(home string) *ApplicationDirectory {
 	ctx, cancel := context.WithCancel(context.Background())
 	catalog := loadApplicationCatalog(home)
-	d := &ApplicationDirectory{home: home, ctx: ctx, cancel: cancel, done: make(chan struct{}), global: catalog.global, err: catalog.err}
+	d := &ApplicationDirectory{home: home, ctx: ctx, cancel: cancel, done: make(chan struct{}), global: catalog.global, err: catalog.err, profiles: newExecutionProfiles(home, catalog.global)}
 	if _, err := os.Lstat(runnerstatepath.Directory(home)); !os.IsNotExist(err) {
 		d.runner.attempted = true
 		d.runner.client.StateDir = runnerstatepath.Directory(home)
@@ -179,6 +179,7 @@ func (d *ApplicationDirectory) run() {
 		}
 		fmt.Fprintf(os.Stderr, "startup Runner preparation elapsed=%s error=%v\n", time.Since(runnerStarted), err)
 	}
+	d.profiles.enable(d.runner.native)
 	var wg sync.WaitGroup
 	slots := make(chan struct{}, 8)
 	for _, e := range d.entries {
@@ -204,7 +205,7 @@ func (d *ApplicationDirectory) run() {
 			var releaseOnce sync.Once
 			releaseSlot := func() { releaseOnce.Do(func() { <-slots }) }
 			defer releaseSlot()
-			runtime := &ProjectRuntime{configID: e.view.ConfigID}
+			runtime := &ProjectRuntime{configID: e.view.ConfigID, profiles: d.profiles}
 			d.mu.Lock()
 			e.runtime = runtime
 			d.mu.Unlock()
@@ -244,11 +245,17 @@ func (d *ApplicationDirectory) Catalog(ctx context.Context) (contract.Catalog, e
 	if err := ctx.Err(); err != nil {
 		return contract.Catalog{}, err
 	}
+	snapshot, reloadErr := d.profiles.current(ctx)
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	result := contract.Catalog{Projects: []contract.Project{}}
-	if len(d.global) > 0 {
-		result.LoadedExecutionDigest = executionconfig.Digest(d.global)
+	if snapshot != nil {
+		result.LoadedExecutionDigest = snapshot.digest
+	}
+	if errors.Is(reloadErr, errExecutionRestartRequired) {
+		result.ExecutionRestartRequired = true
+	} else if reloadErr != nil {
+		result.ExecutionReloadError = boundedDiagnostic(reloadErr.Error(), 4096)
 	}
 	for _, e := range d.entries {
 		result.Projects = append(result.Projects, e.view)

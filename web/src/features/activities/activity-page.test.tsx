@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -150,6 +151,9 @@ function setup(
           {
             id: older ? "earlier" : "latest",
             role: "assistant",
+            turn_id: older ? "older-turn" : "current-turn",
+            turn_started_at:
+              !older && !body ? "2026-11-13T08:10:11Z" : undefined,
             text: body
               ? "最新的助手消息完整正文"
               : older
@@ -160,6 +164,16 @@ function setup(
             truncated: !older && !body,
             body_cursor: !older && !body ? "body" : undefined,
           },
+          ...(!older && !body && !second
+            ? [
+                {
+                  id: "follow-up",
+                  role: "assistant",
+                  turn_id: "current-turn",
+                  text: "同轮后续消息",
+                },
+              ]
+            : []),
         ],
       };
     }
@@ -277,6 +291,64 @@ it("keeps the pagination snapshot when a background refresh races with loading t
     screen.queryByText("有更新，刷新后读取新快照。"),
   ).not.toBeInTheDocument();
   expect(submit).not.toHaveBeenCalled();
+});
+
+it("keeps an abandoned activity out of ongoing when a stale later page is loaded again", async () => {
+  const { api, client, submit } = setup();
+  await screen.findByRole("button", { name: /活动一/ });
+  const initial = client.getQueryData<ActivityListPage>([
+    "home",
+    "project",
+    "instance",
+    "async-activities",
+    "head",
+    "ongoing",
+  ])!;
+  const archived = {
+    ...activity,
+    activity_id: "b",
+    source_id: "second-candidate",
+    title: "第二页待放弃活动",
+  };
+  const stalePage = {
+    ...initial,
+    items: [
+      archived,
+      {
+        ...activity,
+        activity_id: "c",
+        source_id: "other",
+        title: "第二页其他活动",
+      },
+    ],
+    has_more: false,
+    next_cursor: undefined,
+  };
+  vi.mocked(api.get).mockImplementation(async (path) => {
+    if (path === "/activities/b") return archived;
+    return path.includes("cursor=") ? stalePage : initial;
+  });
+  submit.mockImplementation(async (envelope) => ({
+    ...envelope,
+    status: "applied",
+    sampled_at: "2026-11-13T10:00:00Z",
+  }));
+
+  fireEvent.click(screen.getByRole("button", { name: "加载更多活动" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /第二页待放弃活动/ }),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "放弃活动" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认放弃" }));
+  await screen.findByText(/选择活动查看摘要/);
+  await waitFor(() => expect(screen.queryByText("第二页其他活动")).toBeNull());
+  const loadMore = screen.getByRole("button", { name: "加载更多活动" });
+  await waitFor(() => expect(loadMore).toBeEnabled());
+  fireEvent.click(loadMore);
+
+  expect(await screen.findByText("第二页其他活动")).toBeVisible();
+  expect(screen.queryByText(archived.title)).toBeNull();
+  expect(submit).toHaveBeenCalledTimes(1);
 });
 
 it("loads only summary until explicit expansion and reads one index page and body segment per action", async () => {
@@ -486,13 +558,23 @@ it("opens candidate conversation on demand and prepends earlier pages in native 
   const panel = screen.getByRole("region", { name: "原会话对话" });
   expect(
     Array.from(panel.querySelectorAll("article p"), (el) => el.textContent),
-  ).toEqual(["更早的助手消息", "最新的助手消息"]);
+  ).toEqual(["更早的助手消息", "最新的助手消息", "同轮后续消息"]);
+  expect(panel.querySelectorAll("article time")).toHaveLength(1);
+  expect(panel.querySelector("article time")).toHaveAttribute(
+    "datetime",
+    "2026-11-13T08:10:11Z",
+  );
+  expect(within(panel).getByText("时间未记录")).toBeVisible();
   expect(screen.getByText("原会话仅有部分历史可读。")).toBeVisible();
   expect(calls.filter((path) => path.includes("/conversation?"))).toHaveLength(
     2,
   );
   fireEvent.click(screen.getByRole("button", { name: "展开消息正文" }));
   await screen.findByText("最新的助手消息完整正文");
+  expect(panel.querySelector("article time")).toHaveAttribute(
+    "datetime",
+    "2026-11-13T08:10:11Z",
+  );
   expect(calls.filter((path) => path.includes("cursor=body"))).toHaveLength(1);
 });
 

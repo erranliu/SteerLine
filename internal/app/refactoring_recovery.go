@@ -23,7 +23,7 @@ func prepareRefactoringStops(ctx context.Context, c *Config, store *sqlite.SQLit
 		if !runnerbinding.SamePath(r.Frozen.Runner.StateDir, cli.StateDir) {
 			return nil, errors.New("maintenance Runner namespace differs")
 		}
-		if !r.Active() {
+		if !r.Active() || r.Phase == "waiting_input" {
 			continue
 		}
 		expected := r.Revision
@@ -50,9 +50,7 @@ func prepareRefactoringStops(ctx context.Context, c *Config, store *sqlite.SQLit
 			if err = runnerbinding.ValidateContent(o.Content(r), view); err != nil {
 				return nil, err
 			}
-			o.RunID = view.Run.RunID
-			o.InputDigest = view.Run.InputDigest
-			o.Run = view.Run
+			o.ObserveRun(view.Run)
 			if view.Run.StopStatus != "stopped" {
 				if o.Stop != nil && o.StopState != "rejected" {
 					stopView, stopCold, stopErr := cli.InspectBeforeStart(ctx, "request-id", o.Stop.RequestID)

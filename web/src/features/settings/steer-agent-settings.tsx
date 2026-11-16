@@ -83,7 +83,7 @@ export function SteerAgentSettings({
       );
       client.setQueryData([home, "execution-config"], updated);
       await client.invalidateQueries({
-        queryKey: [home, "execution-config-status"],
+        queryKey: [home, "projects"],
       });
       setDraft(undefined);
       setMessage("SteerAgent 设置已保存，重启 SteerLine 后生效。");

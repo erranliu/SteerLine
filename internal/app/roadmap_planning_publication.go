@@ -114,17 +114,38 @@ func (p *planningPort) publishPlanning(ctx context.Context, task *plan.PlanningT
 }
 
 func (p *planningPort) preparePlanningCommit(ctx context.Context, task *plan.PlanningTask, version *plan.PlanningVersion) (string, error) {
-	dir, err := os.MkdirTemp(filepath.Dir(task.Material), "publication-")
+	settings, err := p.config.worktreeSettings()
 	if err != nil {
 		return "", err
 	}
+	if settings.Directory != "" {
+		if err := p.config.validateWorktreeRoot(settings.Directory); err != nil {
+			return "", err
+		}
+	}
+	parent := filepath.Join(settings.Effective, "roadmap-planning")
+	if err := ordinaryVerificationPath(settings.Effective, parent); err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(parent, 0700); err != nil {
+		return "", err
+	}
+	dir, err := os.MkdirTemp(parent, "publication-")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(dir)
 	root := filepath.Join(dir, "worktree")
+	if err := p.config.verifyLocalWorktreePath(dir, "roadmap-planning", filepath.Base(dir)); err != nil {
+		return "", err
+	}
 	git := p.config.repositoryGit
 	if _, err = git(ctx, "-c", "core.hooksPath=", "worktree", "add", "--detach", root, version.Base); err != nil {
 		return "", err
 	}
 	defer func() { _, _ = git(context.WithoutCancel(ctx), "worktree", "remove", root) }()
 	tree, err := p.indexPlanningChanges(ctx, root, version.Base, filepath.Join(dir, "index"), version.Changes)
+	defer os.Remove(filepath.Join(dir, "index"))
 	if err != nil {
 		return "", err
 	}

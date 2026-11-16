@@ -33,7 +33,7 @@ func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 		return strings.Repeat("c", 40), nil
 	}}
 	prepareFixtureServiceEnvironment(t, s, svc)
-	resolve := func(string, string) (string, error) { return "live", nil }
+	resolve := func(context.Context, string, string) (string, error) { return "live", nil }
 	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: resolve}
 	now := time.Now().UTC()
 	payload, _ := json.Marshal(api.ControlPayload{TaskID: tasks[0].TaskID, ExpectedTaskVersion: 1, ExpectedGraphRevision: 1, ExecutionProfileID: "live", ExecutionProfileDigest: strings.Repeat("a", 64)})
@@ -54,7 +54,7 @@ func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 	require(t, err)
 	svc.Profiles = nil
 	docs.body = nil
-	controls.ResolveProfile = func(string, string) (string, error) {
+	controls.ResolveProfile = func(context.Context, string, string) (string, error) {
 		return "", errors.New("changed configuration must not be consulted for accepted replay")
 	}
 	replayed, err := controls.Handle(ctx, req, "replacement", 99)

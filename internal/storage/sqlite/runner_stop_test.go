@@ -186,7 +186,10 @@ func TestRunnerControlStopRecoversOnlyOriginalWithdrawal(t *testing.T) {
 	first := reserve(strings.Repeat("b", 32), false)
 	reserve("second", true)
 	svc := &taskrunner.Service{Project: project, Store: s, Bridge: &runnerbridge.Bridge{Store: s}}
-	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(string, string) (string, error) { t.Fatal("withdrawal consulted startup profile"); return "", nil }}
+	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(context.Context, string, string) (string, error) {
+		t.Fatal("withdrawal consulted startup profile")
+		return "", nil
+	}}
 	graph, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	payload, _ := json.Marshal(api.ControlPayload{TaskID: first.TaskID, RunID: first.ID, ExpectedRunRevision: first.Revision})
@@ -243,7 +246,10 @@ func TestCandidateStopReliabilityObservationChanges(t *testing.T) {
 	graph, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	svc := &taskrunner.Service{Project: project, Store: s, Bridge: &runnerbridge.Bridge{Store: s}}
-	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(string, string) (string, error) { t.Fatal("stop consulted profile"); return "", nil }}
+	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(context.Context, string, string) (string, error) {
+		t.Fatal("stop consulted profile")
+		return "", nil
+	}}
 	payload, _ := json.Marshal(api.ControlPayload{TaskID: first.TaskID, RunID: first.ID, ExpectedRunRevision: observed})
 	now := time.Now().UTC()
 	req := api.ControlRequest{ProtocolVersion: 1, RequestID: strings.Repeat("e", 32), RepositoryIdentity: project, InstanceID: "instance", Action: "stop_candidate", ExpectedControlRevision: graph.Authority.AuthorityVersion, RequestedBy: "operator", CreatedAt: now, ExpiresAt: now.Add(time.Minute), Payload: payload}

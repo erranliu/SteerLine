@@ -10,9 +10,6 @@ import (
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 )
 
-var ErrPlanningChanged = errors.New("规划任务已变化，请刷新")
-var ErrPlanningPathOccupied = errors.New("同一路径已有活动规划任务")
-
 // The explicit discard reader can inspect databases created before planning existed.
 func (s *SQLiteStore) PlanningTasksForDiscard(ctx context.Context, project string) ([]roadmap.PlanningTask, error) {
 	version, err := readDatabaseSchemaVersion(ctx, s.db)
@@ -110,13 +107,13 @@ func (s *SQLiteStore) SavePlanning(ctx context.Context, project, request string,
 					return countErr
 				}
 				if n != 1 {
-					return ErrPlanningChanged
+					return roadmap.ErrPlanningChanged
 				}
 			}
 		}
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed: roadmap_planning.project_identity, roadmap_planning.active_path") {
-				return ErrPlanningPathOccupied
+				return roadmap.ErrPlanningPathOccupied
 			}
 			return err
 		}

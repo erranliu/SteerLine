@@ -173,7 +173,58 @@ test("independent activity page reads conversation and bodies only on demand", a
     (a: { source: string }) => a.source === "task_candidate",
   );
   expect(candidate).toBeTruthy();
-  const requests = { indexes: 0, bodies: 0, changes: 0, history: 0 };
+  const requests = {
+    indexes: 0,
+    bodies: 0,
+    changes: 0,
+    history: 0,
+    conversation: 0,
+  };
+  const turnStartedAt = "2026-11-13T08:10:11Z";
+  await page.route(
+    `**/activities/${encodeURIComponent(candidate.activity_id)}/conversation*`,
+    async (route) => {
+      const url = new URL(route.request().url());
+      if (!url.searchParams.has("session")) {
+        await route.fulfill({
+          json: {
+            activity_id: candidate.activity_id,
+            targets: [
+              {
+                id: "original",
+                label: "原会话",
+                run_id: "run",
+                attempt_id: "attempt",
+                state: "available",
+              },
+            ],
+          },
+        });
+        return;
+      }
+      requests.conversation++;
+      await route.fulfill({
+        json: {
+          activity_id: candidate.activity_id,
+          target_id: "original",
+          run_id: "run",
+          attempt_id: "attempt",
+          session_id: "session",
+          generation: "generation",
+          partial: false,
+          messages: [
+            {
+              id: "current",
+              role: "assistant",
+              text: "有时间的历史消息",
+              turn_started_at: turnStartedAt,
+            },
+            { id: "undated", role: "assistant", text: "没有时间的历史消息" },
+          ],
+        },
+      });
+    },
+  );
   page.on("request", (request) => {
     const url = request.url();
     if (url.includes("/activities/") && url.includes("/interactions?"))
@@ -199,7 +250,16 @@ test("independent activity page reads conversation and bodies only on demand", a
   ).toBeVisible();
   expect(requests.indexes).toBe(0);
   expect(requests.bodies).toBe(0);
+  expect(requests.conversation).toBe(0);
   await reader.getByRole("button", { name: "查看对话", exact: true }).click();
+  const conversation = reader.getByRole("region", {
+    name: "原会话对话",
+    exact: true,
+  });
+  const turnTime = conversation.locator("time");
+  await expect(turnTime).toHaveAttribute("datetime", turnStartedAt);
+  await expect(conversation.getByText("时间未记录")).toBeVisible();
+  expect(requests.conversation).toBe(1);
   const firstIndex = page.waitForResponse(
     (r) => r.url().includes("/interactions?") && r.request().method() === "GET",
   );
@@ -237,6 +297,7 @@ test("independent activity page reads conversation and bodies only on demand", a
   }
   for (const width of [1440, 768, 320]) {
     await page.setViewportSize({ width, height: 900 });
+    await expect(turnTime).toBeVisible();
     await expect(
       reader.getByRole("button", { name: "收起已记录交互", exact: true }),
     ).toBeVisible();

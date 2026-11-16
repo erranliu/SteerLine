@@ -66,9 +66,6 @@ export function GenerationSettings({
       });
       client.setQueryData([home, "execution-config"], result);
       setDraft(undefined);
-      void client.invalidateQueries({
-        queryKey: [home, "execution-config-status"],
-      });
       void client.invalidateQueries({ queryKey: [home, "projects"] });
       setNotice("生成并发已保存。重启 SteerLine 后生效。");
     } catch (e) {

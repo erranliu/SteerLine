@@ -56,8 +56,9 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 }
 
 var nativeTaskSchema = []string{
-	`CREATE TABLE refactoring_actions (project_identity TEXT NOT NULL, action_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), active INTEGER NOT NULL CHECK(active IN (0,1)), payload BLOB NOT NULL, PRIMARY KEY(project_identity,action_id))`,
-	`CREATE UNIQUE INDEX refactoring_one_active ON refactoring_actions(project_identity) WHERE active=1`,
+	`CREATE TABLE manual_verifications (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id))`,
+	`CREATE TABLE refactoring_actions (project_identity TEXT NOT NULL, action_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), slot INTEGER NOT NULL CHECK(slot IN (0,1)), payload BLOB NOT NULL, PRIMARY KEY(project_identity,action_id))`,
+	`CREATE INDEX refactoring_slots ON refactoring_actions(project_identity) WHERE slot=1`,
 	`CREATE TABLE reading_fields (seq INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, source TEXT NOT NULL, source_id TEXT NOT NULL, item_id TEXT NOT NULL, origin TEXT NOT NULL, origin_id TEXT NOT NULL, field TEXT NOT NULL, role TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL, preview TEXT NOT NULL, body_bytes INTEGER NOT NULL, body_sha256 TEXT NOT NULL, at TEXT NOT NULL, state TEXT NOT NULL, run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, session_id TEXT NOT NULL, turn_id TEXT NOT NULL, group_name TEXT NOT NULL, UNIQUE(project_identity,source,source_id,item_id))`,
 	`CREATE INDEX reading_fields_page ON reading_fields(project_identity,source,source_id,seq)`,
 	`CREATE INDEX reading_fields_preview ON reading_fields(project_identity,source,source_id,role,seq DESC)`,
@@ -67,6 +68,7 @@ var nativeTaskSchema = []string{
 	`CREATE TABLE advisory_jobs (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
 	`CREATE TABLE maintenance_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, digest TEXT NOT NULL, result BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
 	`CREATE TABLE source_observations (project_identity TEXT NOT NULL, source TEXT NOT NULL, source_id TEXT NOT NULL, source_revision INTEGER NOT NULL, last_success TEXT NOT NULL, diagnostic TEXT NOT NULL, PRIMARY KEY(project_identity,source,source_id))`,
+	`CREATE TABLE abandoned_activities (project_identity TEXT NOT NULL, source TEXT NOT NULL, source_id TEXT NOT NULL, abandoned_at TEXT NOT NULL, PRIMARY KEY(project_identity,source,source_id))`,
 	`CREATE TABLE project_environment_current (project_identity TEXT NOT NULL, environment_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,environment_key))`,
 	`CREATE TABLE roadmaps (project_identity TEXT NOT NULL, roadmap_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,roadmap_id))`,
 	`CREATE TABLE roadmap_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, roadmap_id TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,roadmap_id) REFERENCES roadmaps(project_identity,roadmap_id))`,

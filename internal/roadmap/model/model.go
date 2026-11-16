@@ -27,14 +27,16 @@ const Root = "SteerlineFlow/Roadmap/drafts/"
 const MaxBytes = 2 << 20
 
 type Source struct {
-	PlanningID string `json:"planning_id,omitempty"`
-	ID         string `json:"id"`
-	Path       string `json:"path"`
-	Body       string `json:"body"`
-	Digest     string `json:"digest"`
-	Head       string `json:"head"`
-	Modified   bool   `json:"modified"`
-	Diagnostic string `json:"diagnostic,omitempty"`
+	PlanningID  string            `json:"planning_id,omitempty"`
+	CardVersion uint64            `json:"card_version,omitempty"`
+	CardEdits   map[string]string `json:"card_edits,omitempty"`
+	ID          string            `json:"id"`
+	Path        string            `json:"path"`
+	Body        string            `json:"body"`
+	Digest      string            `json:"digest"`
+	Head        string            `json:"head"`
+	Modified    bool              `json:"modified"`
+	Diagnostic  string            `json:"diagnostic,omitempty"`
 }
 type Existing struct {
 	ID             string   `json:"id"`
@@ -75,14 +77,16 @@ type Document struct {
 	Body string `json:"body"`
 }
 type Documents struct {
-	Key           string     `json:"local_key"`
-	Spec          Document   `json:"spec"`
-	Plan          Document   `json:"plan"`
-	Tests         []string   `json:"tests"`
-	ProvidesTests []string   `json:"provides_tests"`
-	Acceptance    []Document `json:"acceptance"`
+	Key           string          `json:"local_key"`
+	Spec          Document        `json:"spec"`
+	Plan          Document        `json:"plan"`
+	Tests         []string        `json:"tests"`
+	ProvidesTests []string        `json:"provides_tests"`
+	Acceptance    []Document      `json:"acceptance"`
+	ManualChecks  json.RawMessage `json:"manual_checks,omitempty"`
 }
 type Publication struct {
+	Worktree     string `json:"worktree,omitempty"`
 	RequestID    string `json:"request_id"`
 	ReviewDigest string `json:"review_digest"`
 	Branch       string `json:"branch"`

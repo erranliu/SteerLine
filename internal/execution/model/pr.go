@@ -6,12 +6,15 @@ import (
 
 type PRInfo struct {
 	Body           string     `json:"body,omitempty"`
+	Checks         string     `json:"checks,omitempty"`
 	URL            string     `json:"url"`
 	Repository     string     `json:"repository"`
 	BaseBranch     string     `json:"base_branch"`
+	BaseRevision   string     `json:"base_revision,omitempty"`
 	HeadRepository string     `json:"head_repository,omitempty"`
 	HeadBranch     string     `json:"head_branch,omitempty"`
 	HeadRevision   string     `json:"head_revision,omitempty"`
+	Draft          *bool      `json:"draft,omitempty"`
 	State          string     `json:"state"`
 	Merged         bool       `json:"merged"`
 	MergedAt       *time.Time `json:"merged_at"`

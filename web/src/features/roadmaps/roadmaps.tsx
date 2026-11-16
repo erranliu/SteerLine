@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import { SafeLink } from "../../shared/ui/status";
 import type { Envelope } from "../../shared/api/types";
 import {
@@ -30,6 +31,10 @@ import { OperationResult } from "../activities/operation-result";
 export type RoadmapSource = {
   id: string;
   planning_id?: string;
+  card_version?: number;
+  card_edits?: Partial<
+    Record<"goal" | "scope" | "constraints" | "acceptance", string>
+  >;
   path: string;
   body: string;
   digest: string;
@@ -61,6 +66,7 @@ type Documents = {
   tests: string[];
   provides_tests: string[];
   acceptance: File[];
+  manual_checks?: Record<string, unknown>;
 };
 export type RoadmapRecord = {
   generations?: {
@@ -149,7 +155,11 @@ export function Roadmaps({
 }: {
   planning?: {
     id: string;
-    cardForm: (disabled: boolean, confirmed?: RoadmapTask) => React.ReactNode;
+    workspace: (
+      disabled: boolean,
+      confirmed?: RoadmapTask,
+      source?: RoadmapSource,
+    ) => React.ReactNode;
   };
 } = {}) {
   const { api, identity, online, submit, requests, pendingRequests } =
@@ -158,9 +168,9 @@ export function Roadmaps({
   const [params, setParams] = useSearchParams();
   const [error, setError] = useState("");
   const [documentKey, setDocumentKey] = useState(""),
-    [kind, setKind] = useState<"spec" | "plan" | "tests" | "acceptance">(
-      "spec",
-    );
+    [kind, setKind] = useState<
+      "spec" | "plan" | "tests" | "acceptance" | "manual_checks"
+    >("spec");
   const [editing, setEditing] = useState(false),
     [body, setBody] = useState("");
   const key = roadmapQueryKey(
@@ -204,7 +214,17 @@ export function Roadmaps({
           : !r.source.planning_id),
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const currentSummary = currentRoadmapRecord(history);
+  const archivedRoadmaps = useAbandonedActivities(
+    "roadmap",
+    history.map((r) => r.id),
+  );
+  const currentSummary = currentRoadmapRecord(
+    history.filter(
+      (r) =>
+        !archivedRoadmaps.isAbandoned(r.id) &&
+        !archivedRoadmaps.isAbandoned(r.parent_id),
+    ),
+  );
   const currentID = currentSummary?.id || "";
   const historicalID = params.get("record");
   const viewingHistory = !!historicalID && historicalID !== currentID;
@@ -228,6 +248,8 @@ export function Roadmaps({
       ? detail.data
       : undefined
     : currentDetail.data;
+  const archivedRecord = !!record && archivedRoadmaps.isAbandoned(record.id);
+  const archivedNextAction = archivedRecord ? roadmapNextAction(record) : "";
   const analysis = record?.analysis;
   const questions = [
     ...(analysis?.questions || []),
@@ -262,8 +284,16 @@ export function Roadmaps({
     roadmap_observe: "正在查询原操作…",
     roadmap_stop: "正在提交停止请求…",
   };
-  const sending = inFlight();
-  const originalRows = (requests || []).filter((r) => belongs(r.envelope));
+  const sending = inFlight().filter(
+    (e) => viewingHistory || !archivedRoadmaps.isAbandoned(e.target_id),
+  );
+  const originalRows = (requests || []).filter((r) => {
+    const bound = r.response?.roadmap as { id?: string } | undefined;
+    return (
+      belongs(r.envelope) &&
+      !archivedRoadmaps.isAbandoned(bound?.id || r.envelope.target_id)
+    );
+  });
   const unresolved = originalRows.find(
     (r) =>
       advancing(r.envelope) &&
@@ -336,9 +366,17 @@ export function Roadmaps({
           body:
             JSON.stringify({ tests: currentDocument.tests }, null, 2) + "\n",
         }
-      : kind === "acceptance"
-        ? currentDocument?.acceptance[0]
-        : currentDocument?.[kind];
+      : kind === "manual_checks"
+        ? currentDocument?.manual_checks && {
+            path: currentDocument.plan.path.replace(
+              /\.plan\.md$/,
+              ".manual-checks.json",
+            ),
+            body: JSON.stringify(currentDocument.manual_checks, null, 2) + "\n",
+          }
+        : kind === "acceptance"
+          ? currentDocument?.acceptance[0]
+          : currentDocument?.[kind];
   const generationParent =
     record?.purpose === "documents"
       ? history.find((r) => r.id === record.parent_id)
@@ -353,7 +391,14 @@ export function Roadmaps({
   ) {
     if (
       !online ||
-      viewingHistory ||
+      (viewingHistory &&
+        !(
+          archivedRecord &&
+          target === record?.id &&
+          (name === "roadmap_observe" ||
+            (name === "roadmap_resume" && archivedNextAction === "resume") ||
+            (name === "roadmap_admit" && archivedNextAction === "admit"))
+        )) ||
       inFlight().some(
         (e) =>
           (advancing(e) && advancing({ action: name } as Envelope)) ||
@@ -391,6 +436,7 @@ export function Roadmaps({
       await Promise.all([
         list.refetch({ cancelRefetch: false }),
         ...(currentID ? [currentDetail.refetch({ cancelRefetch: false })] : []),
+        ...(viewingHistory ? [detail.refetch({ cancelRefetch: false })] : []),
       ]);
     } catch (e) {
       setError(String(e));
@@ -415,6 +461,13 @@ export function Roadmaps({
   const publicationPending = history
     .map((r) => (r.id === current?.id ? current : r))
     .some((r) => !!r.publication && r.state !== "admitted");
+  const archivedPending = history.filter(
+    (r) =>
+      archivedRoadmaps.isAbandoned(r.id) &&
+      (contentPending(r) ||
+        (!!r.publication && r.state !== "admitted") ||
+        r.state === "admission-unknown"),
+  );
   const parseDisabled =
     locked ||
     !source.data ||
@@ -493,7 +546,19 @@ export function Roadmaps({
       />
     );
   }
-  return (
+  const workspace = planning?.workspace(
+    locked ||
+      hasPending ||
+      publicationPending ||
+      current?.state === "admitted" ||
+      !value?.documents_available ||
+      !materialsReady,
+    record?.analysis?.tasks[0],
+    record?.source,
+  );
+  const showProgress =
+    !planning || history.length > 0 || !!flowReason || !!historicalID;
+  const progressPanel = showProgress && (
     <section
       className="roadmaps-page"
       aria-label={planning ? "文档与入图" : "Roadmap 草稿"}
@@ -658,23 +723,46 @@ export function Roadmaps({
         )}
         {viewingHistory ? (
           <div className="roadmaps-history-notice" role="note">
-            正在查看历史记录，操作已禁用。
+            {archivedRoadmaps.isAbandoned(record?.id)
+              ? "正在查看已放弃的记录。"
+              : "正在查看历史记录，操作已禁用。"}
             <button onClick={returnToCurrent}>返回当前流程</button>
+            {record && archivedRoadmaps.isAbandoned(record.id) && (
+              <>
+                <button
+                  disabled={
+                    !online ||
+                    sending.some((e) => e.action === "roadmap_observe")
+                  }
+                  onClick={() => void action("roadmap_observe", record.id, 1)}
+                >
+                  查询原操作结果
+                </button>
+                {archivedNextAction === "resume" && (
+                  <button
+                    disabled={!online || sending.length > 0}
+                    onClick={() =>
+                      void action("roadmap_resume", record.id, record.revision)
+                    }
+                  >
+                    继续原操作
+                  </button>
+                )}
+                {archivedNextAction === "admit" && (
+                  <button
+                    disabled={!online || sending.length > 0}
+                    onClick={() =>
+                      void action("roadmap_admit", record.id, record.revision)
+                    }
+                  >
+                    正式入图
+                  </button>
+                )}
+              </>
+            )}
           </div>
         ) : (
           <div className="roadmaps-actions">
-            {planning &&
-              (mainAction === "parse" ||
-                mainAction === "generate" ||
-                mainAction === "publish") && (
-                <details open={!current || mainAction === "parse"}>
-                  <summary>{current ? "重新确认任务卡" : "确认任务卡"}</summary>
-                  {planning.cardForm(
-                    locked || !value?.documents_available || !materialsReady,
-                    record?.analysis?.tasks[0],
-                  )}
-                </details>
-              )}
             {mainAction === "parse" && !planning && (
               <button
                 className="roadmaps-primary"
@@ -823,6 +911,23 @@ export function Roadmaps({
           </div>
         )}
       </section>
+      {!viewingHistory &&
+        archivedPending.map((r) => (
+          <p key={r.id} className="notice amber">
+            原 Roadmap 操作仍待结算或核实。{" "}
+            <Link
+              to={
+                "?" +
+                new URLSearchParams({
+                  ...(planning ? { task: planning.id } : { source: sourceID }),
+                  record: r.id,
+                })
+              }
+            >
+              查看原记录
+            </Link>
+          </p>
+        ))}
       {record?.generations?.length ? (
         <section className="roadmaps-section" aria-label="逐任务文档生成">
           <h2>逐任务文档生成</h2>
@@ -1179,6 +1284,16 @@ export function Roadmaps({
             >
               测试安排 JSON
             </button>
+            {!!currentDocument?.manual_checks && (
+              <button
+                onClick={() => {
+                  setKind("manual_checks");
+                  setEditing(false);
+                }}
+              >
+                人工核验 JSON
+              </button>
+            )}
             <button
               onClick={() => {
                 setKind("acceptance");
@@ -1203,7 +1318,9 @@ export function Roadmaps({
                   rows={18}
                 />
                 <button
-                  disabled={locked || !body.trim()}
+                  disabled={
+                    locked || (kind !== "manual_checks" && !body.trim())
+                  }
                   onClick={() => {
                     void action(
                       "roadmap_edit_documents",
@@ -1313,6 +1430,12 @@ export function Roadmaps({
         </section>
       )}
     </section>
+  );
+  return (
+    <>
+      {workspace}
+      {progressPanel}
+    </>
   );
 }
 

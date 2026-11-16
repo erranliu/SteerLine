@@ -45,8 +45,8 @@ func RoadmapSpecGuide() ([]byte, error)     { return files.ReadFile("materials/r
 func RoadmapPlanningRules() ([]byte, error) { return files.ReadFile("materials/roadmap-planning.md") }
 func TaskPlanningRules() ([]byte, error)    { return files.ReadFile("materials/task-planning.md") }
 func TaskPlanning(rules, card, goal string) (string, error) {
-	if rules == "" || card == "" || strings.TrimSpace(goal) == "" {
-		return "", errors.New("fixed planning rules, card path and user goal are required")
+	if rules == "" || card == "" {
+		return "", errors.New("fixed planning rules and card path are required")
 	}
 	return render("task-planning", struct{ Rules, Card, Goal string }{rules, card, goal})
 }
@@ -65,13 +65,32 @@ func RoadmapPlanning(rules, draft, goal string) (string, error) {
 func RoadmapPlanningConflict(decision string) (string, error) {
 	return render("roadmap-planning-conflict", struct{ Decision string }{decision})
 }
-func MainAgentRules() ([]byte, error)   { return files.ReadFile("materials/main-agent.md") }
-func MaintenanceRules() ([]byte, error) { return files.ReadFile("materials/maintenance.md") }
+func MainAgentRules() ([]byte, error) { return files.ReadFile("materials/main-agent.md") }
+func MaintenanceRules(phase string) ([]byte, error) {
+	switch phase {
+	case "first", "followup", "report":
+		return files.ReadFile("materials/maintenance-" + phase + ".md")
+	default:
+		return nil, fmt.Errorf("unknown maintenance phase %q", phase)
+	}
+}
+
+func MaintenanceStrategy(strategy string) ([]byte, error) {
+	switch strategy {
+	case "cautious", "autonomous", "aggressive":
+		return files.ReadFile("materials/maintenance-" + strategy + ".md")
+	default:
+		return nil, fmt.Errorf("unknown maintenance strategy %q", strategy)
+	}
+}
 func MaintenanceDirection(id string) ([]byte, error) {
 	return files.ReadFile("materials/refactoring-directions/" + id + ".md")
 }
-func MaintenanceDecision() (string, error) { return render("maintenance-decision", nil) }
-func MaintenanceExecute() (string, error)  { return render("maintenance-execute", nil) }
+func MaintenanceDecision() (string, error)          { return render("maintenance-decision", false) }
+func MaintenanceDecisionJSONRetry() (string, error) { return render("maintenance-decision", true) }
+func MaintenanceExecute(request []byte) (string, error) {
+	return render("maintenance-execute", string(request))
+}
 func MainAgentAdvisory(context string) (string, error) {
 	rules, err := MainAgentRules()
 	if err != nil {

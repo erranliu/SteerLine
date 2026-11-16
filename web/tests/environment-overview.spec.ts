@@ -64,7 +64,7 @@ test("all environment readiness remains visible with inline actions across refre
       key: "orca",
       agent: "Codex",
       adapter: "orca-terminal",
-      stage: "blocked",
+      stage: "failed",
       reason: "Agent 登录不可用",
       names: ["Orca 开发"],
     },
@@ -273,7 +273,7 @@ test("all environment readiness remains visible with inline actions across refre
     expect(bounds.right).toBeLessThanOrEqual(width + 1);
     expect(bounds.scroll).toBeLessThanOrEqual(bounds.width + 1);
     await expect(
-      rows.first().getByText("检测阻断", { exact: true }),
+      rows.first().getByText("检测失败", { exact: true }),
     ).toBeVisible();
     await page
       .locator(".environment-page")

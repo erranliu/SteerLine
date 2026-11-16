@@ -95,9 +95,11 @@ test(
       await expect(page.getByLabel("审计模型", { exact: true })).toHaveValue(
         "configuration-only-model",
       );
-      await page.getByLabel("审计模型", { exact: true }).selectOption("gpt-6-luna");
+      await page
+        .getByLabel("审计模型", { exact: true })
+        .selectOption("gpt-6-luna");
       await page.getByRole("button", { name: "保存配置", exact: true }).click();
-      await expect(page.getByText("配置已保存，待重启生效")).toBeVisible();
+      await expect(page.getByText("当前服务已加载保存配置")).toBeVisible();
       const current = await (
         await page.request.get(url.origin + "/api/web/execution-config")
       ).json();

@@ -9,6 +9,7 @@ export type Activity = {
   project_id: string;
   source: string;
   source_id: string;
+  source_revision?: number;
   kind: string;
   steer_agent?: { type: string; operation: string };
   request_ids: string[];
@@ -21,6 +22,7 @@ export type Activity = {
   needs_attention: boolean;
   created_at?: string;
   finished_at?: string;
+  abandoned_at?: string;
   source_observed_at?: string;
   observation: string;
   provisional?: boolean;
@@ -78,18 +80,25 @@ export function steerAgentLabel(a: Activity): string | undefined {
       return "持续维护";
   }
 }
-export const matchesActivity = (a: Activity, filter: ActivityFilter) =>
-  filter === "attention"
-    ? a.needs_attention
-    : filter === "recent"
-      ? ended(a)
-      : !ended(a);
+export function withActivityAbandonmentMark(a: Activity, mark?: string) {
+  return mark && !a.abandoned_at ? { ...a, abandoned_at: mark } : a;
+}
+
+export function matchesActivity(a: Activity, filter: ActivityListFilter) {
+  const history = filter === "recent" || filter === "history";
+  if (a.abandoned_at) return history;
+  if (filter === "attention") return a.needs_attention;
+  return history ? ended(a) : !ended(a);
+}
+export const activityHistoryTime = (a: Activity) =>
+  a.abandoned_at || a.finished_at;
 export const activityActions = new Set([
   "refactoring_start",
   "refactoring_finish",
   "refactoring_stop",
   "refactoring_answer",
   "refactoring_conflict",
+  "refactoring_review",
   "environment_start",
   "maintenance_check",
   "start_task",
@@ -111,6 +120,7 @@ export function provisionalActivities(
   starts: CandidateStart[],
   links: Record<string, Activity>,
   official: Activity[],
+  isAbandonedCandidate?: (id: string) => boolean,
 ) {
   const known = new Set(
     [...official, ...Object.values(links)].flatMap((a) => [
@@ -125,7 +135,9 @@ export function provisionalActivities(
       e.project_id !== project ||
       e.instance_id !== instance ||
       !activityActions.has(e.action) ||
-      known.has(e.request_id)
+      known.has(e.request_id) ||
+      ((e.action === "start_task" || e.action === "start_candidate") &&
+        isAbandonedCandidate?.(e.request_id))
     )
       continue;
     const rejected = r.response?.status === "rejected";
@@ -189,7 +201,7 @@ export function provisionalActivities(
     });
   }
   for (const s of starts) {
-    if (known.has(s.id)) continue;
+    if (known.has(s.id) || isAbandonedCandidate?.(s.id)) continue;
     const previous = result.get(s.id);
     result.set(s.id, {
       ...previous,
@@ -218,7 +230,7 @@ export function activityDestination(project: string, activity: Activity) {
   if (d.kind === "refactoring")
     return `${root}/refactoring?action=${encodeURIComponent(d.target)}`;
   if (d.kind === "advisory")
-    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.candidate_id || "")}&advisory=${encodeURIComponent(d.target)}`;
+    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.candidate_id || "")}&advisory=${encodeURIComponent(d.target)}${activity.abandoned_at ? "&history=1" : ""}`;
   if (d.kind === "roadmap")
     return `${root}/roadmaps?record=${encodeURIComponent(d.target)}${activity.execution_ref?.action && activity.execution_ref.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   if (d.kind === "roadmap-source")
@@ -226,13 +238,13 @@ export function activityDestination(project: string, activity: Activity) {
   if (d.kind === "task-planning")
     return `${root}/roadmap-planning?task=${encodeURIComponent(d.target)}${activity.execution_ref?.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   if (d.kind === "candidate")
-    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.target)}`;
+    return `${root}/runs?task=${encodeURIComponent(d.task_id || "")}&run=${encodeURIComponent(d.target)}${activity.abandoned_at ? "&history=1" : ""}`;
   if (d.kind === "task")
     return `${root}/runs?task=${encodeURIComponent(d.target)}`;
   if (d.kind === "environment-profile")
     return `${root}/environment${d.target ? `?profile=${encodeURIComponent(d.target)}` : ""}`;
   if (d.kind === "environment")
-    return `${root}/environment?activity=${encodeURIComponent(d.target)}`;
+    return `${root}/environment?activity=${encodeURIComponent(d.target)}${activity.abandoned_at && activity.execution_ref?.request_id ? `&request_id=${encodeURIComponent(activity.execution_ref.request_id)}` : ""}`;
   return `${root}/status?request_id=${encodeURIComponent(d.target)}`;
 }
 

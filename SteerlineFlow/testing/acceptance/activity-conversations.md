@@ -34,3 +34,11 @@ SQLite 争用修复后定向复验活动读取、来源绑定、SQLite 只读池
 使用新 Runner CLI 和隔离的只读服务分派器，从 SteerLine 公共活动读取路由查询上述同一 Run 和 Attempt。返回 2 条助手消息，第一条为 138 字节的原过程消息，第二条与 184 字节已核实最终回复完全相同。复验过程没有启动业务执行或替换安装。日志见 Runner worktree 的 `.evidence/native-conversation-original-run/original-run-activity.log`。
 
 本轮活动中心 44 项前端定向测试、生产构建及固定 L1/L2 均通过。
+
+## 历史对话轮次时间
+
+2026-11-13。SteerLine 基于 `07a5c769`，SteerRunner 基于 `2906afa1`，均含本次工作区改动。活动中心在每轮第一条可见消息旁按浏览器本地时区显示原会话的开始时间。时间缺失时显示“时间未记录”。SteerRunner 从 Codex 或 Orca 原生轮次读取时间，通过可选的 `turn_started_at` 字段提供给 SteerLine。
+
+SteerRunner 的 Codex、Orca 和应用层 `go test -run NativeConversation` 定向测试及 Runner 构建通过。SteerLine 的活动对话接口定向测试、45 项活动中心前端测试及生产构建通过。L1、L2 及接口定向报告保存在 `C:\SteerlineDebug\wt-ef2a-conversation-time-22e0fc9d` 下的 `test-results/L1/01`、`test-results/L2/01` 与 `diagnostics/activity-conversation`。首次沙箱运行的 L1/L2 报告写入遇到 Windows 拒绝访问，随后在独立目录重新运行通过。
+
+L3 活动中心的两项 Edge 用例通过。原会话响应使用浏览器夹具，覆盖有时间、缺少时间以及 1440、768、320 像素视口。整个 `runtime.async-activities` 场景因操作反馈用例再次只观察到一次候选提交（预期两次）而失败，与上文已记录的失败一致。报告位于同一根目录的 `test-results/L3/01/summary.json`，浏览器日志及截图在该次的 `scenarios/runtime.async-activities`。本次未用真实模型会话验证轮次时间，未部署。

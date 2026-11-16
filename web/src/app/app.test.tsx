@@ -36,6 +36,12 @@ function workspaceRead(api: Api, path: string): unknown {
   if (path.startsWith("/environment/materials?"))
     return { document: "# 项目运行环境" };
   if (path === "/snapshot") return makeSnapshot(api);
+  if (path === "/settings/worktrees")
+    return {
+      directory: "",
+      effective: "C:/state",
+      default_directory: "C:/state",
+    };
   if (path === "/dispatch")
     return {
       mode: "manual",
@@ -222,6 +228,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
           !(
             path === "/snapshot" ||
             path === "/dispatch" ||
+            path === "/settings/worktrees" ||
             path === "/presentation" ||
             path === "/tasks?limit=100&cursor=" ||
             path === "/maintenance" ||
@@ -233,6 +240,9 @@ it("preloads only after connection verification, shares presentation in StrictMo
       ),
   ).toEqual([]);
   expect(get.mock.calls.filter(([path]) => path === "/dispatch")).toHaveLength(1);
+  expect(
+    get.mock.calls.filter(([path]) => path === "/settings/worktrees"),
+  ).toHaveLength(1);
   client.clear();
 });
 
@@ -247,6 +257,9 @@ it("keeps project dispatch separate from shared configuration and scopes manual 
     async (path) => workspaceRead(api, path) as never,
   );
   mountWorkspace(api, client, { onRefreshConnection: refreshConnection });
+  expect(
+    await screen.findByRole("heading", { name: "项目设置", level: 1 }),
+  ).toBeVisible();
   expect(await screen.findByRole("heading", { name: "任务自动派发" })).toBeVisible();
   expect(screen.queryByLabelText("生成最大并发数")).not.toBeInTheDocument();
   expect(screen.queryByText("当前服务已加载方案")).not.toBeInTheDocument();
@@ -465,6 +478,11 @@ it("routes manual reconciliation through the original envelope while an automati
   );
   const mounted = mountWorkspace(api, client);
   await waitFor(() => expect(reconcile).toHaveBeenCalledTimes(1));
+  expect(
+    screen.queryByRole("region", { name: "操作结果" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("link", { name: /^配置$/ }));
+  await screen.findByRole("region", { name: "操作结果" });
   fireEvent.click(screen.getByText(/操作回执 · 最近/));
   const button = await screen.findByRole("button", { name: "查询原请求" });
   fireEvent.click(button);

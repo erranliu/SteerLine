@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"errors"
-	"os"
+	"path/filepath"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
+	"github.com/erranliu/SteerLine/internal/product/httpfs"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -102,22 +104,50 @@ func (c Config) ValidateAdmission() error {
 
 func (c Config) DefaultProfileID() string { return c.RunnerExecution.DefaultProfile }
 
-type appConfigVerifier struct{ project, global, digest string }
-
-func (v appConfigVerifier) VerifyCurrentConfig() error {
-	if v.project == "" || v.global == "" {
+func (c Config) verifyCurrentConfig(ctx context.Context) error {
+	if c.projectPath == "" || c.executionPath == "" {
 		return nil
 	}
-	project, err := os.ReadFile(v.project)
+	project, err := readConfiguration(c.projectPath)
 	if err != nil {
 		return err
 	}
-	global, err := os.ReadFile(v.global)
+	raw, err := readConfiguration(c.executionPath)
 	if err != nil {
-		return err
+		return taskError("stale_profile", err.Error())
 	}
-	if loadedConfigDigest(project, global) != v.digest {
+	startup := c.RunnerExecution.startupSettings()
+	if value, _ := ctx.Value(profileContextKey{}).(profileContextValue); value.source != nil {
+		if value.err != nil {
+			return taskError("stale_profile", value.err.Error())
+		}
+		if value.snapshot == nil || value.snapshot.digest != executionconfig.Digest(raw) {
+			return taskError("stale_profile", "执行方案在受理期间已变化，请刷新后重试")
+		}
+	} else {
+		var global RunnerExecutionConfig
+		if err := decodeStrictJSON(raw, &global); err != nil {
+			return taskError("stale_profile", err.Error())
+		}
+		startup = global.startupSettings()
+	}
+	if loadedConfigDigest(project, startup) != c.configDigest {
 		return &taskmodel.Error{Code: "stale_profile", Message: "project or execution configuration changed during claim evaluation"}
 	}
 	return nil
+}
+
+func (c Config) reserveCurrentProfiles(ctx context.Context, reserve func() error) error {
+	if c.projectPath == "" || c.executionPath == "" {
+		return reserve()
+	}
+	return httpfs.WithConfigurationLock(filepath.Dir(c.executionPath), func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := c.verifyCurrentConfig(ctx); err != nil {
+			return err
+		}
+		return reserve()
+	})
 }

@@ -36,6 +36,7 @@ export const operationNames: Record<string, string> = {
   environment_start: "环境检测",
   environment_stop: "停止环境检测",
   environment_invalidate: "标记环境失效",
+  activity_abandon: "放弃活动",
   maintenance_check: "检查主分支",
   maintenance_update: "更新本地",
   start_task: "启动任务",

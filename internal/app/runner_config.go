@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/executionconfig"
@@ -12,6 +13,13 @@ import (
 // cutover. Settings are public Runner JSON; SteerLine has no adapter codecs.
 type RunnerExecutionConfig executionconfig.File[runnerclient.Selection]
 type RunnerProfile = executionconfig.Profile
+
+// Profile edits do not change the identity of a running project service.
+func (g RunnerExecutionConfig) startupSettings() []byte {
+	g.DefaultProfile, g.Profiles = "", nil
+	raw, _ := json.Marshal(g)
+	return raw
+}
 
 func (g RunnerExecutionConfig) Validate() error {
 	if _, err := executionconfig.SteerAgentSettings(g.SteerAgent); err != nil {

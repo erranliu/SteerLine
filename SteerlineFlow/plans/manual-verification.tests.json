@@ -1,0 +1,12 @@
+{
+  "tests": [
+    "l1.minimum",
+    "smoke.delivery",
+    "go.roadmap",
+    "go.runner-contract",
+    "go.runner-result",
+    "go.http",
+    "go.storage",
+    "manual-verification.local-codex"
+  ]
+}

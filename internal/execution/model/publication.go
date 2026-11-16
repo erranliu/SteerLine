@@ -11,11 +11,12 @@ import (
 )
 
 type PRProviderConfig struct {
-	Kind       string                   `json:"kind"`
-	BaseURL    string                   `json:"base_url"`
-	Repository string                   `json:"repository"`
-	TokenEnv   string                   `json:"token_env"`
-	Query      executionbackend.Command `json:"query"`
+	Kind             string                   `json:"kind"`
+	BaseURL          string                   `json:"base_url"`
+	Repository       string                   `json:"repository"`
+	TokenEnv         string                   `json:"token_env"`
+	Query            executionbackend.Command `json:"query"`
+	DraftTitlePrefix string                   `json:"draft_title_prefix,omitempty"`
 }
 
 type PublicationSettings struct {

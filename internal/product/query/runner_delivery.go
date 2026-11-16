@@ -6,7 +6,7 @@ import (
 )
 
 func runnerDelivery(r *runnercontract.DeliveryObservation) *api.RunnerDeliverySummary {
-	v := &api.RunnerDeliverySummary{Available: r.Available, RunID: r.RunID, Revision: r.Revision, Submission: r.Submission, Step: r.Step, Status: r.Status, Phase: r.Phase, Diagnostic: r.Diagnostic, NativeOutcome: r.NativeOutcome, FinalVerified: r.FinalVerified, ContentStatus: r.ContentStatus, PRState: r.PRState, PRQueryError: r.PRQueryError, StopStatus: r.StopStatus, Closed: r.Closed, ResumeRequired: r.ResumeRequired, NewInputsAllowed: r.NewInputsAllowed, Commands: []api.RunnerCommandSummary{}}
+	v := &api.RunnerDeliverySummary{Available: r.Available, RunID: r.RunID, Revision: r.Revision, Submission: r.Submission, Step: r.Step, Status: r.Status, Phase: r.Phase, Diagnostic: r.Diagnostic, NativeOutcome: r.NativeOutcome, FinalVerified: r.FinalVerified, ContentStatus: r.ContentStatus, ManualVerification: r.ManualVerification, PRState: r.PRState, PRQueryError: r.PRQueryError, StopStatus: r.StopStatus, Closed: r.Closed, ResumeRequired: r.ResumeRequired, NewInputsAllowed: r.NewInputsAllowed, Commands: []api.RunnerCommandSummary{}}
 	if w := r.ExecutionWait; w != nil {
 		v.ExecutionWait = &api.ExecutionWaitSummary{Contract: w.Contract, OperationID: w.OperationID, Query: w.Query, Stage: w.Stage, ReasonCode: w.ReasonCode, StartedAt: w.StartedAt, UpdatedAt: w.UpdatedAt, DeadlineAt: w.DeadlineAt, CallsStarted: w.CallsStarted, MaxCalls: w.MaxCalls, NextAttemptAt: copyValue(w.NextAttemptAt), Diagnostic: w.Diagnostic}
 	}

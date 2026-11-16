@@ -29,6 +29,7 @@ import (
 )
 
 type ProjectRuntime struct {
+	profiles          *executionProfiles
 	runner            *applicationRunner // borrowed; only ApplicationDirectory stops it
 	config            Config
 	hostConfig        host.Config
@@ -186,6 +187,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	}
 	r.config.runtimeGenerations = runner.generations
 	r.config.runtimeCatalog = runner.catalog
+	r.config.runtimeProfiles = r.profiles
 	r.config.runtimeNative = runner.native
 	r.config.runtimeEnvironmentAdmission = runner.environments
 	if runner.environments != nil {
@@ -215,8 +217,11 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.environment.service.Admit = service.VerifyRunnerAdmission
 	r.config.runtimeTests = r.tests
 	taskAdmission := newRoadmapTaskCommands(r.store, r.config, service.ExecuteTaskMutation)
-	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, taskAdmission, maintenance, maintenance.refreshBaselineWithRewrite)
+	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, r.config.committedDocuments(), r.store, taskAdmission, maintenance, maintenance.refreshBaselineWithRewrite)
 	r.config.runtimeContinuationSuggestion = newContinuationSuggestionPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	// Populate the read-only capability snapshot before exposing maintenance readiness.
+	// Other project capabilities remain available if this optional combination fails.
+	_, _, _ = r.config.prepareSteerAgentGeneration(ctx)
 	r.config.runtimeRefactoring = newRefactoringPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission, maintenance, maintenance)
 	if retErr = r.config.runtimeRefactoring.service.Recover(ctx); retErr != nil {
 		return
@@ -241,6 +246,16 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		return
 	}
 	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance, readingBodies: runner.readingBodies, readiness: maintenance, conversationReaders: newActivityConversationReaders(r.store)}
+	r.port.manual = newManualVerification(r.config, r.store)
+	if err := r.port.manual.recover(ctx); err != nil {
+		return result, err
+	}
+	if err := r.port.manual.recoverProjectLaunch(maintenance); err != nil {
+		return result, err
+	}
+	if err := r.port.manual.recoverPRLaunch(ctx); err != nil {
+		return result, err
+	}
 	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -341,6 +356,9 @@ func (r *ProjectRuntime) close() {
 			cancel()
 		}
 		if r.port != nil {
+			if r.port.manual != nil {
+				r.port.manual.close()
+			}
 			r.localErr = errors.Join(r.localErr, r.port.Server.Close(context.Background()))
 		}
 		if r.product != nil {
@@ -376,6 +394,7 @@ type runtimeProjectPort struct {
 	readingBodies       *query.ReadingBodyCache
 	readiness           projectReadinessReader
 	conversationReaders map[string]activityConversationReader
+	manual              *manualVerification
 }
 
 func (p *runtimeProjectPort) StopAccepting() { p.stopping.Store(true) }
@@ -384,6 +403,15 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 		return httpcontract.CommandResponse{}, err
 	}
 	defer p.users.RUnlock()
+	if in.Action == activityAbandon {
+		return p.abandonActivity(ctx, in)
+	}
+	if strings.HasPrefix(in.Action, "manual_verification_") {
+		return p.manualVerificationCommand(ctx, in)
+	}
+	if strings.HasPrefix(in.Action, "project_launch_") {
+		return p.projectLaunchCommand(ctx, in)
+	}
 	if strings.HasPrefix(in.Action, "refactoring_") {
 		return p.refactoringCommand(ctx, in)
 	}
@@ -490,6 +518,11 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if route == "/presentation" && p.config.runtimeProfiles != nil && p.product != nil {
+		view := p.product.Project().Presentation
+		p.config.presentProfiles(&view, p.config.withProfiles(ctx))
+		return httpapi.ProjectPresentation{ProjectID: httpcontract.ProjectID(p.config.Identity()), SampledAt: time.Now().UTC(), Presentation: view}, nil
+	}
 	if route == "/dispatch" {
 		if len(values) != 0 {
 			return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "dispatch observation does not accept parameters"}
@@ -498,6 +531,18 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 	}
 	if route == "/activities" {
 		return p.readAsyncActivities(ctx, values)
+	}
+	if route == "/settings/worktrees" {
+		if len(values) != 0 {
+			return nil, errors.New("Worktree 设置查询不接受参数")
+		}
+		return p.config.worktreeSettings()
+	}
+	if route == "/manual-verification" || strings.HasPrefix(route, "/manual-verification/") {
+		if len(values) != 0 {
+			return nil, errors.New("人工核验查询不接受参数")
+		}
+		return p.manualVerificationRead(ctx, route)
 	}
 	if route == "/refactoring" || strings.HasPrefix(route, "/refactoring/") {
 		if p.config.runtimeRefactoring == nil {
@@ -553,6 +598,29 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.maintenanceRead(ctx, route, values.Get("page"), values.Get("scope"))
 	}
 	if strings.HasPrefix(route, "/commands/") {
+		if out, err := p.projectLaunchReceipt(ctx, strings.TrimPrefix(route, "/commands/")); err != nil || out != nil {
+			return out, err
+		}
+		if p.manual != nil {
+			raw, err := p.manual.store.ManualVerificationReceipt(ctx, p.config.Identity(), strings.TrimPrefix(route, "/commands/"))
+			if err != nil {
+				return nil, err
+			}
+			if len(raw) != 0 {
+				var in httpcontract.CommandEnvelope
+				if err := json.Unmarshal(raw, &in); err != nil {
+					return nil, err
+				}
+				out := maintenanceResponse(in)
+				out.Status = "applied"
+				return out, nil
+			}
+		}
+		if r, e := p.activityAbandonmentReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
+			return nil, e
+		} else if r != nil {
+			return r, nil
+		}
 		if p.config.runtimeRefactoring != nil {
 			if r, e := p.refactoringReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
 				return nil, e

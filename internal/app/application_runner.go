@@ -105,16 +105,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	r.client, r.catalog = cli, catalog
 	if err == nil {
 		r.native = &runnerclient.ConfigurationSnapshot{Client: cli, Catalog: catalog}
-		for _, profile := range g.Profiles {
-			_, _ = r.native.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{Operation: "describe", Execution: &profile.Execution, Workflow: runnercontract.Workflow{ID: profile.Workflow.ID, Version: profile.Workflow.Version}})
-			for _, target := range []struct {
-				id      string
-				version int
-				mode    string
-			}{{"execute", 1, "full_access"}, {"generate", 1, "read_only"}} {
-				_, _ = r.native.Resolve(ctx, runnercontract.ExecutionConfigurationRequest{Operation: "derive", Execution: &profile.Execution, Workflow: runnercontract.Workflow{ID: target.id, Version: target.version}, AccessMode: target.mode})
-			}
-		}
+		prepareProfileMetadata(ctx, r.native, g.Profiles)
 	}
 	if err == nil && !cli.SupportsObservation() {
 		return errors.New("selected Runner must support same-snapshot run observation (steerrunner-run-observation/v1, max_events >= 100)")

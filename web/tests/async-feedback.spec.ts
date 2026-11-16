@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { TaskPage } from "../src/shared/api/types";
 
 test("explicit submissions give immediate local feedback without a second coordinator", async ({
   page,
@@ -100,8 +101,34 @@ test("explicit submissions give immediate local feedback without a second coordi
   const start = page.getByRole("button", { name: "手动启动", exact: true });
   await expect(start).toBeEnabled();
   await start.click();
-  await page.getByRole("button", { name: "确认启动", exact: true }).click();
+  // The preview can offer a queued addition while the original claim is
+  // still pending. Verify the actual participant before testing a direct add.
+  await Promise.all([
+    page.waitForResponse(
+      async (response) => {
+        if (
+          response.request().method() !== "GET" ||
+          !new URL(response.url()).pathname.endsWith("/tasks/1") ||
+          !response.ok()
+        )
+          return false;
+        const first = commands.find(({ action }) => action === "start_task");
+        const { tasks }: TaskPage = await response.json();
+        return tasks.some(
+          (task) =>
+            task.task_id === "1" &&
+            task.start_eligibility?.action === "start_candidate" &&
+            task.workflow_runs?.some(
+              (run) => run.workflow_run_id === first?.request_id,
+            ),
+        );
+      },
+      { timeout: 120_000 },
+    ),
+    page.getByRole("button", { name: "确认启动", exact: true }).click(),
+  ]);
   await expect(page).toHaveURL(/run=[a-f0-9]+/);
+  await expect(page.getByRole("button", { name: /^候选 C1 / })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "新增并行候选", exact: true }),
   ).toBeEnabled();

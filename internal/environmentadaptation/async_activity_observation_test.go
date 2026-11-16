@@ -8,14 +8,17 @@ import (
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func TestEnvironmentActivityObservationErrorAndRecovery(t *testing.T) {
 	s, remote, store, now := setup(t)
 	r := start(t, s)
-	observe(t, s)
-	observe(t, s) // Submission and the first successful inspection are distinct.
+	remote.submitFailure = &runnerclient.Failure{Code: "request_outcome_unknown", Message: "original receipt unavailable", Unknown: true}
+	if err := s.Observe(ctx); err == nil {
+		t.Fatal("missing unknown submission")
+	}
 	project := func() api.AsyncActivity {
 		t.Helper()
 		facts, _, err := store.ReadAsyncActivityFacts(ctx, s.Project, ports.AsyncActivityRead{Source: "environment_detection", Limit: 50})
@@ -28,8 +31,12 @@ func TestEnvironmentActivityObservationErrorAndRecovery(t *testing.T) {
 		}
 		return a
 	}
+	if unconfirmed := project(); !strings.Contains(unconfirmed.Diagnostic, remote.submitFailure.Error()) {
+		t.Fatalf("unconfirmed submission diagnostic missing: %+v", unconfirmed)
+	}
+	observe(t, s) // The original Run confirms the submission.
 	first := project()
-	if first.State != "running" || first.Observation != "current" || first.ObservedAt == nil {
+	if first.State != "running" || first.Observation != "current" || first.ObservedAt == nil || strings.Contains(first.Diagnostic, remote.submitFailure.Error()) {
 		t.Fatalf("initial successful observation: %+v", first)
 	}
 	*now = now.Add(time.Second)

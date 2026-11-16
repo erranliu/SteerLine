@@ -22,6 +22,18 @@ type BaseResolver struct {
 }
 
 func (r BaseResolver) Resolve(ctx context.Context, work taskmodel.FixedWork, candidate bool) (string, error) {
+	return r.resolve(ctx, work, "")
+}
+
+// ResolveAt verifies a base already fetched by project maintenance.
+func (r BaseResolver) ResolveAt(ctx context.Context, work taskmodel.FixedWork, base string) (string, error) {
+	if !taskmodel.ValidCommit(base) {
+		return "", failure("base_missing_delivery", "target branch has no valid commit")
+	}
+	return r.resolve(ctx, work, base)
+}
+
+func (r BaseResolver) resolve(ctx context.Context, work taskmodel.FixedWork, base string) (string, error) {
 	if r.Git == nil || r.Store == nil || work.Record.ProjectIdentity != r.Project {
 		return "", errors.New("base resolution requires the fixed project repository")
 	}
@@ -33,14 +45,16 @@ func (r BaseResolver) Resolve(ctx context.Context, work taskmodel.FixedWork, can
 		return "", failure("stale_version", "task graph changed before acquiring its base")
 	}
 	ref := "refs/remotes/" + work.Contract.Remote + "/" + work.Contract.Branch
-	if _, err := r.Git(ctx, "fetch", "--no-tags", "--no-write-fetch-head", work.Contract.Remote, "+refs/heads/"+work.Contract.Branch+":"+ref); err != nil {
-		return "", failure("task_not_ready", "cannot acquire the fixed target branch")
+	if base == "" {
+		if _, err := r.Git(ctx, "fetch", "--no-tags", "--no-write-fetch-head", work.Contract.Remote, "+refs/heads/"+work.Contract.Branch+":"+ref); err != nil {
+			return "", failure("task_not_ready", "cannot acquire the fixed target branch")
+		}
+		raw, err := r.Git(ctx, "rev-parse", "--verify", ref+"^{commit}")
+		if err != nil {
+			return "", err
+		}
+		base = strings.TrimSpace(string(raw))
 	}
-	raw, err := r.Git(ctx, "rev-parse", "--verify", ref+"^{commit}")
-	if err != nil {
-		return "", err
-	}
-	base := strings.TrimSpace(string(raw))
 
 	if !taskmodel.ValidCommit(base) {
 		return "", failure("base_missing_delivery", "target branch has no valid commit")

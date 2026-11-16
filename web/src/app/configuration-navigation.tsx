@@ -13,7 +13,7 @@ const projectPages = [
   { path: "status", label: "项目状态", icon: Activity },
   { path: "environment", label: "项目运行环境", icon: Monitor },
   { path: "tests", label: "测试管理", icon: FlaskConical },
-  { path: "settings", label: "任务自动派发", icon: Bot },
+  { path: "settings", label: "项目设置", icon: Bot },
 ];
 
 const globalPages = [

@@ -18,7 +18,7 @@
 | `/tasks`、`/tasks/{task_id}`、`/graph`、`/snapshot`、`/candidates` | 任务、DAG、项目快照与可领取任务。在线任务详情还提供显式启动资格 |
 | `/presentation` | 安全的 profile 摘要、默认项、配置 digest 和不可用原因 |
 | `/dispatch` | 已保存的派发模式及版本、默认执行方案、当前派发状态和结构化等待原因 |
-| `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合与原请求关联，不调用 Git/Runner 或推进业务 |
+| `/activities` | [异步活动中心](async-activities.md)的有界只读来源聚合、原请求关联和精确归档状态查询，不调用 Git/Runner 或推进业务 |
 | `/activities/{activity_id}` | 精确活动摘要；仍只读本地事实和有界消息预览 |
 | `/activities/{activity_id}/interactions` | 显式读取已记录交互一页，默认 50、最多 200、1 MiB；游标绑定项目/实例/活动/原成员范围与读取版本，变化失效后显式刷新 |
 | `/activities/{activity_id}/conversation` | 任务候选显式读取原 Runner 会话，核对候选、Run、Attempt、Session 与 generation。首屏读最近一页，`cursor` 继续读取更早一页或指定消息的一段正文。页面与正文读取均只读且无自动轮询 |
@@ -64,7 +64,25 @@ final 最多直接返回 4 MiB 正文；更大内容按原引用从 body 读取�
 
 `GET /dispatch` 按派发模式返回 `closed`，或按当前任务、执行槽位、默认方案及项目和环境观察返回 `waiting` 或 `ready`。等待原因包含 `category`、`code` 和 `diagnostic`。界面按对应派发版本展示状态。这个查询只读取事实，实际派发使用原启动和预留路径。
 
-以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning、人工验收和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
+以上启动动作仍受项目统一就绪和原任务/资源资格约束。通用 commands 不支持 create_task、add_predecessors、planning 和自定义前置；有效 ID 的拒绝持久保存为 unsupported，而非 not_found。任务创建另走下节原生窄接口。公开 stop_service 已退役，旧回执只读保留；关闭浏览器不停止业务。
+
+人工核验使用项目范围的 `/manual-verification` 列表及 `/manual-verification/{candidate_id}/logs/{attempt_id}` 日志查询。命令以 `manual_verification_` 为前缀，按候选 ID 与核验记录版本定位。请求载荷均携带完整 `head`。
+
+| 后缀 | 载荷 |
+| --- | --- |
+| `start` | `head` 是页面所见的 PR Head。可选 `source` 默认为 `pr`，已合入时也接受 `remote_head`。服务端从冻结 Plan 读取启动命令，启动记录返回实际来源及 SHA。 |
+| `stop`、`remove` | `head` 与 `attempt_id` 定位原启动。 |
+| `result` | `head`、`attempt_id`、`check_id`、`outcome`，可选 `notes` 和 `evidence`。来源由原启动记录确定。 |
+| `close` | `source` 与 `head` 定位具备全部结论的核验提交。 |
+| `reopen` | `head` 匹配原关闭记录。 |
+
+待办状态、来源与记录规则见[人工核验设计](manual-verification.md)。
+
+当前项目启动通过 `GET /manual-verification/project` 查询纳管路径、目标分支、当前提交、可用入口、就绪诊断和最近一次启动。两个命令以项目 ID 和版本 `1` 为目标。`project_launch_start` 提交页面所见的完整 `head` 和 `entry_id`，`project_launch_stop` 提交 `attempt_id`。日志通过 `GET /manual-verification/project/logs/{attempt_id}` 查询。
+
+`GET /manual-verification/pulls` 返回最近更新的最多 10 个可核实 PR，包含开放中、已合入及已关闭状态。`GET /manual-verification/pulls/{number}` 返回指定 PR 的 Head 和启动入口。`project_launch_pr_start` 提交 `pr_number`、完整 `head` 和 `entry_id`。`project_launch_pr_stop` 与 `project_launch_pr_cleanup` 提交 `attempt_id`。通过 `GET /manual-verification/pulls/run` 查询最近一次启动 `latest` 和需清理的旧现场 `retained`。日志在 `GET /manual-verification/pulls/logs/{attempt_id}` 查询。
+
+`GET /settings/worktrees` 读取本机 worktree 目录。使用项目 ID 和版本 `1` 发送 `maintenance_set_worktree_directory`，`directory` 为宿主机绝对路径或表示恢复默认值的空字符串。
 
 POST 正文最大 1,048,576 bytes。登记前检查原信封、固定意图、digest、时间与 JSON framing 聚合编码：无结果摘要最多 1,064,960 bytes，为结果预留 16 KiB；持久读写硬上限 1,081,344 bytes。超限分别返回 HTTP 413 / request_body_too_large 或 request_record_too_large，新 ID 不登记、零业务副作用。持久摘要的 code/diagnostic 各限 1,024 UTF-8 bytes，超长保留前缀与 ` [truncated]`；正式 authority 回执保持完整。仲裁文件只存一份原信封、意图与紧凑结果，typed receipt 从原权威查询，不复制膨胀。
 
@@ -106,13 +124,13 @@ Web 只作受限同源 `/api/v2/application/...` 转接；原生 `/native/identi
 
 环境结果以原 Run 绑定、停止结算、封存的 result-file、脚本报告及 verified 成功 final 共同核验；进度/回复或命令 applied 不单独授予 ready。最终结果 closed/0 保留采集失败，closed/1 才有文件，封存后不重采。失效只阻断新候选，未知按原号核实，不因 not_found 补交。当前单次执行和准入以[服务实现](../../internal/environmentadaptation/service.go)及[模型](../../internal/environmentadaptation/model/model.go)为准；[适配 Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)记录原交付范围。
 
-检测详情和历史的 `blocked` 是原 Run 阻断事实的只读投影，`timed_out` 表示整次检测已超时；两者不改写 `state`、`settled` 或停止资格。未就绪时，顶层诊断优先保留原活动原因，缺少说明时读取当前轮及原 Run 诊断，首次提交错误继续保留。未结算阻断在环境页显示“检测阻断”，活动中心列入进行中及需要关注；指定检测 ID 的详情沿原号轮询，不自动停止或重试。
+检测详情和历史用 `stage` 投影检测阶段和已结算结果。`verifying` 表示检测中，`closing` 表示正在核实原执行停止及结果封存。收尾时 `diagnostic` 显示原故障和待确认步骤，`closing_action` 给出处理说明。活动中心将收尾列入进行中，当前检测也列入需要关注。等待回执时保留首次提交诊断，受理后可在轮次的 `submission_diagnostic` 查看。原检测结算（`settled` 为真）后才允许重新检测。查询沿原 ID 读取。检测观察器负责原 Run 的停止和结算。
 
 ## 项目维护动作与能力边界
 
-重构与维护独立于下表的项目基线维护：`GET /refactoring`、`GET /refactoring/<action-id>` 只读取保存事实；`refactoring_start/answer/finish/stop/conflict` 沿同一命令信封及 journal，回执的 `refactoring` 仅含行动 ID/版本。启动 target 是 repository_identity、版本 1；后继操作 target 为原行动，采用其版本；停止/结束允许同一行动的较早已知版本，人工答复仍须匹配原 question_id 和当前版本。详情不返回冻结执行 settings 或传输原请求。完整规则归[产品设计](refactoring-maintenance.md)与[路由](../../internal/app/refactoring_routes.go)。
+重构与维护独立于下表的项目基线维护：`GET /refactoring`、`GET /refactoring/<action-id>` 只读取保存事实；`refactoring_start/answer/finish/stop/conflict/review` 沿同一命令信封及 journal，回执的 `refactoring` 仅含行动 ID/版本。启动 target 是 repository_identity、版本 1；后继操作 target 为原行动，采用其版本；停止/结束允许同一行动的较早已知版本，人工答复仍须匹配原 question_id 和当前版本。详情不返回冻结执行 settings 或传输原请求。完整规则归[产品设计](refactoring-maintenance.md)与[路由](../../internal/app/refactoring_routes.go)。 人工答复正文包含 `question_id`、`option_id` 和可选 `note`，按原行动版本恢复待答用途。PR 核验及独立合入评审进度由行动状态及已保存事实展示。
 
-`GET /refactoring/readiness?profile=<id>` 以已观察的基线核实所选执行配置的运行环境资格，返回目标分支、项目基线、运行环境状态与诊断。省略 `profile` 时只核实项目基线。该查询不会发起远端同步或环境检测，启动命令会重新核验。
+`GET /refactoring/readiness` 按已观察的基线返回项目基线、运行环境、资格版本、可用方案及其有效配置版本。启动携带所选环境键、资格版本、方案标识及版本、起始提交和方向版本。服务在受理及首次派发边界重新核实。`GET /refactoring` 返回进行中与待答复的摘要、历史首页及推进名额计数。使用 `history_before` 读取后续历史页。按行动 ID 查询详情。所有 GET 只读。
 
 维护动作沿原项目 actor、命令 journal 和原请求回执，不使用图/控制 revision。
 

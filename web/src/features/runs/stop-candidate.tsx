@@ -33,7 +33,7 @@ export function StopCandidate({
       : applied
         ? "停止已生效，等待列表刷新"
         : pending
-          ? "停止请求待核实，请在操作回执中查询原请求"
+          ? "停止请求待核实，请前往「项目状态」查询"
           : busy || sending
             ? "正在处理上一项操作"
             : stopReason(run, page.runs ?? []);

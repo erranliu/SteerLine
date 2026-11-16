@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
+import { useAbandonedActivities } from "../activities/abandonment-marks";
 import type { Candidate } from "../../shared/api/types";
 import { Button } from "../../shared/ui/button";
 
@@ -39,10 +40,14 @@ export function ContinuationSuggestion({
   run,
   inline = false,
   onSuggestion,
+  actionsDisabled = false,
+  onRestore,
 }: {
   run: Candidate;
   inline?: boolean;
-  onSuggestion?: (record: AdvisoryDetail) => void;
+  onSuggestion?: (record: AdvisoryDetail | undefined) => void;
+  actionsDisabled?: boolean;
+  onRestore?: (record: AdvisoryDetail) => void;
 }) {
   const { api, online, submit, busy } = useWorkspace();
   const client = useQueryClient();
@@ -54,7 +59,9 @@ export function ContinuationSuggestion({
     if (target) setOpen(true);
   }, [target]);
   const [working, setWorking] = useState(false);
+  const inFlight = useRef(false);
   const [message, setMessage] = useState("");
+  const [supersededID, setSupersededID] = useState<string>();
   const key = [
     api.home,
     api.identity.project_id,
@@ -77,19 +84,32 @@ export function ContinuationSuggestion({
       online &&
       inline &&
       (!query.state.data?.record?.settled ||
+        query.state.data.record.id === supersededID ||
         ["queued", "preparing"].includes(query.state.data.record.state))
         ? 2500
         : false,
   });
   const currentRecord = current.data?.record;
-  const matched =
+  const marks = useAbandonedActivities(
+    "main_agent_advisory",
+    currentRecord ? [currentRecord.id] : [],
+  );
+  const archived = marks.isAbandoned(currentRecord?.id);
+  const currentMatch =
+    !marks.pending &&
     currentRecord?.candidate_id === run.run_id &&
     currentRecord.occurrence === occurrence
       ? currentRecord
       : undefined;
+  const awaitingReplacement =
+    !!currentMatch && currentMatch.id === supersededID;
+  const matched = archived || awaitingReplacement ? undefined : currentMatch;
   useEffect(() => {
-    if (matched?.state === "ready" && matched.settled && matched.prompt)
-      onSuggestion?.(matched);
+    onSuggestion?.(
+      matched?.state === "ready" && matched.settled && matched.prompt
+        ? matched
+        : undefined,
+    );
   }, [matched, onSuggestion]);
   const list = useQuery({
     queryKey: [...key, "list"],
@@ -132,23 +152,35 @@ export function ContinuationSuggestion({
       setMessage("复制未成功，请选择正文手动复制。");
     }
   }
-  async function cancel() {
-    if (!record) return;
+  async function submitSuggestionAction(
+    action: "main_agent_cancel" | "main_agent_regenerate",
+    target: AdvisoryDetail,
+  ) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const regenerate = action === "main_agent_regenerate";
     setWorking(true);
+    setMessage("");
     try {
       const receipt = await submit(
-        api.envelope("main_agent_cancel", record.id, record.revision, {}),
+        api.envelope(action, target.id, target.revision, {}),
       );
+      if (regenerate && receipt?.status === "applied") {
+        setSupersededID(target.id);
+      }
       setMessage(
         receipt?.diagnostic ||
           (receipt?.status === "applied"
-            ? "取消请求已保存"
-            : "原取消结果待核实，请沿原请求查询。"),
+            ? regenerate
+              ? "已请求重新生成建议。"
+              : "取消请求已保存"
+            : "原建议操作结果待核实，请沿原请求查询。"),
       );
-      await client.invalidateQueries({ queryKey: key });
     } catch (e) {
       setMessage(String(e));
     } finally {
+      await client.invalidateQueries({ queryKey: key });
+      inFlight.current = false;
       setWorking(false);
     }
   }
@@ -166,9 +198,11 @@ export function ContinuationSuggestion({
       )}
       {inline && !record && (
         <p className="muted">
-          {current.isPending
-            ? "正在读取当前问题的建议…"
-            : "当前问题暂无建议，可直接填写回答。"}
+          {awaitingReplacement
+            ? "正在读取重新生成的建议…"
+            : current.isPending
+              ? "正在读取当前问题的建议…"
+              : "当前问题暂无建议，可直接填写回答。"}
         </p>
       )}
       {!inline && !id && !list.isLoading && <p>暂无已登记建议。</p>}
@@ -214,12 +248,51 @@ export function ContinuationSuggestion({
             <Button
               variant="outline"
               disabled={!online || busy || working}
-              onClick={() => void cancel()}
+              onClick={() =>
+                void submitSuggestionAction("main_agent_cancel", record)
+              }
             >
               取消本次生成
             </Button>
           )}
         </article>
+      )}
+      {inline && currentMatch && (
+        <div className="actions">
+          <Button
+            variant="outline"
+            disabled={
+              busy ||
+              actionsDisabled ||
+              !onRestore ||
+              matched?.state !== "ready" ||
+              !matched.settled ||
+              !matched.prompt
+            }
+            onClick={() => matched && onRestore?.(matched)}
+          >
+            恢复建议
+          </Button>
+          <Button
+            variant="outline"
+            disabled={
+              !online ||
+              busy ||
+              actionsDisabled ||
+              working ||
+              awaitingReplacement ||
+              !currentMatch.settled ||
+              !["ready", "failed", "cancelled", "blocked"].includes(
+                currentMatch.state,
+              )
+            }
+            onClick={() =>
+              void submitSuggestionAction("main_agent_regenerate", currentMatch)
+            }
+          >
+            重新生成建议
+          </Button>
+        </div>
       )}
       <p role="status">{message}</p>
     </>

@@ -1,12 +1,30 @@
 {
   "tests": [
     {
+      "id": "manual-verification.gitea-local-codex",
+      "name": "Gitea 真实草稿 PR 与人工核验",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=manual-verification -env=live -scenario manual-verification.gitea-local-codex",
+      "check": "真实 Runner、Codex、Edge 和隔离本机 Gitea 创建草稿 PR，出现候选待办，从完整 Head 创建 worktree、启动预览并保存结论。推送新 Head 后拒绝旧提交写入，核验新提交，关闭待办和 PR，确认清理。",
+      "note": "Windows、Go、Git、Node、Edge、Codex 原生登录。STEERRUNNER_EXE 和 STEERLINE_E2E_GITEA_EXE 指向独立二进制，先构建 Web。测试服务监听 loopback，使用自有仓库与自定义 WIP 前缀。"
+    },
+    {
+      "id": "manual-verification.local-codex",
+      "name": "人工核验真实草稿 PR",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=manual-verification -env=live -scenario manual-verification.local-codex",
+      "check": "真实 Runner/Codex 与专属 GitHub 草稿 PR，零人工输入先发布。按原 Head 运行本机预览，保存逐项结论，拒绝旧 Head 写入。Ready、合并及唯一交付后，在 PR 位置和远端 Head 分别启动，核对结论隔离、关闭待办并清理资源。",
+      "note": "固定支持 draft 的 Runner，Windows/Go/Git/Node，Codex 与 GitHub 原生登录。独立精确选择专属 PR，串行。"
+    },
+    {
       "id": "runtime.async-activities",
       "name": "异步活动中心抽屉与独立阅读页",
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.async-activities",
-      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测与候选可发现，退役测试准备活动缺席，PR-ready保持等待；原观察阶段跨路由、320px模态/焦点、断连/刷新/重启原活动和Run不变且零新增输入。独立活动页及摘要深链接默认不读交互/正文，显式展开一页索引，连续轻量变化检查不追页，正文显式一段或完整短预览免查询，历史无焦点重取，1440/768/320px截图及请求计数证据经执行器校验。另一个独立项目从浏览器发起草稿解析（真实来源变化拒绝）、检查更新、首次及并行候选、环境检测，验证即时局部反馈、飞入动效及窄屏减少动态效果，每意图一次原命令；分别核对浏览器证据和两次候选提交，完整交付与资源结算。",
+      "check": "真实 SteerLine/Git/SQLite/HTTP/Edge 与公开 Runner fixture：检测与候选可发现，退役测试准备活动缺席，PR-ready保持等待；原观察阶段跨路由、320px模态/焦点、断连/刷新/重启原活动和Run不变且零新增输入。通过正式命令放弃候选，核对原回执及历史，随后原候选仍可交付。独立活动页及摘要深链接默认不读交互/正文，显式展开一页索引，连续轻量变化检查不追页，正文显式一段或完整短预览免查询，历史无焦点重取，1440/768/320px截图及请求计数证据经执行器校验。另一个独立项目从浏览器发起草稿解析（真实来源变化拒绝）、检查更新、首次及并行候选、环境检测，验证即时局部反馈、飞入动效及窄屏减少动态效果，每意图一次原命令；分别核对浏览器证据和两次候选提交，完整交付与资源结算。",
       "note": "Windows/Go/Git、Node/npm/Edge；先 npm --prefix web ci 和 npm --prefix web run build，场景只读共享资产/依赖，Web EXE由本次构建冻结；两独立项目按顺序运行观察与发起阶段，正文10分钟/包12分钟，清理沿原独立上下文。home/repo/DB/provider/端口/浏览器/证据独立，不依赖其他场景产物。总并发最多二；受控不证明真实模型/PR。"
     },
     {
@@ -42,7 +60,7 @@
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=configuration -env=controlled -scenario configuration.execution-profiles",
-      "check": "浏览器条件保存本机Orca三Agent配置、待重启门槛、正式停启、关闭Web后CLI核对adapter/target/agent/model/effort/helper，原候选不变且资源清理完整。",
+      "check": "浏览器条件保存本机 Orca/Codex 和 Pi 方案并切换默认项，同一项目服务加载，关闭 Web 后 CLI 使用新方案，原候选输入和服务实例保持一致并完成资源清理。",
       "note": "Windows/Go/Git、Node/npm、Edge；先串行执行 npm --prefix web ci 和 npm --prefix web run build，测试仅只读复用已构建资产，不在场景中 npm 构建。独立 home/repo/DB/端口/浏览器输出；受控 Runner，无真实 Orca。跨包总并发二；已验证组合见专属验收，不推断全部组合。"
     },
     {
@@ -275,7 +293,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.runner-result",
-      "check": "runneracceptance 标签下精确执行 TestProjectEnvironmentExecutionPublishedResultRoundTrip，原始结果来源、封存及资源清理断言通过。；同一固定实际Runner以协议夹具额外验证至少四次execute的最新持有者/原worktree/独立session、dirty文件保留、停止封存，generate.directory与file manifest，以及只读后仍接回原写入者；不证明模型审计质量或真实PR。",
+      "check": "runneracceptance 标签下精确执行 TestProjectEnvironmentExecutionPublishedResultRoundTrip，原始结果来源、封存及资源清理断言通过。；同一固定实际Runner以协议夹具额外验证至少四次execute的最新持有者/原worktree/独立session、dirty文件保留、停止封存，首轮generate.directory、后续无目录generate与file manifest，以及只读后仍接回原写入者；不证明模型审计质量或真实PR。",
       "note": "显式 STEERRUNNER_EXE、STEERRUNNER_VERSION、STEERRUNNER_SHA256、STEERRUNNER_NATIVE_FIXTURE（Runner 提供的原生协议 fixture）；不证明真实模型或 PR。缺输入阻断。"
     },
     {
@@ -318,13 +336,13 @@
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.refactoring-maintenance",
       "name": "维护多轮、审计和原PR交付",
-      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner/provider夹具：宽窄屏预览方向原文、拒绝过期版本、安装模板修改后继续使用冻结正文；两轮及失败修复四次execute沿同一worktree最新持有者；谨慎人工答复、预算自动收尾、原PR报告和手动更新；刷新零命令、活动分类和资源清理。原生模型与真实PR由live专项验证。",
+      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner/provider夹具：宽窄屏预览方向原文、拒绝过期版本、安装模板修改后继续使用冻结正文；两轮、失败修复、发布复用同一worktree最新持有者；结构化人工答复、预算自动收尾、按核验PR版本独立评审且正文保持、原PR手动更新；三条并发及第四条排队接位；刷新零命令、活动分类和资源清理。原生模型与真实PR由live专项验证。",
       "id": "runtime.refactoring-maintenance",
       "note": "Windows/Go/Git/Node/Edge；先构建Web，独立home/repo/provider/浏览器输出。串行准备，受控不证明真实模型工程判断。",
       "level": "L3"
     },
     {
-      "check": "固定新Runner与本机Codex，独立GitHub测试base：两轮同方向维护、预算自动收尾、同worktree原身份链、一个draft PR及同源审计报告；目标推进形成真实Git冲突后手动更新原PR及冲突审计；所有Run与服务停止、关闭本轮PR并清理自有分支。",
+      "check": "固定新Runner与本机Codex，独立GitHub测试base：同项目同环境两条Run重叠，各自在原worktree和分支交付draft PR，核验head/base后独立评审且正文保持；目标推进形成真实Git冲突后手动更新原PR并登记新基线和第二份评审；所有Run与服务停止、关闭本轮PR并清理自有分支。",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=refactoring -env=live -scenario refactoring.local-codex",
       "name": "本机真实维护与冲突交付",
       "environment": "live",

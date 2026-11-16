@@ -444,20 +444,14 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
         ).filter((kind) => kind === "reply"),
       ).toHaveLength(0);
       expect(attempt).toBeLessThan(2);
-      const operations = page.locator("details.operations");
-      if (
-        !(await operations.evaluate(
-          (element) => (element as HTMLDetailsElement).open,
-        ))
-      ) {
-        await operations.locator("summary").click();
-      }
+      const executionURL = page.url();
+      await page.getByRole("link", { name: "配置", exact: true }).click();
+      const operations = page.getByRole("region", { name: "操作结果" });
       const rejected = operations
-        .locator(".operation")
-        .filter({ hasText: "answer_decision" })
-        .first();
+        .locator(":scope > .operation")
+        .filter({ hasText: "回答问题" });
       await expect(rejected.getByText("已拒绝", { exact: true })).toBeVisible();
-      await page.reload();
+      await page.goto(executionURL);
       await expect(
         page.getByRole("textbox", { name: "回答内容" }),
       ).toBeEnabled();

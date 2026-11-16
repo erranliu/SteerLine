@@ -12,6 +12,7 @@ import {
   activityDestination,
   ended,
   formatActivityTime,
+  matchesActivity,
   type Activity,
   type ActivityListFilter,
 } from "./model";
@@ -19,6 +20,8 @@ import { useActivityList } from "./use-activity-list";
 import { ActivityConversation } from "./activity-conversation";
 import { CopyExecutionInfo } from "./execution-info";
 import { readingRoot } from "./reading-api";
+import { AbandonActivity } from "./abandonment";
+import { useAbandonedActivities } from "./abandonment-marks";
 import "./activity-page.css";
 
 function ActivityPhase({ activity }: { activity: Activity }) {
@@ -30,7 +33,11 @@ function ActivityPhase({ activity }: { activity: Activity }) {
       data-attention={activity.needs_attention}
     >
       {phase}
-      {activity.needs_attention && phase !== "需处理" ? " · 需处理" : ""}
+      {activity.abandoned_at
+        ? " · 已放弃"
+        : activity.needs_attention && phase !== "需处理"
+          ? " · 需处理"
+          : ""}
     </span>
   );
 }
@@ -115,11 +122,13 @@ export function ActivityPage() {
   }, [selected]);
   const visible = usePageVisible();
   const list = useActivityList(api, filter, online && visible, 2000);
+  const { applyMark } = useAbandonedActivities();
   const activities = new Map<string, Activity>();
   for (const page of list.data?.pages ?? []) {
     for (const item of page.items) {
-      if (!activities.has(item.activity_id))
-        activities.set(item.activity_id, item);
+      const activity = applyMark(item);
+      if (!activities.has(item.activity_id) && matchesActivity(activity, filter))
+        activities.set(item.activity_id, activity);
     }
   }
   const items = [...activities.values()];
@@ -228,9 +237,11 @@ export function ActivityPage() {
               <Message activity={activity} />
               {filter === "history" && (
                 <small>
-                  {activity.finished_at
-                    ? "结束于 " + formatActivityTime(activity.finished_at)
-                    : "结束时间未记录"}
+                  {activity.abandoned_at
+                    ? "放弃于 " + formatActivityTime(activity.abandoned_at)
+                    : activity.finished_at
+                      ? "结束于 " + formatActivityTime(activity.finished_at)
+                      : "结束时间未记录"}
                 </small>
               )}
             </article>
@@ -253,6 +264,11 @@ export function ActivityPage() {
             }
             id={selected}
             onBack={() => setSelection("")}
+            onAbandoned={() => {
+              setSelection("");
+              headingElement.current?.focus({ preventScroll: true });
+              void list.refetch().catch(() => {});
+            }}
           />
         ) : (
           <p className="empty">选择活动查看摘要，需要时再展开已记录的交互。</p>
@@ -262,8 +278,17 @@ export function ActivityPage() {
   );
 }
 
-function ActivityDetail({ id, onBack }: { id: string; onBack: () => void }) {
+function ActivityDetail({
+  id,
+  onBack,
+  onAbandoned,
+}: {
+  id: string;
+  onBack: () => void;
+  onAbandoned: () => void;
+}) {
   const { api, online, identity } = useWorkspace();
+  const { applyMark } = useAbandonedActivities();
   const key = [
     api.home,
     identity.project_id,
@@ -288,7 +313,7 @@ function ActivityDetail({ id, onBack }: { id: string; onBack: () => void }) {
       query.state.data && ended(query.state.data) ? false : "always",
     refetchOnReconnect: false,
   });
-  const activity = summary.data;
+  const activity = summary.data && applyMark(summary.data);
   return (
     <section aria-label="所选活动摘要">
       <Button className="reading-back" variant="ghost" onClick={onBack}>
@@ -319,13 +344,20 @@ function ActivityDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <div className="reading-actions">
               <Button
                 asChild
-                variant={activity.needs_attention ? "default" : "outline"}
+                variant={
+                  activity.needs_attention && !activity.abandoned_at
+                    ? "default"
+                    : "outline"
+                }
               >
                 <Link to={activityDestination(identity.project_id, activity)}>
-                  {activity.needs_attention ? "去处理" : "查看原详情"}
+                  {activity.needs_attention && !activity.abandoned_at
+                    ? "去处理"
+                    : "查看原详情"}
                   <ArrowUpRight size={14} aria-hidden="true" />
                 </Link>
               </Button>
+              <AbandonActivity activity={activity} onApplied={onAbandoned} />
               <CopyExecutionInfo
                 info={{
                   title: activity.title,
