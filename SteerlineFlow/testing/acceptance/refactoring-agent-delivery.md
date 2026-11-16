@@ -30,6 +30,20 @@ Runner 使用 #157 之前的 `8be179f29e0b9eac8572f447439a15cd7d776213`。公开
 
 前置能力验证和主体接线已完成，逐项验证范围见下文。关联 [Spec](../../spec/refactoring-agent-delivery.spec.md) · [Plan](../../plans/refactoring-agent-delivery.plan.md) · [测试选择](../../plans/refactoring-agent-delivery.tests.json)。原最小闭环验收见 [历史证据](refactoring-maintenance.md)。
 
+## 2026-11-16 首轮快照与 Git LFS
+
+受测源码为 `39ad4922c1360147b332936f9d034d42e75dbd8f` 加本次修复。首轮快照检出时保留 LFS 指针，并使用独立的项目 `command_timeout`；停止行动可取消快照准备。
+
+| 验证 | 结果及证据 |
+| --- | --- |
+| 维护模块 Go 全集 | `go test ./internal/refactoring/... -count=1` 通过。原日志为 `C:/Users/lmas1/AppData/Local/Temp/sl-maintenance-owner-a05a7402c7584cddae30446c4c081ae3.log`。 |
+| LFS 快照及调度定向回归 | `go test ./internal/refactoring ./internal/app -run 'Test(Maintenance(Investigation\|StopCancelsInvestigation\|SlowSubmit)\|RefactoringInvestigation)' -count=1` 通过。原日志为 `C:/Users/lmas1/AppData/Local/Temp/sl-maintenance-focused-d33bebb9a16140c680c50335a50e31e3.log`。验证保留指针、固定提交、失败诊断、超时范围及停止时未投递 Runner。 |
+| L1 | `go run ./cmd/test-feedback -level=L1` 通过。原报告为 `C:/Users/lmas1/AppData/Local/Temp/sl-maintenance-l1-6a1a634a1cde4cfebed9718056d2f272/summary.json`。 |
+| L2 `smoke.delivery` | `go run ./cmd/test-feedback -level=L2` 通过，清理完成。原报告为 `C:/Users/lmas1/AppData/Local/Temp/sl-maintenance-regression-a6e540ecf55442b093abf11772c23306/L2/summary.json`。 |
+| L3 `runtime.refactoring-maintenance` | `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.refactoring-maintenance` 通过，清理完成。原报告为 `C:/Users/lmas1/AppData/Local/Temp/sl-maintenance-regression-a6e540ecf55442b093abf11772c23306/L3/summary.json`。 |
+
+本次未更新安装版，未复跑真实 Runner L4。
+
 ## 前置能力验证
 
 2026-11-12 使用 SteerLine 基线 `400e15dcfab24074d0062caeb46d35043a5e09e8`，工作树仅有待审文档。通过临时 Go overlay 运行两个诊断用例，2 项通过、零跳过。探针源码、实际命令和原始报告保存于 `C:\SteerlineDebug\wt-1851-refactoring-agent-preflight\diagnostics\preflight-20261112T083901Z-5d21ad1d\`。结果入口为 `report/summary.json`，逐项日志见 `report/go-test.jsonl`。

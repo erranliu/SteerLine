@@ -243,13 +243,28 @@ func (p *refactoringPort) investigation(ctx context.Context, r ref.Record, id st
 	}
 	local := (&url.URL{Scheme: "file", Path: source}).String()
 	commit := r.Frozen.Repository.BaseRevision
-	git := commandRunner{Dir: dir, ProcessHost: p.config.ProcessHost, Timeout: positiveDuration(p.config.CommandTimeout, 30*time.Second)}
-	for _, args := range [][]string{
-		{"init", "--quiet", "--template="},
-		{"fetch", "--quiet", "--no-tags", "--depth=1", local, commit},
-		{"-c", "core.hooksPath=" + filepath.Join(dir, ".git", "disabled-hooks"), "checkout", "--quiet", "--detach", commit},
+	timeout := positiveDuration(p.config.CommandTimeout, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	started := time.Now()
+	git := commandRunner{Dir: dir, ProcessHost: p.config.ProcessHost, Timeout: timeout}
+	for _, step := range []struct {
+		name string
+		args []string
+	}{
+		{"init", []string{"init", "--quiet", "--template="}},
+		{"fetch", []string{"fetch", "--quiet", "--no-tags", "--depth=1", local, commit}},
+		{"checkout", []string{"-c", "core.hooksPath=" + filepath.Join(dir, ".git", "disabled-hooks"), "checkout", "--quiet", "--detach", commit}},
 	} {
-		if _, err = git.Output(ctx, backend.Command{Executable: "git"}, args...); err != nil {
+		if step.name == "checkout" {
+			git.Env = map[string]string{"GIT_LFS_SKIP_SMUDGE": "1"}
+		}
+		_, err = git.Output(ctx, backend.Command{Executable: "git"}, step.args...)
+		if err == nil {
+			err = ctx.Err()
+		}
+		if err != nil {
+			err = fmt.Errorf("首轮只读快照 git %s 失败（已用 %s，快照时限 %s）: %w", step.name, time.Since(started).Round(time.Millisecond), timeout, err)
 			return errors.Join(err, releaseInvestigation(id))
 		}
 	}

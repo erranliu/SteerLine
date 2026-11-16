@@ -11,6 +11,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/refactoring/model"
 )
 
+const advanceTimeout = 30 * time.Second
+
 func observationTime(observed, now time.Time) time.Time {
 	if observed.IsZero() || observed.After(now) {
 		return now
@@ -103,9 +105,7 @@ func (s *Service) run(ctx context.Context, drain bool) error {
 			}
 			workers.Go(func() {
 				defer advancing.Delete(r.ID)
-				step, cancel := context.WithTimeout(ctx, 30*time.Second)
-				defer cancel()
-				_ = s.advanceAction(step, r)
+				_ = s.advanceAction(ctx, r)
 			})
 		}
 		select {
@@ -132,12 +132,14 @@ func (s *Service) Tick(ctx context.Context) error {
 }
 
 func (s *Service) advanceAction(ctx context.Context, r model.Record) error {
+	step, cancel := context.WithTimeout(ctx, advanceTimeout)
+	defer cancel()
 	if i := s.investigationDue(r); i >= 0 {
 		op := r.Operations[i]
 		if err := s.ReleaseInvestigation(op.ID); err != nil {
 			return err
 		}
-		_, err := s.update(ctx, r.ID, func(current *model.Record) error {
+		_, err := s.update(step, r.ID, func(current *model.Record) error {
 			current.Operations[i].Investigation = ""
 			return nil
 		})
@@ -145,15 +147,15 @@ func (s *Service) advanceAction(ctx context.Context, r model.Record) error {
 	}
 	if !r.Active() {
 		if s.claimReviewCheck(r) {
-			if err := s.refreshReview(ctx, r); err != nil {
+			if err := s.refreshReview(step, r); err != nil {
 				return err
 			}
 		}
-		return s.refreshCost(ctx, r)
+		return s.refreshCost(step, r)
 	}
-	err := s.tick(ctx, r)
-	if err != nil && ctx.Err() == nil {
-		_, _ = s.update(ctx, r.ID, func(current *model.Record) error {
+	err := s.tick(step, ctx, r)
+	if err != nil && step.Err() == nil {
+		_, _ = s.update(step, r.ID, func(current *model.Record) error {
 			current.Diagnostic = err.Error()
 			return nil
 		})
@@ -246,7 +248,7 @@ func (s *Service) refreshCost(ctx context.Context, r model.Record) error {
 	return err
 }
 
-func (s *Service) markSubmitted(ctx context.Context, id string, operation model.Operation, proof []env.Admission) (bool, error) {
+func (s *Service) markSubmitted(ctx context.Context, id string, operation model.Operation, proof []env.Admission, cancelInvestigation context.CancelFunc) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, err := s.Store.Refactoring(ctx, s.Project, id)
@@ -280,6 +282,12 @@ func (s *Service) markSubmitted(ctx context.Context, id string, operation model.
 			s.Queue.UpdateContent(s.Project, key, last.CreatedAt, false, false)
 		}
 		return false, err
+	}
+	if cancelInvestigation != nil {
+		if s.investigations == nil {
+			s.investigations = make(map[string]context.CancelFunc)
+		}
+		s.investigations[id] = cancelInvestigation
 	}
 	return true, nil
 }

@@ -21,6 +21,51 @@ import (
 	"time"
 )
 
+func TestRefactoringInvestigationPreservesLFSPointer(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "empty.gitconfig"))
+	t.Setenv("GIT_CONFIG_COUNT", "0")
+	source := t.TempDir()
+	fixtureGit(t, source, "init", "-q", "-b", "main")
+	pointer := "version https://git-lfs.github.com/spec/v1\noid sha256:" + strings.Repeat("a", 64) + "\nsize 4096\n"
+	require(t, os.WriteFile(filepath.Join(source, ".gitattributes"), []byte("bundle.bin filter=lfs -text\n"), 0600))
+	require(t, os.WriteFile(filepath.Join(source, "bundle.bin"), []byte(pointer), 0600))
+	fixtureGit(t, source, "add", ".")
+	fixtureGit(t, source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "LFS pointer")
+	revision := fixtureGit(t, source, "rev-parse", "HEAD")
+	fixtureGit(t, source, "remote", "add", "origin", "https://example.invalid/project.git")
+
+	// Exercise checkout with an LFS filter without requiring a Git LFS install.
+	t.Setenv("GIT_LFS_SKIP_SMUDGE", "0")
+	t.Setenv("GIT_CONFIG_COUNT", "2")
+	t.Setenv("GIT_CONFIG_KEY_0", "filter.lfs.smudge")
+	t.Setenv("GIT_CONFIG_VALUE_0", `test "$GIT_LFS_SKIP_SMUDGE" = 1 && cat`)
+	t.Setenv("GIT_CONFIG_KEY_1", "filter.lfs.required")
+	t.Setenv("GIT_CONFIG_VALUE_1", "true")
+	port := refactoringPort{config: Config{CommandTimeout: "20s", ProcessHost: NewProcessHost(20 * time.Second)}}
+	record := ref.Record{Frozen: ref.Frozen{Repository: rc.Repository{LocalPath: source, BaseRevision: revision}}}
+	id := ref.ID()
+	require(t, port.investigation(t.Context(), record, id))
+	dir, err := investigationPath(id)
+	require(t, err)
+	body, err := os.ReadFile(filepath.Join(dir, "bundle.bin"))
+	require(t, err)
+	if string(body) != pointer || fixtureGit(t, dir, "rev-parse", "HEAD") != revision || fixtureGit(t, dir, "remote") != "" {
+		t.Fatal("expected the pinned snapshot to preserve the LFS pointer and have no remote")
+	}
+	require(t, releaseInvestigation(id))
+
+	record.Frozen.Repository.BaseRevision = strings.Repeat("b", 40)
+	err = port.investigation(t.Context(), record, id)
+	if err == nil || !strings.Contains(err.Error(), "git fetch 失败") || !strings.Contains(err.Error(), "快照时限 20s") {
+		t.Fatalf("expected a fetch failure with a snapshot deadline, got %v", err)
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed snapshot was not removed: %v", err)
+	}
+}
+
 func TestRefactoringPRVersionAndOriginalBranch(t *testing.T) {
 	for _, kind := range []string{"valid", "fork", "closed", "body", "head", "base"} {
 		t.Run(kind, func(t *testing.T) {

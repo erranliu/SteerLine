@@ -217,6 +217,74 @@ func TestMaintenanceFirstDispatchChecksQualificationAfterQueue(t *testing.T) {
 	}
 }
 
+func TestMaintenanceInvestigationUsesLifecycleDeadline(t *testing.T) {
+	s, runner, _ := fixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	deadline, _ := ctx.Deadline()
+	s.Admit = func(step context.Context) error {
+		if stepDeadline, ok := step.Deadline(); !ok || !stepDeadline.Before(deadline) {
+			t.Error("dispatch admission lost its step deadline")
+		}
+		return nil
+	}
+	s.Investigate = func(snapshot context.Context, _ m.Record, _ string) error {
+		if snapshotDeadline, ok := snapshot.Deadline(); !ok || !snapshotDeadline.Equal(deadline) {
+			t.Error("snapshot inherited the shorter step deadline")
+		}
+		return nil
+	}
+	for range 2 {
+		if err := s.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(runner.requests) != 1 {
+		t.Fatal("expected one first-round submission")
+	}
+}
+
+func TestMaintenanceStopCancelsInvestigationBeforeSubmission(t *testing.T) {
+	s, runner, first := fixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	started := make(chan struct{})
+	s.Investigate = func(snapshot context.Context, _ m.Record, _ string) error {
+		close(started)
+		<-snapshot.Done()
+		// A checkout can complete successfully at the same time as cancellation.
+		return nil
+	}
+	if err := s.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	var tickErr error
+	go func() {
+		defer close(done)
+		tickErr = s.Tick(ctx)
+	}()
+	defer func() { cancel(); <-done }()
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("investigation did not start")
+	}
+	control(t, s, first, "refactoring_stop")
+	select {
+	case <-done:
+		if tickErr != nil {
+			t.Fatal(tickErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("stopping did not cancel the investigation")
+	}
+	stopped := tickUntil(t, s, first.ID, func(r m.Record) bool { return r.Phase == "stopped" })
+	if len(runner.requests) != 0 || stopped.Slot || !stopped.Operations[0].Settled() {
+		t.Fatal("stopped investigation submitted a Runner request or retained capacity")
+	}
+}
+
 func TestMaintenanceQueuedConflictStopsWhenOriginalPRCloses(t *testing.T) {
 	s, runner, first := fixture(t)
 	delivered := tickUntil(t, s, first.ID, func(r m.Record) bool { return r.Phase == "delivered" })
