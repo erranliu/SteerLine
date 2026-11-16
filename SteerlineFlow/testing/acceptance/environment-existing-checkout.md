@@ -17,3 +17,9 @@
 - 配套 Runner 用独立服务和临时 Git 项目验证了本机和本机 Orca 结果封存，配对机验证见 SteerRunner PR 161。没有更换正式安装。
 
 配对机 308 验证创建 Run 56c1554838e7b2d7563f3fda32bb0fb5。其 checkout 的 HEAD 3dd85978 与调用基线 d57552a2 的 manifest 依赖声明不同，Runner 在调用项目入口前按约定拒绝，原 Run 已停止并封存诊断。未修改目标 checkout。
+
+## 合入 main 后的验证
+
+- 合并工作树运行 `go run ./cmd/test-feedback -level=L1` 通过，报告 `%LOCALAPPDATA%/Temp/steerline-pr546-l1-8935b6a84abc4e8283eb780c53a137fa/summary.json`。合并提交 `8f6d13addc32d9ca0ec46c525ee0a9202ad994fa` 的 [GitHub 提示词治理检查](https://github.com/erranliu/SteerLine/actions/runs/43794795657/job/133061041496)通过。
+- 合并提交运行 `go run ./cmd/test-feedback -level=L2` 和 `go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.environment` 通过。报告分别为 `%LOCALAPPDATA%/Temp/steerline-pr546-l2-a0d2758445884baeb69c9afc8fda4f09/summary.json` 和 `%LOCALAPPDATA%/Temp/steerline-pr546-environment-1b6b2f5b2f584691a9b7e5c6db2fb207/summary.json`。环境专项包含缓存命中后校验 manifest、入口和依赖摘要的回归断言。
+- 首次在 Windows 沙箱内运行 L2 和环境专项遇到进程或文件权限错误，以上结果来自沙箱外的独立临时目录。本轮未在真实配对机执行快进。
