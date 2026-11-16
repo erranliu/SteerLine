@@ -4,15 +4,19 @@
     [switch]$IndependentProcess,
     [switch]$Planning,
     [switch]$SingleTask,
+    [switch]$Interrupt,
+    [switch]$Streaming,
     [string]$CodexExe
 )
 $ErrorActionPreference='Stop'
-if ($Planning -and $SingleTask) { throw 'Select one planning scenario.' }
+if (@($Planning, $SingleTask, $Interrupt, $Streaming).Where({ $_ }).Count -gt 1) { throw 'Select one planning scenario.' }
 if (!$IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
     $taskArguments=@('-SteerRunnerExe',$SteerRunnerExe,'-OutRoot',$OutRoot)
     if ($Planning) { $taskArguments+= '-Planning' }
     if ($SingleTask) { $taskArguments+= '-SingleTask' }
+    if ($Interrupt) { $taskArguments+= '-Interrupt' }
+    if ($Streaming) { $taskArguments+= '-Streaming' }
     if ($CodexExe) { $taskArguments+= @('-CodexExe',$CodexExe) }
     Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $taskArguments -Timeout ([TimeSpan]::FromMinutes(30))
     return
@@ -57,6 +61,7 @@ $taskStarted=$false;$taskBrowser=$false;$taskCleanup=$false;$taskPR=$null;$taskH
 $taskPreviousHome=$env:STEERLINE_HOME
 $taskPreviousRoot=$env:STEERLINE_ROADMAP_BROWSER_ROOT
 $taskPreviousEvidence=$env:STEERLINE_WEB_EVIDENCE
+$taskPreviousStreaming=$env:STEERLINE_PLANNING_STREAM
 try {
     $repoInfo=Invoke-TaskNative 'gh' @('api',('repos/'+$taskRemote),'--jq','{full_name,default_branch,permissions}')
     $taskPermission=$repoInfo|ConvertFrom-Json
@@ -178,10 +183,11 @@ try {
     }
     $env:STEERLINE_ROADMAP_BROWSER_ROOT=$taskRoot
     $env:STEERLINE_WEB_EVIDENCE=Join-Path $taskRoot 'evidence\browser'
+    $env:STEERLINE_PLANNING_STREAM=if($Streaming){'1'}else{''}
     Push-Location $taskSource
     try {
         $ErrorActionPreference='Continue'
-        $taskScenario=if($SingleTask){'single-task-planning-live.spec.ts'}elseif($Planning){'roadmap-planning-live.spec.ts'}else{'roadmap-live.spec.ts'}
+        $taskScenario=if($Interrupt -or $Streaming){'planning-interrupt-live.spec.ts'}elseif($SingleTask){'single-task-planning-live.spec.ts'}elseif($Planning){'roadmap-planning-live.spec.ts'}else{'roadmap-live.spec.ts'}
         & npm.cmd --prefix web run test:e2e -- $taskScenario *> (Join-Path $taskRoot 'evidence\browser.log')
         $taskBrowser=$LASTEXITCODE -eq 0
         $ErrorActionPreference='Stop'
@@ -228,7 +234,7 @@ finally {
     $listeners=@(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue|Where-Object {$_.OwningProcess -in $processes.ProcessId -or ($taskPort -and $_.LocalPort -eq $taskPort)})
     $taskCleanup=$taskCleanupErrors.Count -eq 0 -and $processes.Count -eq 0 -and $listeners.Count -eq 0
     Write-TaskJSON 'result.json' @{schema='roadmap-browser-live/v1';passed=($taskBrowser -and $taskCleanup -and !$taskFailure);browser_passed=$taskBrowser;cleanup_complete=$taskCleanup;failure=$taskFailure;cleanup_errors=$taskCleanupErrors;processes=$processes.Count;listeners=$listeners.Count;pull_request=$taskPR.html_url;base_branch=$taskBase;head_branch=$taskHead}
-    $env:STEERLINE_HOME=$taskPreviousHome;$env:STEERLINE_ROADMAP_BROWSER_ROOT=$taskPreviousRoot;$env:STEERLINE_WEB_EVIDENCE=$taskPreviousEvidence
+    $env:STEERLINE_HOME=$taskPreviousHome;$env:STEERLINE_ROADMAP_BROWSER_ROOT=$taskPreviousRoot;$env:STEERLINE_WEB_EVIDENCE=$taskPreviousEvidence;$env:STEERLINE_PLANNING_STREAM=$taskPreviousStreaming
 }
 if(!$taskBrowser -or !$taskCleanup -or $taskFailure){throw "Roadmap live browser/PR test failed: $taskRoot"}
-Write-Output "Roadmap browser and external PR passed: $taskRoot"
+Write-Output "Roadmap browser test passed: $taskRoot"

@@ -324,6 +324,66 @@ type planningLeaseFixture struct {
 	requestID  string
 }
 
+func testPlanningInterruptUsesOriginalTurn(t *testing.T) {
+	ctx := context.Background()
+	config := Config{}
+	task := roadmap.PlanningTask{
+		ID: "planning", Project: config.Identity(), Revision: 8,
+		Run: &runnercontract.Run{
+			RunID: "run", Revision: 12, Correlation: map[string]string{"steerline_planning": "planning"},
+			Workflow:          runnercontract.Workflow{ID: "conversation", Version: 2},
+			Execution:         runnercontract.Execution{SessionID: "session", TurnID: "turn", Workspace: "workspace"},
+			WorkspaceIdentity: "identity", WorkspaceWrite: &runnercontract.WorkspaceWrite{Owner: "runner"},
+			Controls: runnercontract.Controls{CanInterrupt: true},
+		},
+	}
+	store := &planningStoreFixture{task: mustJSON(task)}
+	port := &planningPort{roadmapPort: &roadmapPort{config: config}, store: store}
+	in := httpcontract.CommandEnvelope{Action: planningAction + "interrupt", TargetID: task.ID, ExpectedVersion: task.Revision}
+	in.Payload = []byte(`{"turn_id":"previous"}`)
+	if _, _, err := port.prepare(ctx, in); err == nil {
+		t.Fatal("stale turn was accepted")
+	}
+	in.Payload = []byte(`{"turn_id":"turn"}`)
+	tasks, info, err := port.prepare(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queued := tasks[0]
+	view := info.(planningView)
+	if !view.Interrupting || view.CanMessage || view.InterruptTurn != "" ||
+		queued.Revision != task.Revision+1 || string(queued.Interrupt.Request.Input) != `{"expected_revision":12}` {
+		t.Fatalf("unexpected queued interrupt: %+v %+v", queued.Interrupt, view)
+	}
+	t.Run("new turn before first dispatch", func(t *testing.T) {
+		changed := queued
+		run := *queued.Run
+		run.Execution.TurnID = "next"
+		changed.Run = &run
+		port.runner = planningLeaseFixture{stale: true, requestID: changed.Interrupt.Request.RequestID}
+		if err := port.advancePlanningInterrupt(ctx, &changed); err != nil || changed.Interrupt != nil {
+			t.Fatalf("obsolete interrupt attempted dispatch or remained pending: %v, %+v", err, changed.Interrupt)
+		}
+	})
+	t.Run("recovery confirms completion before continuing", func(t *testing.T) {
+		stopped := queued
+		run := *queued.Run
+		receipt := runnercontract.Command{Command: "interrupt", RequestID: stopped.Interrupt.Request.RequestID, ActionStatus: "running"}
+		port.runner = planningLeaseFixture{run: &run, command: &receipt, requestID: receipt.RequestID}
+		if err := port.advancePlanningInterrupt(ctx, &stopped); err != nil || stopped.Interrupt == nil {
+			t.Fatalf("unsettled interrupt was lost: %v", err)
+		}
+		receipt.ActionStatus = "completed"
+		run.Execution.NativeOutcome = "cancelled"
+		run.Controls = runnercontract.Controls{CanMessage: true}
+		if err := port.advancePlanningInterrupt(ctx, &stopped); err != nil || stopped.Interrupt != nil || !viewPlanning(stopped).CanMessage ||
+			stopped.Run.RunID != task.Run.RunID || stopped.Run.Execution.SessionID != task.Run.Execution.SessionID ||
+			stopped.Run.WorkspaceIdentity != task.Run.WorkspaceIdentity {
+			t.Fatalf("original session could not continue: %v, %+v", err, stopped)
+		}
+	})
+}
+
 func (f planningLeaseFixture) BuildPin() runnercontract.BuildPin { return runnercontract.BuildPin{} }
 func (f planningLeaseFixture) Inspect(_ context.Context, selector, id string) (runnercontract.Inspection, error) {
 	if selector == "request-id" && f.requestID != "" && id != f.requestID {
@@ -436,6 +496,7 @@ func testPlanningStoreReplayAndRecovery(t *testing.T) {
 }
 
 func TestRoadmapPlanningRecoveryRejectsHistoricalLease(t *testing.T) {
+	t.Run("interrupt remains bound to original turn", testPlanningInterruptUsesOriginalTurn)
 	t.Run("store port replays receipt and recovers original operation", testPlanningStoreReplayAndRecovery)
 	task := roadmap.PlanningTask{ID: "plan", Operation: &roadmap.PlanningOperation{Command: "workspace acquire", Kind: "rebase", Request: &runnercontract.Request{RequestID: "original"}}}
 	run := &runnercontract.Run{RunID: "run", Correlation: map[string]string{"steerline_planning": task.ID}, Workflow: runnercontract.Workflow{ID: "conversation", Version: 2},

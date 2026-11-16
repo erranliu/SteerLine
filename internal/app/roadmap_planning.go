@@ -53,31 +53,34 @@ type planningRunner interface {
 }
 
 type planningView struct {
-	ID           string                    `json:"id"`
-	Title        string                    `json:"title"`
-	Kind         string                    `json:"kind,omitempty"`
-	Goal         string                    `json:"goal,omitempty"`
-	Card         *roadmap.TaskCard         `json:"card,omitempty"`
-	CardVersion  uint64                    `json:"card_version,omitempty"`
-	PlanningCard bool                      `json:"planning_card,omitempty"`
-	DAGTaskID    string                    `json:"dag_task_id,omitempty"`
-	Path         string                    `json:"path"`
-	Revision     uint64                    `json:"revision"`
-	Status       string                    `json:"status"`
-	Diagnostic   string                    `json:"diagnostic,omitempty"`
-	Body         string                    `json:"body,omitempty"`
-	SourceID     string                    `json:"source_id,omitempty"`
-	PR           string                    `json:"pr,omitempty"`
-	Busy         bool                      `json:"busy"`
-	CanMessage   bool                      `json:"can_message"`
-	CanRebase    bool                      `json:"can_rebase"`
-	Question     *runnercontract.Question  `json:"question,omitempty"`
-	Conflict     *roadmap.PlanningConflict `json:"conflict,omitempty"`
-	Review       *roadmap.PlanningReview   `json:"review,omitempty"`
+	ID            string                    `json:"id"`
+	Title         string                    `json:"title"`
+	Kind          string                    `json:"kind,omitempty"`
+	Goal          string                    `json:"goal,omitempty"`
+	Card          *roadmap.TaskCard         `json:"card,omitempty"`
+	CardVersion   uint64                    `json:"card_version,omitempty"`
+	PlanningCard  bool                      `json:"planning_card,omitempty"`
+	DAGTaskID     string                    `json:"dag_task_id,omitempty"`
+	Path          string                    `json:"path"`
+	Revision      uint64                    `json:"revision"`
+	Status        string                    `json:"status"`
+	Diagnostic    string                    `json:"diagnostic,omitempty"`
+	Body          string                    `json:"body,omitempty"`
+	SourceID      string                    `json:"source_id,omitempty"`
+	PR            string                    `json:"pr,omitempty"`
+	Busy          bool                      `json:"busy"`
+	CanMessage    bool                      `json:"can_message"`
+	InterruptTurn string                    `json:"interrupt_turn,omitempty"`
+	Interrupting  bool                      `json:"interrupting,omitempty"`
+	LiveEvents    bool                      `json:"live_events,omitempty"`
+	CanRebase     bool                      `json:"can_rebase"`
+	Question      *runnercontract.Question  `json:"question,omitempty"`
+	Conflict      *roadmap.PlanningConflict `json:"conflict,omitempty"`
+	Review        *roadmap.PlanningReview   `json:"review,omitempty"`
 }
 
 func viewPlanning(task roadmap.PlanningTask) planningView {
-	view := planningView{ID: task.ID, Title: task.Title, Kind: task.Kind, Path: task.Path, Revision: task.Revision, Status: task.Status, Diagnostic: task.Diagnostic, Body: task.Body, SourceID: task.SourceID, Busy: task.Operation != nil, Conflict: task.Conflict, Review: task.Review}
+	view := planningView{ID: task.ID, Title: task.Title, Kind: task.Kind, Path: task.Path, Revision: task.Revision, Status: task.Status, Diagnostic: task.Diagnostic, Body: task.Body, SourceID: task.SourceID, Busy: task.Operation != nil || task.Interrupt != nil, Interrupting: task.Interrupt != nil, Conflict: task.Conflict, Review: task.Review}
 	if task.Kind == roadmap.SingleTaskPlanning {
 		view.Goal = task.Goal
 		view.Body = ""
@@ -95,11 +98,26 @@ func viewPlanning(task roadmap.PlanningTask) planningView {
 		view.CanMessage = task.Run.Controls.CanMessage && task.Run.WorkspaceWrite != nil && task.Run.WorkspaceWrite.Owner == "runner"
 		view.CanRebase = task.Conflict == nil && task.Run.WorkspaceWrite != nil && task.Run.WorkspaceWrite.CanAcquire
 	}
-	if task.Run != nil && task.Merged == "" && !task.StopRequested && task.Run.Controls.CanReply &&
+	if canInterruptPlanning(task) {
+		view.InterruptTurn = task.Run.Execution.TurnID
+	}
+	if task.Run != nil && task.Interrupt == nil && task.Merged == "" && !task.StopRequested && task.Run.Controls.CanReply &&
 		(task.Operation == nil || planningOperationCanAnswer(task.Operation)) {
 		view.Question = task.Run.Question
 	}
 	return view
+}
+
+func canInterruptPlanning(task roadmap.PlanningTask) bool {
+	run := task.Run
+	if run == nil || !run.Controls.CanInterrupt || run.Execution.SessionID == "" || run.Execution.TurnID == "" ||
+		run.WorkspaceWrite == nil || run.WorkspaceWrite.Owner != "runner" ||
+		task.Interrupt != nil || task.Merged != "" || task.StopRequested {
+		return false
+	}
+	op := task.Operation
+	return op == nil || op.Answer == nil && op.Stage == "runner" &&
+		(op.Command == "submit" || op.Command == "message" && op.Previous != run.Execution.TurnID)
 }
 
 func planningOperationCanAnswer(op *roadmap.PlanningOperation) bool {
@@ -143,6 +161,9 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 	if err != nil {
 		return nil, err
 	}
+	if tail == "conversation-events" {
+		return p.readPlanningEvents(ctx, task, values)
+	}
 	if tail == "history" {
 		if len(values) > 1 || len(values) == 1 && (len(values["after"]) != 1 || len(values.Get("after")) > 160) {
 			return nil, errors.New("invalid planning history cursor")
@@ -162,10 +183,15 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 			RunID   string `json:"run_id"`
 			Entries []struct {
 				RequestCommandID string `json:"request_command_id"`
+				TurnID           string `json:"turn_id,omitempty"`
 				Role             string `json:"role"`
 				Text             string `json:"text,omitempty"`
 				Result           *struct {
-					Text string `json:"text,omitempty"`
+					Text   string `json:"text,omitempty"`
+					Status string `json:"status,omitempty"`
+					Source *struct {
+						ItemID string `json:"item_id,omitempty"`
+					} `json:"source,omitempty"`
 				} `json:"result,omitempty"`
 			} `json:"entries"`
 			Next string `json:"next_cursor"`
@@ -218,6 +244,7 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		return nil, roadmap.ErrNotFound
 	}
 	view := viewPlanning(task)
+	view.LiveEvents = task.Run != nil && task.Run.Execution.SessionID != "" && p.config.runtimeCatalog.SupportsConversationEvents()
 	if task.Kind == roadmap.SingleTaskPlanning {
 		mapping, err := p.readAdmissionMapping(ctx, task.Project, task.ID)
 		if err != nil {
@@ -225,10 +252,52 @@ func (p *planningPort) read(ctx context.Context, route string, values url.Values
 		}
 		view.DAGTaskID = mapping["T1"]
 		if view.DAGTaskID != "" {
-			view.CanMessage, view.CanRebase, view.Question = false, false, nil
+			view.CanMessage, view.CanRebase, view.Question, view.InterruptTurn = false, false, nil, ""
 		}
 	}
 	return view, nil
+}
+
+func (p *planningPort) readPlanningEvents(ctx context.Context, task roadmap.PlanningTask, values url.Values) (any, error) {
+	if len(values) > 1 || len(values) == 1 && (len(values["after"]) != 1 || len(values.Get("after")) > 160) {
+		return nil, errors.New("规划对话事件游标无效")
+	}
+	if task.Run == nil || task.Run.Execution.SessionID == "" || !p.config.runtimeCatalog.SupportsConversationEvents() ||
+		!runnerbinding.SameBuild(task.Build, p.runner.BuildPin()) {
+		return nil, errors.New("原 Runner 未提供可用的规划对话事件")
+	}
+	args := []string{"--run-id", task.Run.RunID, "--limit", "100"}
+	if after := values.Get("after"); after != "" {
+		args = append(args, "--after", after)
+	}
+	res, err := p.runner.Call(ctx, runnerclient.ConversationEventsCommand, args, nil)
+	if err != nil {
+		return nil, err
+	}
+	var page struct {
+		Contract  string `json:"contract"`
+		RunID     string `json:"run_id"`
+		SessionID string `json:"session_id"`
+		Events    []struct {
+			ID     string `json:"id"`
+			TurnID string `json:"turn_id"`
+			ItemID string `json:"item_id,omitempty"`
+			Kind   string `json:"kind"`
+			Text   string `json:"text,omitempty"`
+			Tool   string `json:"tool,omitempty"`
+			Status string `json:"status,omitempty"`
+		} `json:"events"`
+		NextCursor string `json:"next_cursor,omitempty"`
+		HasMore    bool   `json:"has_more"`
+		Active     bool   `json:"active"`
+	}
+	if json.Unmarshal(res.Data, &page) != nil || page.Contract != runnerclient.ConversationEventsContract ||
+		page.RunID != task.Run.RunID || page.SessionID != task.Run.Execution.SessionID || page.Events == nil ||
+		len(page.Events) > 100 || len(page.NextCursor) > 160 ||
+		page.HasMore && (page.NextCursor == "" || page.NextCursor == values.Get("after")) {
+		return nil, errors.New("原规划对话事件身份或分页无法核实")
+	}
+	return page, nil
 }
 
 func (p *planningPort) receipt(ctx context.Context, id string) (*httpcontract.CommandResponse, error) {
@@ -305,7 +374,8 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		return nil, nil, err
 	}
 	answeringOperation := in.Action == planningAction+"answer" && task.Operation != nil && planningOperationCanAnswer(task.Operation)
-	if task.Revision != in.ExpectedVersion || task.Operation != nil && !answeringOperation || task.Merged != "" || task.StopRequested || task.Run == nil {
+	interrupting := in.Action == planningAction+"interrupt"
+	if task.Revision != in.ExpectedVersion || task.Interrupt != nil || task.Operation != nil && !answeringOperation && !interrupting || task.Merged != "" || task.StopRequested || task.Run == nil {
 		return nil, nil, errors.New("任务状态已变化或原操作未结算")
 	}
 	view := viewPlanning(task)
@@ -319,6 +389,18 @@ func (p *planningPort) prepare(ctx context.Context, in httpcontract.CommandEnvel
 		}
 	}
 	switch in.Action {
+	case planningAction + "interrupt":
+		var input struct {
+			TurnID string `json:"turn_id"`
+		}
+		if decodeStrictJSON(in.Payload, &input) != nil || view.InterruptTurn == "" || input.TurnID != view.InterruptTurn {
+			return nil, nil, errors.New("原轮次已结束或当前无法停止，请刷新对话")
+		}
+		var control roadmap.PlanningOperation
+		planControl(&control, "interrupt", task.Run.Revision, nil)
+		task.Interrupt = &roadmap.PlanningInterrupt{TurnID: input.TurnID, Request: *control.Request}
+		task.Diagnostic = ""
+		task.Revision++
 	case planningAction + taskCardOperation:
 		if task.Kind != roadmap.SingleTaskPlanning || !view.CanMessage || task.Conflict != nil || decodeStrictJSON(in.Payload, &struct{}{}) != nil {
 			return nil, nil, errors.New("原会话当前无法规划任务卡")
@@ -719,6 +801,11 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 		}
 		task.Run = current.Run
 	}
+	if task.Interrupt != nil {
+		if err := p.advancePlanningInterrupt(ctx, task); err != nil || task.Interrupt != nil {
+			return err
+		}
+	}
 	if task.Publication != nil && task.Publication.URL != "" && task.Merged == "" && !task.StopRequested {
 		if err := p.observePlanningPR(ctx, task); err != nil && (task.Operation == nil || task.Operation.Stage == "push_unknown") {
 			return err
@@ -759,6 +846,47 @@ func (p *planningPort) advance(ctx context.Context, task *roadmap.PlanningTask) 
 		}
 	} else if task.Run != nil && task.Conflict == nil {
 		task.Status = task.Run.Status
+	}
+	return nil
+}
+
+func (p *planningPort) advancePlanningInterrupt(ctx context.Context, task *roadmap.PlanningTask) error {
+	interrupt := task.Interrupt
+	result, err := p.runner.Inspect(ctx, "request-id", interrupt.Request.RequestID)
+	if err != nil {
+		var failure *runnerclient.Failure
+		if !errors.As(err, &failure) || failure.Code != "request_not_found" {
+			return err
+		}
+		run := task.Run
+		if task.StopRequested || task.Merged != "" || !run.Controls.CanInterrupt || run.Execution.TurnID != interrupt.TurnID {
+			task.Interrupt = nil
+			return nil
+		}
+		_, err = p.runner.Call(ctx, "interrupt", []string{"--run-id", run.RunID}, &interrupt.Request)
+		if errors.As(err, &failure) && !failure.Unknown && (failure.Exit == 2 || failure.Exit == 3 || failure.Exit == 5) {
+			task.Interrupt = nil
+		}
+		return err
+	}
+	if err := verifyPlanningRun(task, result.Run); err != nil {
+		return err
+	}
+	command := result.Command
+	if command == nil || command.RequestID != interrupt.Request.RequestID || command.Command != "interrupt" {
+		return errors.New("原 Runner 中断操作不匹配")
+	}
+	task.Run = result.Run
+	if command.ActionStatus == "failed" || command.ReceiptStatus == "rejected" {
+		task.Interrupt = nil
+		if command.Error != nil {
+			return command.Error
+		}
+		return errors.New("Runner 未能中断原轮次")
+	}
+	if command.ActionStatus == "completed" || task.Run.StopStatus == "stopped" {
+		task.Interrupt = nil
+		task.Diagnostic = ""
 	}
 	return nil
 }

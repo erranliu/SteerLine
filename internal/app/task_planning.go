@@ -39,6 +39,10 @@ func finishTaskCardPlanning(task *roadmap.PlanningTask, receipt *runnercontract.
 	previousFile := task.Operation.Digest
 	task.Operation = nil
 	task.Status = "ready"
+	if run.Execution.NativeOutcome == "cancelled" {
+		task.Diagnostic = ""
+		return true, nil
+	}
 	if run.Execution.NativeOutcome != "succeeded" {
 		return false, errors.New("任务卡规划轮次未成功，原任务卡仍可查看")
 	}

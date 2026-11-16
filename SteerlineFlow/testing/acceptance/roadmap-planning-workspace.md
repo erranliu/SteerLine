@@ -112,3 +112,17 @@ Roadmap Go 专项首次执行在丢失 PR 回执的观察时间断言失败，�
 - 首次真实复跑在等待文件审阅时触发 15 秒点击超时，资源已清理。验收脚本改为在原审阅租约归还后勾选，提交 `3aefaab6fe8e787cfb21fc8e13d1409a4d2fb3bd` 在 Windows、Edge、Codex CLI 0.166.0、Runner #146 `2de536cb` 下重跑通过。真实两轮改稿、原会话 Git 冲突续作、只发布勾选的两份文件、合并待同步及稳定链接跳转均通过。测试 PR 为 [SteerlineTest #801](https://github.com/erranliu/SteerlineTest/pull/801)，测试资源清理完成，进程和监听均为零。报告根为 `C:\SteerlineDebug\roadmap-planning-6999\test-results\L4\live-review-3aefaab6`。
 - 验证期间 `main` 推进至 `7d7e1ff605461cbab7acb2f71c52396c4cf7cc0c`，合并提交 `3e1dbc5c` 的规划业务代码、页面和真实用例与 `3aefaab6` 一致。补验 Runner 客户端、提示词、Web 服务、生产构建和固定 L1 均通过，报告位于同一审查诊断目录。独立复核确认规划正文、黄金样本及 main 更新后的维护规则均保留。
 - RPW-M01 人工体验仍待安排。真实复跑覆盖一个任务，多任务批次和租约故障使用受控测试取证。
+
+## 停止本轮并继续对话
+
+2026-11-15 在 `05581540c96af307043f65e5cd8335bd8af7b475` 的开发 worktree 验证。单任务和 Roadmap 规划共用 Runner `interrupt`。受控测试核对过期轮次拒绝、轮次切换后不发送，以及按原请求对账完毕后恢复发送资格。
+
+- 专项入口为 `scripts/test-roadmap-browser-live.ps1 -Interrupt`，用独立测试环境、Edge、Codex CLI 0.167.0-alpha.4.1 和固定 Runner `d58f0b26`。两类规划均在执行中点击「停止本轮」，核实原轮次为 `cancelled`，刷新后仍显示停止记录。两类规划的下一轮均读取了中断前写入的文件，Run、Codex 会话以及 worktree 的路径和身份一致。
+- 真实验证与构建报告位于 `C:\SteerlineDebug\planning-interrupt-af12\test-results\L4\browser-03`。各规划的原生身份记录分别为 `evidence/interrupt-task.json` 和 `evidence/interrupt-roadmap.json`。`result.json` 确认清理完成，剩余进程和监听均为零。前两次的定位和断言错误保留在 `browser-01` 与 `browser-02`。
+- 定向规划 Go 测试、Runner 客户端全包、规划页组件测试与 Web 生产构建通过。固定集和 Roadmap 专项通过，报告位于 `C:\SteerlineDebug\planning-interrupt-af12\test-results` 下的 `L1/after-catalogue`、`L2/20261115-191108` 和 `L4/go-roadmap`。
+
+## 流式回复与工具活动
+
+- 2026-11-15，专项入口 `scripts/test-roadmap-browser-live.ps1 -Streaming`。单任务和 Roadmap 两个真实本地 Codex 用例均通过。运行中读取正文增量并显示命令类别和进行中状态，浏览器刷新后恢复同一轮的内容。浏览器 trace 在两个用例中均记录到正文仍在增长时的页面快照。
+- 两类规划都通过「停止本轮」得到 Runner 的 `cancelled` 结算，随后在同一 Run、Codex 会话和 worktree 中读取并回复中断前写入的验收文件。浏览器测试和清理结果见 `C:\SteerlineDebug\planning-stream-af12\test-results\L4\browser-01\result.json`，两条 Run 的事实见同目录下的 `evidence/interrupt-task.json` 和 `evidence/interrupt-roadmap.json`。测试服务与专用远端分支已清理，剩余进程和监听均为零。
+- Runner 定向测试覆盖游标跨身份拒绝、半行补读和工具信息过滤。SteerLine 规划组件回归覆盖跨页的重复通知、正文拼接和工具状态更新，HTTP 路由回归覆盖鉴权和游标转发。Web 生产构建、固定 L1 和 L2 通过，报告分别位于同一调试根的 `test-results/L1/stream` 与 `test-results/L2/stream`。
