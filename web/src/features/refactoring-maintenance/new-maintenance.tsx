@@ -295,6 +295,65 @@ export function NewMaintenance({
           }}
         >
           <fieldset>
+            <div className="refactoring-prompts">
+              <section className="refactoring-preview">
+                <h3>一级 · 决策提示词</h3>
+                <p className="muted">交给 SteerAgent · 本次行动</p>
+                <label>
+                  重构方向
+                  <select
+                    required
+                    value={draft.direction}
+                    onChange={(e) => change("direction", e.target.value)}
+                  >
+                    {catalogue.data?.directions.map((item) => (
+                      <option value={item.id} key={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {catalogue.isError && <p role="alert">维护方向查询失败</p>}
+                {catalogue.data?.diagnostics?.map((message) => (
+                  <p className="notice amber" key={message}>
+                    {message}
+                  </p>
+                ))}
+                {direction && (
+                  <pre
+                    className="refactoring-prompt-body"
+                    aria-label="方向提示词"
+                  >
+                    {direction.prompt}
+                  </pre>
+                )}
+                <label>
+                  补充要求
+                  <textarea
+                    maxLength={32768}
+                    value={draft.requirements}
+                    onChange={(e) => change("requirements", e.target.value)}
+                  />
+                </label>
+                <label>
+                  决策策略
+                  <select
+                    value={draft.strategy}
+                    onChange={(e) => change("strategy", e.target.value)}
+                  >
+                    <option value="cautious">谨慎决策</option>
+                    <option value="autonomous">完全自主</option>
+                    <option value="aggressive">激进决策</option>
+                  </select>
+                </label>
+              </section>
+              <section className="refactoring-preview">
+                <h3>二级 · 执行提示词</h3>
+                <p className="muted">
+                  启动后由 SteerAgent 生成，交给 Runner 执行。
+                </p>
+              </section>
+            </div>
             {ready?.steer_agent?.model && (
               <p>
                 SteerAgent 只读决策 {ready.steer_agent.model} /{" "}
@@ -404,53 +463,6 @@ export function NewMaintenance({
                   </Link>
                 </div>
               )}
-            <label>
-              重构方向
-              <select
-                required
-                value={draft.direction}
-                onChange={(e) => change("direction", e.target.value)}
-              >
-                {catalogue.data?.directions.map((item) => (
-                  <option value={item.id} key={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {catalogue.isError && <p role="alert">维护方向查询失败</p>}
-            {catalogue.data?.diagnostics?.map((message) => (
-              <p className="notice amber" key={message}>
-                {message}
-              </p>
-            ))}
-            {direction && (
-              <div className="refactoring-preview">
-                <h3>方向提示词</h3>
-                <pre aria-label="方向提示词" tabIndex={0}>
-                  {direction.prompt}
-                </pre>
-              </div>
-            )}
-            <label>
-              补充要求
-              <textarea
-                maxLength={32768}
-                value={draft.requirements}
-                onChange={(e) => change("requirements", e.target.value)}
-              />
-            </label>
-            <label>
-              决策策略
-              <select
-                value={draft.strategy}
-                onChange={(e) => change("strategy", e.target.value)}
-              >
-                <option value="cautious">谨慎决策</option>
-                <option value="autonomous">完全自主</option>
-                <option value="aggressive">激进决策</option>
-              </select>
-            </label>
             <div className="refactoring-fields">
               <label>
                 美元预算

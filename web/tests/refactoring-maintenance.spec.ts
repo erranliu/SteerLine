@@ -51,6 +51,12 @@ test("maintenance report, history and refresh remain observational", async ({
     ).toBeVisible();
     const start = page.getByRole("button", { name: "开始维护", exact: true });
     await expect(start).toBeEnabled();
+    await expect(
+      page.getByRole("heading", { name: "一级 · 决策提示词" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "二级 · 执行提示词" }),
+    ).toBeVisible();
     await expect(page.getByLabel("决策策略")).toHaveValue("cautious");
     await expect(page.getByLabel("重构轮次")).toHaveValue("1");
     const preview = page.getByLabel("方向提示词", { exact: true });
@@ -119,30 +125,37 @@ test("maintenance report, history and refresh remain observational", async ({
       .getByRole("region", { name: "维护详情" })
       .getByText("已交付", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "PR 合入评审 2" }),
-  ).toBeVisible();
   const detail = page.getByRole("region", { name: "维护详情" });
-  await detail.getByText("方向提示词", { exact: true }).click();
+  await expect(detail.getByLabel("执行指令", { exact: true })).toBeVisible();
+  const reports = detail.getByText("PR 合入评审（2）", { exact: true });
+  await expect(reports).toBeVisible();
+  await reports.click();
+  await expect(
+    detail.getByRole("heading", { name: "PR 合入评审 2" }),
+  ).toBeVisible();
   await expect(
     detail.getByText("优先处理共享测试夹具。", { exact: false }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "处理冲突并重新评审" }),
   ).toBeVisible();
-  await expect(page.getByText(/不覆盖子 Agent/)).toBeVisible();
+  const billingCoverage = detail.getByText(/不覆盖子\s*Agent/);
+  await expect(billingCoverage).toBeHidden();
+  await detail.getByText("运行信息", { exact: true }).click();
+  await expect(billingCoverage).toBeVisible();
   await page.reload();
+  await expect(reports).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "PR 合入评审 2" }),
-  ).toBeVisible();
+    detail.getByRole("heading", { name: "PR 合入评审 2" }),
+  ).toBeHidden();
   expect(commands).toEqual([]);
   await page.setViewportSize({ width: 375, height: 900 });
   await page.getByRole("button", { name: "返回行动列表" }).click();
   await expect(page.getByRole("region", { name: "行动列表" })).toBeVisible();
   await page.goBack();
-  await expect(
-    page.getByRole("heading", { name: "PR 合入评审 2" }),
-  ).toBeVisible();
+  await expect(reports).toBeVisible();
+  await expect(detail.getByLabel("方向提示词", { exact: true })).toBeVisible();
+  await expect(detail.getByLabel("执行指令", { exact: true })).toBeVisible();
   await page.screenshot({
     path: join(out, "maintenance-mobile.png"),
     fullPage: true,

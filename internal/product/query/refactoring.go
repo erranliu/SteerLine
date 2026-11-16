@@ -1,17 +1,25 @@
 package query
 
 import (
-	refactoring "github.com/erranliu/SteerLine/internal/refactoring/model"
+	"encoding/json"
 	"math/big"
 	"time"
+
+	refactoring "github.com/erranliu/SteerLine/internal/refactoring/model"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
-// View exposes the action's direction snapshot and omits internal execution settings.
+// Refactoring exposes the action's prompt snapshots without exposing Runner requests.
 func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 	amount, complete := r.CostTotal()
 	ops := make([]map[string]any, 0, len(r.Operations))
+	var decisionInput json.RawMessage
 	for _, o := range r.Operations {
-		ops = append(ops, map[string]any{"id": o.ID, "purpose": o.Purpose, "round": o.Round, "state": o.State, "feedback": o.Feedback, "result": o.Result, "cost": o.Cost, "created_at": o.CreatedAt, "prompt": o.Prompt, "run_id": o.RunID})
+		workflow := o.Content(r).WorkflowID
+		ops = append(ops, map[string]any{"id": o.ID, "purpose": o.Purpose, "round": o.Round, "state": o.State, "feedback": o.Feedback, "result": o.Result, "cost": o.Cost, "created_at": o.CreatedAt, "prompt": o.Prompt, "run_id": o.RunID, "workflow": workflow})
+		if workflow == "generate" {
+			decisionInput = o.Request.Input
+		}
 	}
 	breakdown := map[string]any{}
 	for _, closing := range []bool{false, true} {
@@ -46,6 +54,9 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 	out["cost_breakdown"] = breakdown
 	out["input"] = r.Input
 	out["direction_prompt"] = r.Frozen.Direction.Prompt
+	if rules := refactoringDecisionRules(decisionInput); len(rules) > 0 {
+		out["decision_rules"] = rules
+	}
 	out["source_commit"] = r.Frozen.Repository.BaseRevision
 	out["source_branch"] = r.Frozen.Repository.BaseBranch
 	out["startup_failed"] = r.Phase == "blocked" && r.Frozen.Repository.BaseRevision == ""
@@ -57,6 +68,26 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 	out["cost_complete"] = complete
 	out["untracked"] = []string{"subagents", "tool_internal_models", "unobserved_provider_calls"}
 	return out
+}
+
+func refactoringDecisionRules(input json.RawMessage) map[string]string {
+	var request runnercontract.GenerateRunInput
+	if len(input) == 0 || json.Unmarshal(input, &request) != nil {
+		return nil
+	}
+	rules := make(map[string]string, 2)
+	for _, material := range request.Generate.Materials {
+		if material.Kind != "file" || material.Content == nil {
+			continue
+		}
+		switch material.Path {
+		case "maintenance/rules.md":
+			rules["rules"] = *material.Content
+		case "maintenance/strategy.md":
+			rules["strategy"] = *material.Content
+		}
+	}
+	return rules
 }
 
 func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
