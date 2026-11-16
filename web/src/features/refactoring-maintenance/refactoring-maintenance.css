@@ -19,7 +19,16 @@
   margin: 12px 0;
 }
 
+.refactoring-prompts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  align-items: start;
+  gap: 12px;
+  margin-block: 16px;
+}
+
 .refactoring-preview {
+  min-width: 0;
   padding: 14px;
   border: 1px solid var(--ui-line);
   border-radius: 8px;
@@ -40,6 +49,11 @@
 .refactoring-panel pre {
   max-height: 360px;
   overflow: auto;
+}
+
+.refactoring-panel .refactoring-prompt-body {
+  max-height: none;
+  overflow: visible;
 }
 
 .refactoring-preview :is(p, pre) {

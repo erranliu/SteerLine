@@ -187,6 +187,15 @@ it("keeps the full direction preview and drafts when the sheet closes", async ()
   setup();
   const sheet = openSheet();
   const preview = await sheet.findByLabelText("方向提示词");
+  expect(
+    sheet.getByRole("heading", { name: "一级 · 决策提示词" }),
+  ).toBeVisible();
+  expect(
+    sheet.getByRole("heading", { name: "二级 · 执行提示词" }),
+  ).toBeVisible();
+  expect(
+    sheet.getByText("启动后由 SteerAgent 生成，交给 Runner 执行。"),
+  ).toBeVisible();
   expect(preview.textContent).toBe(builtIn.prompt);
   fireEvent.change(sheet.getByLabelText("重构方向"), {
     target: { value: custom.id },
@@ -199,6 +208,82 @@ it("keeps the full direction preview and drafts when the sheet closes", async ()
   const reopened = openSheet();
   expect(reopened.getByLabelText("补充要求")).toHaveValue("先检查共享夹具");
   expect(reopened.getByLabelText("方向提示词").textContent).toBe(custom.prompt);
+});
+
+it("keeps both prompt bodies visible and folds rules, feedback, and history", async () => {
+  const requirements = "保持原接口。";
+  const instruction = "补充验证。  \r\n核对调用方。\r\n";
+  const operation = { round: 1, state: "complete", feedback: "", prompt: "" };
+  setup([
+    {
+      ...record,
+      input: { ...record.input, requirements },
+      decision_rules: { rules: "冻结的阶段规则", strategy: "冻结的策略规则" },
+      operations: [
+        { ...operation, id: "first", workflow: "generate", purpose: "first" },
+        {
+          ...operation,
+          id: "implement",
+          workflow: "execute",
+          purpose: "implement",
+          prompt: "最初的实施指令",
+        },
+        {
+          ...operation,
+          id: "repair",
+          workflow: "execute",
+          purpose: "repair",
+          prompt: instruction,
+          feedback: "补证完成",
+          run_id: "run-repair",
+        },
+        {
+          ...operation,
+          id: "audit",
+          workflow: "generate",
+          purpose: "audit",
+          prompt: "最新决策短指令",
+        },
+      ],
+    },
+  ]);
+  const detail = within(
+    await screen.findByRole("region", { name: "维护详情" }),
+  );
+  expect(
+    detail.getByRole("heading", { name: "一级 · 决策提示词" }),
+  ).toBeVisible();
+  expect(
+    detail.getByRole("heading", { name: "二级 · 执行提示词" }),
+  ).toBeVisible();
+  expect(detail.getByLabelText("方向提示词")).toBeVisible();
+  expect(detail.getByText(requirements)).toBeVisible();
+  expect(detail.getByLabelText("执行指令")).toBeVisible();
+  expect(detail.getByLabelText("执行指令").textContent).toBe(instruction);
+  expect(detail.getByText(record.question!.prompt)).toBeVisible();
+
+  for (const [summary, content] of [
+    ["内置决策规则", "冻结的阶段规则"],
+    ["历史执行提示词（1）", "最初的实施指令"],
+    ["运行信息", record.source_commit],
+  ]) {
+    expect(detail.getByText(content)).not.toBeVisible();
+    fireEvent.click(detail.getByText(summary));
+    expect(detail.getByText(content)).toBeVisible();
+  }
+  expect(detail.getByText("最新决策短指令")).toBeVisible();
+  expect(detail.getByText("冻结的策略规则")).toBeVisible();
+  expect(detail.getByText("补证完成")).not.toBeVisible();
+  fireEvent.click(detail.getAllByText("执行反馈与运行信息")[0]);
+  expect(detail.getByText("补证完成")).toBeVisible();
+  expect(detail.getByText("run-repair")).toBeVisible();
+});
+
+it("shows a waiting state before SteerAgent generates an execution prompt", async () => {
+  setup([{ ...record, phase: "first", question: undefined }]);
+  expect(
+    await screen.findByText("等待 SteerAgent 生成执行提示词"),
+  ).toBeVisible();
 });
 
 it("requires explicit confirmation of a changed qualification and blocks stale cached data", async () => {
@@ -253,6 +338,8 @@ it("keeps the startup failure on the action and can copy its input into a new dr
       phase: "blocked",
       startup_failed: true,
       source_commit: "",
+      direction_prompt: undefined,
+      round: 0,
       input: envelope.payload,
       active: false,
       can_stop: false,
@@ -272,6 +359,12 @@ it("keeps the startup failure on the action and can copy its input into a new dr
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "环境已变化，请重新检测",
   );
+  expect(screen.getByText("检查共享夹具")).toBeVisible();
+  const requestedCommit = screen.getByText(/申请的起始提交/);
+  expect(requestedCommit).not.toBeVisible();
+  fireEvent.click(screen.getByText("运行信息", { exact: true }));
+  expect(requestedCommit).toHaveTextContent(ready.project.commit);
+  expect(requestedCommit).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "带入新建" }));
   expect(screen.getByRole("dialog")).toBeInTheDocument();
   expect(screen.getByLabelText("补充要求")).toHaveValue("检查共享夹具");

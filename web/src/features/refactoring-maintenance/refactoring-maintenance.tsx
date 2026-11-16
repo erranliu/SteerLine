@@ -23,6 +23,7 @@ export type MaintenanceRecord = {
   input: Input;
   direction_name: string;
   direction_prompt?: string;
+  decision_rules?: { rules?: string; strategy?: string };
   round: number;
   active: boolean;
   source_commit: string;
@@ -65,6 +66,7 @@ export type MaintenanceRecord = {
     purpose: string;
     round: number;
     state: string;
+    workflow: "generate" | "execute";
     feedback: string;
     prompt: string;
     run_id?: string;
@@ -121,6 +123,34 @@ const phases: Record<string, string> = {
   blocked: "已阻断",
   delivered: "已交付",
 };
+
+const operationNames: Record<string, string> = {
+  first: "首轮选题",
+  select: "后续选题",
+  audit: "成果审计",
+  finish: "收尾决策",
+  report: "PR 合入评审",
+  implement: "实施",
+  repair: "修复或补证",
+  publish: "交付",
+  conflict: "处理冲突",
+};
+
+const operationStates: Record<string, string> = {
+  pending: "待提交",
+  submitted: "已提交",
+  complete: "已完成",
+  rejected: "已拒绝",
+  cancelled: "已取消",
+};
+
+const strategyNames: Record<string, string> = {
+  cautious: "谨慎决策",
+  autonomous: "完全自主",
+  aggressive: "激进决策",
+};
+
+type Operation = NonNullable<MaintenanceRecord["operations"]>[number];
 
 const narrowScreen = "(max-width: 760px)";
 
@@ -635,6 +665,7 @@ export function RefactoringMaintenance() {
           )}
           {current && (
             <MaintenanceDetail
+              key={current.id}
               current={current}
               disabled={actionDisabled}
               command={command}
@@ -656,6 +687,28 @@ function duration(seconds: number) {
   return seconds < 60
     ? Math.floor(seconds) + " 秒"
     : Math.floor(seconds / 60) + " 分钟";
+}
+
+function operationLabel(operation: Operation) {
+  return `第 ${operation.round} 轮 · ${operationNames[operation.purpose] ?? operation.purpose}`;
+}
+
+function OperationFeedback({ operation }: { operation: Operation }) {
+  return (
+    <details>
+      <summary>
+        {operation.workflow === "execute" ? "执行反馈" : "决策反馈"}与运行信息
+      </summary>
+      <p>
+        {operationStates[operation.state] ?? operation.state} · Runner Run ID{" "}
+        <code>{operation.run_id || "尚未取得"}</code>
+      </p>
+      <pre tabIndex={0}>
+        {operation.feedback ||
+          (operation.state === "complete" ? "未返回文字" : "暂无反馈")}
+      </pre>
+    </details>
+  );
 }
 
 function MaintenanceDetail({
@@ -683,90 +736,26 @@ function MaintenanceDetail({
   const { identity } = useWorkspace();
   const [choice, setChoice] = useState({ question: "", option: "" });
   const option = choice.question === current.question?.id ? choice.option : "";
+  const operations = current.operations ?? [];
+  const decisions = operations.filter((o) => o.workflow === "generate");
+  const decision = decisions.at(-1);
+  const executions = operations.filter((o) => o.workflow === "execute");
+  const execution = executions.at(-1);
+  const strategy =
+    strategyNames[current.input.strategy] ?? current.input.strategy;
   return (
     <section className="settings-panel refactoring-panel" aria-label="维护详情">
       <h2>{current.direction_name}</h2>
-      <p>{phases[current.phase] ?? current.phase}</p>
+      <p>
+        <span>{phases[current.phase] ?? current.phase}</span>
+        {current.round > 0 && ` · 第 ${current.round} 轮`}
+      </p>
       {current.wait_reason && <p role="status">{current.wait_reason}</p>}
-      <p>
-        {current.environment_name && current.environment_name + " · "}
-        {current.round > 0 && `第 ${current.round} 轮 · `}
-        预算已用 {duration(current.elapsed_seconds)}
-      </p>
-      {(current.source_commit || current.input.base_commit) && (
-        <p>
-          {current.source_commit ? "起始提交" : "申请的起始提交"}{" "}
-          {current.source_branch}{" "}
-          <code>{current.source_commit || current.input.base_commit}</code>
-        </p>
-      )}
-      {current.direction_prompt && (
-        <details>
-          <summary>方向提示词</summary>
-          <pre>{current.direction_prompt}</pre>
-        </details>
-      )}
-      {current.input.requirements && (
-        <details>
-          <summary>补充要求</summary>
-          <pre>{current.input.requirements}</pre>
-        </details>
-      )}
-      <p>
-        策略：
-        {
-          {
-            cautious: "谨慎决策",
-            autonomous: "完全自主",
-            aggressive: "激进决策",
-          }[current.input.strategy]
-        }{" "}
-        · 执行配置：{current.profile_name || current.input.profile}
-      </p>
-      <p>
-        预算：
-        {current.input.budget.dollars
-          ? "$" + current.input.budget.dollars
-          : "美元未设置"}{" "}
-        ·{" "}
-        {current.input.budget.minutes
-          ? current.input.budget.minutes + " 分钟"
-          : "时间未设置"}{" "}
-        ·{" "}
-        {current.input.budget.rounds
-          ? current.input.budget.rounds + " 轮"
-          : "轮次未设置"}
-      </p>
-      <p>
-        已覆盖参考费用：
-        {current.amount == null ? "待采集" : "$" + current.amount}
-        {!current.cost_complete && "（采集不完整）"}
-      </p>
-      {current.cost_breakdown && (
-        <p>
-          推进参考费用：
-          {current.cost_breakdown.progress.amount == null
-            ? "待采集"
-            : "$" + current.cost_breakdown.progress.amount}{" "}
-          · 收尾参考费用：
-          {current.cost_breakdown.closing.amount == null
-            ? "待采集"
-            : "$" + current.cost_breakdown.closing.amount}
-        </p>
-      )}
-      {current.wall_seconds !== undefined && (
-        <p>总历时 {duration(current.wall_seconds)}（含等待与离线）</p>
-      )}
-      <p>
-        费用包含主会话与已登记内部调用；不覆盖子
-        Agent、工具内部模型和不可观测供应商调用。
-      </p>
       {error && (
         <p className="notice amber" role="alert">
           {error}
         </p>
       )}
-      {current.summary && <p>{current.summary}</p>}
       {current.diagnostic && (
         <p className="notice amber" role="alert">
           {current.diagnostic}
@@ -907,42 +896,185 @@ function MaintenanceDetail({
           </Button>
         </form>
       )}
-      {current.reports?.map((r, i) => (
-        <article key={i}>
-          <h3>PR 合入评审 {i + 1}</h3>
-          <p>
-            head {r.head} · base {r.base}
-          </p>
-          <p>
-            {
-              {
-                merge: "建议合入",
-                revise: "建议修改后再审",
-                insufficient_evidence: "证据不足",
-              }[r.recommendation]
-            }
-          </p>
-          {current.report_stale && i === current.reports!.length - 1 && (
-            <p>此评审已过期或正在复核。</p>
+      <div className="refactoring-prompts">
+        <section className="refactoring-preview">
+          <h3>一级 · 决策提示词</h3>
+          <p className="muted">交给 SteerAgent · 本次行动</p>
+          {current.direction_prompt ? (
+            <pre className="refactoring-prompt-body" aria-label="方向提示词">
+              {current.direction_prompt}
+            </pre>
+          ) : (
+            <p className="muted">暂无方向提示词</p>
           )}
-          <div className="refactoring-pre">{r.body}</div>
-        </article>
-      ))}
-      <h3>轮次与执行反馈</h3>
-      {current.operations?.map((o) => (
-        <details key={o.id}>
-          <summary>
-            第 {o.round} 轮 · {o.purpose} · {o.state}
-          </summary>
-          <p>Runner：{o.run_id || "尚未提交"}</p>
-          <h4>提示词</h4>
-          <pre>{o.prompt}</pre>
-          <h4>反馈</h4>
-          <pre>
-            {o.feedback || (o.state === "complete" ? "未返回文字" : "等待反馈")}
-          </pre>
+          {current.input.requirements && (
+            <>
+              <h4>补充要求</h4>
+              <pre className="refactoring-prompt-body">
+                {current.input.requirements}
+              </pre>
+            </>
+          )}
+          <details>
+            <summary>内置决策规则</summary>
+            {decision ? (
+              <>
+                <p>{operationLabel(decision)}</p>
+                {decision.prompt && (
+                  <>
+                    <h4>决策短指令</h4>
+                    <pre tabIndex={0}>{decision.prompt}</pre>
+                  </>
+                )}
+                {current.decision_rules?.rules && (
+                  <>
+                    <h4>阶段规则</h4>
+                    <pre tabIndex={0}>{current.decision_rules.rules}</pre>
+                  </>
+                )}
+                {current.decision_rules?.strategy && (
+                  <>
+                    <h4>策略规则 · {strategy}</h4>
+                    <pre tabIndex={0}>{current.decision_rules.strategy}</pre>
+                  </>
+                )}
+              </>
+            ) : (
+              <p className="muted">等待准备 SteerAgent 决策请求</p>
+            )}
+          </details>
+        </section>
+        <section className="refactoring-preview">
+          <h3>二级 · 执行提示词</h3>
+          <p className="muted">SteerAgent 生成 → Runner 执行</p>
+          {execution ? (
+            <>
+              <h4>{operationLabel(execution)}</h4>
+              <pre className="refactoring-prompt-body" aria-label="执行指令">
+                {execution.prompt}
+              </pre>
+              <OperationFeedback key={execution.id} operation={execution} />
+            </>
+          ) : (
+            <p className="muted">
+              {current.active
+                ? "等待 SteerAgent 生成执行提示词"
+                : "本次行动未生成执行提示词"}
+            </p>
+          )}
+          {executions.length > 1 && (
+            <details>
+              <summary>历史执行提示词（{executions.length - 1}）</summary>
+              {executions
+                .slice(0, -1)
+                .reverse()
+                .map((o) => (
+                  <article key={o.id}>
+                    <h4>{operationLabel(o)}</h4>
+                    <pre className="refactoring-prompt-body">{o.prompt}</pre>
+                    <OperationFeedback operation={o} />
+                  </article>
+                ))}
+            </details>
+          )}
+        </section>
+      </div>
+      <details>
+        <summary>运行信息</summary>
+        {current.summary && <p>{current.summary}</p>}
+        <p>
+          {current.environment_name && <>{current.environment_name} · </>}
+          执行配置：{current.profile_name || current.input.profile} · 策略：
+          {strategy}
+        </p>
+        {(current.source_commit || current.input.base_commit) && (
+          <p>
+            {current.source_commit ? "起始提交" : "申请的起始提交"}{" "}
+            {current.source_branch}{" "}
+            <code>{current.source_commit || current.input.base_commit}</code>
+          </p>
+        )}
+        <p>
+          预算：
+          {current.input.budget.dollars
+            ? "$" + current.input.budget.dollars
+            : "美元未设置"}{" "}
+          ·{" "}
+          {current.input.budget.minutes
+            ? current.input.budget.minutes + " 分钟"
+            : "时间未设置"}{" "}
+          ·{" "}
+          {current.input.budget.rounds
+            ? current.input.budget.rounds + " 轮"
+            : "轮次未设置"}{" "}
+          · 已用 {duration(current.elapsed_seconds)}
+        </p>
+        <p>
+          已覆盖参考费用：
+          {current.amount == null ? "待采集" : "$" + current.amount}
+          {!current.cost_complete && "（采集不完整）"}
+        </p>
+        {current.cost_breakdown && (
+          <p>
+            推进参考费用：
+            {current.cost_breakdown.progress.amount == null
+              ? "待采集"
+              : "$" + current.cost_breakdown.progress.amount}{" "}
+            · 收尾参考费用：
+            {current.cost_breakdown.closing.amount == null
+              ? "待采集"
+              : "$" + current.cost_breakdown.closing.amount}
+          </p>
+        )}
+        {current.wall_seconds !== undefined && (
+          <p>总历时 {duration(current.wall_seconds)}（含等待与离线）</p>
+        )}
+        <p>
+          费用包含主会话与已登记内部调用；不覆盖子
+          Agent、工具内部模型和不可观测供应商调用。
+        </p>
+        {decisions.length > 0 && (
+          <details>
+            <summary>决策记录（{decisions.length}）</summary>
+            {decisions
+              .slice()
+              .reverse()
+              .map((o) => (
+                <article key={o.id}>
+                  <h4>{operationLabel(o)}</h4>
+                  {o.id !== decision?.id && <pre tabIndex={0}>{o.prompt}</pre>}
+                  <OperationFeedback operation={o} />
+                </article>
+              ))}
+          </details>
+        )}
+      </details>
+      {!!current.reports?.length && (
+        <details>
+          <summary>PR 合入评审（{current.reports.length}）</summary>
+          {current.reports.map((r, i) => (
+            <article key={i}>
+              <h3>PR 合入评审 {i + 1}</h3>
+              <p>
+                head {r.head} · base {r.base}
+              </p>
+              <p>
+                {
+                  {
+                    merge: "建议合入",
+                    revise: "建议修改后再审",
+                    insufficient_evidence: "证据不足",
+                  }[r.recommendation]
+                }
+              </p>
+              {current.report_stale && i === current.reports!.length - 1 && (
+                <p>此评审已过期或正在复核。</p>
+              )}
+              <div className="refactoring-pre">{r.body}</div>
+            </article>
+          ))}
         </details>
-      ))}
+      )}
     </section>
   );
 }

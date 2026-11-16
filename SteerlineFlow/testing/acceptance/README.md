@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+重构与维护两级提示词展示（2026-11-16）。[实现与验收](refactoring-prompt-display.md)
+
 环境检测自动收尾（2026-11-15）。[实现与验收](environment-automatic-cleanup.md)
 
 活动中心放弃活动（2026-11-13）。[验收记录](activity-abandonment.md)
