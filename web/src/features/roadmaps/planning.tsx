@@ -1,5 +1,5 @@
 import type { SteerAgentConfig } from "../../shared/api/execution-configs";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
@@ -11,6 +11,7 @@ import {
   type RoadmapTask,
 } from "./roadmaps";
 import "./planning.css";
+import { PlanningTurnActivity, usePlanningEvents } from "./planning-events";
 
 type Change = {
   path: string;
@@ -46,6 +47,9 @@ type Planning = {
   busy: boolean;
   can_rebase: boolean;
   can_message: boolean;
+  interrupt_turn?: string;
+  interrupting?: boolean;
+  live_events?: boolean;
   question?: PlanningQuestion;
   conflict?: { files: string[] };
   review?: { digest: string; changes: Change[] };
@@ -61,7 +65,8 @@ type TaskCard = {
 type HistoryEntry = {
   role: string;
   text?: string;
-  result?: { text?: string };
+  turn_id?: string;
+  result?: { text?: string; status?: string; source?: { item_id?: string } };
 };
 type HistoryPage = {
   entries: HistoryEntry[];
@@ -123,6 +128,7 @@ export default function RoadmapPlanning() {
     skipped?: Record<string, string>;
   }>();
   const [sending, setSending] = useState(false);
+  const [interruptingTask, setInterruptingTask] = useState("");
   const [selection, setSelection] = useState<{
     digest: string;
     paths: string[];
@@ -202,6 +208,26 @@ export default function RoadmapPlanning() {
         : [];
   const project = "/projects/" + identity.project_id;
   const cardTabOpen = !!task?.card && cardTabTask === id;
+  const interrupting = task?.interrupting || interruptingTask === id;
+  const live = usePlanningEvents(
+    JSON.stringify([...key, id]),
+    online && !!task?.live_events,
+    api,
+    `${route}/${id}/conversation-events`,
+  );
+  const entries = [...(history.data?.entries || []), ...(extra?.entries || [])];
+  const settledTurns = new Set(
+    entries.filter((entry) => entry.role === "assistant").map((entry) => entry.turn_id),
+  );
+  const conversationScroll = useRef<HTMLDivElement>(null);
+  const followConversation = useRef(true);
+  useEffect(() => {
+    followConversation.current = true;
+  }, [id]);
+  useEffect(() => {
+    const viewport = conversationScroll.current;
+    if (viewport && followConversation.current) viewport.scrollTop = viewport.scrollHeight;
+  }, [id, live.turns, history.data, extra]);
 
   async function act(
     action: string,
@@ -210,6 +236,7 @@ export default function RoadmapPlanning() {
   ) {
     if (!online || sending || (!projectAction && !task)) return;
     setSending(true);
+    if (action === "interrupt") setInterruptingTask(id);
     setError("");
     try {
       const result = await submit(
@@ -245,6 +272,7 @@ export default function RoadmapPlanning() {
       setError(String(failure));
     } finally {
       setSending(false);
+      if (action === "interrupt") setInterruptingTask("");
     }
   }
 
@@ -268,6 +296,17 @@ export default function RoadmapPlanning() {
 
   function planningWorkspace(card?: ReactNode) {
     if (!task) return null;
+    const interruptTurn = task.interrupt_turn;
+    const stopTurn =
+      (interruptTurn || interrupting) && (
+        <button
+          type="button"
+          disabled={!online || sending || interrupting}
+          onClick={() => void act("interrupt", { turn_id: interruptTurn })}
+        >
+          {interrupting ? "正在停止…" : "停止本轮"}
+        </button>
+      );
     return (
       <>
         {task.card && (
@@ -310,13 +349,25 @@ export default function RoadmapPlanning() {
                   : "对话历史读取失败。"}
               </p>
             )}
-            <div className="planning-history">
-              {[...(history.data?.entries || []), ...(extra?.entries || [])]
+            {live.failed && (
+              <p className="notice amber" role="status">对话事件暂时无法刷新，正在重试。</p>
+            )}
+            <div
+              className="planning-history"
+              ref={conversationScroll}
+              onScroll={(event) => {
+                const view = event.currentTarget;
+                followConversation.current = view.scrollHeight - view.scrollTop - view.clientHeight < 48;
+              }}
+            >
+              {entries
                 .filter(
                   (entry) =>
                     entry.role === "planning" ||
                     entry.text ||
-                    entry.result?.text,
+                    entry.result?.text ||
+                    entry.result?.status === "cancelled" ||
+                    (entry.role === "assistant" && entry.turn_id && live.turns.has(entry.turn_id)),
                 )
                 .map((entry, i) => (
                   <article key={i}>
@@ -329,11 +380,30 @@ export default function RoadmapPlanning() {
                             ? "你"
                             : "SteerAgent"}
                         </small>
-                        <p>{entry.result?.text || entry.text}</p>
+                        {entry.role === "assistant" && entry.turn_id && live.turns.has(entry.turn_id) && (
+                          <PlanningTurnActivity
+                            turn={live.turns.get(entry.turn_id)!}
+                            finalItem={(entry.result?.text || entry.text) ? entry.result?.source?.item_id : undefined}
+                          />
+                        )}
+                        {(entry.result?.text || entry.text) && (
+                          <p>{entry.result?.text || entry.text}</p>
+                        )}
+                        {entry.result?.status === "cancelled" && (
+                          <p className="planning-system-message">本轮已停止</p>
+                        )}
                       </>
                     )}
                   </article>
                 ))}
+              {Array.from(live.turns, ([turnID, turn]) =>
+                !settledTurns.has(turnID) && (turn.messages.size > 0 || turn.tools.size > 0) ? (
+                  <article key={turnID}>
+                    <small>SteerAgent</small>
+                    <PlanningTurnActivity turn={turn} />
+                  </article>
+                ) : null,
+              )}
             </div>
             {(extra?.more ?? history.data?.has_more) && (
               <button onClick={() => void moreHistory()}>更多消息</button>
@@ -393,6 +463,7 @@ export default function RoadmapPlanning() {
                 >
                   提交回答
                 </button>
+                {stopTurn}
               </>
             ) : (
               <>
@@ -404,17 +475,19 @@ export default function RoadmapPlanning() {
                       onChange={(event) => setMessage(event.target.value)}
                     />
                   </label>
-                  <button
-                    disabled={
-                      sending ||
-                      !message.trim() ||
-                      !task.can_message ||
-                      !!task.conflict
-                    }
-                    onClick={() => void act("message", { text: message })}
-                  >
-                    发送
-                  </button>
+                  {stopTurn || (
+                    <button
+                      disabled={
+                        sending ||
+                        !message.trim() ||
+                        !task.can_message ||
+                        !!task.conflict
+                      }
+                      onClick={() => void act("message", { text: message })}
+                    >
+                      发送
+                    </button>
+                  )}
                 </div>
               </>
             )}

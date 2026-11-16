@@ -144,6 +144,16 @@
   max-height: 420px;
   overflow: auto;
 }
+.planning-tool-activity {
+  margin-block: 8px;
+  color: var(--ui-secondary);
+}
+.planning-tool-activity summary {
+  cursor: pointer;
+}
+.planning-tool-activity ul {
+  padding-inline-start: 20px;
+}
 .planning-markdown strong {
   display: block;
   margin: 0.7em 0 0.3em;

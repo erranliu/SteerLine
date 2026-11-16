@@ -47,10 +47,16 @@ type PlanningTask struct {
 	Material         string                  `json:"material"`
 	MaterialSHA      string                  `json:"material_sha"`
 	Operation        *PlanningOperation      `json:"operation,omitempty"`
+	Interrupt        *PlanningInterrupt      `json:"interrupt,omitempty"`
 	Conflict         *PlanningConflict       `json:"conflict,omitempty"`
 	Review           *PlanningReview         `json:"review,omitempty"`
 	Publication      *PlanningPublication    `json:"publication,omitempty"`
 	Merged           string                  `json:"merged,omitempty"`
+}
+
+type PlanningInterrupt struct {
+	TurnID  string                 `json:"turn_id"`
+	Request runnercontract.Request `json:"request"`
 }
 
 type PlanningOperation struct {
