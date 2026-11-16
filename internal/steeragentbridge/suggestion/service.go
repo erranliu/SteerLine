@@ -50,6 +50,8 @@ type Record struct {
 	StopState     string                  `json:"stop_state,omitempty"`
 	Project       string                  `json:"project"`
 	ID            string                  `json:"id"`
+	Generation    uint64                  `json:"generation,omitempty"`
+	RegeneratedBy string                  `json:"regenerated_by,omitempty"`
 	Revision      uint64                  `json:"revision"`
 	Source        Source                  `json:"source"`
 	SourceActive  bool                    `json:"source_active"`
@@ -70,6 +72,7 @@ func (r Record) Complete() bool {
 
 type Store interface {
 	LoadAdvisory(context.Context, string, string) ([]byte, uint64, error)
+	CurrentAdvisoryID(context.Context, string, string, string) (string, error)
 	SaveAdvisory(context.Context, string, string, string, []byte, uint64) error
 	AdvisoryIDs(context.Context, string, string) ([]string, error)
 	AdvisorySummaries(context.Context, string, string) ([]json.RawMessage, bool, error)
@@ -147,6 +150,50 @@ func (s *Service) track(r Record) {
 	}
 }
 func (s *Service) Get(ctx context.Context, id string) (Record, error) { return s.load(ctx, id) }
+func (s *Service) Current(ctx context.Context, source Source) (Record, error) {
+	id, err := s.Store.CurrentAdvisoryID(ctx, s.Project, source.CandidateID, source.Occurrence)
+	if err != nil {
+		return Record{}, err
+	}
+	return s.load(ctx, id)
+}
+
+func regeneratedID(id string) string {
+	return contract.Digest([]byte("advisory regeneration\x00" + id))[:32]
+}
+
+func (s *Service) RegenerationApplied(ctx context.Context, id, commandID string) (bool, error) {
+	r, err := s.load(ctx, regeneratedID(id))
+	if errors.Is(err, contract.ErrNotFound) {
+		return false, nil
+	}
+	return r.RegeneratedBy == commandID, err
+}
+
+func (s *Service) Regenerate(ctx context.Context, id string, expected uint64, source Source, commandID string) error {
+	if err := s.enter(ctx); err != nil {
+		return err
+	}
+	defer s.leave()
+	old, err := s.Current(ctx, source)
+	if err != nil {
+		return err
+	}
+	if old.ID != id || old.Revision != expected || !old.Complete() ||
+		old.Source.BaseRevision != source.BaseRevision || old.Source.ContractDigest != source.ContractDigest {
+		return errors.New("当前问题或建议已变化，请刷新后重试")
+	}
+	next := newAdvisory(s.Project, regeneratedID(id), old.Source)
+	next.Generation = old.Generation + 1
+	next.RegeneratedBy = commandID
+	_, err = s.save(ctx, next)
+	return err
+}
+
+func newAdvisory(project, id string, source Source) Record {
+	return Record{Project: project, ID: id, Source: source, SourceActive: true, State: "queued", CreatedAt: time.Now().UTC(), Settled: true}
+}
+
 func (s *Service) List(ctx context.Context, candidate string) ([]json.RawMessage, bool, error) {
 	return s.Store.AdvisorySummaries(ctx, s.Project, candidate)
 }
@@ -162,9 +209,8 @@ func (s *Service) Sync(ctx context.Context, sources []Source) error {
 		if !source.Valid() {
 			return errors.New("invalid explicit material advisory source")
 		}
-		id := SourceID(s.Project, source)
-		current[id] = true
-		if old, err := s.load(ctx, id); err == nil {
+		if old, err := s.Current(ctx, source); err == nil {
+			current[old.ID] = true
 			if !old.SourceActive {
 				old.SourceActive = true
 				if _, err = s.save(ctx, old); err != nil {
@@ -177,7 +223,9 @@ func (s *Service) Sync(ctx context.Context, sources []Source) error {
 		} else if !errors.Is(err, contract.ErrNotFound) {
 			return err
 		}
-		r := Record{Project: s.Project, ID: id, Source: source, SourceActive: true, State: "queued", CreatedAt: time.Now().UTC(), Settled: true}
+		id := SourceID(s.Project, source)
+		current[id] = true
+		r := newAdvisory(s.Project, id, source)
 		if _, err := s.save(ctx, r); err != nil && !errors.Is(err, contract.ErrConflict) {
 			return err
 		}

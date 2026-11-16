@@ -100,7 +100,7 @@ func (p *continuationSuggestionPort) read(ctx context.Context, route string, val
 			if !source.Valid() {
 				return nil, errors.New("invalid advisory source")
 			}
-			record, err := p.service.Get(ctx, suggestionbridge.SourceID(p.config.Identity(), source))
+			record, err := p.service.Current(ctx, source)
 			if errors.Is(err, contract.ErrNotFound) {
 				return struct {
 					Record *suggestionbridge.Detail `json:"record"`

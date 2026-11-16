@@ -162,7 +162,7 @@ export function Answer({ run }: { run: Candidate }) {
       active = false;
     };
   }, [key, resume]);
-  const update = (value: string) => {
+  const update = (value: string | undefined) => {
     setNote(value);
     writeDraft(key, value)
       .then(() => setStorageError(""))
@@ -325,6 +325,16 @@ export function Answer({ run }: { run: Candidate }) {
               run={run}
               inline
               onSuggestion={setSuggestion}
+              actionsDisabled={!loaded || checking || composing}
+              onRestore={
+                note !== undefined
+                  ? (record) => {
+                      setSuggestion(record);
+                      update(undefined);
+                      setOpened(true);
+                    }
+                  : undefined
+              }
             />
           )}
           {answered ? (
