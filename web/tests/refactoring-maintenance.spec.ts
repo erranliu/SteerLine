@@ -46,27 +46,26 @@ test("maintenance report, history and refresh remain observational", async ({
     const opener = page.getByRole("button", { name: "新建维护行动" });
     await opener.focus();
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("dialog", { name: "新建维护行动" }),
-    ).toBeVisible();
-    const start = page.getByRole("button", { name: "开始维护", exact: true });
+    const dialog = page.getByRole("dialog", { name: "新建维护行动" });
+    await expect(dialog).toBeVisible();
+    const start = dialog.getByRole("button", { name: "开始维护", exact: true });
     await expect(start).toBeEnabled();
     await expect(
-      page.getByRole("heading", { name: "一级 · 决策提示词" }),
+      dialog.getByRole("heading", { name: "一级 · 决策提示词" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "二级 · 执行提示词" }),
+      dialog.getByRole("heading", { name: "二级 · 执行提示词" }),
     ).toBeVisible();
-    await expect(page.getByLabel("决策策略")).toHaveValue("cautious");
-    await expect(page.getByLabel("重构轮次")).toHaveValue("1");
-    const preview = page.getByLabel("方向提示词", { exact: true });
+    await expect(dialog.getByLabel("决策策略")).toHaveValue("cautious");
+    await expect(dialog.getByLabel("重构轮次")).toHaveValue("1");
+    const preview = dialog.getByLabel("方向提示词", { exact: true });
     await expect(preview).toContainText("简化不必要的抽象与控制流。");
-    await page.getByLabel("重构方向").selectOption("custom:shared-fixtures");
+    await dialog.getByLabel("重构方向").selectOption("custom:shared-fixtures");
     await expect
       .poll(() => preview.textContent())
       .toBe("# 收拢共享夹具\r\n\r\n优先处理共享测试夹具。  \r\n");
-    await page.getByLabel("补充要求").fill("ask-once");
-    await page.getByLabel("重构轮次").fill("2");
+    await dialog.getByLabel("补充要求").fill("ask-once");
+    await dialog.getByLabel("重构轮次").fill("2");
     await page.screenshot({
       path: join(out, "maintenance-direction-desktop.png"),
       fullPage: true,
