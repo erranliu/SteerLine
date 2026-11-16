@@ -10,11 +10,9 @@ import (
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-// Only cancellation remains public. Legacy answer/publish/prepare/analyze
-// commands are rejected before reserving any intent or invoking a business owner.
 func (p *runtimeProjectPort) SubmitContinuationSuggestion(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
 	out := maintenanceResponse(in)
-	if in.Action != "main_agent_cancel" {
+	if in.Action != "main_agent_cancel" && in.Action != "main_agent_regenerate" {
 		return out, errors.New("unsupported advisory action")
 	}
 	if err := in.Validate(httpcontract.ProjectID(p.config.Identity()), p.instance); err != nil {
@@ -48,13 +46,20 @@ func (p *runtimeProjectPort) SubmitContinuationSuggestion(ctx context.Context, i
 		return out, err
 	}
 	if !created {
-		return out, errors.New("original advisory cancellation is pending")
+		return out, errors.New("original advisory command is pending")
 	}
-	_, err = p.config.runtimeContinuationSuggestion.service.Cancel(ctx, in.TargetID, in.ExpectedVersion)
+	advisory := p.config.runtimeContinuationSuggestion
+	rejectedCode := "advisory_cancel_rejected"
+	if in.Action == "main_agent_regenerate" {
+		rejectedCode = "advisory_regenerate_rejected"
+		err = advisory.regenerate(ctx, in.TargetID, in.ExpectedVersion, in.RequestID)
+	} else {
+		_, err = advisory.service.Cancel(ctx, in.TargetID, in.ExpectedVersion)
+	}
 	out.Status = "applied"
 	if err != nil {
 		out.Status = "rejected"
-		out.Code = "advisory_cancel_rejected"
+		out.Code = rejectedCode
 		out.Diagnostic = err.Error()
 	}
 	c.Status = out.Status
@@ -79,9 +84,35 @@ func (p *runtimeProjectPort) ContinuationSuggestionReceipt(ctx context.Context, 
 			return nil, err
 		}
 	} else {
+		if in.Action == "main_agent_regenerate" && p.config.runtimeContinuationSuggestion != nil {
+			applied, err := p.config.runtimeContinuationSuggestion.service.RegenerationApplied(ctx, in.TargetID, id)
+			if err != nil {
+				return nil, err
+			}
+			if applied {
+				out.Status = "applied"
+				return &out, nil
+			}
+		}
 		out.Status = "outcome_unknown"
 		out.Code = "outcome_unknown"
-		out.Diagnostic = "原取消结果待核实，不自动重发"
+		out.Diagnostic = "原建议操作结果待核实，不自动重发"
 	}
 	return &out, nil
+}
+
+func (p *continuationSuggestionPort) regenerate(ctx context.Context, id string, version uint64, commandID string) error {
+	old, err := p.service.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	candidate, err := p.store.Candidate(ctx, p.config.Identity(), old.Source.CandidateID)
+	if err != nil {
+		return err
+	}
+	source, ok := materialAdviceSource(candidate)
+	if !ok || source.Occurrence != old.Source.Occurrence {
+		return errors.New("原问题已不再等待回答")
+	}
+	return p.service.Regenerate(ctx, id, version, source, commandID)
 }

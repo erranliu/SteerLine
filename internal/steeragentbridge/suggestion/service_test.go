@@ -29,6 +29,23 @@ func (m *memory) LoadAdvisory(_ context.Context, p, id string) ([]byte, uint64, 
 	_ = json.Unmarshal(raw, &r)
 	return append([]byte{}, raw...), r.Revision, nil
 }
+func (m *memory) CurrentAdvisoryID(_ context.Context, p, candidate, occurrence string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var latest Record
+	for _, raw := range m.rows {
+		var r Record
+		_ = json.Unmarshal(raw, &r)
+		if r.Project == p && r.Source.CandidateID == candidate && r.Source.Occurrence == occurrence &&
+			(latest.ID == "" || r.Generation > latest.Generation) {
+			latest = r
+		}
+	}
+	if latest.ID == "" {
+		return "", contract.ErrNotFound
+	}
+	return latest.ID, nil
+}
 func (m *memory) SaveAdvisory(_ context.Context, p, id, candidate string, raw []byte, expected uint64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -111,6 +128,55 @@ func TestAdvisoryAutomaticOccurrenceDedupAndGeneration(t *testing.T) {
 	r, _ = s.Get(ctx, id)
 	if r.SourceActive || r.State != "ready" {
 		t.Fatal("source resolution rewrote historical result", r)
+	}
+}
+
+func TestAdvisoryRegenerateKeepsHistoryAndRequiresCurrentSettledGeneration(t *testing.T) {
+	s, source, calls := fixture()
+	ctx := t.Context()
+	if err := s.Sync(ctx, []Source{source}); err != nil {
+		t.Fatal(err)
+	}
+	old, err := s.Current(ctx, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Regenerate(ctx, old.ID, old.Revision, source, "early"); err == nil {
+		t.Fatal("regeneration overlapped an unsettled job")
+	}
+	for range 3 {
+		if err = s.ProcessNext(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old, err = s.Current(ctx, source)
+	if err != nil || old.State != "ready" || !old.Complete() {
+		t.Fatalf("expected ready original suggestion: %v, %v", old.State, err)
+	}
+	if err = s.Regenerate(ctx, old.ID, old.Revision, source, "regenerate-request"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Regenerate(ctx, old.ID, old.Revision, source, "duplicate-click"); err == nil {
+		t.Fatal("superseded generation accepted a second click")
+	}
+	if ok, err := s.RegenerationApplied(ctx, old.ID, "regenerate-request"); err != nil || !ok {
+		t.Fatal("lost receipt could not be verified", ok, err)
+	}
+	if err = s.Sync(ctx, []Source{source}); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if err = s.ProcessNext(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	next, err := s.Current(ctx, source)
+	if err != nil || next.ID == old.ID || next.State != "ready" || next.RunnerRequest.RequestID == old.RunnerRequest.RequestID || *calls != 2 {
+		t.Fatalf("expected one separate generation: %v, build calls %d, %v", next.State, *calls, err)
+	}
+	history, err := s.Get(ctx, old.ID)
+	if err != nil || history.SourceActive || history.State != "ready" || history.Suggestion.Prompt != old.Suggestion.Prompt {
+		t.Fatal("old suggestion was not preserved", history.State, err)
 	}
 }
 func TestAdvisoryCancelledAndInvalidSourcesNeverPrepare(t *testing.T) {

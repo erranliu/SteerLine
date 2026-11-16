@@ -50,6 +50,7 @@ export function Operations({
     resolve_pr_conflict: "解决合并冲突",
     set_dispatch_mode: "切换自动派发",
     main_agent_cancel: "取消提示词建议生成",
+    main_agent_regenerate: "重新生成建议",
   };
   const target = (row: StoredRequest) => {
     const e = row.envelope;

@@ -168,9 +168,10 @@ export async function readDraftValue(key: string) {
     },
   );
 }
-export async function writeDraft(key: string, value: string) {
+export async function writeDraft(key: string, value: string | undefined) {
   return transaction<void>("drafts", "readwrite", (store, done) => {
-    store.put(value, key);
+    if (value === undefined) store.delete(key);
+    else store.put(value, key);
     done();
   });
 }

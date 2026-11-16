@@ -8,7 +8,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
-import { saveRequest, writeDraft } from "../../shared/api/journal";
+import {
+  readDraftValue,
+  saveRequest,
+  writeDraft,
+} from "../../shared/api/journal";
 import { identity, run, testClient } from "../../test/workspace";
 import type {
   Candidate,
@@ -139,6 +143,91 @@ it("defaults to the exact current suggestion and replies once with original iden
     expected_recovery_version: 3,
   });
   expect(await screen.findByText("回答已提交，等待状态更新。")).toBeVisible();
+  w.client.clear();
+});
+
+it("restores the suggestion on request and clears the saved draft", async () => {
+  const home = "restore-suggestion";
+  const key =
+    home + "/" + draftKey(identity.project_id, identity.instance_id, candidate);
+  await writeDraft(key, "我的草稿");
+  const w = setup(ready, home);
+  const box = screen.getByRole("textbox", { name: "回答内容" });
+  await waitFor(() => expect(box).toHaveValue("我的草稿"));
+  const restore = await screen.findByRole("button", { name: "恢复建议" });
+  await waitFor(() => expect(restore).toBeEnabled());
+  fireEvent.click(restore);
+  expect(box).toHaveValue(ready.prompt!.replace(/\r\n/g, "\n"));
+  expect(w.send).not.toHaveBeenCalled();
+  await waitFor(async () => expect(await readDraftValue(key)).toBeUndefined());
+  w.client.clear();
+});
+
+it("runs one regeneration and keeps a typed draft until the user restores the new suggestion", async () => {
+  const w = setup(ready, "regenerate-suggestion");
+  const next = { ...ready, id: "c".repeat(32), prompt: "新的建议" };
+  const box = screen.getByRole("textbox", { name: "回答内容" });
+  const regenerate = await screen.findByRole("button", {
+    name: "重新生成建议",
+  });
+  await waitFor(() => expect(regenerate).toBeEnabled());
+  fireEvent.change(box, { target: { value: "保留这份草稿" } });
+  w.get.mockImplementation(
+    async (path) =>
+      (path.includes("main-agent?") ? { record: next } : {}) as never,
+  );
+  fireEvent.click(regenerate);
+  fireEvent.click(regenerate);
+  await waitFor(() => expect(w.send).toHaveBeenCalledTimes(1));
+  expect(w.send).toHaveBeenCalledWith(
+    "main_agent_regenerate",
+    ready.id,
+    ready.revision,
+    {},
+  );
+  expect(box).toHaveValue("保留这份草稿");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "恢复建议" })).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "恢复建议" }));
+  expect(box).toHaveValue(next.prompt);
+  expect(w.send).toHaveBeenCalledTimes(1);
+  w.client.clear();
+});
+
+it("removes the superseded default while regeneration is pending or failed", async () => {
+  const w = setup(ready, "regenerate-default");
+  const box = screen.getByRole("textbox", { name: "回答内容" });
+  const regenerate = await screen.findByRole("button", {
+    name: "重新生成建议",
+  });
+  await waitFor(() => expect(regenerate).toBeEnabled());
+  w.get.mockRejectedValueOnce(new Error("暂时无法读取新建议"));
+  fireEvent.click(regenerate);
+  await waitFor(() => expect(box).toHaveValue(""));
+  await screen.findByText("Error: 暂时无法读取新建议");
+  expect(screen.getByRole("button", { name: "重新生成建议" })).toBeDisabled();
+  let next: AdvisoryDetail = {
+    ...ready,
+    id: "c".repeat(32),
+    state: "queued",
+    prompt: undefined,
+  };
+  w.get.mockImplementation(
+    async (path) =>
+      (path.includes("main-agent?") ? { record: next } : {}) as never,
+  );
+  await act(() => w.client.invalidateQueries());
+  expect(
+    await screen.findByRole("button", { name: "重新生成建议" }),
+  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "回复并继续" })).toBeDisabled();
+  next = { ...next, state: "failed" };
+  await act(() => w.client.invalidateQueries());
+  expect(box).toHaveValue("");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "重新生成建议" })).toBeEnabled(),
+  );
   w.client.clear();
 });
 
