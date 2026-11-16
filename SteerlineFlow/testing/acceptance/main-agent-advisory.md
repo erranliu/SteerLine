@@ -168,3 +168,27 @@ go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario ru
 独立reviewer `/root/independent_review` 新鲜审查确认上述两项，随后复核生产修复、强化L4及原始公开请求/浏览器/清理证据，结论为两项闭合、无剩余确定问题。实际测试由当前聊天执行。远端cdf5bd77的[prompt-governance](https://github.com/erranliu/SteerLine/actions/runs/42744261976/job/129592486791)也已success；旧4f96b677检查曾15分钟超时cancelled且未能取得日志，不作为当前通过依据。
 
 人工主观体验及完整真实开发任务产Question仍未验；本次不新增真实模型调用，不改变原生工具/隐式上下文的既有边界。满足本轮合并前检查，实际合并状态以PR #478为准，未部署。
+
+## 2026-11-15 实施报告续作建议
+
+Task 17 的候选在 `implement.input` 等待输入。Runner 把实施报告作为原问题交给建议生成。报告列出失败检查和未完成验收，原建议仅返回「未完成。」。
+
+[固定正文](../../../internal/prompts/materials/main-agent.md)保留明确问题、用户决定和原作答格式的优先级。实施报告显示实施未完成、验收受阻或 PR 尚不可合并时，要求拟写可直接发送的续作消息，列明失败检查、未完成工作和复验，按报告交代需要用户确认的具体事项。报告只给状态时，要求实施 Agent 补充卡点、剩余工作和所需输入。用户在原回答区确认后提交。
+
+| UTF-8 正文 | 修改前 | 修改后 |
+| --- | ---: | ---: |
+| 短模板 | 145 | 145 |
+| 固定规则 | 1300 | 2133 |
+| 黄金组装正文 | 1455 | 2288 |
+| 含 Task 17 冻结上下文的完整 Runner 指令 | 4259 | 5092 |
+
+独立只读审阅核对了正文差异、普通待答边界、原报告、前后完整指令、黄金样本和摘要守卫。业务来源和发送接线沿用当前实现。
+
+受测基线 `05581540c96af307043f65e5cd8335bd8af7b475` 加工作树修改。原始报告、建议原文及以下测试产物保存在本地隔离证据目录 `task17-steeragent/`。
+
+- `go test ./internal/prompts -count=1 -v` 通过。
+- `controlled-replay-final/summary.json` 通过。复用 SQLite 候选及公开 Runner 夹具，以原始 1172 字节报告作为 `goal` 和 `question.text`，核对两处正文与原记录逐字节一致。夹具提交一次，实际请求 5078 字节，和表中 5092 字节相差的 14 字节来自隔离测试的身份字段。原报告 SHA-256 为 `7b430f998e8cdcad3d6f4cc62f4aa19ece435a85d3e612a9cb51ed614eaffa6a`。
+- `answer-web.json` 的答复和建议测试 23 项通过，覆盖预填、点击前零投递和确认后仅投递一次。
+- `advisory-owner-final/summary.json`、`L1-final/summary.json`、`L2-final/summary.json` 均通过，L2 `cleanup_complete=true`。首轮 App 夹具和 L2 遇到临时 Git 配置写入权限错误，首轮 L1 的宿主磁盘满夹具被沙箱拒绝。原失败记录保留，复跑各用独立结果目录。
+
+2026-11-16 获得明确授权后，将原报告发给现有 Codex 服务做隔离回归。复用 Runner `0.2.0-dev.4` 的公开 generate/1，按 Task 17 原配置使用本地 Codex CLI `0.166.0`、`gpt-6.1-sol/high` 和 `read_only`。首轮误选桌面沙箱启动器，未取得建议，失败报告保存在 `live-authorized/summary.json`。修正后的 `live-authorized-native/summary.json` 通过，指令为 5092 字节，模型原文 916 字节，内容与 Runner 可查询的 Final 逐字一致。原文保存在 `actual-suggestion.txt`，包含两项失败检查的处理和复验、剩余验收、已有通过记录以及需要用户决定时的确认要求。已核实隔离 Runner 停机结算。原候选仍在原 Attempt 等待输入，未提交回复，安装版未更新。
