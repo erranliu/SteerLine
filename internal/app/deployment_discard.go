@@ -262,7 +262,7 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	}
 	persist := func() error { return localservice.WritePrivateFile(archive, "discard.json", journal) }
 	if err := discardOriginalRuns(ctx, original, journal, persist); err != nil {
-		return fail(err)
+		return fail(fmt.Errorf("discard-runs Runner settlement (journal %s): %w", filepath.Join(archive, "discard.json"), err))
 	}
 	// Validate every caller-owned Run/input binding with the strict original
 	// resource proof. Only report/business completion is waived for discarded work.
@@ -426,12 +426,12 @@ func discardOriginalRuns(ctx context.Context, cli runnerclient.Client, journal *
 func discardRuns(ctx context.Context, ops discardRunOperations, journal *DeploymentDiscard, persist func() error) error {
 	inventory, err := ops.inventory(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("read original Runner's stopped inventory: %w", err)
 	}
 	for _, item := range inventory.Runs {
 		view, cold, err := ops.inspectCold(ctx, item.RunID)
 		if err != nil {
-			return err
+			return fmt.Errorf("inspect original Run %s before stopping: %w", item.RunID, err)
 		}
 		r := view.Run
 		if !cold || r == nil || r.InputDigest != item.InputDigest {
@@ -447,8 +447,8 @@ func discardRuns(ctx context.Context, ops discardRunOperations, journal *Deploym
 			}
 			continue
 		}
-		if !r.Controls.CanStop {
-			return fmt.Errorf("Run %s has an unresolved original stop/control; inspect its original request before retrying", item.RunID)
+		if r.StopStatus == "pending" || r.StopStatus == "unknown" || !r.Controls.CanStop {
+			return discardStopDiagnostic(fmt.Errorf("Run %s has an unresolved original stop/control; inspect its original request before retrying", item.RunID), r)
 		}
 		body, _ := json.Marshal(map[string]uint64{"expected_revision": r.Revision})
 		journal.Stops = append(journal.Stops, runnercontract.PendingStop{RunID: item.RunID, Request: runnercontract.Request{Protocol: runnerclient.Protocol, RequestID: productclient.NewRequestID(), Input: body}})
@@ -459,42 +459,34 @@ func discardRuns(ctx context.Context, ops discardRunOperations, journal *Deploym
 	if len(journal.Stops) != 0 {
 		info, err := ops.start(ctx, journal.Stops)
 		if err != nil {
-			return err
+			return fmt.Errorf("start original Runner with recorded stop requests: %w", err)
 		}
+		var waitErr error
 		for _, stop := range journal.Stops {
-			for {
-				view, err := ops.inspectStop(ctx, stop.Request.RequestID)
-				if err != nil {
-					return err
-				}
-				if view.Run == nil || view.Run.RunID != stop.RunID || view.Command == nil || view.Command.RequestID != stop.Request.RequestID || view.Command.Command != "stop" {
-					return errors.New("original stop receipt binding differs")
-				}
-				if view.Command.ActionStatus == "failed" || view.Command.ActionStatus == "rejected" {
-					return errors.New("original Run stop failed")
-				}
-				if view.Command.ActionStatus == "completed" && view.Run.StopStatus == "stopped" {
-					break
-				}
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(200 * time.Millisecond):
-				}
+			if waitErr = waitDiscardRunStop(ctx, ops.inspectStop, stop); waitErr != nil {
+				break
 			}
 		}
 		body, _ := json.Marshal(map[string]string{"expected_instance_id": info.InstanceID})
 		journal.ServiceStop = &runnercontract.Request{Protocol: runnerclient.Protocol, RequestID: "sl-service-stop-" + info.InstanceID, Input: body}
 		if err := persist(); err != nil {
-			return err
+			return errors.Join(waitErr, err)
 		}
-		if err := ops.stopService(ctx, info.InstanceID, journal.ServiceStop.RequestID); err != nil {
+		// The verified writer that we started still needs to exit if waiting for
+		// its original stops fails. Closing it does not prove resource settlement.
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		stopErr := ops.stopService(stopCtx, info.InstanceID, journal.ServiceStop.RequestID)
+		cancel()
+		if stopErr != nil {
+			stopErr = fmt.Errorf("close original Runner service %s: %w", info.InstanceID, stopErr)
+		}
+		if err := errors.Join(waitErr, stopErr, ctx.Err()); err != nil {
 			return err
 		}
 	}
 	proof, err := ops.verify(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("verify original Runner resources after writer exit: %w", err)
 	}
 	if len(proof.Runs) != len(inventory.Runs) {
 		return errors.New("Runner inventory changed while discarding Runs")
@@ -510,6 +502,57 @@ func discardRuns(ctx context.Context, ops discardRunOperations, journal *Deploym
 	}
 	journal.Resources, journal.Phase = &proof, "settled"
 	return persist()
+}
+
+func waitDiscardRunStop(ctx context.Context, inspect func(context.Context, string) (runnerclient.Inspection, error), stop runnercontract.PendingStop) error {
+	var last *runnerclient.Run
+	fail := func(err error) error {
+		return discardStopDiagnostic(fmt.Errorf("Run %s stop request %s: %w", stop.RunID, stop.Request.RequestID, err), last)
+	}
+	for {
+		view, err := inspect(ctx, stop.Request.RequestID)
+		if ctx.Err() != nil {
+			return fail(ctx.Err())
+		}
+		if err != nil {
+			return fail(fmt.Errorf("inspect original stop receipt: %w", err))
+		}
+		if view.Run == nil || view.Run.RunID != stop.RunID || view.Command == nil || view.Command.RequestID != stop.Request.RequestID || view.Command.Command != "stop" {
+			return fail(errors.New("original stop receipt binding differs"))
+		}
+		last = view.Run
+		switch view.Command.ActionStatus {
+		case "failed", "rejected":
+			if view.Command.Error != nil {
+				return fail(view.Command.Error)
+			}
+			return fail(fmt.Errorf("original stop action %s", view.Command.ActionStatus))
+		case "completed":
+			if last.StopStatus == "stopped" {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return fail(ctx.Err())
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+func discardStopDiagnostic(err error, run *runnerclient.Run) error {
+	if run == nil {
+		return err
+	}
+	for _, op := range run.Operations {
+		if op.Status == "outcome_unknown" && op.Diagnostic != "" {
+			return fmt.Errorf("%w (stop_status=%q, original %s operation %s: %s)", err, run.StopStatus, op.Action, op.ID, op.Diagnostic)
+		}
+	}
+	if run.Diagnostic != "" {
+		return fmt.Errorf("%w (stop_status=%q: %s)", err, run.StopStatus, run.Diagnostic)
+	}
+	return fmt.Errorf("%w (stop_status=%q)", err, run.StopStatus)
 }
 
 func commitDiscard(home string, journal *DeploymentDiscard) error {

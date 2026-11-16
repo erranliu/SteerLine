@@ -429,9 +429,12 @@ func execDiscardFixtureSQL(t *testing.T, c Config, stmt string, args ...any) {
 }
 
 func testDiscardStopProtocol(t *testing.T) {
-	for _, fault := range []string{"valid", "persist", "online", "input", "unknown", "pending-resume", "start", "stop-failed", "receipt", "unsettled", "inventory-changed"} {
+	for _, fault := range []string{"valid", "persist", "online", "input", "unknown", "pending-stop", "pending-resume", "start", "stop-failed", "receipt", "wait-canceled", "unsettled", "inventory-changed"} {
 		t.Run(fault, func(t *testing.T) {
 			persisted, started, serviceStopped := false, false, false
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			var pendingRequest string
 			journal := &DeploymentDiscard{Stops: []runnercontract.PendingStop{}}
 			proof := runnerclient.StoppedVerification{StateDir: "original", ResourcesSettled: true, Runs: []runnerclient.StoppedRun{{RunID: "run", InputDigest: "fixed", ResourcesSettled: true}}}
 			ops := discardRunOperations{
@@ -443,6 +446,9 @@ func testDiscardStopProtocol(t *testing.T) {
 					}
 					if fault == "unknown" {
 						run.Controls.CanStop = false
+					}
+					if fault == "pending-stop" {
+						run.StopStatus = "pending"
 					}
 					if fault == "pending-resume" {
 						run.StopStatus, run.ResumeRequired, run.Controls.CanStop = "stopped", true, false
@@ -460,6 +466,15 @@ func testDiscardStopProtocol(t *testing.T) {
 					return runnerclient.ServiceInfo{InstanceID: "original"}, nil
 				},
 				inspectStop: func(_ context.Context, id string) (runnerclient.Inspection, error) {
+					if fault == "wait-canceled" {
+						if pendingRequest != "" {
+							cancel()
+							return runnerclient.Inspection{}, errors.New("Runner query response is unavailable")
+						}
+						pendingRequest = id
+						run := &runnerclient.Run{RunID: "run", StopStatus: "pending", Operations: []runnercontract.Operation{{ID: "original-operation", Action: "prepare_workspace", Status: "outcome_unknown", Diagnostic: "original worktree is missing"}}}
+						return runnerclient.Inspection{Run: run, Command: &runnerclient.Command{Command: "stop", RequestID: id, ActionStatus: "pending"}}, nil
+					}
 					action := "completed"
 					if fault == "stop-failed" {
 						action = "failed"
@@ -469,14 +484,18 @@ func testDiscardStopProtocol(t *testing.T) {
 					}
 					return runnerclient.Inspection{Run: &runnerclient.Run{RunID: "run", StopStatus: "stopped"}, Command: &runnerclient.Command{Command: "stop", RequestID: id, ActionStatus: action}}, nil
 				},
-				stopService: func(_ context.Context, instance, id string) error {
+				stopService: func(ctx context.Context, instance, id string) error {
 					if !persisted || instance != "original" || id != "sl-service-stop-original" || journal.ServiceStop == nil {
 						t.Fatal("service shutdown not durable")
 					}
+					require(t, ctx.Err())
 					serviceStopped = true
 					return nil
 				},
 				verify: func(context.Context) (runnerclient.StoppedVerification, error) {
+					if fault == "wait-canceled" {
+						t.Fatal("cancelled wait continued toward discard")
+					}
 					if !serviceStopped {
 						t.Fatal("verified resources before original service exit")
 					}
@@ -491,7 +510,7 @@ func testDiscardStopProtocol(t *testing.T) {
 					return value, nil
 				},
 			}
-			err := discardRuns(context.Background(), ops, journal, func() error {
+			err := discardRuns(ctx, ops, journal, func() error {
 				if fault == "persist" {
 					return errors.New("disk full")
 				}
@@ -504,8 +523,11 @@ func testDiscardStopProtocol(t *testing.T) {
 			if fault == "valid" && (journal.Phase != "settled" || journal.Resources == nil) {
 				t.Fatal(journal)
 			}
-			if (fault == "persist" || fault == "online" || fault == "input" || fault == "unknown" || fault == "pending-resume") && started {
+			if (fault == "persist" || fault == "online" || fault == "input" || fault == "unknown" || fault == "pending-stop" || fault == "pending-resume") && (started || persisted) {
 				t.Fatal("unverified stop started a worker")
+			}
+			if fault == "wait-canceled" && (!serviceStopped || !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "Run run stop request "+pendingRequest) || !strings.Contains(err.Error(), "original prepare_workspace operation original-operation: original worktree is missing")) {
+				t.Fatal("cancellation lost the original stop evidence or left its writer running", err)
 			}
 		})
 	}

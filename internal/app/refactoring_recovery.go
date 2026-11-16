@@ -87,6 +87,11 @@ func prepareRefactoringStops(ctx context.Context, c *Config, store *sqlite.SQLit
 						o.StopState = "rejected"
 					}
 				}
+				// Deployment can submit a stop outside the maintenance outbox.
+				// Runner already holds that stop and can reconcile it on startup.
+				if view.Run.StopStatus == "pending" || view.Run.StopStatus == "unknown" {
+					continue
+				}
 				if o.Stop == nil || o.StopState == "rejected" {
 					o.Stop = runnerbinding.ContentStop(ref.ID(), view.Run.Revision)
 					o.StopState = "unknown"

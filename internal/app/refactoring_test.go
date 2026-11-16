@@ -159,7 +159,7 @@ func TestRefactoringStartupAllowsActionsWithoutRunnerBinding(t *testing.T) {
 }
 
 func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
-	for _, kind := range []string{"missing-stale", "missing-current", "accepted", "rejected", "foreign", "unavailable", "stopped"} {
+	for _, kind := range []string{"missing-stale", "missing-current", "accepted", "rejected", "foreign", "unavailable", "stopped", "deployment-stop-pending", "deployment-stop-unknown"} {
 		t.Run(kind, func(t *testing.T) {
 			c := Config{identity: "project"}
 			cli := startupFixtureCLI(t)
@@ -175,6 +175,11 @@ func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
 			}
 			if kind == "stopped" {
 				run.StopStatus = "stopped"
+			}
+			status, deploymentStop := strings.CutPrefix(kind, "deployment-stop-")
+			if deploymentStop {
+				run.StopStatus = status
+				op.Stop, op.StopState = nil, ""
 			}
 			entries := map[string]any{run.RunID: rc.Inspection{Run: &run}}
 			if kind == "accepted" || kind == "rejected" || kind == "foreign" {
@@ -202,9 +207,16 @@ func TestRefactoringStartupReconcilesOriginalStop(t *testing.T) {
 				return
 			}
 			require(t, e)
-			if kind == "stopped" {
+			if kind == "stopped" || deploymentStop {
 				if len(stops) != 0 {
 					t.Fatal(stops)
+				}
+				if deploymentStop {
+					saved, err := store.Refactoring(ctx, c.Identity(), id)
+					require(t, err)
+					if !saved.StopRequested || saved.Phase != "stopping" || saved.Operations[0].Stop != nil {
+						t.Fatal("original deployment stop was replaced or maintenance was reactivated", saved)
+					}
 				}
 				return
 			}

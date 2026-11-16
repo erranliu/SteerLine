@@ -598,6 +598,9 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 	}
 	o = r.Operations[len(r.Operations)-1]
 	if r.StopRequested && run.StopStatus != "stopped" {
+		if (run.StopStatus == "pending" || run.StopStatus == "unknown") && (o.Stop == nil || o.StopState != "unknown") {
+			return nil
+		}
 		return s.stopOperation(ctx, r, o)
 	}
 	if run.StopStatus != "stopped" {
