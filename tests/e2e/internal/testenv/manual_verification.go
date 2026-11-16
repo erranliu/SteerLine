@@ -12,6 +12,7 @@ import (
 	"time"
 
 	mv "github.com/erranliu/SteerLine/internal/manualverification"
+	"github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
@@ -29,13 +30,13 @@ func ManualVerificationLive(s *Scenario) {
 	p.AssertRunnerBinding(open)
 	c := open.Runner.Candidates[0]
 	if c.Projection.PR == nil || !c.Projection.PR.InitialDraftVerified || open.Helper.PR.Draft == nil || !*open.Helper.PR.Draft {
-		s.t.Fatal("Runner and GitHub did not confirm the initial draft PR")
+		s.t.Fatal("Runner and the platform did not confirm the initial draft PR")
 	}
 	p.Record("draft-open", open)
 	project, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
 	s.Must(err)
+	defer project.Close()
 	identity := project.Identity()
-	project.Close()
 	client, err := applicationclient.Open(s.Context, p.Home)
 	s.Must(err)
 	defer client.Close()
@@ -130,7 +131,12 @@ func ManualVerificationLive(s *Scenario) {
 	p.git(p.Repo, "add", "--", "second.txt")
 	p.git(p.Repo, "commit", "-m", "Exercise manual re-verification")
 	newHead := p.git(p.Repo, "rev-parse", "HEAD")
-	p.git(p.Repo, "push", "origin", "HEAD:refs/heads/"+open.Helper.PR.HeadBranch)
+	refspec := "HEAD:refs/heads/" + open.Helper.PR.HeadBranch
+	if p.Gitea.Kind != "" {
+		p.pushGitea(refspec)
+	} else {
+		p.git(p.Repo, "push", "origin", refspec)
+	}
 	r = wait(func(r mv.Record) bool { return r.Head == newHead })
 	if len(r.Results) != 1 || r.Results[0].Head != old.Head {
 		s.t.Fatal("old results did not keep their original Head")
@@ -152,6 +158,39 @@ func ManualVerificationLive(s *Scenario) {
 	}
 	for _, attempt := range []mv.Attempt{a, b} {
 		r = clean(r, attempt)
+	}
+	if p.Gitea.Kind != "" {
+		pr := open.Helper.PR
+		applied(post("close", r, map[string]any{"head": r.Head, "source": mv.SourcePR}))
+		r = wait(func(r mv.Record) bool { return r.Closure != nil })
+		p.closeGiteaPR(pr)
+		p.pushGitea(":refs/heads/" + pr.HeadBranch)
+		closed, err := p.giteaPR(s.Context, open)
+		s.Must(err)
+		if closed.State != "closed_unmerged" || closed.HeadBranch != pr.HeadBranch {
+			s.t.Fatal("closed PR did not retain its candidate identity after removing the source branch")
+		}
+		final := wait(func(r mv.Record) bool { return r.Archived })
+		p.RealPRProof = &pr
+		s.Must(controlled.Write(filepath.Join(s.Output, "manual-verification.json"), map[string]any{"initial_draft": *pr.Draft, "pr": pr.URL, "first_head": old.Head, "second_head": newHead, "final": final}))
+		// Settle the test's unmerged Run through normal task control before host shutdown.
+		task, err := project.ShowTask(s.Context, c.TaskID)
+		s.Must(err)
+		if len(task.Tasks) != 1 || task.Tasks[0].TaskID != c.TaskID {
+			s.t.Fatal("isolated task identity missing before cleanup")
+		}
+		discard, err := project.DiscardTask(s.Context, api.DiscardInput{
+			TaskID: c.TaskID, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""),
+			ExpectedVersion: task.Tasks[0].Version, Reason: "Close the isolated Gitea verification fixture",
+		})
+		s.Must(err)
+		if discard.Status != "discarded" || discard.TaskID != c.TaskID {
+			s.t.Fatal("isolated task discard did not settle the original candidate")
+		}
+		p.WaitStoppedCandidates()
+		s.Must(s.FinishBody())
+		p.StopService()
+		return
 	}
 	p.Merge()
 	done := p.WaitPhase("completed")

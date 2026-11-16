@@ -27,6 +27,9 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	if s.ID == "smoke.local-codex" || s.ID == "workflow.local-codex-audited" || s.ID == "refactoring.local-codex" || s.ID == ManualVerificationLiveID {
 		p.enableGitHub()
 	}
+	if s.ID == ManualVerificationGiteaLiveID {
+		p.enableManualGitea()
+	}
 	codex, err := driver.CodexExecutable("codex")
 	s.Must(err)
 	var config map[string]any
@@ -40,7 +43,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &catalog))
 	catalog["default_execution_profile"] = chain
-	if s.ID == ManualVerificationLiveID {
+	if s.ID == ManualVerificationLiveID || s.ID == ManualVerificationGiteaLiveID {
 		catalog["developer"] = map[string]bool{"skip_environment_readiness": true}
 	}
 	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"access_mode": "full_access", "executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 2}}}
@@ -60,7 +63,10 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "AGENTS.md"), []byte("# Isolated SteerLine E2E fixture\n\nFor a readiness-only Dispatch, run only its exact probe command and report the result; do not inspect business task references. Preserve the COMPLETE native command tool result, including its exit_code and output. If using the exec JavaScript wrapper, use exactly `const r = await tools.exec_command({cmd: <exact probe command>, login: false}); text(r);`. Do not project r.output, stringify individual fields, add exit= text, or transform the result: the readiness verifier consumes the full native JSON result. For business work, only implement the bound task. Invoke shell tools with login=false to disable unrelated user shell profiles. Initially HEAD equals the reference commit: confirm with git rev-parse HEAD, then use Get-FileHash directly on SteerlineFlow/spec/task.spec.md and SteerlineFlow/plans/task.plan.md. Read those original files. Do not reconstruct files from git show text or PowerShell pipelines: newline conversion changes their hashes. Any scratch work must stay inside this assigned worktree, and must not be staged. No questions or other tasks are needed: the fixture contract specifies the entire output and publication action.\n"), 0600))
 	spec := "# Live delivery fixture\n\nCreate result.txt containing exactly `real model delivery` followed by a newline. Verify the file. Stage only result.txt. Do not modify any other tracked file.\n\n"
-	if p.RealPR {
+	if p.Gitea.Kind != "" {
+		s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(p.manualGiteaPublishScript()), 0600))
+		spec += "In the publish step, use publish.ps1 to push the candidate and create or find its Gitea PR. Use the published Gitea draft title prefix as the script's DraftTitlePrefix parameter. Report the actual PR URL returned by the script.\n"
+	} else if p.RealPR {
 		script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
 $branch = git symbolic-ref --short HEAD
@@ -143,13 +149,19 @@ git rev-parse HEAD
 	arrangement, readErr := os.ReadFile(filepath.Join(s.Run.Root, "tests", "e2e", "testdata", "tasks", "task.tests.json"))
 	s.Must(readErr)
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.tests.json"), arrangement, 0600))
-	if s.ID == ManualVerificationLiveID {
+	if s.ID == ManualVerificationLiveID || s.ID == ManualVerificationGiteaLiveID {
 		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
 		profile["workflow"].(map[string]any)["prompt_overrides"] = map[string]string{
 			"implement.execute": "Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once. This stage only writes, checks and commits result.txt. Leave STEERLINE_RESULT_FILE and STEERLINE_PROGRESS_FILE intact, and do not run publish.ps1, push, or create a PR. The appended SHA-256 is for the existing arrangement file. After the command succeeds, write exactly 实施及必要验证已完成 as the final line, without punctuation.",
 			"implement.report":  "Report the preceding implementation outcome only, without tools or publishing. On success write exactly 实施及必要验证已完成 as the final line, without punctuation.",
 			"publish":           "Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 exactly once with the publication mode flag instructed by the Runner publication target. On success, return the actual complete PR URL on its own line and 本次发布已完成。 on the last line.",
 			"publish.report":    "Report only the preceding publication result. On success write the actual complete PR URL on its own line and 本次发布已完成。 on the last line.",
+		}
+		if s.ID == ManualVerificationGiteaLiveID {
+			profile["workflow"].(map[string]any)["prompt_overrides"].(map[string]string)["publish"] = "Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 once with -DraftTitlePrefix taken from the Runner publication target. On success, return the actual complete PR URL on its own line and 本次发布已完成。 on the last line."
+			plan, err := os.ReadFile(planPath)
+			s.Must(err)
+			s.Must(os.WriteFile(planPath, append(plan, []byte("\nManual verification M01 requires a person to observe the result in the launched preview.\n")...), 0600))
 		}
 		s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
 		checks := `{"version":1,"launch":{"program":"node","args":["manual-preview.cjs","${PORT}"],"url":"http://127.0.0.1:${PORT}"},"checks":[{"id":"M01","title":"Preview","steps":["Open the preview"],"expected":"Shows the committed result"}]}`
@@ -176,7 +188,9 @@ git rev-parse HEAD
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
 	s.Must(err)
-	if p.RealPR {
+	if p.Gitea.Kind != "" {
+		p.pushGitea("HEAD:refs/heads/" + p.BaseBranch)
+	} else if p.RealPR {
 		p.git(p.Repo, "push", "--quiet", "origin", p.BaseBranch)
 	} else {
 		p.git(p.Repo, "push", "--quiet", state.GitURL, "main")

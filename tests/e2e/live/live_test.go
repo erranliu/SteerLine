@@ -22,6 +22,10 @@ func TestManualVerificationLocalCodex(t *testing.T) {
 	testenv.ManualVerificationLive(testenv.NewScenario(t, testenv.ManualVerificationLiveID))
 }
 
+func TestManualVerificationGiteaLocalCodex(t *testing.T) {
+	testenv.ManualVerificationLive(testenv.NewScenario(t, testenv.ManualVerificationGiteaLiveID))
+}
+
 func TestRefactoringLocalCodex(t *testing.T) {
 	testenv.RefactoringLive(testenv.NewScenario(t, "refactoring.local-codex"))
 }

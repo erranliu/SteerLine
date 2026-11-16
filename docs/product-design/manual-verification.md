@@ -35,7 +35,9 @@
 
 格式限制与逐字段规则见[人工核验 JSON 契约](../../SteerlineFlow/spec/manual-verification.spec.md#1-plan-伴随文件)。
 
-SteerLine 在受理候选前核对 Runner 与 PR 平台的草稿发布能力，把草稿意图随原发布输入冻结。Runner 执行发布前步骤后提交、推送并直接创建草稿 PR。平台确认原 PR 身份、分支、完整 Head SHA 和草稿状态后，SteerLine 才建立待办。待办按候选 PR 管理，发布与合并均可先于人工核验完成。当前本机启动链路支持已绑定的 GitHub PR。
+SteerLine 在受理候选前核对 Runner 与 PR 平台的草稿发布能力，把草稿意图随原发布输入冻结。Runner 执行发布前步骤后提交、推送并直接创建草稿 PR。平台确认原 PR 身份、分支、完整 Head SHA 和草稿状态后，SteerLine 才建立待办。待办按候选 PR 管理，发布与合并均可先于人工核验完成。本机启动支持已绑定的 GitHub 和 Gitea PR。
+
+Gitea 在 PR 创建时通过标题前缀标记草稿。默认使用 `WIP:`。实例自定义 `WORK_IN_PROGRESS_PREFIXES` 时，在项目配置的 `pr.draft_title_prefix` 填写该实例认可的前缀。Runner 核对 Gitea 返回的 `draft=true` 及候选远端分支的完整 Head SHA 后初次绑定 PR。
 
 ## 选择核验来源
 
