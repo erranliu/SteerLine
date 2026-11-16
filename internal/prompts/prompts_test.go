@@ -135,7 +135,7 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		{"maintenance-cautious", "36fb56b30ba9e12306c3066b0f9315752bb5e880dbaaa7261cf543612657c7f4", func() ([]byte, error) { return MaintenanceStrategy("cautious") }},
 		{"maintenance-autonomous", "f0c2470a07e019911ae36c30046e1ad320a5ea60b9a5db46a7d67b404ef57776", func() ([]byte, error) { return MaintenanceStrategy("autonomous") }},
 		{"maintenance-aggressive", "e9ed219ceaf5abdab0b467664db2d247ddf3f57a8da853d918246c993a08130b", func() ([]byte, error) { return MaintenanceStrategy("aggressive") }},
-		{"main-agent", "1fa5687dcca43dc78f5a91b0114dd3892c5918d626d0c86105e540d5ae5f2128", MainAgentRules},
+		{"main-agent", "aa6419dea3bc11e04708face11a55b941c07262842533f8b29ff3860acd063dd", MainAgentRules},
 		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
 		{"roadmap-documents", "62f392fc7d180d272949910dc7a7b32514bd43040c8f5655d354db16bdaff7ea", RoadmapDocumentRules},
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
