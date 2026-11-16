@@ -42,6 +42,7 @@ type refactoringPort struct {
 func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, reserver readyExecutionReserver) *refactoringPort {
 	p := &refactoringPort{config: c, store: store, materials: materials}
 	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Qualify: p.qualifyFirst, Verify: p.verify, VerifyConflictBase: p.verifyConflictBase, ReviewDiff: p.reviewDiff, ReadCost: p.cost, Queue: c.runtimeGenerations, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
+	p.service.StartContext = c.withProfiles
 	p.service.Reserve = func(ctx context.Context, commit string, save func() error) error {
 		return reserver.reserveReadyExecution(ctx, commit, func() error {
 			return c.reserveCurrentProfiles(ctx, save)

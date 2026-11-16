@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
-import type { ProjectReadiness, Receipt } from "../../shared/api/types";
+import type { ProjectReadiness } from "../../shared/api/types";
 import { Button } from "../../shared/ui/button";
 import { environmentLink } from "../environment-checks/use-readiness";
 
@@ -41,6 +41,28 @@ const empty = {
   rounds: "1",
 };
 
+export type StartInput = {
+  direction: string;
+  direction_revision: string;
+  requirements: string;
+  strategy: string;
+  profile: string;
+  profile_version: string;
+  environment_key: string;
+  environment_revision: number;
+  base_commit: string;
+  budget: { dollars?: string; minutes?: string; rounds?: number };
+};
+
+function validBudget(value: string) {
+  return (
+    !value ||
+    (value.length <= 32 &&
+      /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value) &&
+      Number(value) > 0)
+  );
+}
+
 function version(
   data?: Readiness,
   environment?: Environment,
@@ -60,27 +82,49 @@ export function NewMaintenance({
   open,
   close,
   full,
-  receipt,
+  initial,
+  submissionPending,
   onSubmit,
-  onAccepted,
 }: {
   open: boolean;
   close: () => void;
   full: boolean;
-  receipt?: Receipt;
-  onSubmit: (payload: Record<string, unknown>) => Promise<Receipt | undefined>;
-  onAccepted: (id: string) => void;
+  initial?: StartInput;
+  submissionPending: boolean;
+  onSubmit: (
+    payload: StartInput,
+    directionName: string,
+    environmentName: string,
+  ) => void;
 }) {
   const { api, identity, online } = useWorkspace();
   const dialog = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
-  const seeded = useRef(false);
-  const sent = useRef(false);
-  const [draft, setDraft] = useState(empty);
-  const [confirmed, setConfirmed] = useState("");
-  const [pending, setPending] = useState(false);
-  const [localReceipt, setLocalReceipt] = useState<Receipt>();
-  const [error, setError] = useState("");
+  const seeded = useRef(!!initial);
+  const [draft, setDraft] = useState(() =>
+    initial
+      ? {
+          direction: initial.direction,
+          requirements: initial.requirements,
+          strategy: initial.strategy,
+          environment: initial.environment_key,
+          profile: initial.profile,
+          dollars: initial.budget.dollars ?? "",
+          minutes: initial.budget.minutes ?? "",
+          rounds: initial.budget.rounds ? String(initial.budget.rounds) : "",
+        }
+      : empty,
+  );
+  const [confirmed, setConfirmed] = useState(() =>
+    initial
+      ? JSON.stringify([
+          initial.environment_key,
+          initial.environment_revision,
+          initial.profile_version,
+          initial.base_commit,
+        ])
+      : "",
+  );
   const scope = [
     api.home,
     identity.project_id,
@@ -150,32 +194,6 @@ export function NewMaintenance({
     }
   }, [open, ready, available]);
 
-  const outcome =
-    receipt?.status === "applied" || receipt?.status === "rejected"
-      ? receipt
-      : localReceipt;
-  useEffect(() => {
-    if (!pending || !outcome) return;
-    const applied = outcome.refactoring as { id?: string } | undefined;
-    if (outcome.status === "applied" && applied?.id) {
-      sent.current = false;
-      seeded.current = false;
-      setPending(false);
-      setLocalReceipt(undefined);
-      setDraft(empty);
-      setConfirmed("");
-      setError("");
-      onAccepted(applied.id);
-    } else if (outcome.status === "rejected") {
-      sent.current = false;
-      setPending(false);
-      setLocalReceipt(undefined);
-      setError(outcome.diagnostic || "启动被拒绝");
-      void readiness.refetch();
-      void catalogue.refetch();
-    }
-  }, [pending, outcome, onAccepted, readiness, catalogue]);
-
   const chooseEnvironment = (key: string) => {
     const item = options.find((option) => option.environment_key === key);
     const selected =
@@ -188,12 +206,21 @@ export function NewMaintenance({
       profile: selected?.id ?? "",
     }));
     setConfirmed(version(ready, item, selected));
-    setError("");
   };
   const change = (field: keyof typeof empty, value: string) =>
     setDraft((old) => ({ ...old, [field]: value }));
   const needsConfirmation =
     selectedVersion !== "" && confirmed !== selectedVersion;
+  const rounds = Number(draft.rounds);
+  const budgetValid =
+    validBudget(draft.dollars) &&
+    validBudget(draft.minutes) &&
+    Number.isInteger(rounds) &&
+    rounds >= 0 &&
+    rounds <= 10000 &&
+    !!(draft.dollars || draft.minutes || rounds);
+  const requirementsValid =
+    new TextEncoder().encode(draft.requirements).length <= 32 * 1024;
   const canStart =
     available &&
     ready?.project.status === "ready" &&
@@ -201,8 +228,9 @@ export function NewMaintenance({
     !needsConfirmation &&
     !!direction &&
     catalogue.isSuccess &&
-    !pending &&
-    !!(draft.dollars || draft.minutes || draft.rounds);
+    !submissionPending &&
+    budgetValid &&
+    requirementsValid;
   const other = ready?.environments.find(
     (item) => item.environment_key === draft.environment,
   );
@@ -240,47 +268,33 @@ export function NewMaintenance({
           </Button>
         </header>
         <form
-          onSubmit={async (e) => {
+          onSubmit={(e) => {
             e.preventDefault();
-            if (
-              !canStart ||
-              !direction ||
-              !profile ||
-              !environment ||
-              !ready ||
-              sent.current
-            )
+            if (!canStart || !direction || !profile || !environment || !ready)
               return;
-            sent.current = true;
-            setError("");
-            setPending(true);
-            try {
-              setLocalReceipt(
-                await onSubmit({
-                  direction: direction.id,
-                  direction_revision: direction.revision,
-                  requirements: draft.requirements,
-                  strategy: draft.strategy,
-                  profile: profile.id,
-                  profile_version: profile.version,
-                  environment_key: environment.environment_key,
-                  environment_revision: environment.current_revision,
-                  base_commit: ready.project.commit,
-                  budget: {
-                    dollars: draft.dollars,
-                    minutes: draft.minutes,
-                    rounds: draft.rounds ? Number(draft.rounds) : 0,
-                  },
-                }),
-              );
-            } catch (err) {
-              sent.current = false;
-              setPending(false);
-              setError(String(err));
-            }
+            onSubmit(
+              {
+                direction: direction.id,
+                direction_revision: direction.revision,
+                requirements: draft.requirements,
+                strategy: draft.strategy,
+                profile: profile.id,
+                profile_version: profile.version,
+                environment_key: environment.environment_key,
+                environment_revision: environment.current_revision,
+                base_commit: ready.project.commit,
+                budget: {
+                  dollars: draft.dollars,
+                  minutes: draft.minutes,
+                  rounds,
+                },
+              },
+              direction.name,
+              environment.name,
+            );
           }}
         >
-          <fieldset disabled={pending}>
+          <fieldset>
             {ready?.steer_agent?.model && (
               <p>
                 SteerAgent 只读决策 {ready.steer_agent.model} /{" "}
@@ -334,7 +348,6 @@ export function NewMaintenance({
                         ),
                       ),
                     );
-                    setError("");
                   }}
                 >
                   <option value="">选择执行方案</option>
@@ -516,18 +529,19 @@ export function NewMaintenance({
               </div>
             )}
             {full && <p role="status">推进名额已满，提交后进入队列。</p>}
-            {error && (
-              <p role="alert" className="notice amber">
-                {error}
+            {!budgetValid && (
+              <p role="status">
+                请填写至少一项有效的正数预算，轮次最多 10000。
               </p>
+            )}
+            {!requirementsValid && <p role="status">补充要求最多 32 KiB。</p>}
+            {submissionPending && (
+              <p role="status">上一条提交待确认，确认后可以继续提交。</p>
             )}
             <Button disabled={!canStart} variant="default" type="submit">
               开始维护
             </Button>
           </fieldset>
-          {pending && (
-            <p role="status">{outcome?.diagnostic || "正在核实原启动请求"}</p>
-          )}
         </form>
       </section>
     </dialog>

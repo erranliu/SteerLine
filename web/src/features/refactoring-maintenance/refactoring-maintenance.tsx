@@ -2,20 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
+import { requestByID } from "../../shared/api/journal";
+import type { StoredRequest } from "../../shared/api/types";
 import { Button } from "../../shared/ui/button";
 import { SafeLink } from "../../shared/ui/status";
 import { useAbandonedActivities } from "../activities/abandonment-marks";
 import { useActivityFeedback } from "../activities/feedback/feedback";
-import { NewMaintenance } from "./new-maintenance";
+import { NewMaintenance, type StartInput } from "./new-maintenance";
 import "./refactoring-maintenance.css";
 
-type Input = {
-  direction: string;
-  requirements: string;
-  profile: string;
-  strategy: string;
-  budget: { dollars?: string; minutes?: string; rounds?: number };
-};
+type Input = Pick<
+  StartInput,
+  "direction" | "requirements" | "profile" | "strategy" | "budget"
+> &
+  Partial<StartInput>;
 export type MaintenanceRecord = {
   id: string;
   revision: number;
@@ -27,6 +27,7 @@ export type MaintenanceRecord = {
   active: boolean;
   source_commit: string;
   source_branch?: string;
+  startup_failed?: boolean;
   environment_name?: string;
   profile_name?: string;
   wait_reason?: string;
@@ -102,6 +103,9 @@ type Index = {
 };
 
 const phases: Record<string, string> = {
+  start_pending: "提交待确认",
+  start_accepted: "已受理，正在读取行动状态",
+  checking_start: "正在核验启动条件",
   queued: "排队中",
   submission_unknown: "提交结果待核实",
   first: "首轮调查中",
@@ -120,6 +124,15 @@ const phases: Record<string, string> = {
 
 const narrowScreen = "(max-width: 760px)";
 
+type StartRequest = StoredRequest & {
+  directionName?: string;
+  environmentName?: string;
+  unsent?: boolean;
+};
+
+const rejectedStart = (row: StartRequest) =>
+  row.unsent || row.response?.status === "rejected";
+
 export function RefactoringMaintenance() {
   const { api, identity, online, submit, requests, pendingRequests } =
     useWorkspace();
@@ -127,9 +140,12 @@ export function RefactoringMaintenance() {
   const [params, setParams] = useSearchParams();
   const selected = params.get("action") ?? "";
   const [opened, setOpened] = useState(false);
-  const [startReceipt, setStartReceipt] = useState("");
-  const [startFrom, setStartFrom] = useState("");
-  const [accepted, setAccepted] = useState("");
+  const [form, setForm] = useState<{ key: number; input?: StartInput }>({
+    key: 0,
+  });
+  const [starts, setStarts] = useState<Record<string, StartRequest>>({});
+  const confirmedActions = useRef(new Set<string>());
+  const sendingStart = useRef(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [controlRequests, setControlRequests] = useState<
     Record<string, string>
@@ -174,17 +190,82 @@ export function RefactoringMaintenance() {
   });
   const first = index.data?.pages[0];
   const ownerOngoing = first?.ongoing ?? [];
-  const ownerHistory = (index.data?.pages ?? []).flatMap((page) => page.history);
+  const ownerHistory = (index.data?.pages ?? []).flatMap(
+    (page) => page.history,
+  );
+  const known = new Set([...ownerOngoing, ...ownerHistory].map(({ id }) => id));
+  useEffect(() => {
+    // Keep list projections only until the action is listed or known to have ended.
+    for (const page of index.data?.pages ?? []) {
+      for (const { id } of [...page.ongoing, ...page.history])
+        confirmedActions.current.add(id);
+    }
+    if (detail.data && !detail.data.active)
+      confirmedActions.current.add(detail.data.id);
+  }, [index.data, detail.data]);
+  const startRequests = new Map(Object.entries(starts));
+  for (const row of requests ?? []) {
+    const envelope = row.envelope;
+    if (
+      envelope.action !== "refactoring_start" ||
+      envelope.project_id !== identity.project_id ||
+      envelope.instance_id !== identity.instance_id
+    )
+      continue;
+    const previous = startRequests.get(envelope.request_id);
+    if (
+      previous ||
+      envelope.request_id === selected ||
+      row.response?.status !== "applied"
+    ) {
+      const response = previous?.response;
+      startRequests.set(envelope.request_id, {
+        ...previous,
+        ...row,
+        unsent: false,
+        response:
+          response?.status === "rejected" || response?.status === "applied"
+            ? response
+            : (row.response ?? response),
+      });
+    }
+  }
+  const submitting = [...startRequests.values()].some(
+    (row) => !rejectedStart(row) && row.response?.status !== "applied",
+  );
+  const startSummary = ([id, row]: [string, StartRequest]): Summary => ({
+    id,
+    direction_name: row.directionName ?? String(row.envelope.payload.direction),
+    environment_name: row.environmentName,
+    phase:
+      row.response?.status === "applied" ? "start_accepted" : "start_pending",
+    round: 0,
+    created_at: row.created_at,
+    enqueued_at: row.created_at,
+    elapsed_seconds: 0,
+  });
+  const projectedStarts = [...startRequests.entries()].flatMap(([id, row]) => {
+    if (known.has(id) || confirmedActions.current.has(id) || rejectedStart(row))
+      return [];
+    const saved = detail.data;
+    if (saved?.id === id) return saved.active ? [saved] : [];
+    return [startSummary([id, row])];
+  });
+  const selectedStart = startRequests.get(selected);
   const archived = useAbandonedActivities(
     "refactoring",
     [...ownerOngoing, ...ownerHistory].map(({ id }) => id),
   );
-  const ongoing = ownerOngoing.filter(({ id }) => !archived.isAbandoned(id));
+  const ongoing = [...ownerOngoing, ...projectedStarts].filter(
+    ({ id }) => !archived.isAbandoned(id),
+  );
   const archivedOngoing = ownerOngoing.filter(({ id }) =>
     archived.isAbandoned(id),
   );
   const archivedSlots = archivedOngoing.filter(({ slot }) => slot);
-  const active = new Set(ownerOngoing.map(({ id }) => id));
+  const active = new Set(
+    [...ownerOngoing, ...projectedStarts].map(({ id }) => id),
+  );
   const waiting = ongoing
     .filter((r) => r.phase === "waiting_input")
     .sort(
@@ -244,13 +325,6 @@ export function RefactoringMaintenance() {
       list.current.scrollTop = listPosition.current;
   }, [selected]);
 
-  const journalReceipt = requests?.find(
-    (row) =>
-      row.envelope.request_id === startReceipt &&
-      row.envelope.instance_id === identity.instance_id &&
-      row.envelope.project_id === identity.project_id,
-  )?.response;
-
   const openAction = (id: string, followCurrent = false) => {
     listPosition.current = list.current?.scrollTop ?? listPosition.current;
     initialSelection.current = true;
@@ -264,28 +338,64 @@ export function RefactoringMaintenance() {
     setOpened(false);
     requestAnimationFrame(() => newButton.current?.focus());
   };
-  const start = async (payload: Record<string, unknown>) => {
+  const start = async (
+    payload: StartInput,
+    directionName: string,
+    environmentName: string,
+  ) => {
+    if (sendingStart.current || submitting) return;
     const envelope = api.envelope(
       "refactoring_start",
       identity.repository_identity,
       1,
       payload,
     );
-    setStartReceipt(envelope.request_id);
-    setStartFrom(selected);
+    sendingStart.current = true;
+    const id = envelope.request_id;
+    const initial: StartRequest = {
+      envelope,
+      created_at: new Date().toISOString(),
+      directionName,
+      environmentName,
+    };
+    setStarts((items) => ({ ...items, [id]: initial }));
+    setOpened(false);
+    setForm(({ key }) => ({ key: key + 1 }));
+    openAction(id, true);
+    requestAnimationFrame(() => detailHeading.current?.focus());
     feedback.notify("重构与维护");
-    return submit(envelope);
-  };
-  const onAccepted = (id: string) => {
-    setStartReceipt("");
-    void index.refetch();
-    if (opened && selected === startFrom) {
-      setOpened(false);
-      openAction(id, true);
-    } else {
-      setOpened(false);
-      setAccepted(id);
+    let response;
+    let error: string | undefined;
+    try {
+      response = await submit(envelope);
+    } catch (err) {
+      error = String(err);
     }
+    if (response) {
+      setStarts((items) => ({ ...items, [id]: { ...initial, response } }));
+    } else {
+      try {
+        const saved = await requestByID(id);
+        setStarts((items) => ({
+          ...items,
+          [id]: saved
+            ? { ...initial, ...saved }
+            : {
+                ...initial,
+                unsent: true,
+                error: error || "启动请求未发送，请重新发起",
+              },
+        }));
+      } catch {
+        // Leave the original request pending if the journal cannot be read.
+      }
+    }
+    sendingStart.current = false;
+    void index.refetch();
+  };
+  const retryStart = (input: StartInput) => {
+    setForm(({ key }) => ({ key: key + 1, input }));
+    setOpened(true);
   };
   const current = detail.data;
   const questionKey = current?.question
@@ -347,15 +457,20 @@ export function RefactoringMaintenance() {
               data-action={r.id}
               aria-current={selected === r.id ? "true" : undefined}
               onClick={() =>
-                openAction(r.id, active.has(r.id) && !archived.isAbandoned(r.id))
+                openAction(
+                  r.id,
+                  active.has(r.id) && !archived.isAbandoned(r.id),
+                )
               }
             >
               <strong>{r.direction_name}</strong>
               <span>
-                {phases[r.phase] ?? r.phase} · 第 {r.round} 轮
+                {phases[r.phase] ?? r.phase}
+                {r.round > 0 && ` · 第 ${r.round} 轮`}
               </span>
               <span>
-                {r.environment_name} · {r.id.slice(0, 8)}
+                {r.environment_name && r.environment_name + " · "}
+                {r.id.slice(0, 8)}
               </span>
               <span>{r.wait_reason || r.summary}</span>
               <span>
@@ -389,7 +504,9 @@ export function RefactoringMaintenance() {
             <p key={action.id}>
               {action.direction_name}仍占用推进名额 ·{" "}
               <Link
-                to={{ search: "?" + new URLSearchParams({ action: action.id }) }}
+                to={{
+                  search: "?" + new URLSearchParams({ action: action.id }),
+                }}
               >
                 核实原行动
               </Link>
@@ -399,30 +516,18 @@ export function RefactoringMaintenance() {
         <Button
           variant="default"
           ref={newButton}
-          onClick={() => {
-            setAccepted("");
-            setOpened(true);
-          }}
+          onClick={() => setOpened(true)}
         >
           新建维护行动
         </Button>
       </header>
-      {accepted && (
-        <p className="notice" role="status">
-          维护行动已受理{" "}
-          <Link
-            to={{ search: "?" + new URLSearchParams({ action: accepted }) }}
-          >
-            查看行动
-          </Link>
-        </p>
-      )}
       <NewMaintenance
+        key={form.key}
         open={opened}
         close={closeSheet}
         onSubmit={start}
-        onAccepted={onAccepted}
-        receipt={journalReceipt}
+        initial={form.input}
+        submissionPending={submitting}
         full={!!first && first.slots_used >= first.slot_limit}
       />
       <div className="refactoring-layout" data-selected={!!selected}>
@@ -437,10 +542,14 @@ export function RefactoringMaintenance() {
             </p>
           )}
           {online && index.isPending && <p role="status">正在读取行动列表</p>}
-          {first && (
+          {(first || projectedStarts.length > 0) && (
             <>
               <h2>进行中 {progressing.length}</h2>
               {renderRows(progressing)}
+            </>
+          )}
+          {first && (
+            <>
               <h2>待答复 {waiting.length}</h2>
               {renderRows(waiting)}
               <h2>维护历史</h2>
@@ -479,6 +588,7 @@ export function RefactoringMaintenance() {
             </Button>
           )}
           {selected &&
+            (!selectedStart || current) &&
             (!online || detail.isError || !/^[a-f0-9]{32}$/.test(selected)) && (
               <p className="notice amber" role="status">
                 {current
@@ -486,10 +596,43 @@ export function RefactoringMaintenance() {
                   : "无法读取此行动，请返回行动列表"}
               </p>
             )}
-          {selected && online && !current && detail.isFetching && (
-            <p role="status">正在读取维护详情</p>
-          )}
+          {selected &&
+            online &&
+            !selectedStart &&
+            !current &&
+            detail.isFetching && <p role="status">正在读取维护详情</p>}
           {!selected && <p className="muted">选择一条行动查看详情</p>}
+          {!current && selectedStart && (
+            <section
+              className="settings-panel refactoring-panel"
+              aria-label="维护详情"
+            >
+              <h2>
+                {selectedStart.directionName ??
+                  String(selectedStart.envelope.payload.direction)}
+              </h2>
+              {rejectedStart(selectedStart) ? (
+                <>
+                  <p role="alert">
+                    {selectedStart.response?.diagnostic ||
+                      selectedStart.error ||
+                      "启动请求被拒绝"}
+                  </p>
+                  <Button
+                    onClick={() =>
+                      retryStart(selectedStart.envelope.payload as StartInput)
+                    }
+                  >
+                    带入新建
+                  </Button>
+                </>
+              ) : (
+                <p role="status">
+                  {phases[startSummary([selected, selectedStart]).phase]}
+                </p>
+              )}
+            </section>
+          )}
           {current && (
             <MaintenanceDetail
               current={current}
@@ -500,6 +643,7 @@ export function RefactoringMaintenance() {
               setAnswer={(value) =>
                 setAnswers((items) => ({ ...items, [questionKey]: value }))
               }
+              retryStart={() => retryStart(current.input as StartInput)}
             />
           )}
         </div>
@@ -521,6 +665,7 @@ function MaintenanceDetail({
   answer,
   error,
   setAnswer,
+  retryStart,
 }: {
   current: MaintenanceRecord;
   disabled: boolean;
@@ -533,7 +678,9 @@ function MaintenanceDetail({
   answer: string;
   error?: string;
   setAnswer: (value: string) => void;
+  retryStart: () => void;
 }) {
+  const { identity } = useWorkspace();
   const [choice, setChoice] = useState({ question: "", option: "" });
   const option = choice.question === current.question?.id ? choice.option : "";
   return (
@@ -542,16 +689,27 @@ function MaintenanceDetail({
       <p>{phases[current.phase] ?? current.phase}</p>
       {current.wait_reason && <p role="status">{current.wait_reason}</p>}
       <p>
-        {current.environment_name} · 第 {current.round} 轮 · 预算已用{" "}
-        {duration(current.elapsed_seconds)}
+        {current.environment_name && current.environment_name + " · "}
+        {current.round > 0 && `第 ${current.round} 轮 · `}
+        预算已用 {duration(current.elapsed_seconds)}
       </p>
-      <p>
-        起始提交 {current.source_branch} <code>{current.source_commit}</code>
-      </p>
+      {(current.source_commit || current.input.base_commit) && (
+        <p>
+          {current.source_commit ? "起始提交" : "申请的起始提交"}{" "}
+          {current.source_branch}{" "}
+          <code>{current.source_commit || current.input.base_commit}</code>
+        </p>
+      )}
       {current.direction_prompt && (
         <details>
           <summary>方向提示词</summary>
           <pre>{current.direction_prompt}</pre>
+        </details>
+      )}
+      {current.input.requirements && (
+        <details>
+          <summary>补充要求</summary>
+          <pre>{current.input.requirements}</pre>
         </details>
       )}
       <p>
@@ -613,6 +771,22 @@ function MaintenanceDetail({
         <p className="notice amber" role="alert">
           {current.diagnostic}
         </p>
+      )}
+      {current.startup_failed && (
+        <div className="refactoring-actions">
+          <Link
+            to={{
+              pathname: `/projects/${identity.project_id}/dag`,
+              search: "?maintenance=preparation",
+            }}
+          >
+            打开项目维护
+          </Link>
+          <Link to={`/projects/${identity.project_id}/environment`}>
+            打开运行环境
+          </Link>
+          <Button onClick={retryStart}>带入新建</Button>
+        </div>
       )}
       <div className="refactoring-actions">
         {current.can_finish && (

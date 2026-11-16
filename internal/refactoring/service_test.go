@@ -227,6 +227,7 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "first" })
 	return s, f, r
 }
 func tickUntil(t *testing.T, s *Service, id string, check func(m.Record) bool) m.Record {

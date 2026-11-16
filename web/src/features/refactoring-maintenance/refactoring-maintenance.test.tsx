@@ -236,9 +236,9 @@ it("requires explicit confirmation of a changed qualification and blocks stale c
   expect(submit).not.toHaveBeenCalled();
 });
 
-it("keeps draft and diagnosis when a previously ready environment is revoked", async () => {
-  const readiness = vi.fn(async () => ready);
-  const { submit } = setup([], readiness);
+it("keeps the startup failure on the action and can copy its input into a new draft", async () => {
+  const records: MaintenanceRecord[] = [];
+  const { submit } = setup(records);
   const sheet = openSheet();
   const start = sheet.getByRole("button", { name: "开始维护" });
   await waitFor(() => expect(start).toBeEnabled());
@@ -246,59 +246,112 @@ it("keeps draft and diagnosis when a previously ready environment is revoked", a
     target: { value: "检查共享夹具" },
   });
   submit.mockImplementationOnce(async (envelope) => {
-    readiness.mockResolvedValue({
-      ...ready,
-      environments: [
-        {
-          ...ready.environments[0],
-          status: "not_ready",
-          reason: "环境检测资格已撤销",
-        },
-      ],
+    const actionID = envelope.request_id;
+    records.push({
+      ...record,
+      id: actionID,
+      phase: "blocked",
+      startup_failed: true,
+      source_commit: "",
+      input: envelope.payload,
+      active: false,
+      can_stop: false,
+      can_finish: false,
+      question: undefined,
+      diagnostic: "环境已变化，请重新检测",
     });
     return {
       ...envelope,
-      status: "rejected",
-      diagnostic: "环境已变化，请重新检测",
+      status: "applied",
+      refactoring: { id: actionID, revision: 1 },
       sampled_at: "now",
     };
   });
   fireEvent.click(start);
-  expect(await sheet.findByRole("alert")).toHaveTextContent(
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent(
     "环境已变化，请重新检测",
   );
-  expect(start).toBeDisabled();
-  expect(sheet.getByLabelText("补充要求")).toHaveValue("检查共享夹具");
+  fireEvent.click(screen.getByRole("button", { name: "带入新建" }));
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(screen.getByLabelText("补充要求")).toHaveValue("检查共享夹具");
 });
 
-it("offers the action link when a receipt arrives after the sheet closes", async () => {
-  const { submit } = setup();
+it("closes immediately and keeps the current view when the start receipt arrives late", async () => {
+  const records = [record];
+  const { submit, client } = setup(records);
   let release: () => void = () => undefined;
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
   submit.mockImplementationOnce(async (envelope) => {
     await held;
+    records.push({
+      ...record,
+      id: envelope.request_id,
+      phase: "checking_start",
+      direction_name: custom.name,
+      slot: false,
+      round: 0,
+      elapsed_seconds: 0,
+      question: undefined,
+    });
     return {
       ...envelope,
       status: "applied",
-      refactoring: { id, revision: 1 },
+      refactoring: { id: envelope.request_id, revision: 1 },
       sampled_at: "now",
     };
   });
   const sheet = openSheet();
   const start = sheet.getByRole("button", { name: "开始维护" });
   await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.change(sheet.getByLabelText("重构方向"), {
+    target: { value: custom.id },
+  });
   fireEvent.click(start);
-  fireEvent.click(sheet.getByRole("button", { name: "关闭" }));
-  await act(async () => release());
-  expect(await screen.findByRole("link", { name: "查看行动" })).toHaveAttribute(
-    "href",
-    expect.stringContaining(id),
-  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "进行中 1" })).toBeInTheDocument();
   expect(
-    screen.queryByRole("region", { name: "维护详情" }),
-  ).not.toBeInTheDocument();
+    within(screen.getByRole("region", { name: "维护详情" })).getByText(
+      "提交待确认",
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /简化设计.*待答复/ }));
+  await screen.findByText(record.question!.prompt);
+  openSheet();
+  await act(async () => release());
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+  expect(await screen.findByText(record.question!.prompt)).toBeInTheDocument();
+  const action = await screen.findByRole("button", {
+    name: /收拢共享夹具.*正在核验启动条件/,
+  });
+  fireEvent.click(action);
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole("region", { name: "维护详情" })).getByText(
+        "正在核验启动条件",
+      ),
+    ).toBeInTheDocument(),
+  );
+  // The list can eventually drop a completed action as server history advances.
+  fireEvent.click(screen.getByRole("button", { name: /简化设计.*待答复/ }));
+  records.pop();
+  await act(async () => {
+    await client.refetchQueries({
+      queryKey: [
+        "home",
+        identity.project_id,
+        identity.instance_id,
+        "refactoring",
+      ],
+      exact: true,
+    });
+  });
+  expect(
+    await screen.findByRole("heading", { name: "进行中 0" }),
+  ).toBeInTheDocument();
 });
 
 it("shows coverage exclusions and answers the original question without another chat", async () => {

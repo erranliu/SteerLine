@@ -99,10 +99,27 @@ func RefactoringMaintenance(s *Scenario) {
 	body, e := json.Marshal(stale)
 	s.Must(e)
 	staleRequest := httpcontract.CommandEnvelope{RequestID: ref.ID(), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "refactoring_start", TargetID: identity.RepositoryIdentity, ExpectedVersion: 1, Payload: body}
-	var rejected httpcontract.CommandResponse
-	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &rejected))
-	if rejected.Status != "rejected" || rejected.Code != "refactoring_direction_changed" || rejected.Diagnostic != "重构提示词已更新，请刷新并查看最新正文后重新启动" {
-		s.t.Fatal("stale preview did not reject before launch", rejected)
+	waitStartup := func(id string) string {
+		s.t.Helper()
+		var action struct {
+			Phase, Diagnostic string
+		}
+		s.Wait("maintenance startup "+id, func() (bool, error) {
+			err := client.Get(s.Context, prefix+"/refactoring/"+id, &action)
+			return err == nil && action.Phase != ref.PhaseCheckingStart, err
+		})
+		if action.Phase == "blocked" {
+			if action.Diagnostic == "" {
+				s.t.Fatal("blocked startup has no diagnostic", id)
+			}
+			return action.Diagnostic
+		}
+		return ""
+	}
+	var accepted httpcontract.CommandResponse
+	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &accepted))
+	if accepted.Status != "applied" || waitStartup(staleRequest.RequestID) != "重构提示词已更新，请刷新并查看最新正文后重新启动" {
+		s.t.Fatal("stale preview did not block background startup", accepted)
 	}
 	readiness := func(want string) {
 		s.t.Helper()
@@ -146,9 +163,9 @@ func RefactoringMaintenance(s *Scenario) {
 	staleRequest.RequestID = ref.ID()
 	staleRequest.Payload, e = json.Marshal(stale)
 	s.Must(e)
-	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &rejected))
-	if rejected.Status != "rejected" || rejected.Diagnostic == "" {
-		s.t.Fatal("the start command accepted a revoked qualification", rejected)
+	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &accepted))
+	if accepted.Status != "applied" || waitStartup(staleRequest.RequestID) == "" {
+		s.t.Fatal("revoked qualification did not block background startup", accepted)
 	}
 	readiness("not_ready")
 	var empty struct{ Ongoing []json.RawMessage }
@@ -159,7 +176,7 @@ func RefactoringMaintenance(s *Scenario) {
 	s.Must(json.Unmarshal(before, &beforeRunner))
 	s.Must(json.Unmarshal(after, &afterRunner))
 	if len(empty.Ongoing) != 0 || !maps.Equal(beforeRunner.SubmitCalls, afterRunner.SubmitCalls) {
-		s.t.Fatal("a revoked qualification created an action or submitted a Runner request")
+		s.t.Fatal("a revoked qualification left an ongoing action or submitted a Runner request")
 	}
 	p.ValidateDeclaredControlledEnvironment(profile)
 	readiness("ready")
@@ -340,14 +357,16 @@ func RefactoringMaintenance(s *Scenario) {
 				return false, nil
 			}
 			request, response := submit("refactoring_start", identity.RepositoryIdentity, 1, action)
-			if response.Status == "rejected" && response.Diagnostic == "baseline observation changed or pending before reservation; review again" {
-				// The periodic observation may start during preflight. Refresh and
-				// confirm again only after this attempt was explicitly rejected.
-				s.t.Log(response.Diagnostic)
-				return false, nil
-			}
 			if response.Status != "applied" {
 				s.t.Fatalf("refactoring_start: %s", response.Diagnostic)
+			}
+			if diagnosis := waitStartup(request.RequestID); diagnosis != "" {
+				if diagnosis == "baseline observation changed or pending before reservation; review again" {
+					// The periodic observation may start during preflight.
+					s.t.Log(diagnosis)
+					return false, nil
+				}
+				s.t.Fatal(diagnosis)
 			}
 			parallel = append(parallel, request.RequestID)
 			return true, nil
