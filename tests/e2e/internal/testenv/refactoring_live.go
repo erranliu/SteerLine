@@ -1,3 +1,5 @@
+//go:build e2e
+
 package testenv
 
 import (
@@ -23,12 +25,19 @@ import (
 
 func RefactoringLive(s *Scenario) {
 	p := s.NewLiveProject("maintenance-live", "local-codex")
+	remote := loadOrcaTarget(s, p)
+	profile := p.Driver.Profile
 	configPath := filepath.Join(p.Home, "execution.json")
 	configBytes, e := os.ReadFile(configPath)
 	s.Must(e)
 	var config map[string]any
 	s.Must(json.Unmarshal(configBytes, &config))
 	config["steer_agent"] = map[string]string{"model": "gpt-6-luna", "reasoning_effort": "medium"}
+	if remote != nil {
+		profile = s.Run.Remote.Profile.ID
+		config["execution_profiles"] = append(config["execution_profiles"].([]any), remote.Profile)
+		p.Driver.Profile = profile
+	}
 	s.Must(controlled.Write(configPath, config))
 	// Copy only login into this owned home; do not run sessions in the user's home.
 	auth, e := os.ReadFile(filepath.Join(s.Run.AuthHome, "auth.json"))
@@ -61,6 +70,9 @@ assert.equal(reads, 2);
 console.log('checks passed');
 `,
 	}
+	if remote != nil {
+		files["AGENTS.md"] += "For each authorized implementation write, run node check.cjs and git diff --check, stage only that round's permitted file, commit it on the managed branch, and verify that git status --porcelain is empty before reporting done. In the summary include the changed file and concise before-and-after code from the committed diff, plus the actual check results. Use exactly the output contract supplied by the runner for each action. Before sending the final JSON, compare action_id and operation_id character for character with the top-level request IDs, including the last character.\n"
+	}
 	for path, body := range files {
 		s.Must(os.WriteFile(filepath.Join(p.Repo, path), []byte(body), 0600))
 	}
@@ -70,9 +82,16 @@ console.log('checks passed');
 	price := billing.Policy{Source: "E2E declared reference rates, not provider prices", Currency: "USD", Basis: billing.Basis, Rules: []billing.Rule{{ID: "fixture", Provider: "fixture-reference", Model: "gpt-6-luna", From: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Rates: billing.Rates{Input: "1", Read: "1", Write: "1", Output: "1"}}}}
 	_, e = (billingconfig.Store{Home: p.Home}).Save("*", price)
 	s.Must(e)
-	p.CreateTasks()
 	baseline := p.git(p.Repo, "rev-parse", "HEAD")
-	p.validateControlledEnvironment("local-codex", baseline)
+	if remote != nil {
+		remote.isolateMaintenanceCheckout(s, p, baseline)
+	}
+	p.CreateTasks()
+	if remote == nil {
+		p.validateControlledEnvironment(profile, baseline)
+	} else {
+		p.ensureRemoteReady(s.Run.Remote.RoundSeconds)
+	}
 	verifyTree := func(report ref.Report, stage string, concurrent bool) {
 		p.git(p.Repo, "fetch", "--quiet", "origin", report.Head)
 		p.git(p.Repo, "merge-base", "--is-ancestor", report.Base, report.Head)
@@ -148,13 +167,22 @@ console.log('checks passed');
 		return id, response
 	}
 	var start ref.Start
+	var remoteKey string
+	if remote != nil {
+		remoteKey = p.environmentKey(profile)
+	}
 	s.Wait("native maintenance qualification", func() (bool, error) {
 		var view maintenanceReadiness
 		if err := client.Get(s.Context, prefix+"/refactoring/readiness", &view); err != nil {
 			return false, err
 		}
+		for _, item := range view.Environments {
+			if remoteKey != "" && item.Key == remoteKey && item.Status == "unsupported" {
+				s.t.Fatalf("ready remote profile is unsupported for maintenance: %s", item.Reason)
+			}
+		}
 		var ready bool
-		start, ready = view.bind(ref.Start{Direction: "simplify", DirectionRevision: directionRevision, Requirements: "完成两个独立切片。第一轮只简化 alpha.cjs，含该轮审计需要的任何补证和修复。第一轮验收后，第二轮只简化 beta.cjs，保留第一轮已验收的改动。两轮均保留 calculate 导出及行为并运行 node check.cjs。最终提交须同时包含两文件的简化，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。", Profile: "local-codex", Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
+		start, ready = view.bind(ref.Start{Direction: "simplify", DirectionRevision: directionRevision, Requirements: "完成两个独立切片。第一轮只简化 alpha.cjs，含该轮审计需要的任何补证和修复。第一轮验收后，第二轮只简化 beta.cjs，保留第一轮已验收的改动。两轮均保留 calculate 导出及行为并运行 node check.cjs。每轮结束前把本轮改动提交到原受管工作区，使 git status 干净。最终提交须同时包含两文件的简化，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。", Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
 		return ready, nil
 	})
 	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, start)
@@ -164,9 +192,12 @@ console.log('checks passed');
 	peer := start
 	peer.Requirements = "只简化 gamma.cjs 的冗余布尔分支，保留 calculate 导出及行为。验证 node check.cjs，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。"
 	peer.Budget.Rounds = 1
-	peerID, started := post("refactoring_start", identity.RepositoryIdentity, 1, peer)
-	if started.Status != "applied" {
-		s.t.Fatalf("parallel refactoring_start: %s", started.Diagnostic)
+	var peerID string
+	if remote == nil {
+		peerID, started = post("refactoring_start", identity.RepositoryIdentity, 1, peer)
+		if started.Status != "applied" {
+			s.t.Fatalf("parallel refactoring_start: %s", started.Diagnostic)
+		}
 	}
 	type deliveryView struct {
 		ID                string
@@ -189,61 +220,65 @@ console.log('checks passed');
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		_ = client.Get(ctx, prefix+"/refactoring/"+peerID, &second)
-		s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-peer-view.json"), second))
+		if peerID != "" {
+			_ = client.Get(ctx, prefix+"/refactoring/"+peerID, &second)
+			s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-peer-view.json"), second))
+		}
 		s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-view.json"), view))
 	}()
-	currentRun := func(action string) (string, error) {
-		var state struct{ Operations []ref.Operation }
-		err := client.Get(s.Context, prefix+"/refactoring/"+action, &state)
-		if err != nil || len(state.Operations) == 0 {
-			return "", err
+	if peerID != "" {
+		currentRun := func(action string) (string, error) {
+			var state struct{ Operations []ref.Operation }
+			err := client.Get(s.Context, prefix+"/refactoring/"+action, &state)
+			if err != nil || len(state.Operations) == 0 {
+				return "", err
+			}
+			return state.Operations[len(state.Operations)-1].RunID, nil
 		}
-		return state.Operations[len(state.Operations)-1].RunID, nil
-	}
-	type sample struct {
-		Run        *runnercontract.Run
-		ObservedAt time.Time
-	}
-	observe := func(id string) (sample, error) {
-		cmd := exec.CommandContext(s.Context, s.Run.Runner, "inspect", "--state-dir", runnerstatepath.Directory(p.Home), "--run-id", id, "--json")
-		cmd.Env = p.Driver.Environment(os.Environ())
-		raw, err := cmd.Output()
-		var result struct {
-			Data struct{ Run *runnercontract.Run }
+		type sample struct {
+			Run        *runnercontract.Run
+			ObservedAt time.Time
 		}
-		if err == nil {
-			err = json.Unmarshal(raw, &result)
+		observe := func(id string) (sample, error) {
+			cmd := exec.CommandContext(s.Context, s.Run.Runner, "inspect", "--state-dir", runnerstatepath.Directory(p.Home), "--run-id", id, "--json")
+			cmd.Env = p.Driver.Environment(os.Environ())
+			raw, err := cmd.Output()
+			var result struct {
+				Data struct{ Run *runnercontract.Run }
+			}
+			if err == nil {
+				err = json.Unmarshal(raw, &result)
+			}
+			return sample{Run: result.Data.Run, ObservedAt: time.Now().UTC()}, err
 		}
-		return sample{Run: result.Data.Run, ObservedAt: time.Now().UTC()}, err
-	}
-	var overlap []sample
-	s.Wait("two overlapping native maintenance turns", func() (bool, error) {
-		a, err := currentRun(id)
-		if err != nil || a == "" {
-			return false, err
-		}
-		b, err := currentRun(peerID)
-		if err != nil || b == "" {
-			return false, err
-		}
-		samples := make([]sample, 0, 3)
-		for _, runID := range []string{a, b, a} {
-			item, err := observe(runID)
-			if err != nil || item.Run == nil || item.Run.Status != "running" || item.Run.Final != nil || item.Run.Execution.SessionID == "" {
+		var overlap []sample
+		s.Wait("two overlapping native maintenance turns", func() (bool, error) {
+			a, err := currentRun(id)
+			if err != nil || a == "" {
 				return false, err
 			}
-			samples = append(samples, item)
-		}
-		if samples[0].Run.Execution.SessionID == samples[1].Run.Execution.SessionID ||
-			samples[0].Run.Execution.SessionID != samples[2].Run.Execution.SessionID ||
-			samples[0].Run.Correlation["steerline_refactoring"] != id || samples[1].Run.Correlation["steerline_refactoring"] != peerID {
-			return false, nil
-		}
-		overlap = samples
-		return true, nil
-	})
-	s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-native-overlap.json"), overlap))
+			b, err := currentRun(peerID)
+			if err != nil || b == "" {
+				return false, err
+			}
+			samples := make([]sample, 0, 3)
+			for _, runID := range []string{a, b, a} {
+				item, err := observe(runID)
+				if err != nil || item.Run == nil || item.Run.Status != "running" || item.Run.Final != nil || item.Run.Execution.SessionID == "" {
+					return false, err
+				}
+				samples = append(samples, item)
+			}
+			if samples[0].Run.Execution.SessionID == samples[1].Run.Execution.SessionID ||
+				samples[0].Run.Execution.SessionID != samples[2].Run.Execution.SessionID ||
+				samples[0].Run.Correlation["steerline_refactoring"] != id || samples[1].Run.Correlation["steerline_refactoring"] != peerID {
+				return false, nil
+			}
+			overlap = samples
+			return true, nil
+		})
+		s.Must(controlled.Write(filepath.Join(s.Output, "maintenance-native-overlap.json"), overlap))
+	}
 	captured := map[string]bool{}
 	wait := func(reports int) {
 		s.Wait("native maintenance delivery", func() (bool, error) {
@@ -274,20 +309,22 @@ console.log('checks passed');
 	initial := view.Reports[0]
 	originalBody := verifyPR(original, initial)
 	verifyTree(initial, "initial", false)
-	s.Wait("parallel native maintenance delivery", func() (bool, error) {
-		err := client.Get(s.Context, prefix+"/refactoring/"+peerID, &second)
-		if err == nil && (second.Phase == "blocked" || second.Phase == "waiting_input" || second.Phase == "stopped") {
-			s.t.Fatalf("parallel maintenance interrupted: %s %s", second.Phase, second.Diagnostic)
+	if peerID != "" {
+		s.Wait("parallel native maintenance delivery", func() (bool, error) {
+			err := client.Get(s.Context, prefix+"/refactoring/"+peerID, &second)
+			if err == nil && (second.Phase == "blocked" || second.Phase == "waiting_input" || second.Phase == "stopped") {
+				s.t.Fatalf("parallel maintenance interrupted: %s %s", second.Phase, second.Diagnostic)
+			}
+			return err == nil && second.Phase == "delivered" && second.PR != nil && len(second.Reports) == 1, err
+		})
+		if second.PR.URL == original || second.Reports[0].Base != baseline {
+			s.t.Fatal("parallel action did not publish independently")
 		}
-		return err == nil && second.Phase == "delivered" && second.PR != nil && len(second.Reports) == 1, err
-	})
-	if second.PR.URL == original || second.Reports[0].Base != baseline {
-		s.t.Fatal("parallel action did not publish independently")
-	}
-	verifyPR(second.PR.URL, second.Reports[0])
-	p.git(p.Repo, "fetch", "--quiet", "origin", second.Reports[0].Head)
-	if changed := p.git(p.Repo, "diff", "--name-only", baseline, second.Reports[0].Head); strings.TrimSpace(changed) != "gamma.cjs" {
-		s.t.Fatalf("parallel action exceeded its scope: %q", changed)
+		verifyPR(second.PR.URL, second.Reports[0])
+		p.git(p.Repo, "fetch", "--quiet", "origin", second.Reports[0].Head)
+		if changed := p.git(p.Repo, "diff", "--name-only", baseline, second.Reports[0].Head); strings.TrimSpace(changed) != "gamma.cjs" {
+			s.t.Fatalf("parallel action exceeded its scope: %q", changed)
+		}
 	}
 	// Advance the owned base with an overlapping replacement; the original PR must be updated.
 	for _, name := range []string{"alpha.cjs", "beta.cjs"} {
@@ -337,7 +374,11 @@ console.log('checks passed');
 	raw, e := p.gh(s.Context, "pr", "list", "--repo", githubRepository, "--base", p.BaseBranch, "--state", "all", "--limit", "2", "--json", "url")
 	s.Must(e)
 	s.Must(json.Unmarshal(raw, &prs))
-	if len(prs) != 2 || (prs[0].URL != original || prs[1].URL != second.PR.URL) && (prs[1].URL != original || prs[0].URL != second.PR.URL) {
+	if peerID == "" {
+		if len(prs) != 1 || prs[0].URL != original {
+			s.t.Fatal("remote maintenance must publish exactly its original PR")
+		}
+	} else if len(prs) != 2 || (prs[0].URL != original || prs[1].URL != second.PR.URL) && (prs[1].URL != original || prs[0].URL != second.PR.URL) {
 		s.t.Fatal("each maintenance action must publish exactly its original PR")
 	}
 	reader, e := sqlite.OpenSQLiteReader(p.Database)
@@ -345,22 +386,49 @@ console.log('checks passed');
 	defer reader.Close()
 	records, e := reader.Refactorings(s.Context, p.ProjectID)
 	s.Must(e)
-	if len(records) != 2 {
-		s.t.Fatal("two isolated actions required")
+	var r ref.Record
+	var otherCost any
+	parallelPR := ""
+	if peerID == "" {
+		if len(records) != 1 || records[0].ID != id {
+			s.t.Fatal("one remote maintenance action expected")
+		}
+		r = records[0]
+	} else {
+		if len(records) != 2 {
+			s.t.Fatal("two isolated actions required")
+		}
+		other := records[1]
+		r = records[0]
+		if r.ID != id {
+			r, other = other, r
+		}
+		peerCost, _ := other.CostTotal()
+		if other.ID != peerID || r.ID != id || other.Identity == "" || other.Identity == r.Identity || other.Workspace == r.Workspace || other.PR == nil || r.PR == nil || other.PR.HeadBranch == r.PR.HeadBranch || peerCost == nil {
+			s.t.Fatal("parallel action did not bind its own worktree, branch, PR and costs")
+		}
+
+		otherCost, parallelPR = peerCost, second.PR.URL
 	}
-	r, other := records[0], records[1]
-	if r.ID != id {
-		r, other = other, r
-	}
-	otherCost, _ := other.CostTotal()
-	if other.ID != peerID || r.ID != id || other.Identity == "" || other.Identity == r.Identity || other.Workspace == r.Workspace || other.PR == nil || r.PR == nil || other.PR.HeadBranch == r.PR.HeadBranch || otherCost == nil {
-		s.t.Fatal("parallel action did not bind its own worktree, branch, PR and costs")
+	if remote != nil {
+		if r.Frozen.Read.Adapter != "codex-app-server" || r.Frozen.Read.Target.Kind != "local" ||
+			r.Frozen.Write.Adapter != "orca-terminal" || r.Frozen.Write.Target != s.Run.Remote.Profile.Execution.Target ||
+			r.Frozen.Environment == nil {
+			s.t.Fatal("maintenance action did not freeze local decision and qualified remote execution")
+		}
 	}
 	latest, origin, identityKey, workspace, branch := "", "", "", "", ""
 	writes := 0
 	closingSeen := false
 	sessions := map[string]bool{}
 	var gitFacts []*runnercontract.WorkspaceGit
+	roundEvidence := map[int]bool{}
+	accepted := map[int]string{}
+	for _, o := range r.Operations {
+		if o.Purpose == "audit" && o.AcceptedOperation != "" {
+			accepted[o.Round] = o.AcceptedOperation
+		}
+	}
 	for _, o := range r.Operations {
 		if o.Run == nil || o.Run.Workflow.ID != "execute" {
 			continue
@@ -382,6 +450,10 @@ console.log('checks passed');
 		sessions[exec.SessionID] = true
 		if o.WorkspaceGit != nil {
 			gitFacts = append(gitFacts, o.WorkspaceGit)
+			if o.ID == accepted[o.Round] && o.WorkspaceGit.RunID == run.RunID && o.WorkspaceGit.Verified &&
+				o.WorkspaceGit.Commit != nil && o.WorkspaceGit.Clean != nil && *o.WorkspaceGit.Clean {
+				roundEvidence[o.Round] = true
+			}
 		}
 	}
 	if writes < 4 {
@@ -391,10 +463,10 @@ console.log('checks passed');
 		s.t.Fatal("missing verified workspace evidence from native Runner")
 	}
 	amount, complete := r.CostTotal()
-	if amount == nil {
+	if amount == nil && remote == nil {
 		s.t.Fatal("missing observed reference usage")
 	}
-	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-live-proof.json"), map[string]any{"rounds": r.Round, "executes": writes, "same_workspace": true, "workspace_git": gitFacts, "original_pr": original, "parallel_pr": second.PR.URL, "parallel_amount": otherCost, "native_overlap": true, "review_matches_pr_version": true, "pr_body_unchanged": true, "conflict_audit": true, "verified_both_trees": true, "amount": amount, "cost_complete": complete, "pricing": "declared fixture reference rates", "head": last.Head, "base": last.Base}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-live-proof.json"), map[string]any{"rounds": r.Round, "profile": profile, "remote": remote != nil, "local_decisions": r.Frozen.Read.Target.Kind == "local", "verified_implementation_rounds": roundEvidence, "executes": writes, "same_workspace": true, "workspace_git": gitFacts, "original_pr": original, "parallel_pr": parallelPR, "parallel_amount": otherCost, "native_overlap": peerID != "", "review_matches_pr_version": true, "pr_body_unchanged": true, "conflict_audit": true, "verified_both_trees": true, "amount": amount, "cost_complete": complete, "pricing": "declared fixture reference rates", "head": last.Head, "base": last.Base}))
 	s.Must(s.FinishBody())
 }
 

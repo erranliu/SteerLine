@@ -15,6 +15,7 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
+	"github.com/erranliu/SteerLine/internal/testkit/remotetest"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 )
@@ -75,7 +76,7 @@ func (p *Project) enableGitHub() {
 		queryOutput = strings.Replace(queryOutput, "{body:.body,", "{", 1)
 	}
 	query := map[string]any{"executable": gh, "args": []string{"pr", "view", "{pr_url}", "--repo", "{repository}", "--json", githubFields, "--jq", queryOutput}}
-	if s.ID == "refactoring.local-codex" {
+	if s.ID == "refactoring.local-codex" || s.ID == remotetest.Refactoring {
 		query["args"] = githubMaintenancePRArgs("{number}", githubMaintenanceQuery)
 	}
 	var config map[string]any
@@ -171,7 +172,7 @@ func (p *Project) cleanupGitHub() error {
 		} else {
 			return candidateErr
 		}
-	} else if p.Scenario.ID == "refactoring.local-codex" {
+	} else if p.Scenario.ID == "refactoring.local-codex" || p.Scenario.ID == remotetest.Refactoring {
 		maintenance, err := driver.ReadOriginalMaintenanceOperations(ctx, p.Database, p.ProjectID)
 		if err != nil {
 			return err

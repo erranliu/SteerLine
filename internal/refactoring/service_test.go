@@ -10,6 +10,7 @@ import (
 	decision "github.com/erranliu/SteerLine/internal/steeragent/maintenance"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -487,38 +488,54 @@ func TestMaintenanceRejectsForeignDecisionSource(t *testing.T) {
 	})
 }
 func TestMaintenanceRetriesFailedDecisionOutputOnce(t *testing.T) {
-	s, f, r := fixture(t)
-	r = tickUntil(t, s, r.ID, func(r m.Record) bool {
-		if len(r.Operations) == 0 {
-			return false
-		}
-		last := r.Operations[len(r.Operations)-1]
-		return last.Purpose == "audit" && last.RunID != ""
-	})
-	first := r.Operations[len(r.Operations)-1]
-	run := f.runs[first.RunID]
-	run.Status = "failed"
-	run.Final = nil
-	run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: "human_input_required"}
-	r = tickUntil(t, s, r.ID, func(r m.Record) bool {
-		last := r.Operations[len(r.Operations)-1]
-		return last.ID != first.ID && last.RunID != ""
-	})
-	second := r.Operations[len(r.Operations)-1]
-	if second.Purpose != "audit" || second.Round != first.Round || second.Request.RequestID == first.Request.RequestID || !r.Operations[len(r.Operations)-2].Settled() {
-		t.Fatal("failed audit did not start one fresh decision in the same round", r)
-	}
-	run = f.runs[second.RunID]
-	run.Status = "failed"
-	run.Final = nil
-	run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: "invalid_json: extra data"}
-	submissions := len(f.requests)
-	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
-	if !strings.Contains(r.Diagnostic, "invalid_json: extra data") || r.Active() || r.Question != nil || !r.Operations[len(r.Operations)-1].Settled() {
-		t.Fatal("failed audit did not settle with its own diagnostic", r)
-	}
-	if err := s.Tick(context.Background()); err != nil || len(f.requests) != submissions {
-		t.Fatal("advanced after failed decision", err, len(f.requests))
+	for _, initialFailure := range []string{"human_input_required", "native_read_only_directory_unavailable"} {
+		t.Run(initialFailure, func(t *testing.T) {
+			s, f, r := fixture(t)
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool {
+				if len(r.Operations) == 0 {
+					return false
+				}
+				last := r.Operations[len(r.Operations)-1]
+				return last.Purpose == "audit" && last.RunID != ""
+			})
+			first := r.Operations[len(r.Operations)-1]
+			run := f.runs[first.RunID]
+			run.Status = "failed"
+			run.Final = nil
+			run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: initialFailure}
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool {
+				last := r.Operations[len(r.Operations)-1]
+				return last.ID != first.ID && last.RunID != ""
+			})
+			second := r.Operations[len(r.Operations)-1]
+			if second.Purpose != "audit" || second.Round != first.Round || second.Request.RequestID == first.Request.RequestID || !r.Operations[len(r.Operations)-2].Settled() {
+				t.Fatal("failed audit did not start one fresh decision in the same round", r)
+			}
+			var original, retry rc.GenerateRunInput
+			if err := json.Unmarshal(first.Request.Input, &original); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(second.Request.Input, &retry); err != nil {
+				t.Fatal(err)
+			}
+			if retry.Generate.Instruction != original.Generate.Instruction ||
+				!reflect.DeepEqual(retry.Execution, original.Execution) ||
+				!reflect.DeepEqual(retry.Generate.Directory, original.Generate.Directory) {
+				t.Fatal("retry changed the original read-only prompt or execution configuration")
+			}
+			run = f.runs[second.RunID]
+			run.Status = "failed"
+			run.Final = nil
+			run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: "invalid_json: extra data"}
+			submissions := len(f.requests)
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
+			if !strings.Contains(r.Diagnostic, "invalid_json: extra data") || r.Active() || r.Question != nil || !r.Operations[len(r.Operations)-1].Settled() {
+				t.Fatal("failed audit did not settle with its own diagnostic", r)
+			}
+			if err := s.Tick(context.Background()); err != nil || len(f.requests) != submissions {
+				t.Fatal("advanced after failed decision", err, len(f.requests))
+			}
+		})
 	}
 }
 
@@ -541,7 +558,11 @@ func TestMaintenanceConflictReviewRegeneratesInvalidJSON(t *testing.T) {
 				run := f.runs[id]
 				run.Status = "failed"
 				run.Final.Text = malformed
-				run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: "invalid_json: extra data"}
+				diagnostic := "invalid_json: extra data"
+				if retrySucceeds {
+					diagnostic = "schema_mismatch: missing required field"
+				}
+				run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: diagnostic}
 			}
 			fail(first.RunID)
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool {
