@@ -8,7 +8,11 @@ import { Button } from "../../shared/ui/button";
 import { SafeLink } from "../../shared/ui/status";
 import { useAbandonedActivities } from "../activities/abandonment-marks";
 import { useActivityFeedback } from "../activities/feedback/feedback";
-import { NewMaintenance, type StartInput } from "./new-maintenance";
+import {
+  NewMaintenance,
+  type StartInput,
+  useMaintenanceStartData,
+} from "./new-maintenance";
 import "./refactoring-maintenance.css";
 
 type Input = Pick<
@@ -170,6 +174,7 @@ export function RefactoringMaintenance() {
   const [params, setParams] = useSearchParams();
   const selected = params.get("action") ?? "";
   const [opened, setOpened] = useState(false);
+  const startData = useMaintenanceStartData(opened);
   const [form, setForm] = useState<{ key: number; input?: StartInput }>({
     key: 0,
   });
@@ -558,6 +563,7 @@ export function RefactoringMaintenance() {
         onSubmit={start}
         initial={form.input}
         submissionPending={submitting}
+        startData={startData}
         full={!!first && first.slots_used >= first.slot_limit}
       />
       <div className="refactoring-layout" data-selected={!!selected}>

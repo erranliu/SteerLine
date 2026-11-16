@@ -78,12 +78,38 @@ function version(
     : "";
 }
 
+export function useMaintenanceStartData(open: boolean) {
+  const { api, identity, online } = useWorkspace();
+  const scope = [
+    api.home,
+    identity.project_id,
+    identity.instance_id,
+    "refactoring",
+  ];
+  const readiness = useQuery({
+    queryKey: [...scope, "readiness"],
+    queryFn: ({ signal }) =>
+      api.get<Readiness>("/refactoring/readiness", signal),
+    enabled: online,
+    retry: false,
+    refetchInterval: open ? 10000 : false,
+  });
+  const catalogue = useQuery({
+    queryKey: [...scope, "directions"],
+    queryFn: ({ signal }) =>
+      api.get<Catalogue>("/refactoring/directions", signal),
+    enabled: online,
+  });
+  return { readiness, catalogue };
+}
+
 export function NewMaintenance({
   open,
   close,
   full,
   initial,
   submissionPending,
+  startData,
   onSubmit,
 }: {
   open: boolean;
@@ -91,13 +117,14 @@ export function NewMaintenance({
   full: boolean;
   initial?: StartInput;
   submissionPending: boolean;
+  startData: ReturnType<typeof useMaintenanceStartData>;
   onSubmit: (
     payload: StartInput,
     directionName: string,
     environmentName: string,
   ) => void;
 }) {
-  const { api, identity, online } = useWorkspace();
+  const { identity, online } = useWorkspace();
   const dialog = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const seeded = useRef(!!initial);
@@ -125,26 +152,7 @@ export function NewMaintenance({
         ])
       : "",
   );
-  const scope = [
-    api.home,
-    identity.project_id,
-    identity.instance_id,
-    "refactoring",
-  ];
-  const readiness = useQuery({
-    queryKey: [...scope, "readiness"],
-    queryFn: ({ signal }) =>
-      api.get<Readiness>("/refactoring/readiness", signal),
-    enabled: open && online,
-    retry: false,
-    refetchInterval: 10000,
-  });
-  const catalogue = useQuery({
-    queryKey: [...scope, "directions"],
-    queryFn: ({ signal }) =>
-      api.get<Catalogue>("/refactoring/directions", signal),
-    enabled: open && online,
-  });
+  const { readiness, catalogue } = startData;
   const ready = readiness.data;
   const options =
     ready?.environments.filter((item) => item.status === "ready") ?? [];

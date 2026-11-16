@@ -154,6 +154,35 @@ it("moves a followed action to history and keeps its occupied slot linked", asyn
   );
 });
 
+it("loads startup qualification and directions on page entry and reuses them when opening the sheet", async () => {
+  const readiness = vi.fn(async () => ready);
+  const { api, client } = setup([], readiness);
+  const scope = [
+    "home",
+    identity.project_id,
+    identity.instance_id,
+    "refactoring",
+  ];
+
+  await waitFor(() => {
+    expect(client.getQueryData([...scope, "readiness"])).toEqual(ready);
+    expect(client.getQueryData([...scope, "directions"])).toEqual({
+      directions: [builtIn, custom],
+    });
+  });
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+  const sheet = openSheet();
+  expect(sheet.getByRole("button", { name: "开始维护" })).toBeEnabled();
+  expect(sheet.getByLabelText("运行环境")).toHaveValue(key);
+  expect(readiness).toHaveBeenCalledTimes(1);
+  expect(
+    vi
+      .mocked(api.get)
+      .mock.calls.filter(([path]) => path === "/refactoring/directions"),
+  ).toHaveLength(1);
+});
+
 it("starts at full capacity using a versioned ready environment and the default plan", async () => {
   const { submit } = setup();
   const sheet = openSheet();
