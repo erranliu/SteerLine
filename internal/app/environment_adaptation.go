@@ -1,19 +1,21 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"strings"
-	"sync"
-	"time"
 )
 
 type environmentBaseline interface {
@@ -113,10 +115,14 @@ func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prep
 	if e != nil || derived.Execution == nil {
 		return envmodel.Prepared{}, e
 	}
-	if e = p.config.runtimeCatalog.ValidateEnvironmentExecution(*derived.Execution); e != nil {
+	if e = p.config.runtimeCatalog.ValidateEnvironmentCheckout(*derived.Execution); e != nil {
 		return envmodel.Prepared{}, e
 	}
-	return p.materialAt(ctx, id, "")
+	prepared, err := p.materialAt(ctx, id, "")
+	if err == nil {
+		prepared.SyncRemoteCheckout = derived.Execution.Target.Kind == "orca_environment" && p.config.runtimeCatalog.SupportsCheckoutFastForward()
+	}
+	return prepared, err
 }
 func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (envmodel.Prepared, error) {
 	c := p.config
@@ -137,6 +143,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 		return out, e
 	}
 	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Repository: runnercontract.Repository{LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: commit}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath()}, Plan: runnercontract.Document{Path: out.Manifest.Script}}}
+	input.EnvironmentCheck = out.Input.EnvironmentCheck
 	input.Repository.URL, e = c.TaskRepositoryTarget(ctx)
 	if e != nil {
 		return out, e
@@ -186,7 +193,12 @@ func (p *environmentPort) basisAt(ctx context.Context, id, commit string) (envmo
 	if e != nil {
 		return out, e
 	}
+	manifestBlock, e := envmodel.ManifestBlock(document)
+	if e != nil {
+		return out, e
+	}
 	files := map[string]string{manifest.Script: envmodel.Digest(script)}
+	checkoutFiles := map[string]string{manifest.Script: checkoutMaterialDigest(script)}
 	total := len(document) + len(script)
 	reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
 	dependencies, e := reader.readCommittedFiles(ctx, commit, manifest.Dependencies)
@@ -197,6 +209,7 @@ func (p *environmentPort) basisAt(ctx context.Context, id, commit string) (envmo
 		b := dependencies[path]
 		total += len(b)
 		files[path] = envmodel.Digest(b)
+		checkoutFiles[path] = checkoutMaterialDigest(b)
 	}
 	if total > 1<<20 {
 		return out, &invalidEnvironmentBasis{errors.New("环境调用材料超限")}
@@ -221,6 +234,10 @@ func (p *environmentPort) basisAt(ctx context.Context, id, commit string) (envmo
 		return out, e
 	}
 	out = envmodel.Prepared{Commit: commit, Inputs: envmodel.Digest(basis), Files: files, Manifest: manifest}
+	out.Input.EnvironmentCheck = &runnercontract.EnvironmentCheckInput{
+		Interpreter: manifest.Interpreter, Script: manifest.Script,
+		ManifestSHA256: envmodel.Digest(manifestBlock), Files: checkoutFiles,
+	}
 	p.basisMu.Lock()
 	if p.bases == nil {
 		p.bases = make(map[environmentBasisKey]envmodel.Prepared)
@@ -228,6 +245,11 @@ func (p *environmentPort) basisAt(ctx context.Context, id, commit string) (envmo
 	p.bases[cacheKey] = out
 	p.basisMu.Unlock()
 	return out, nil
+}
+
+// Git may check out these project text files with CRLF on the execution host.
+func checkoutMaterialDigest(data []byte) string {
+	return envmodel.Digest(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")))
 }
 
 // invocationAt reads only the project invocation, not its dependency basis.

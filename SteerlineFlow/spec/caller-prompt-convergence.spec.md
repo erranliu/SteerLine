@@ -22,7 +22,7 @@
 | [提示组合](../../internal/runnerclient/prompt_context.go)、[候选存储](../../internal/storage/sqlite/runner_candidates.go) | 组合调用方上下文并核验原输入 | 保留冻结/CAS边界，核验引用及实际材料，不只查路径存在 |
 | [测试安排生成](https://github.com/erranliu/SteerLine/blob/221812ec058ec7dd608e447f8aeaeafb8587e376/internal/testmanagement/generation.go) | Plan、规范和清单仍inline | Agent读取同版本完整文件 |
 | [Roadmap解析](../../internal/roadmap/generation.go)、[文档生成](../../internal/roadmap/documents.go) | 规范已改引用；原文、任务图和确认结果仍inline | 原始输入均有可读固定文件，不能用同名快照文件冒充不同原文 |
-| [环境调用](../../internal/app/environment_adaptation.go)、[调用短提示](../../internal/prompts/environment-invoke.md)、[调用接线](../../internal/environmentadaptation/service.go) | 旧生成/阶段编排已退役 | 项目自行检测，平台只调用并消费结果，指令只引用 |
+| [环境调用](../../internal/app/environment_adaptation.go)、[调用接线](../../internal/environmentadaptation/service.go) | 旧生成/阶段编排已退役 | 项目自行检测，平台发送结构化检测请求并消费结果 |
 | [用户回答](../../internal/taskrunner/input.go) | 按原问题/选项/原回答回复 | 原通道传递，超出2000个UTF-8字节拒绝，不转文件 |
 
 历史同源helper样本2260字节、缺helper样本6004字节和环境规则5570字节，只说明旧方案仍保留长内容，不是本修订体积目标或通过证明。

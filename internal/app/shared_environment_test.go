@@ -48,6 +48,26 @@ func TestSharedEnvironmentMaterialsAndIndependentQualifications(t *testing.T) {
 		if r.Prepared.Input.Documents.Spec.Path != env.DocumentPath() || r.Prepared.Input.Documents.Plan.Path != env.ScriptPath("ps1") {
 			t.Fatal("request did not use common paths", r.Prepared.Input.Documents)
 		}
+		prepared, err := p.materialAt(ctx, r.Profile, commit)
+		require(t, err)
+		probe := prepared.Input.EnvironmentCheck
+		if probe == nil || probe.Interpreter != prepared.Manifest.Interpreter || probe.Script != prepared.Manifest.Script {
+			t.Fatal("cached basis did not populate the checkout probe", probe)
+		}
+		document, err := p.read(ctx, commit, env.DocumentPath())
+		require(t, err)
+		block, err := env.ManifestBlock(document)
+		require(t, err)
+		if probe.ManifestSHA256 != env.Digest(block) || len(probe.Files) != len(prepared.Files) {
+			t.Fatal("checkout probe did not use the full frozen basis", probe)
+		}
+		for path := range prepared.Files {
+			content, err := p.read(ctx, commit, path)
+			require(t, err)
+			if probe.Files[path] != checkoutMaterialDigest(content) {
+				t.Fatal("checkout probe used an incorrect digest for", path)
+			}
+		}
 		value, err := p.materials(ctx, mustEnvironmentKey(t, r.Execution))
 		require(t, err)
 		material := value.(map[string]any)

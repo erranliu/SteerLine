@@ -14,7 +14,6 @@ func promptSinkAllowed(file, function string) bool {
 		"internal/roadmap/generation.go:Parse",
 		"internal/roadmap/documents.go:GenerateDocuments",
 		"internal/app/roadmap_planning.go:create",
-		"internal/environmentadaptation/service.go:appendRound",
 		"internal/runnerclient/prompt_context.go:WithTestProgressContext":
 		return true
 	}

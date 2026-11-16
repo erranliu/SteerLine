@@ -18,7 +18,7 @@ SteerLine 调用入口 → 项目完成检测闭环 → 最终结果及原因/�
 SteerLine 展示并据最终 ready 控制对应环境准入
 ```
 
-本公开指导随 `SteerlineProjectGuideDoc/` 一同复制，供项目维护者查阅。运行时的固定提示词及材料由平台交付和维护。项目实现对应版本的环境接口，按明确的接口版本处理不兼容变更。
+本公开指导随 `SteerlineProjectGuideDoc/` 一同复制，供项目维护者查阅。平台冻结调用材料，并通过 Runner 结构化请求调用项目入口。项目实现对应版本的环境接口，按明确的接口版本处理不兼容变更。
 
 ## 根据实际项目形成配套接口
 
@@ -36,9 +36,9 @@ dependencies 只声明检测实际使用的辅助程序和工具/SDK、权限、
 
 入口应在目标未 ready 时也能启动，不能先领取 Task、要求通过自己的检测、提交平台协议或完成一轮生成后才能检测。解释器/通道无法启动属于调用能力问题，平台如实报告；入口可运行时，缺工具等项目问题应尽量形成可读负结果，不只抛一个无说明退出码。
 
-调用工作目录固定为原提交的工作区根，命令是 `powershell.exe -NoProfile -NonInteractive -File <script>` 或 `bash <script>`，按参数数组执行，不传 Phase。入口从 `STEERLINE_RESULT_FILE` 读取预置身份及固定 call_context，完成后原子更新同一文件。稳定调用字段只有项目身份、环境键、adapter 及 target.kind/environment，全部计入摘要，不由平台判断项目使用了哪些字段；不传模型、发布目标或自由参数。
+调用工作目录为执行机已登记的项目 checkout 根。Runner 调用前后核对 manifest、入口和声明依赖，HEAD 可与来源提交不同。命令是 `powershell.exe -NoProfile -NonInteractive -File <script>` 或 `bash <script>`，按参数数组执行，不传 Phase。入口从仓库外的 `STEERLINE_RESULT_FILE` 读取预置身份及固定 call_context，完成后原子更新同一文件。临时文件使用 Runner 提供的仓库外目录。项目负责保证脚本及子进程只写项目日志目录及仓库外临时产物，保持源码、索引、refs 和 Git 配置。稳定调用字段只有项目身份、环境键、adapter 及 target.kind/environment，全部计入摘要，不由平台判断项目使用了哪些字段；不传模型、发布目标或自由参数。
 
-脚本退出0表示正常返回，业务未就绪也应写完负报告；非零退出可保留负报告。平台要求 Runner 公布 status=completed 及 verified 原生成功终态，才判断调用正常结束，不从日志复核脚本退出码；无可信终态不准入。
+脚本退出0表示正常返回，业务未就绪也应写完负报告；非零退出可保留负报告。平台要求 Runner 公布 status=completed 及 已核实的脚本成功退出，才判断调用正常结束，不从日志复核脚本退出码；无可信终态不准入。
 
 一次调用内部由项目处理要求读取、检测、内部重试/诊断、自有资源清理和最终结果原子写入。平台不拆分 tty/prepare/publish，也不因业务失败自动三轮重跑或修脚本。受理未知、超时和取消由平台对账/停止原 Run，项目不自行重发平台请求或删除 Runner 持有资源。
 
