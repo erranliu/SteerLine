@@ -26,6 +26,7 @@ var ErrQualificationUnverified = errors.New("运行环境资格待重新核实")
 var ErrPRClosed = errors.New("原PR已关闭或合并")
 
 const Concurrency = 3
+const PhaseCheckingStart = "checking_start"
 
 const (
 	WaitSharedCapacity = "shared_capacity"
@@ -302,7 +303,7 @@ func (r Record) Unsettled() bool {
 }
 
 func (r Record) DisplayPhase() string {
-	if r.Active() && !r.Slot && r.Phase != "waiting_input" && r.Phase != "stopping" {
+	if r.Active() && !r.Slot && r.Phase != PhaseCheckingStart && r.Phase != "waiting_input" && r.Phase != "stopping" {
 		return "queued"
 	}
 	if r.Phase != "stopping" && len(r.Operations) != 0 {
@@ -312,6 +313,10 @@ func (r Record) DisplayPhase() string {
 		}
 	}
 	return r.Phase
+}
+
+func (r Record) HasRunnerBinding() bool {
+	return r.Frozen.Runner.StateDir != "" || len(r.Operations) != 0
 }
 
 func (r Record) CanFinish() bool {

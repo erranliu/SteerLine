@@ -11,6 +11,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	rc "github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -129,6 +130,31 @@ func TestRefactoringReviewDiffIgnoresLocalReplacementObjects(t *testing.T) {
 	diff, err := p.reviewDiff(context.Background(), r, rc.PRFact{BaseRevision: base, HeadRevision: head})
 	if err != nil || !strings.Contains(diff, "+reviewed") || strings.Contains(diff, "+replacement") {
 		t.Fatalf("review diff differs from the pinned objects: %s, %v", diff, err)
+	}
+}
+
+func TestRefactoringStartupAllowsActionsWithoutRunnerBinding(t *testing.T) {
+	ctx := t.Context()
+	dir := t.TempDir()
+	cli := startupFixtureCLI(t)
+	c := Config{identity: "project", executionPath: filepath.Join(dir, "execution.json"), runtimeRunner: &cli}
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(dir, "state.db"))
+	require(t, err)
+	t.Cleanup(func() { store.Close() })
+	require(t, store.InitializeProject(ctx, taskmodel.ProjectTaskAuthority{
+		ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1,
+		Repository: "https://example.invalid/repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual",
+	}))
+	for _, phase := range []string{ref.PhaseCheckingStart, "blocked", "stopped"} {
+		now := time.Now().UTC()
+		record := ref.Record{ID: ref.ID(), Project: c.Identity(), Revision: 1, Phase: phase, CreatedAt: now, UpdatedAt: now}
+		require(t, store.SaveRefactoring(ctx, record, 0, nil))
+	}
+	require(t, bindRunnerBuild(ctx, c, store))
+	stops, err := prepareRefactoringStops(ctx, &c, store, &cli)
+	require(t, err)
+	if len(stops) != 0 {
+		t.Fatal("unbound actions created Runner stop requests")
 	}
 }
 

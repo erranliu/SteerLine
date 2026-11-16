@@ -44,7 +44,7 @@ func (s *Service) scheduled(ctx context.Context, includeHistory bool) ([]model.R
 		if len(work) >= model.Concurrency {
 			break
 		}
-		if r.Slot || !r.Active() || r.Phase == "waiting_input" || r.RetryAt != nil && now.Before(*r.RetryAt) {
+		if r.Phase == model.PhaseCheckingStart || r.Slot || !r.Active() || r.Phase == "waiting_input" || r.RetryAt != nil && now.Before(*r.RetryAt) {
 			continue
 		}
 		r.Slot = true
@@ -56,6 +56,16 @@ func (s *Service) scheduled(ctx context.Context, includeHistory bool) ([]model.R
 			return work, err
 		}
 		work = append(work, r)
+	}
+	checking := model.Concurrency
+	for _, r := range rows {
+		if checking == 0 {
+			break
+		}
+		if r.Phase == model.PhaseCheckingStart {
+			work = append(work, r)
+			checking--
+		}
 	}
 	// Historical observations do not consume an execution slot.
 	for _, r := range rows {
@@ -134,6 +144,9 @@ func (s *Service) Tick(ctx context.Context) error {
 func (s *Service) advanceAction(ctx context.Context, r model.Record) error {
 	step, cancel := context.WithTimeout(ctx, advanceTimeout)
 	defer cancel()
+	if r.Phase == model.PhaseCheckingStart {
+		return s.checkStart(step, ctx, r)
+	}
 	if i := s.investigationDue(r); i >= 0 {
 		op := r.Operations[i]
 		if err := s.ReleaseInvestigation(op.ID); err != nil {

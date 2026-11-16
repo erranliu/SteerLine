@@ -88,6 +88,11 @@ func TestMaintenanceConcurrencySlotsAndClock(t *testing.T) {
 		}
 		records = append(records, record)
 	}
+	for _, r := range records[1:] {
+		if err := s.advanceAction(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
 	get := func(index int) m.Record {
 		t.Helper()
 		r, err := s.Store.Refactoring(ctx, s.Project, records[index].ID)

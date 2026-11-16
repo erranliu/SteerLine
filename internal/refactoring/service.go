@@ -34,6 +34,7 @@ type Service struct {
 	Project              string
 	Store                Store
 	Runner               Runner
+	StartContext         func(context.Context) context.Context
 	Prepare              func(context.Context, model.Start) (model.Frozen, error)
 	Reserve              func(context.Context, string, func() error) error
 	Admit                func(context.Context) error
@@ -161,34 +162,14 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		if e = in.Validate(); e != nil {
 			return model.Record{}, e
 		}
-		if s.Admit != nil {
-			if e = s.Admit(ctx); e != nil {
-				return model.Record{}, e
-			}
-		}
-		f, e := s.Prepare(ctx, *in)
-		if e != nil {
-			return model.Record{}, e
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if r, found, err := s.replay(ctx, c); found {
+			return r, err
 		}
 		now := s.now()
-		r := model.Record{ID: c.ID, Project: s.Project, Input: *in, Frozen: f, Phase: "first", CreatedAt: now, EnqueuedAt: now, Operations: []model.Operation{}, Answers: []model.Answer{}, Reports: []model.Report{}}
-		create := func() error {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			if replay, found, err := s.replay(ctx, c); found {
-				r = replay
-				return err
-			}
-			if f.Environment != nil {
-				return s.save(ctx, &r, &c, *f.Environment)
-			}
-			return s.save(ctx, &r, &c)
-		}
-		if s.Reserve != nil {
-			e = s.Reserve(ctx, f.Repository.BaseRevision, create)
-		} else {
-			e = create()
-		}
+		r := model.Record{ID: c.ID, Project: s.Project, Input: *in, Phase: model.PhaseCheckingStart, CreatedAt: now, EnqueuedAt: now, Operations: []model.Operation{}, Answers: []model.Answer{}, Reports: []model.Report{}}
+		e = s.save(ctx, &r, &c)
 		return r, e
 	}
 	s.mu.Lock()
@@ -877,7 +858,7 @@ func (s *Service) revoke(ctx context.Context, offline bool) error {
 		return e
 	}
 	for _, r := range rows {
-		if !r.Active() || r.Phase == "waiting_input" {
+		if !r.Active() || r.Phase == "waiting_input" || offline && r.Phase == model.PhaseCheckingStart {
 			continue
 		}
 		_, e = s.update(ctx, r.ID, func(r *model.Record) error {

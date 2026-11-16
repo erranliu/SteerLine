@@ -20,6 +20,9 @@ func prepareRefactoringStops(ctx context.Context, c *Config, store *sqlite.SQLit
 	}
 	pending := []runnercontract.PendingStop{}
 	for _, r := range rows {
+		if !r.HasRunnerBinding() {
+			continue
+		}
 		if !runnerbinding.SamePath(r.Frozen.Runner.StateDir, cli.StateDir) {
 			return nil, errors.New("maintenance Runner namespace differs")
 		}

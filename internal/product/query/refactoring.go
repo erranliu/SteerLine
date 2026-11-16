@@ -48,6 +48,7 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 	out["direction_prompt"] = r.Frozen.Direction.Prompt
 	out["source_commit"] = r.Frozen.Repository.BaseRevision
 	out["source_branch"] = r.Frozen.Repository.BaseBranch
+	out["startup_failed"] = r.Phase == "blocked" && r.Frozen.Repository.BaseRevision == ""
 	out["question"] = r.Question
 	out["operations"] = ops
 	out["reports"] = r.Reports
@@ -77,8 +78,12 @@ func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 			wait = "等待项目推进名额"
 		}
 	}
+	direction := r.Frozen.Direction.Name
+	if direction == "" {
+		direction = r.Input.Direction
+	}
 	return map[string]any{
-		"id": r.ID, "revision": r.Revision, "direction_name": r.Frozen.Direction.Name,
+		"id": r.ID, "revision": r.Revision, "direction_name": direction,
 		"environment_name": r.Frozen.EnvironmentName, "profile_name": r.Frozen.ProfileName,
 		"phase": phase, "round": r.Round, "slot": r.Slot, "wait_reason": wait,
 		"summary": r.Summary, "diagnostic": r.Diagnostic, "enqueued_at": r.EnqueuedAt,
