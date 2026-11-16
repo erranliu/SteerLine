@@ -50,10 +50,11 @@ type Service struct {
 		UpdateContent(string, string, time.Time, bool, bool)
 		AcquireContent(string, string) bool
 	}
-	Now           func() time.Time
-	mu            sync.Mutex
-	advance       sync.Mutex
-	reviewChecked map[string]time.Time
+	Now            func() time.Time
+	mu             sync.Mutex
+	advance        sync.Mutex
+	reviewChecked  map[string]time.Time
+	investigations map[string]context.CancelFunc
 }
 
 func (s *Service) now() time.Time {
@@ -79,6 +80,9 @@ func (s *Service) save(ctx context.Context, r *model.Record, cmd *model.Command,
 	if err := s.Store.SaveRefactoring(ctx, *r, expected, cmd, proof...); err != nil {
 		r.Revision = expected
 		return err
+	}
+	if cancel := s.investigations[r.ID]; r.StopRequested && cancel != nil {
+		cancel()
 	}
 	if s.Queue != nil {
 		for _, o := range r.Operations {
@@ -308,12 +312,12 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 	return r, e
 }
 
-func (s *Service) tick(ctx context.Context, r model.Record) error {
+func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 	if len(r.Operations) > 0 {
 		o := r.Operations[len(r.Operations)-1]
 		if !o.Settled() {
 			if o.State == "pending" {
-				return s.submit(ctx, r, o)
+				return s.submit(ctx, lifecycle, r, o)
 			}
 			return s.observe(ctx, r, o)
 		}
@@ -400,7 +404,7 @@ func (s *Service) tick(ctx context.Context, r model.Record) error {
 	return e
 }
 
-func (s *Service) submit(ctx context.Context, r model.Record, o model.Operation) error {
+func (s *Service) submit(ctx, lifecycle context.Context, r model.Record, o model.Operation) error {
 	if s.Admit != nil {
 		if err := s.Admit(ctx); err != nil {
 			_, saveErr := s.update(ctx, r.ID, func(current *model.Record) error {
@@ -470,10 +474,16 @@ func (s *Service) submit(ctx context.Context, r model.Record, o model.Operation)
 		}
 		proof = append(proof, qualification)
 	}
+	var investigation context.Context
+	var cancelInvestigation context.CancelFunc
+	if o.Investigation != "" {
+		investigation, cancelInvestigation = context.WithCancel(lifecycle)
+		defer cancelInvestigation()
+	}
 	var send bool
 	mark := func() error {
 		var err error
-		send, err = s.markSubmitted(ctx, r.ID, o, proof)
+		send, err = s.markSubmitted(ctx, r.ID, o, proof, cancelInvestigation)
 		return err
 	}
 	var err error
@@ -482,28 +492,48 @@ func (s *Service) submit(ctx context.Context, r model.Record, o model.Operation)
 	} else {
 		err = mark()
 	}
-	if errors.Is(err, model.ErrEnvironmentChanged) || errors.Is(err, model.ErrQualificationUnverified) {
-		return s.deferFirstDispatch(ctx, r.ID, o.ID, err)
-	}
-	if err != nil || !send {
+	if !send {
+		if errors.Is(err, model.ErrEnvironmentChanged) || errors.Is(err, model.ErrQualificationUnverified) {
+			return s.deferFirstDispatch(ctx, r.ID, o.ID, err)
+		}
 		return err
 	}
-	if o.Investigation != "" {
-		if err := s.Investigate(ctx, r, o.ID); err != nil {
-			_, saveErr := s.update(context.WithoutCancel(ctx), r.ID, func(current *model.Record) error {
+	if investigation != nil {
+		if err == nil {
+			err = investigation.Err()
+		}
+		if err == nil {
+			err = s.Investigate(investigation, r, o.ID)
+		}
+		s.mu.Lock()
+		// A saved stop can cancel preparation until this handoff to Runner.
+		if err == nil {
+			err = investigation.Err()
+		}
+		delete(s.investigations, r.ID)
+		s.mu.Unlock()
+		if err != nil {
+			_, saveErr := s.update(context.WithoutCancel(lifecycle), r.ID, func(current *model.Record) error {
 				last := &current.Operations[len(current.Operations)-1]
 				if last.ID != o.ID || last.State != "submitted" {
 					return nil
 				}
+				if current.StopRequested {
+					last.State = "cancelled"
+					return nil
+				}
 				last.State = "rejected"
 				last.Feedback = err.Error()
-				if !current.StopRequested {
-					s.block(current, err.Error())
-				}
+				s.block(current, err.Error())
 				return nil
 			})
 			return saveErr
 		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(lifecycle, advanceTimeout)
+		defer cancel()
+	} else if err != nil {
+		return err
 	}
 	receipt, callErr := s.Runner.Submit(ctx, o.Request)
 	_, e := s.update(context.WithoutCancel(ctx), r.ID, func(r *model.Record) error {
