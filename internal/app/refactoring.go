@@ -103,9 +103,9 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 		return out, ref.ErrEnvironmentChanged
 	}
 	write, e := c.deriveProfile(ctx, profile, "execute", "full_access")
-	if e != nil || write.Execution == nil {
+	if e != nil || write.Execution == nil || write.View.Agent != "codex" {
 		if e == nil {
-			e = errors.New("写入执行配置缺失")
+			e = errors.New("维护写入需要 Runner 派生 Codex 执行配置")
 		}
 		return out, e
 	}
@@ -175,7 +175,7 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 	if e != nil {
 		return out, e
 	}
-	out.Environment, out.EnvironmentName, out.ProfileName = &proof, "本机 · Codex 直连", profile.Name
+	out.Environment, out.EnvironmentName, out.ProfileName = &proof, refactoringEnvironmentName(profile.Execution.Target), profile.Name
 	out.Direction = direction
 	out.Repository = runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}
 	out.Documents = runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}
@@ -408,8 +408,19 @@ func (p *refactoringPort) fetchPRVersion(ctx context.Context, r ref.Record, pr r
 }
 
 func supportsRefactoringProfile(profile RunnerProfile) bool {
-	return profile.Execution.Adapter == "codex-app-server" && profile.Execution.Target.Kind == "local" &&
-		(profile.Workflow.ID == "development" || profile.Workflow.ID == "development-audited")
+	if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
+		return false
+	}
+	target := profile.Execution.Target
+	return profile.Execution.Adapter == "codex-app-server" && target.Kind == "local" ||
+		profile.Execution.Adapter == "orca-terminal" && target.Kind == "orca_environment" && target.Environment != ""
+}
+
+func refactoringEnvironmentName(target runnercontract.ExecutionTarget) string {
+	if target.Kind == "local" {
+		return "本机 · Codex 直连"
+	}
+	return target.Environment
 }
 
 func refactoringProfileVersion(profile RunnerProfile) string {
@@ -553,13 +564,13 @@ func (p *refactoringPort) readiness(ctx context.Context) (any, error) {
 				continue
 			}
 			write, err := c.runtimeNative.Lookup(runnercontract.ExecutionConfigurationRequest{Operation: "derive", Execution: &profile.Execution, Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, AccessMode: "full_access"})
-			if err != nil || write.Execution == nil {
+			if err != nil || write.Execution == nil || write.View.Agent != "codex" {
 				continue
 			}
 			if readErr != nil || read.Execution == nil || c.runtimeNative.Catalog.ValidateMaintenance(*write.Execution, *read.Execution) != nil {
 				continue
 			}
-			v.Name = "本机 · Codex 直连"
+			v.Name = refactoringEnvironmentName(item.Target)
 			v.Profiles = append(v.Profiles, refactoringProfileView{environmentProfileView: candidate, Version: refactoringProfileVersion(profile)})
 		}
 		if v.Status == "ready" && len(v.Profiles) == 0 {

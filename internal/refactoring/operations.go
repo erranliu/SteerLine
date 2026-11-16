@@ -184,7 +184,7 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 		if n := len(r.Operations); n > 0 {
 			prior := r.Operations[n-1]
 			retryJSON = prior.State == "complete" && prior.Purpose == r.Phase && prior.Round == r.Round &&
-				prior.Run != nil && invalidDecisionJSON(prior.Run.ContentResult)
+				prior.Run != nil && decisionNeedsJSONRepair(prior.Run.ContentResult)
 		}
 		body, err := decision.Instruction(retryJSON)
 		if err != nil {

@@ -734,14 +734,14 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 			if detail == "" {
 				detail = run.Status
 			}
-			if retryableDecisionOutput(content) {
+			if retryableDecisionFailure(content) {
 				alreadyRetried := false
 				if len(r.Operations) > 1 {
 					previous := r.Operations[len(r.Operations)-2]
-					alreadyRetried = previous.Purpose == o.Purpose && previous.Round == o.Round && previous.Run != nil && retryableDecisionOutput(previous.Run.ContentResult)
+					alreadyRetried = previous.Purpose == o.Purpose && previous.Round == o.Round && previous.Run != nil && retryableDecisionFailure(previous.Run.ContentResult)
 				}
 				if !alreadyRetried {
-					r.Diagnostic = "只读决策输出无效，重新生成一次：" + detail
+					r.Diagnostic = "只读决策未完成，重试一次：" + detail
 					return nil
 				}
 			}
@@ -772,14 +772,18 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 	return e
 }
 
-func retryableDecisionOutput(result *runnercontract.ContentResult) bool {
+func retryableDecisionFailure(result *runnercontract.ContentResult) bool {
 	return result != nil && result.Status == "failed" &&
-		(result.Diagnostic == "human_input_required" || invalidDecisionJSON(result))
+		(result.Diagnostic == "human_input_required" || result.Diagnostic == "native_read_only_directory_unavailable" ||
+			decisionNeedsJSONRepair(result))
 }
 
-func invalidDecisionJSON(result *runnercontract.ContentResult) bool {
-	return result != nil && result.Status == "failed" &&
-		(result.Diagnostic == "invalid_json" || strings.HasPrefix(result.Diagnostic, "invalid_json:"))
+func decisionNeedsJSONRepair(result *runnercontract.ContentResult) bool {
+	if result == nil || result.Status != "failed" {
+		return false
+	}
+	code, _, _ := strings.Cut(result.Diagnostic, ":")
+	return code == "invalid_json" || code == "schema_mismatch"
 }
 
 func (s *Service) observeWorkspaceGit(ctx context.Context, runID string) *runnercontract.WorkspaceGit {

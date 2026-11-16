@@ -9,6 +9,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
+	"github.com/erranliu/SteerLine/internal/testkit/remotetest"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 )
@@ -24,7 +25,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	p := s.NewProject(name)
 	p.Chain = chain
 	p.Driver.NativeHome = s.Run.AuthHome
-	if s.ID == "smoke.local-codex" || s.ID == "workflow.local-codex-audited" || s.ID == "refactoring.local-codex" || s.ID == ManualVerificationLiveID {
+	if s.ID == "smoke.local-codex" || s.ID == "workflow.local-codex-audited" || (s.ID == "refactoring.local-codex" || s.ID == remotetest.Refactoring) || s.ID == ManualVerificationLiveID {
 		p.enableGitHub()
 	}
 	if s.ID == ManualVerificationGiteaLiveID {

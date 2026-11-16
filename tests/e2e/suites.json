@@ -225,6 +225,15 @@
     "level": "L3"
   },
   {
+    "id": "refactoring.remote-orca",
+    "level": "L4",
+    "suite": "refactoring",
+    "package": "./tests/e2e/remote",
+    "test": "TestRemoteRefactoring",
+    "env": "live",
+    "chain": "orca-remote"
+  },
+  {
     "test": "TestRefactoringLocalCodex",
     "level": "L4",
     "chain": "local-codex",

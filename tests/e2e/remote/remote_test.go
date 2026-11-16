@@ -11,4 +11,8 @@ func TestRemoteExecutionProfiles(t *testing.T)  { testenv.RunRemoteDiscovery(t) 
 func TestRemoteProjectProgress(t *testing.T)    { testenv.RunProjectProgress(t) }
 func TestRemoteProjectEnvironment(t *testing.T) { testenv.RunRemoteEnvironment(t) }
 
+func TestRemoteRefactoring(t *testing.T) {
+	testenv.RefactoringLive(testenv.NewScenario(t, "refactoring.remote-orca"))
+}
+
 func TestLocalProjectEnvironment(t *testing.T) { testenv.RunLocalEnvironment(t) }

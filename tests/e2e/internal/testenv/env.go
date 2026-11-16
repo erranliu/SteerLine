@@ -58,6 +58,7 @@ type Scenario struct {
 type Project struct {
 	orcaEvidence                                                                      *orcaTarget
 	AuditObservations                                                                 map[string]string
+	RemoveRemoteFixture                                                               func() error
 	RemoteCleanupFailed                                                               bool
 	RunnerCleanupFailed                                                               bool
 	Scenario                                                                          *Scenario
@@ -241,7 +242,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	root := filepath.Join(s.Root, relativeRoot, name)
 	p := &Project{Scenario: s, Name: name, Root: root, Home: filepath.Join(root, "home"), Repo: filepath.Join(root, "repo"), Remote: filepath.Join(root, "remotes", "e2e", "project.git"), Config: filepath.Join(root, "home", "etc", "SteerLine.json"), Database: filepath.Join(root, "home", "state", "steerline.db"), Provider: filepath.Join(root, "provider.json"), Executable: executable, Tasks: map[string]Task{}}
 	// Orca resolves its registered repository by the caller repository basename.
-	if s.ID == "testing.project-progress-orca-browser" {
+	if s.ID == "testing.project-progress-orca-browser" || s.ID == remotetest.Refactoring {
 		p.Repo = filepath.Join(root, "SteerlineTest")
 	}
 	p.BaseBranch = "main"
@@ -795,6 +796,14 @@ func (s *Scenario) cleanup() {
 		}
 	}
 	for _, p := range s.projects {
+		if p.RemoveRemoteFixture != nil {
+			if p.RunnerCleanupFailed {
+				p.RemoteCleanupFailed = true
+			} else if err := p.RemoveRemoteFixture(); err != nil {
+				p.RemoteCleanupFailed = true
+				failures = append(failures, "remote maintenance fixture cleanup: "+err.Error())
+			}
+		}
 		if p.RealPR && !p.RemoteCleanupFailed {
 			if err := p.cleanupGitHub(); err != nil {
 				failures = append(failures, err.Error())
@@ -804,7 +813,7 @@ func (s *Scenario) cleanup() {
 	preserveScratch := false
 	for _, p := range s.projects {
 		preserveScratch = preserveScratch || p.RemoteCleanupFailed || p.RunnerCleanupFailed
-		if s.ID == "refactoring.local-codex" && p.Driver.NativeHome == filepath.Join(p.Home, "native-auth") {
+		if (s.ID == "refactoring.local-codex" || s.ID == remotetest.Refactoring) && p.Driver.NativeHome == filepath.Join(p.Home, "native-auth") {
 			if err := os.Remove(filepath.Join(p.Driver.NativeHome, "auth.json")); err != nil && !os.IsNotExist(err) {
 				failures = append(failures, "remove isolated native login: "+err.Error())
 			}

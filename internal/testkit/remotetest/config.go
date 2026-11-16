@@ -22,6 +22,7 @@ import (
 	progresstools "github.com/erranliu/SteerLine/tools"
 )
 
+const Refactoring = "refactoring.remote-orca"
 const Discovery = "configuration.execution-profiles-orca"
 const Progress = "testing.project-progress-orca-browser"
 const Environment = "testing.project-environment-orca"
@@ -37,7 +38,7 @@ type Input struct {
 }
 
 func Selected(id string) bool {
-	return id == Discovery || id == Progress || id == Environment || id == LocalEnvironment
+	return id == Discovery || id == Progress || id == Environment || id == LocalEnvironment || id == Refactoring
 }
 
 // Load is called once, by test-feedback before builds or fixture creation.
@@ -90,6 +91,9 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	in.RoundSeconds, err = strconv.Atoi(getenv("STEERLINE_L4_ROUND_TIMEOUT_SECONDS"))
 	if err != nil || in.RoundSeconds <= 0 || int64(in.RoundSeconds) > int64((time.Duration(1<<63-1)-40*time.Minute)/3/time.Second) {
 		return nil, errors.New("STEERLINE_L4_ROUND_TIMEOUT_SECONDS must be a positive non-overflowing number")
+	}
+	if id == Refactoring {
+		return in, nil
 	}
 	if id == Progress {
 		in.Project, in.Commit = getenv("STEERLINE_PROGRESS_PROJECT"), getenv("STEERLINE_PROGRESS_COMMIT")

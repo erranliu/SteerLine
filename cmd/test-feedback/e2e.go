@@ -406,7 +406,7 @@ func runE2E(opts options) (code int) {
 			activityWeb = true
 		}
 	}
-	if remoteInput != nil && selected[0].ID != remotetest.Environment || activityWeb {
+	if remoteInput != nil && selected[0].ID != remotetest.Environment && selected[0].ID != remotetest.Refactoring || activityWeb {
 		web = filepath.Join(buildDir, "steerline-web.exe")
 		commands := [][]string{{"go", "build", "-tags=webui", "-o", web, "./cmd/steerline-web"}}
 		if remoteInput != nil || maintenanceWeb || hasContinuationSuggestionScenario(selected) {
@@ -823,6 +823,9 @@ func supportedLiveScenario(e e2eScenario) bool {
 	}
 	if e.ID == remotetest.LocalEnvironment {
 		return e.Level == "L4" && e.Suite == "testing" && e.Package == "./tests/e2e/remote" && e.Chain == "local-environment"
+	}
+	if e.ID == remotetest.Refactoring {
+		return e.Level == "L4" && e.Suite == "refactoring" && e.Chain == "orca-remote" && e.Package == "./tests/e2e/remote"
 	}
 	if e.Chain == "orca-remote" && e.Level == "L4" {
 		return (e.ID == remotetest.Discovery && e.Suite == "configuration" || (e.ID == remotetest.Progress || e.ID == remotetest.Environment) && e.Suite == "testing") && e.Package == "./tests/e2e/remote"
