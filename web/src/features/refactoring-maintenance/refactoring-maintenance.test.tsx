@@ -19,6 +19,7 @@ import type { Activity } from "../activities/model";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 const id = "a".repeat(32);
 const builtIn = {
@@ -115,9 +116,115 @@ function setup(
   return { submit, client, api };
 }
 function openSheet() {
-  fireEvent.click(screen.getByRole("button", { name: "新建维护行动" }));
+  fireEvent.click(screen.getByRole("button", { name: "新建重构任务" }));
   return within(screen.getByRole("dialog"));
 }
+
+it("copies the selected refactoring task and its Runner runs without submitting a command", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  const historyID = "d".repeat(32);
+  const { submit, api } = setup([
+    {
+      ...record,
+      phase: "execute",
+      environment_name: "本机 Codex",
+      operations: [
+        {
+          id: "decision-operation",
+          purpose: "first",
+          round: 1,
+          workflow: "generate",
+          state: "complete",
+          feedback: "决策反馈正文",
+          prompt: "决策提示词正文",
+          run_id: "decision-run",
+        },
+        {
+          id: "execution-operation",
+          purpose: "implement",
+          round: 1,
+          workflow: "execute",
+          state: "submitted",
+          feedback: "",
+          prompt: "执行提示词正文",
+          run_id: "execution-run",
+        },
+      ],
+    },
+    {
+      ...record,
+      id: historyID,
+      direction_name: "历史方向",
+      phase: "blocked",
+      active: false,
+      diagnostic: "运行环境不可用",
+      operations: [
+        {
+          id: "history-operation",
+          purpose: "implement",
+          round: 1,
+          workflow: "execute",
+          state: "complete",
+          feedback: "",
+          prompt: "历史执行指令",
+          run_id: "history-run",
+        },
+      ],
+    },
+  ]);
+
+  const detail = () =>
+    within(screen.getByRole("region", { name: "重构任务详情" }));
+  await screen.findByRole("region", { name: "重构任务详情" });
+  fireEvent.click(detail().getByRole("button", { name: "复制调试信息" }));
+  await detail().findByText("已复制调试信息");
+  expect(writeText).toHaveBeenLastCalledWith(
+    [
+      "repo · 重构任务 · 简化设计",
+      `请求 / 重构任务 ID：${id}（本次提交及结果）`,
+      "状态：Runner 执行中 · 第 1 轮",
+      "运行环境：本机 Codex",
+      `起始提交：${record.source_commit}`,
+      "",
+      "第 1 轮 · 首轮选题 · 已完成",
+      "操作 ID：decision-operation",
+      "Runner Run ID：decision-run",
+      "",
+      "第 1 轮 · 实施 · 已提交",
+      "操作 ID：execution-operation",
+      "Runner Run ID：execution-run",
+    ].join("\n"),
+  );
+
+  const historyPath = `/refactoring/${historyID}`;
+  expect(api.get).not.toHaveBeenCalledWith(historyPath, expect.anything());
+  const historyTask = screen.getByRole("button", { name: /历史方向/ });
+  const row = within(historyTask.closest("li")!);
+  fireEvent.click(row.getByRole("button", { name: "复制调试信息" }));
+  await row.findByText("已复制调试信息");
+  expect(api.get).toHaveBeenCalledWith(historyPath, expect.anything());
+  expect(detail().getByRole("heading", { name: builtIn.name })).toBeVisible();
+  const historyText = [
+    "repo · 重构任务 · 历史方向",
+    `请求 / 重构任务 ID：${historyID}（本次提交及结果）`,
+    "状态：已阻断 · 第 1 轮",
+    `起始提交：${record.source_commit}`,
+    "诊断：运行环境不可用",
+    "",
+    "第 1 轮 · 实施 · 已完成",
+    "操作 ID：history-operation",
+    "Runner Run ID：history-run",
+  ].join("\n");
+  expect(writeText).toHaveBeenLastCalledWith(historyText);
+
+  fireEvent.click(historyTask);
+  await detail().findByRole("heading", { name: "历史方向" });
+  fireEvent.click(detail().getByRole("button", { name: "复制调试信息" }));
+  await detail().findByText("已复制调试信息");
+  expect(writeText).toHaveBeenLastCalledWith(historyText);
+  expect(submit).not.toHaveBeenCalled();
+});
 
 it("moves a followed action to history and keeps its occupied slot linked", async () => {
   const action = { ...record, phase: "stopping", slot: true };
@@ -139,13 +246,13 @@ it("moves a followed action to history and keeps its occupied slot linked", asyn
       ],
     );
   });
-  await screen.findByText("选择一条行动查看详情");
+  await screen.findByText("选择一个重构任务查看详情");
   expect(screen.getByRole("heading", { name: "进行中 0" })).toBeInTheDocument();
   expect(
-    screen.getByRole("heading", { name: "维护历史" }).nextElementSibling,
+    screen.getByRole("heading", { name: "重构任务历史" }).nextElementSibling,
   ).toContainElement(screen.getByRole("button", { name: rowName }));
   expect(screen.getByText("推进名额 3 / 3")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("link", { name: "核实原行动" }));
+  fireEvent.click(screen.getByRole("link", { name: "核实原重构任务" }));
   await waitFor(() =>
     expect(screen.getByRole("button", { name: rowName })).toHaveAttribute(
       "aria-current",
@@ -157,7 +264,7 @@ it("moves a followed action to history and keeps its occupied slot linked", asyn
 it("starts at full capacity using a versioned ready environment and the default plan", async () => {
   const { submit } = setup();
   const sheet = openSheet();
-  const start = sheet.getByRole("button", { name: "开始维护" });
+  const start = sheet.getByRole("button", { name: "启动重构任务" });
   await waitFor(() => expect(start).toBeEnabled());
   expect(sheet.getByText("推进名额已满，提交后进入队列。")).toBeInTheDocument();
   expect(sheet.getByLabelText("运行环境")).toHaveValue(key);
@@ -248,7 +355,7 @@ it("keeps both prompt bodies visible and folds rules, feedback, and history", as
     },
   ]);
   const detail = within(
-    await screen.findByRole("region", { name: "维护详情" }),
+    await screen.findByRole("region", { name: "重构任务详情" }),
   );
   expect(
     detail.getByRole("heading", { name: "一级 · 决策提示词" }),
@@ -290,7 +397,7 @@ it("requires explicit confirmation of a changed qualification and blocks stale c
   const readiness = vi.fn(async () => ready);
   const { submit, client } = setup([], readiness);
   const sheet = openSheet();
-  const start = sheet.getByRole("button", { name: "开始维护" });
+  const start = sheet.getByRole("button", { name: "启动重构任务" });
   await waitFor(() => expect(start).toBeEnabled());
   const refresh = () =>
     act(async () =>
@@ -325,7 +432,7 @@ it("keeps the startup failure on the action and can copy its input into a new dr
   const records: MaintenanceRecord[] = [];
   const { submit } = setup(records);
   const sheet = openSheet();
-  const start = sheet.getByRole("button", { name: "开始维护" });
+  const start = sheet.getByRole("button", { name: "启动重构任务" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.change(sheet.getByLabelText("补充要求"), {
     target: { value: "检查共享夹具" },
@@ -397,7 +504,7 @@ it("closes immediately and keeps the current view when the start receipt arrives
     };
   });
   const sheet = openSheet();
-  const start = sheet.getByRole("button", { name: "开始维护" });
+  const start = sheet.getByRole("button", { name: "启动重构任务" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.change(sheet.getByLabelText("重构方向"), {
     target: { value: custom.id },
@@ -406,7 +513,7 @@ it("closes immediately and keeps the current view when the start receipt arrives
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "进行中 1" })).toBeInTheDocument();
   expect(
-    within(screen.getByRole("region", { name: "维护详情" })).getByText(
+    within(screen.getByRole("region", { name: "重构任务详情" })).getByText(
       "提交待确认",
     ),
   ).toBeInTheDocument();
@@ -423,7 +530,7 @@ it("closes immediately and keeps the current view when the start receipt arrives
   fireEvent.click(action);
   await waitFor(() =>
     expect(
-      within(screen.getByRole("region", { name: "维护详情" })).getByText(
+      within(screen.getByRole("region", { name: "重构任务详情" })).getByText(
         "正在核验启动条件",
       ),
     ).toBeInTheDocument(),
@@ -452,7 +559,7 @@ it("shows coverage exclusions and answers the original question without another 
   await screen.findByText(record.question!.prompt);
   expect(screen.getByText(/不覆盖子 Agent/)).toBeInTheDocument();
   expect(
-    screen.queryByRole("button", { name: "开始维护" }),
+    screen.queryByRole("button", { name: "启动重构任务" }),
   ).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("补充说明（可选）"), {
     target: { value: "保留公共接口" },
@@ -476,7 +583,11 @@ it("keeps known details operable when the list fails and isolates drafts by ques
     ...record,
     id: "d".repeat(32),
     direction_name: "另一维护方向",
-    question: { ...record.question!, id: "second", prompt: "第二条行动的决定" },
+    question: {
+      ...record.question!,
+      id: "second",
+      prompt: "第二个重构任务的决定",
+    },
   };
   const { client, api } = setup([record, second]);
   await screen.findByText(record.question!.prompt);
@@ -501,7 +612,7 @@ it("keeps known details operable when the list fails and isolates drafts by ques
       exact: true,
     }),
   );
-  await screen.findByText(/行动列表当前待核实/);
+  await screen.findByText(/重构任务列表当前待核实/);
   expect(screen.getByRole("button", { name: "立即停止" })).toBeEnabled();
 });
 it("links maintenance activity and receipts to the same action", () => {
