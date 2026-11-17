@@ -275,10 +275,14 @@ func RefactoringMaintenance(s *Scenario) {
 			if o.Purpose != "first" && !runnerbinding.SamePath(run.Execution.Workspace, filepath.Join(runnerstatepath.Directory(p.Home), "runs", o.RunID, "content")) {
 				s.t.Fatal("later decision did not use isolated content directory", o.Purpose, run.Execution.Workspace)
 			}
-			if len(run.Materials) != 3 || run.Materials[1].Path != "maintenance/context.json" {
+			count := 1
+			if o.Purpose == "report" {
+				count = 2
+			}
+			if o.Purpose == "finish" || len(run.Materials) != count || run.Materials[0].Path != "maintenance/context.json" {
 				s.t.Fatal("missing decision context", run.Materials)
 			}
-			contextRaw, err := os.ReadFile(run.Materials[1].SnapshotPath)
+			contextRaw, err := os.ReadFile(run.Materials[0].SnapshotPath)
 			s.Must(err)
 			var decisionContext struct {
 				DirectionPrompt string `json:"direction_prompt"`

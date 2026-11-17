@@ -1,6 +1,6 @@
-# 重构方向模板与界面统一
+# 维护方向模板与界面统一
 
-重构与维护复用项目维护的面板样式和共享控件。内置与安装级自定义方向共用目录、完整原文预览和启动版本校验。每次行动冻结所选方向，单次目标和范围通过“补充要求”传入。[产品设计](../../../docs/product-design/refactoring-maintenance.md#维护方向) · [安装说明](../../../docs/integration/install-deploy.md#自定义重构方向)
+重构与维护复用项目维护的面板样式和共享控件。内置与安装级自定义方向共用目录、完整原文预览和启动版本校验。每次行动冻结所选方向，单次目标和范围通过“补充要求”传入。[产品设计](../../../docs/product-design/refactoring-maintenance.md#维护方向) · [安装说明](../../../docs/integration/install-deploy.md#自定义维护方向)
 
 ## 提示词差异
 

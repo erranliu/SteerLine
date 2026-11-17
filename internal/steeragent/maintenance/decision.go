@@ -6,8 +6,6 @@ import (
 	"errors"
 	"slices"
 	"strings"
-
-	"github.com/erranliu/SteerLine/internal/prompts"
 )
 
 type Decision struct {
@@ -33,13 +31,6 @@ func AcceptReview(raw []byte) (Review, error) {
 	return review, nil
 }
 
-func Instruction(retryJSON bool) (string, error) {
-	if retryJSON {
-		return prompts.MaintenanceDecisionJSONRetry()
-	}
-	return prompts.MaintenanceDecision()
-}
-
 func Accept(raw []byte, mode string) (Decision, error) {
 	var d Decision
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -63,7 +54,7 @@ func Accept(raw []byte, mode string) (Decision, error) {
 	switch d.Kind {
 	case "execute":
 		if !present(d.Prompt) {
-			return d, errors.New("执行决定缺少提示词")
+			return d, errors.New("执行决定缺少执行指令")
 		}
 	case "ask":
 		if len(d.Question) == 0 || bytes.Equal(d.Question, []byte("null")) {
@@ -82,7 +73,7 @@ func allowedKinds(mode string) []string {
 	case "audit":
 		return []string{"execute", "ask", "accept", "blocked"}
 	default:
-		return []string{"execute", "ask", "blocked"}
+		return []string{}
 	}
 }
 

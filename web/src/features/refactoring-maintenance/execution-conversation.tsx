@@ -42,38 +42,6 @@ function MessageTime({ value }: { value?: string | null }) {
   );
 }
 
-function DecisionPrompt({
-  decision,
-  record,
-}: {
-  decision?: Operation;
-  record: MaintenanceRecord;
-}) {
-  return (
-    <details>
-      <summary>{decision ? "一级提示词" : "维护要求"}</summary>
-      <dl>
-        {[
-          ["方向提示词", record.direction_prompt],
-          ["补充要求", record.input.requirements],
-          ["决策短指令", decision?.prompt],
-          ["阶段规则", decision?.decision_rules?.rules],
-          ["策略规则", decision?.decision_rules?.strategy],
-        ].map(([label, body]) =>
-          body ? (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>
-                <pre tabIndex={0}>{body}</pre>
-              </dd>
-            </div>
-          ) : null,
-        )}
-      </dl>
-    </details>
-  );
-}
-
 function AgentMessage({
   record,
   operation,
@@ -88,17 +56,19 @@ function AgentMessage({
     operation.report_index === undefined
       ? undefined
       : record.reports?.[operation.report_index];
-  const body = execution
-    ? operation.prompt
-    : report?.body || operation.feedback || operation.decision_summary;
+  const conclusion =
+    report?.body || operation.feedback || operation.decision_summary;
   const summary = execution
-    ? decision?.decision_summary || operation.prompt
+    ? decision?.decision_summary
     : operation.decision_summary || report?.body;
   const purpose = operationPurposeLabel(operation.purpose);
+  const speaker = ["publish", "conflict"].includes(operation.purpose)
+    ? "SteerLine"
+    : "SteerAgent";
   return (
     <li className="refactoring-message" data-speaker="agent">
       <h4>
-        SteerAgent ·{" "}
+        {speaker} ·{" "}
         {execution && decision?.purpose === "audit" && "成果审计 → "}
         {purpose}
       </h4>
@@ -128,20 +98,31 @@ function AgentMessage({
               : operationStateLabel(operation.state)}
         </p>
       )}
+      {execution && operation.prompt && (
+        <>
+          <p>执行指令</p>
+          <pre tabIndex={0}>{operation.prompt}</pre>
+        </>
+      )}
       <div className="refactoring-message-actions">
-        {body && (
+        {!execution && conclusion && (
           <details>
-            <summary>{execution ? "展开指令" : "展开结论"}</summary>
+            <summary>展开结论</summary>
             {report && (
               <p>
                 head <code>{report.head}</code> · base{" "}
                 <code>{report.base}</code>
               </p>
             )}
-            <pre tabIndex={0}>{body}</pre>
+            <pre tabIndex={0}>{conclusion}</pre>
           </details>
         )}
-        {decision && <DecisionPrompt decision={decision} record={record} />}
+        {decision?.prompt && (
+          <details>
+            <summary>决策指令</summary>
+            <pre tabIndex={0}>{decision.prompt}</pre>
+          </details>
+        )}
       </div>
     </li>
   );
@@ -162,13 +143,16 @@ function RunnerMessage({ operation }: { operation: Operation }) {
         : state);
   return (
     <li className="refactoring-message" data-speaker="runner">
-      <h4>Runner · {operationPurposeLabel(operation.purpose)}反馈</h4>
+      <h4>Runner · {operationPurposeLabel(operation.purpose)} · 执行反馈</h4>
       <MessageTime value={operation.completed_at} />
-      <p className="refactoring-message-summary">{summary}</p>
+      <p className="refactoring-feedback">{summary}</p>
+      {operation.feedback && operation.feedback !== summary && (
+        <pre tabIndex={0}>{operation.feedback}</pre>
+      )}
       {(operation.feedback || operation.run_id) && (
         <div className="refactoring-message-actions">
           <details>
-            <summary>展开回执</summary>
+            <summary>运行回执</summary>
             <p>
               {state}
               {operation.run_status && (
@@ -184,7 +168,6 @@ function RunnerMessage({ operation }: { operation: Operation }) {
                 </>
               )}
             </p>
-            {operation.feedback && <pre tabIndex={0}>{operation.feedback}</pre>}
           </details>
         </div>
       )}
@@ -201,6 +184,20 @@ export function ExecutionConversation({
   return (
     <section className="refactoring-conversation" aria-label="执行对话">
       <h3>执行对话</h3>
+      <div className="refactoring-preview refactoring-direction">
+        <h4>维护方向</h4>
+        {record.direction_prompt ? (
+          <pre tabIndex={0}>{record.direction_prompt}</pre>
+        ) : (
+          <p>{record.direction_name}</p>
+        )}
+        {record.input.requirements && (
+          <>
+            <p>补充要求</p>
+            <pre tabIndex={0}>{record.input.requirements}</pre>
+          </>
+        )}
+      </div>
       {operations.length ? (
         <ol>
           {operations.map((operation, i) => {
@@ -238,16 +235,11 @@ export function ExecutionConversation({
           })}
         </ol>
       ) : (
-        <>
-          <p className="muted">
-            {record.active
-              ? "等待 SteerAgent 生成执行提示词"
-              : "本次重构任务未生成执行提示词"}
-          </p>
-          {(record.direction_prompt || record.input.requirements) && (
-            <DecisionPrompt record={record} />
-          )}
-        </>
+        <p className="muted">
+          {record.active
+            ? "等待 SteerAgent 生成执行指令"
+            : "本次重构任务未生成执行指令"}
+        </p>
       )}
     </section>
   );

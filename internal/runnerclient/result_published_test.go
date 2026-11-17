@@ -339,7 +339,7 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat *Catalog, base runnercontract.RunInput, nativeState string) {
 	t.Helper()
 	input := base
-	executePrompt, promptErr := prompts.MaintenanceExecute([]byte(`{"action_id":"fixture","operation_id":"fixture","instruction":"controlled maintenance writer"}`))
+	executePrompt, promptErr := prompts.MaintenanceExecute([]byte(`{"action_id":"fixture","operation_id":"fixture","instruction":"controlled maintenance writer"}`), true)
 	if promptErr != nil {
 		t.Fatal(promptErr)
 	}
@@ -434,12 +434,12 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	if err = os.Remove(filepath.Join(nativeState, "hold-turn")); err != nil {
 		t.Fatal(err)
 	}
-	rules, contextBody := "controlled immutable file", "{\"mode\":\"first\"}"
-	readPrompt, promptErr := prompts.MaintenanceDecision()
+	contextBody := "{\"mode\":\"first\"}"
+	readPrompt, promptErr := prompts.MaintenanceDecision("first", "cautious", false)
 	if promptErr != nil {
 		t.Fatal(promptErr)
 	}
-	g := runnercontract.GenerateRunInput{Title: "Maintenance readonly caller fixture", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: *read.Execution, Generate: runnercontract.GenerateInput{Directory: &runnercontract.DirectoryAccess{Path: input.Repository.LocalPath, Access: "read_only"}, Instruction: readPrompt, OutputSchema: maintenance.Schema("first"), Materials: []runnercontract.Document{{Kind: "file", Path: "maintenance/rules.md", Content: &rules}, {Kind: "file", Path: "maintenance/context.json", Content: &contextBody}}}}
+	g := runnercontract.GenerateRunInput{Title: "Maintenance readonly caller fixture", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: *read.Execution, Generate: runnercontract.GenerateInput{Directory: &runnercontract.DirectoryAccess{Path: input.Repository.LocalPath, Access: "read_only"}, Instruction: readPrompt, OutputSchema: maintenance.Schema("first"), Materials: []runnercontract.Document{{Kind: "file", Path: "maintenance/context.json", Content: &contextBody}}}}
 	if err = cat.ValidateGenerate(g); err != nil {
 		t.Fatal(err)
 	}
@@ -461,6 +461,10 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	}
 	g.Generate.Directory = nil
 	g.Generate.OutputSchema = maintenance.Schema("select")
+	g.Generate.Instruction, err = prompts.MaintenanceDecision("select", "cautious", false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	contextBody = "{\"mode\":\"select\"}"
 	if err = cat.ValidateGenerate(g); err != nil {
 		t.Fatal(err)

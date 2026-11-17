@@ -40,10 +40,14 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 	if in.Workflow.ID == "generate" {
 		var g rc.GenerateRunInput
 		_ = json.Unmarshal(request.Input, &g)
-		if len(g.Generate.Materials) != 3 {
+		count := 1
+		if purpose == "report" {
+			count = 2
+		}
+		if len(g.Generate.Materials) != count || g.Generate.Materials[0].Path != "maintenance/context.json" {
 			return nil, "invalid_materials", nil
 		}
-		_ = json.Unmarshal([]byte(*g.Generate.Materials[1].Content), &facts)
+		_ = json.Unmarshal([]byte(*g.Generate.Materials[0].Content), &facts)
 		decision := map[string]any{"kind": "execute", "prompt": "实施同方向的有限切片并验证。", "summary": "受控决策，非真实模型判断"}
 		switch facts.Mode {
 		case "audit":
@@ -60,8 +64,8 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 				decision["question"] = ref.QuestionBody{Prompt: "是否保留公共接口？", Facts: []string{"当前接口有调用方"}, Attempts: []string{}, Options: []ref.QuestionOption{{ID: "keep", Label: "保留公共接口", Impact: "维持兼容"}}, RecommendedOptionID: "keep", RecommendationReason: "兼容现有调用"}
 			}
 		case "report":
-			if facts.PR == nil || g.Generate.Materials[2].Path != "maintenance/pr.diff" ||
-				!strings.Contains(*g.Generate.Materials[2].Content, "maintenance-result.txt") {
+			if facts.PR == nil || g.Generate.Materials[1].Path != "maintenance/pr.diff" ||
+				!strings.Contains(*g.Generate.Materials[1].Content, "maintenance-result.txt") {
 				return nil, "missing_pr_diff", nil
 			}
 			decision = map[string]any{"recommendation": "merge", "report": reportBody + "\r\n" + facts.PR.HeadRevision + "  "}
@@ -137,18 +141,20 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 			run.Status = "failed"
 			run.Diagnostic = "scripted first-round failure with dirty worktree"
 		}
-		if purpose == "publish" || purpose == "conflict" {
-			for _, args := range [][]string{{"add", "--", "maintenance-result.txt"}, {"commit", "--quiet", "-m", "Controlled maintenance delivery"}} {
+		if value.Outcome == "done" && purpose != "publish" {
+			for _, args := range [][]string{{"add", "--", "maintenance-result.txt"}, {"commit", "--quiet", "-m", "Controlled maintenance changes"}} {
 				if _, e = Git(context.Background(), worktree, args...); e != nil {
 					return nil, "", e
 				}
 			}
-			head, e := Git(context.Background(), worktree, "rev-parse", "HEAD")
-			if e != nil {
-				return nil, "", e
-			}
-			value.Head = head
-			value.Base = in.Repository.BaseRevision
+		}
+		head, e := Git(context.Background(), worktree, "rev-parse", "HEAD")
+		if e != nil {
+			return nil, "", e
+		}
+		value.Head = head
+		value.Base = in.Repository.BaseRevision
+		if purpose == "publish" || purpose == "conflict" {
 			if _, e = Git(context.Background(), worktree, "push", provider.GitURL, head+":refs/heads/"+branch); e != nil {
 				return nil, "", e
 			}

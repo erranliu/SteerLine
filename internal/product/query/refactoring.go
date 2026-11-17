@@ -1,12 +1,10 @@
 package query
 
 import (
-	"encoding/json"
 	"math/big"
 	"time"
 
 	refactoring "github.com/erranliu/SteerLine/internal/refactoring/model"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 // Refactoring exposes the action's prompt snapshots without exposing Runner requests.
@@ -23,9 +21,6 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 		if workflow == "generate" {
 			op["decision_summary"] = o.DecisionSummary
 			op["decision_kind"] = o.DecisionKind
-			if rules := refactoringDecisionRules(o.Request.Input); len(rules) > 0 {
-				op["decision_rules"] = rules
-			}
 			// An accepted review is saved after its operation settles and before the next operation starts.
 			if o.Purpose == "report" && o.CompletedAt != nil && reportIndex < len(r.Reports) {
 				report := r.Reports[reportIndex]
@@ -83,26 +78,6 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 	out["cost_complete"] = complete
 	out["untracked"] = []string{"subagents", "tool_internal_models", "unobserved_provider_calls"}
 	return out
-}
-
-func refactoringDecisionRules(input json.RawMessage) map[string]string {
-	var request runnercontract.GenerateRunInput
-	if len(input) == 0 || json.Unmarshal(input, &request) != nil {
-		return nil
-	}
-	rules := make(map[string]string, 2)
-	for _, material := range request.Generate.Materials {
-		if material.Kind != "file" || material.Content == nil {
-			continue
-		}
-		switch material.Path {
-		case "maintenance/rules.md":
-			rules["rules"] = *material.Content
-		case "maintenance/strategy.md":
-			rules["strategy"] = *material.Content
-		}
-	}
-	return rules
 }
 
 func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {

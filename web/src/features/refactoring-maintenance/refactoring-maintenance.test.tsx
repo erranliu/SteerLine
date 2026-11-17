@@ -137,7 +137,7 @@ it("copies the selected refactoring task and its Runner runs without submitting 
           workflow: "generate",
           state: "complete",
           feedback: "决策反馈正文",
-          prompt: "决策提示词正文",
+          prompt: "只读选择一个切片。",
           run_id: "decision-run",
         },
         {
@@ -147,7 +147,7 @@ it("copies the selected refactoring task and its Runner runs without submitting 
           workflow: "execute",
           state: "submitted",
           feedback: "",
-          prompt: "执行提示词正文",
+          prompt: "实施切片并验证。",
           run_id: "execution-run",
         },
       ],
@@ -293,18 +293,14 @@ it("starts at full capacity using a versioned ready environment and the default 
 it("keeps the full direction preview and drafts when the sheet closes", async () => {
   setup();
   const sheet = openSheet();
-  const preview = await sheet.findByLabelText("方向提示词");
-  expect(
-    sheet.getByRole("heading", { name: "一级 · 决策提示词" }),
-  ).toBeVisible();
-  expect(
-    sheet.getByRole("heading", { name: "二级 · 执行提示词" }),
-  ).toBeVisible();
+  const preview = await sheet.findByLabelText("维护方向预览");
+  expect(sheet.getByRole("heading", { name: "维护方向" })).toBeVisible();
+  expect(sheet.getByRole("heading", { name: "执行指令" })).toBeVisible();
   expect(
     sheet.getByText("启动后由 SteerAgent 生成，交给 Runner 执行。"),
   ).toBeVisible();
   expect(preview.textContent).toBe(builtIn.prompt);
-  fireEvent.change(sheet.getByLabelText("重构方向"), {
+  fireEvent.change(sheet.getByLabelText("选择维护方向"), {
     target: { value: custom.id },
   });
   expect(preview.textContent).toBe(custom.prompt);
@@ -314,10 +310,12 @@ it("keeps the full direction preview and drafts when the sheet closes", async ()
   fireEvent.click(sheet.getByRole("button", { name: "关闭" }));
   const reopened = openSheet();
   expect(reopened.getByLabelText("补充要求")).toHaveValue("先检查共享夹具");
-  expect(reopened.getByLabelText("方向提示词").textContent).toBe(custom.prompt);
+  expect(reopened.getByLabelText("维护方向预览").textContent).toBe(
+    custom.prompt,
+  );
 });
 
-it("shows the execution dialogue in order and expands each message and its own decision prompt", async () => {
+it("shows direction, instructions and feedback by default and expands decisions individually", async () => {
   const instruction = "补充验证。  \r\n核对调用方。\r\n";
   const operation = { round: 1, state: "complete", feedback: "", prompt: "" };
   const reports = [
@@ -342,7 +340,7 @@ it("shows the execution dialogue in order and expands each message and its own d
           purpose: "first",
           decision_kind: "execute",
           decision_summary: "选定一个切片",
-          decision_rules: { rules: "首轮规则" },
+          prompt: "首轮选题指令",
         },
         {
           ...operation,
@@ -360,7 +358,7 @@ it("shows the execution dialogue in order and expands each message and its own d
           purpose: "audit",
           decision_kind: "execute",
           decision_summary: "缺少可核对的测试证据",
-          decision_rules: { rules: "审计规则" },
+          prompt: "按随附材料判断。",
         },
         {
           ...operation,
@@ -385,7 +383,7 @@ it("shows the execution dialogue in order and expands each message and its own d
           id: "report",
           workflow: "generate",
           purpose: "report",
-          decision_rules: { rules: "合入评审规则" },
+          prompt: "合入评审指令",
           report_index: 0,
         },
       ],
@@ -402,10 +400,11 @@ it("shows the execution dialogue in order and expands each message and its own d
   expect(
     dialogue.getAllByRole("heading", { level: 4 }).map((h) => h.textContent),
   ).toEqual([
+    "维护方向",
     "SteerAgent · 实施",
-    "Runner · 实施反馈",
+    "Runner · 实施 · 执行反馈",
     "SteerAgent · 成果审计 → 修复或补证",
-    "Runner · 修复或补证反馈",
+    "Runner · 修复或补证 · 执行反馈",
     "SteerAgent · 成果审计",
     "SteerAgent · PR 合入评审",
   ]);
@@ -415,30 +414,36 @@ it("shows the execution dialogue in order and expands each message and its own d
     "补证完成",
     "审计通过",
     "建议合入 · 此评审已过期或正在复核",
+    "保持原接口。",
   ]) {
     expect(dialogue.getByText(preview, { exact: true })).toBeVisible();
   }
+  expect(dialogue.getByRole("heading", { name: "维护方向" })).toBeVisible();
+  const direction = dialogue.getByText(/简化不必要的抽象与控制流/);
+  expect(direction).toBeVisible();
+  expect(direction.textContent).toBe(builtIn.prompt);
   const [implement, , repair, response, audit, review] = dialogue
     .getAllByRole("listitem")
     .map((message) => within(message));
-  expect(repair.getByText(/核对调用方/)).not.toBeVisible();
-  fireEvent.click(repair.getByText("展开指令"));
+  expect(repair.getByText("执行指令")).toBeVisible();
+  expect(repair.getByText(/核对调用方/)).toBeVisible();
   expect(repair.getByText(/核对调用方/).textContent).toBe(instruction);
-  fireEvent.click(repair.getByText("一级提示词"));
-  expect(repair.getByText("审计规则")).toBeVisible();
-  expect(repair.getByText("保持原接口。")).toBeVisible();
-  expect(implement.getByText("首轮规则")).not.toBeVisible();
-  expect(response.getByText("补证回执原文")).not.toBeVisible();
-  fireEvent.click(response.getByText("展开回执"));
+  expect(repair.getByText("按随附材料判断。")).not.toBeVisible();
+  fireEvent.click(repair.getByText("决策指令"));
+  expect(repair.getByText("按随附材料判断。")).toBeVisible();
+  expect(implement.getByText("首轮选题指令")).not.toBeVisible();
   expect(response.getByText("补证回执原文")).toBeVisible();
+  expect(response.getByText("run-repair")).not.toBeVisible();
+  fireEvent.click(response.getByText("运行回执"));
   expect(response.getByText("run-repair")).toBeVisible();
   fireEvent.click(audit.getByText("展开结论"));
   expect(audit.getByText("审计结论全文")).toBeVisible();
   expect(review.getByText("review-head")).not.toBeVisible();
   fireEvent.click(review.getByText("展开结论"));
   expect(review.getByText("review-head")).toBeVisible();
-  fireEvent.click(review.getByText("一级提示词"));
-  expect(review.getByText("合入评审规则")).toBeVisible();
+  expect(review.getByText("合入评审指令")).not.toBeVisible();
+  fireEvent.click(review.getByText("决策指令"));
+  expect(review.getByText("合入评审指令")).toBeVisible();
   expect(detail.getByText(record.question!.prompt)).toBeVisible();
 });
 
@@ -463,11 +468,10 @@ it("shows pending execution without adding to the Runner count", async () => {
   expect(screen.getByText("Runner 执行 0 次")).toBeVisible();
 });
 
-it("shows a waiting state before SteerAgent generates an execution prompt", async () => {
+it("shows the maintenance direction before SteerAgent generates an execution instruction", async () => {
   setup([{ ...record, phase: "first", question: undefined }]);
-  expect(
-    await screen.findByText("等待 SteerAgent 生成执行提示词"),
-  ).toBeVisible();
+  expect(await screen.findByText("等待 SteerAgent 生成执行指令")).toBeVisible();
+  expect(screen.getByText(/简化不必要的抽象与控制流/)).toBeVisible();
 });
 
 it("requires explicit confirmation of a changed qualification and blocks stale cached data", async () => {
@@ -543,8 +547,6 @@ it("keeps the startup failure on the action and can copy its input into a new dr
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "环境已变化，请重新检测",
   );
-  expect(screen.getByText("检查共享夹具")).not.toBeVisible();
-  fireEvent.click(screen.getByText("维护要求", { exact: true }));
   expect(screen.getByText("检查共享夹具")).toBeVisible();
   const requestedCommit = screen.getByText(/申请的起始提交/);
   expect(requestedCommit).not.toBeVisible();
@@ -585,7 +587,7 @@ it("closes immediately and keeps the current view when the start receipt arrives
   const sheet = openSheet();
   const start = sheet.getByRole("button", { name: "启动重构任务" });
   await waitFor(() => expect(start).toBeEnabled());
-  fireEvent.change(sheet.getByLabelText("重构方向"), {
+  fireEvent.change(sheet.getByLabelText("选择维护方向"), {
     target: { value: custom.id },
   });
   fireEvent.click(start);

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/prompts"
@@ -21,6 +20,7 @@ type contextOperation struct {
 	Feedback      string                       `json:"feedback,omitempty"`
 	Status        string                       `json:"status,omitempty"`
 	NativeOutcome string                       `json:"native_outcome,omitempty"`
+	Committed     bool                         `json:"committed"`
 	Diagnostic    string                       `json:"diagnostic,omitempty"`
 	Result        *model.Result                `json:"result,omitempty"`
 	Question      *runnercontract.Question     `json:"question,omitempty"`
@@ -35,28 +35,18 @@ type roundSummary struct {
 }
 
 type decisionContext struct {
-	ActionID         string                    `json:"action_id"`
-	Mode             string                    `json:"mode"`
-	Strategy         string                    `json:"strategy"`
-	Requirements     string                    `json:"requirements"`
-	DirectionPrompt  string                    `json:"direction_prompt"`
-	Repository       runnercontract.Repository `json:"repository"`
-	Round            int                       `json:"round"`
-	RoundStart       string                    `json:"round_start,omitempty"`
-	Budget           model.Budget              `json:"budget"`
-	Finish           bool                      `json:"finish"`
-	ContinueConflict bool                      `json:"continue_conflict,omitempty"`
-	CanStartRound    bool                      `json:"can_start_round"`
-	Amount           *string                   `json:"amount,omitempty"`
-	CostComplete     bool                      `json:"cost_complete"`
-	AsOf             time.Time                 `json:"as_of"`
-	ElapsedSeconds   float64                   `json:"elapsed_seconds"`
-	Diagnostic       string                    `json:"diagnostic,omitempty"`
-	PR               *runnercontract.PRFact    `json:"pr,omitempty"`
-	Feedback         []contextOperation        `json:"feedback,omitempty"`
-	History          []roundSummary            `json:"history,omitempty"`
-	Answers          []model.Answer            `json:"answers,omitempty"`
-	Question         *model.Question           `json:"answered_question,omitempty"`
+	Mode            string                 `json:"mode"`
+	Requirements    string                 `json:"requirements"`
+	DirectionPrompt string                 `json:"direction_prompt"`
+	Round           int                    `json:"round,omitempty"`
+	RoundStart      string                 `json:"round_start,omitempty"`
+	RoundGoal       string                 `json:"round_goal,omitempty"`
+	PR              *runnercontract.PRFact `json:"pr,omitempty"`
+	Checks          string                 `json:"checks,omitempty"`
+	Feedback        []contextOperation     `json:"feedback,omitempty"`
+	History         []roundSummary         `json:"history,omitempty"`
+	Answers         []model.Answer         `json:"answers,omitempty"`
+	Question        *model.Question        `json:"answered_question,omitempty"`
 }
 
 func clippedSummary(s string, size int) string {
@@ -69,17 +59,15 @@ func clippedSummary(s string, size int) string {
 	return s[:size] + "…"
 }
 
-func (s *Service) context(r model.Record, now time.Time) decisionContext {
-	amount, complete := r.CostTotal()
+func (s *Service) context(r model.Record, review model.ReviewEvidence) decisionContext {
 	f := decisionContext{
-		ActionID: r.ID, Mode: r.Phase, Strategy: r.Input.Strategy, Requirements: r.Input.Requirements,
-		DirectionPrompt: r.Frozen.Direction.Prompt, Repository: r.Frozen.Repository, Round: r.Round, Budget: r.Input.Budget,
-		Finish: r.FinishRequested, CanStartRound: (r.Phase == "first" || r.Phase == "select") && !r.FinishRequested && !r.BudgetExhausted(now) && (r.Input.Budget.Dollars == "" || complete),
-		ContinueConflict: r.Phase == "finish" && r.WriteKind == "conflict",
-		Amount:           amount, CostComplete: complete, AsOf: now, ElapsedSeconds: r.Elapsed(now).Seconds(), Diagnostic: r.Diagnostic,
-		PR: r.PR,
+		Mode: r.Phase, Requirements: r.Input.Requirements, DirectionPrompt: r.Frozen.Direction.Prompt,
 	}
-	f.Repository.LocalPath = ""
+	if r.Phase == "report" {
+		f.PR, f.Checks = r.PR, review.Checks
+		return f
+	}
+	f.Round = r.Round
 	if r.Phase == "audit" {
 		f.RoundStart = roundStart(r)
 	}
@@ -99,8 +87,12 @@ func (s *Service) context(r model.Record, now time.Time) decisionContext {
 		if !o.Settled() {
 			continue
 		}
+		if r.Phase == "audit" && o.Round == r.Round && o.Purpose == "implement" && f.RoundGoal == "" {
+			f.RoundGoal = clippedSummary(o.Prompt, 16<<10)
+		}
 		if o.Content(r).WorkflowID == "execute" && o.Run != nil && executions < 2 {
 			item := contextOperation{ID: o.ID, Round: o.Round, Purpose: o.Purpose, Prompt: o.Prompt, Result: o.Result, Question: o.Run.Question, WorkspaceGit: o.WorkspaceGit, Status: o.Run.Status, Diagnostic: clippedSummary(o.Run.Diagnostic, 2048)}
+			item.Committed = executionCommitted(o)
 			if o.Run.Final != nil {
 				item.NativeOutcome = o.Run.Final.NativeOutcome
 			}
@@ -120,23 +112,50 @@ func (s *Service) context(r model.Record, now time.Time) decisionContext {
 	return f
 }
 
-func roundStart(r model.Record) string {
-	if r.Round == 1 {
-		return r.Frozen.Repository.BaseRevision
+type executionContext struct {
+	Publication   map[string]string      `json:"publication,omitempty"`
+	ManagedBranch string                 `json:"managed_branch,omitempty"`
+	PR            *runnercontract.PRFact `json:"pr,omitempty"`
+	RoundStart    string                 `json:"round_start,omitempty"`
+	AcceptedHead  string                 `json:"accepted_head,omitempty"`
+}
+
+type executionRequest struct {
+	ActionID    string           `json:"action_id"`
+	OperationID string           `json:"operation_id"`
+	Instruction string           `json:"instruction"`
+	Context     executionContext `json:"context"`
+}
+
+func committedHead(o model.Operation) string {
+	if git := o.WorkspaceGit; git != nil && git.Verified && git.Clean != nil && *git.Clean && git.Commit != nil && model.ValidRevision(*git.Commit) {
+		return *git.Commit
 	}
+	return ""
+}
+
+func acceptedHead(r model.Record, round int) string {
 	var accepted string
 	for i := len(r.Operations) - 1; i >= 0; i-- {
 		o := r.Operations[i]
-		if o.Round != r.Round-1 {
+		if round > 0 && o.Round != round {
 			continue
 		}
 		if accepted == "" {
 			accepted = o.AcceptedOperation
-		} else if o.ID == accepted && o.WorkspaceGit != nil && o.WorkspaceGit.Verified &&
-			o.WorkspaceGit.Clean != nil && *o.WorkspaceGit.Clean &&
-			o.WorkspaceGit.Commit != nil && model.ValidRevision(*o.WorkspaceGit.Commit) {
-			return *o.WorkspaceGit.Commit
+		} else if o.ID == accepted {
+			return committedHead(o)
 		}
+	}
+	return ""
+}
+
+func roundStart(r model.Record) string {
+	if r.Round == 1 {
+		return r.Frozen.Repository.BaseRevision
+	}
+	if r.Round > 1 {
+		return acceptedHead(r, r.Round-1)
 	}
 	return ""
 }
@@ -152,13 +171,23 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 	var input any
 	if r.Phase == "execute" {
 		o.Purpose, o.Prompt = r.WriteKind, r.PendingPrompt
-		context := struct {
-			Publication   map[string]string      `json:"publication"`
-			ManagedBranch string                 `json:"managed_branch,omitempty"`
-			PR            *runnercontract.PRFact `json:"pr,omitempty"`
-			RoundStart    string                 `json:"round_start,omitempty"`
-		}{Publication: r.Frozen.Publication, PR: r.PR}
-		if o.Purpose == "repair" {
+		var context executionContext
+		local := o.Purpose == "implement" || o.Purpose == "repair"
+		if !local {
+			var err error
+			o.Prompt, err = prompts.MaintenanceDelivery(o.Purpose)
+			if err != nil {
+				return o, err
+			}
+			context.Publication, context.PR = r.Frozen.Publication, r.PR
+			if o.Purpose == "publish" {
+				context.AcceptedHead = acceptedHead(r, 0)
+				if context.AcceptedHead == "" {
+					return o, errors.New("缺少已接受成果的提交")
+				}
+			}
+		}
+		if local {
 			context.RoundStart = roundStart(r)
 		}
 		for i := len(r.Operations) - 1; i >= 0; i-- {
@@ -168,13 +197,13 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 			}
 		}
 		if strings.TrimSpace(o.Prompt) == "" {
-			return o, errors.New("缺少本次三级指令")
+			return o, errors.New("缺少本次执行指令")
 		}
-		data, err := json.Marshal(map[string]any{"action_id": r.ID, "operation_id": id, "instruction": o.Prompt, "context": context})
+		data, err := json.Marshal(executionRequest{ActionID: r.ID, OperationID: id, Instruction: o.Prompt, Context: context})
 		if err != nil {
 			return o, err
 		}
-		body, err := prompts.MaintenanceExecute(data)
+		body, err := prompts.MaintenanceExecute(data, local)
 		if err != nil {
 			return o, err
 		}
@@ -186,48 +215,29 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 			retryJSON = prior.State == "complete" && prior.Purpose == r.Phase && prior.Round == r.Round &&
 				prior.Run != nil && decisionNeedsJSONRepair(prior.Run.ContentResult)
 		}
-		body, err := decision.Instruction(retryJSON)
+		body, err := prompts.MaintenanceDecision(r.Phase, r.Input.Strategy, retryJSON)
 		if err != nil {
 			return o, err
 		}
-		rules := r.Frozen.FollowRules
 		schema := decision.Schema(r.Phase)
-		switch r.Phase {
-		case "first":
-			rules = r.Frozen.FirstRules
-		case "report":
-			rules, schema = r.Frozen.ReportRules, decision.ReportSchema()
-		}
-		if rules == "" || r.Phase != "report" && r.Frozen.Strategy == "" || r.Frozen.Direction.Prompt == "" {
-			return o, errors.New("缺少冻结维护提示词材料")
-		}
-		var facts any
 		if r.Phase == "report" {
-			facts = struct {
-				Mode            string                 `json:"mode"`
-				PR              *runnercontract.PRFact `json:"pr"`
-				DirectionPrompt string                 `json:"direction_prompt"`
-				Requirements    string                 `json:"requirements"`
-				Checks          string                 `json:"checks"`
-			}{"report", r.PR, r.Frozen.Direction.Prompt, r.Input.Requirements, review.Checks}
-		} else {
-			facts = s.context(r, now)
+			schema = decision.ReportSchema()
 		}
-		data, err := json.Marshal(facts)
+		if r.Frozen.Direction.Prompt == "" {
+			return o, errors.New("缺少冻结的维护方向")
+		}
+		data, err := json.Marshal(s.context(r, review))
 		if err != nil {
 			return o, err
 		}
-		if len(data)+len(rules)+len(r.Frozen.Strategy)+len(review.Diff) > 1<<20 {
+		if len(data)+len(body)+len(review.Diff) > 1<<20 {
 			return o, errors.New("本阶段必要的维护上下文超过限额，需缩小证据范围")
 		}
 		contextBody := string(data)
 		g := runnercontract.GenerateInput{Instruction: body, OutputSchema: schema, Materials: []runnercontract.Document{
-			{Kind: "file", Path: "maintenance/rules.md", Content: &rules},
 			{Kind: "file", Path: "maintenance/context.json", Content: &contextBody},
 		}}
-		if r.Phase != "report" {
-			g.Materials = append(g.Materials, runnercontract.Document{Kind: "file", Path: "maintenance/strategy.md", Content: &r.Frozen.Strategy})
-		} else {
+		if r.Phase == "report" {
 			g.Materials = append(g.Materials, runnercontract.Document{Kind: "file", Path: "maintenance/pr.diff", Content: &review.Diff})
 		}
 		if r.Phase == "first" {

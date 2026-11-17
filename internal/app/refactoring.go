@@ -22,7 +22,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/refactoring"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -41,7 +40,7 @@ type refactoringPort struct {
 
 func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Client, admit func(context.Context) error, materials committedMaterialReader, reserver readyExecutionReserver) *refactoringPort {
 	p := &refactoringPort{config: c, store: store, materials: materials}
-	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Qualify: p.qualifyFirst, Verify: p.verify, VerifyConflictBase: p.verifyConflictBase, ReviewDiff: p.reviewDiff, ReadCost: p.cost, Queue: c.runtimeGenerations, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
+	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Qualify: p.qualifyFirst, Verify: p.verify, VerifyPublishHead: p.verifyPublishHead, VerifyConflictBase: p.verifyConflictBase, ReviewDiff: p.reviewDiff, ReadCost: p.cost, Queue: c.runtimeGenerations, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
 	p.service.StartContext = c.withProfiles
 	p.service.Reserve = func(ctx context.Context, commit string, save func() error) error {
 		return reserver.reserveReadyExecution(ctx, commit, func() error {
@@ -159,18 +158,6 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 			return out, e
 		}
 	}
-	for phase, destination := range map[string]*string{"first": &out.FirstRules, "followup": &out.FollowRules, "report": &out.ReportRules} {
-		rules, err := prompts.MaintenanceRules(phase)
-		if err != nil {
-			return out, err
-		}
-		*destination = string(rules)
-	}
-	strategy, e := prompts.MaintenanceStrategy(in.Strategy)
-	if e != nil {
-		return out, e
-	}
-	out.Strategy = string(strategy)
 	cli, e := c.runnerClient(ctx)
 	if e != nil {
 		return out, e
@@ -385,6 +372,16 @@ func (p *refactoringPort) reviewDiff(ctx context.Context, r ref.Record, pr runne
 	return string(diff), err
 }
 
+func (p *refactoringPort) verifyPublishHead(ctx context.Context, r ref.Record, pr runnercontract.PRFact, accepted string) error {
+	if err := p.fetchPRVersion(ctx, r, pr); err != nil {
+		return err
+	}
+	if _, err := p.config.repositoryGit(ctx, "--no-replace-objects", "merge-base", "--is-ancestor", accepted, pr.HeadRevision); err != nil {
+		return fmt.Errorf("PR head 未核实包含已接受提交 %s: %w", accepted, err)
+	}
+	return nil
+}
+
 func (p *refactoringPort) verifyConflictBase(ctx context.Context, r ref.Record, pr runnercontract.PRFact) error {
 	if err := p.fetchPRVersion(ctx, r, pr); err != nil {
 		return err
@@ -392,6 +389,11 @@ func (p *refactoringPort) verifyConflictBase(ctx context.Context, r ref.Record, 
 	_, err := p.config.repositoryGit(ctx, "--no-replace-objects", "merge-base", "--is-ancestor", pr.BaseRevision, pr.HeadRevision)
 	if err != nil {
 		return fmt.Errorf("原 PR 的交付提交未核实包含当前目标基线 %s: %w", pr.BaseRevision, err)
+	}
+	if r.PR != nil && r.PR.HeadRevision != pr.HeadRevision {
+		if _, err = p.config.repositoryGit(ctx, "--no-replace-objects", "merge-base", "--is-ancestor", r.PR.HeadRevision, pr.HeadRevision); err != nil {
+			return fmt.Errorf("原 PR 的交付提交未核实保留原 head %s: %w", r.PR.HeadRevision, err)
+		}
 	}
 	return nil
 }

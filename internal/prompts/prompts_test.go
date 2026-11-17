@@ -19,10 +19,16 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		name   string
 		render func() (string, error)
 	}{
-		{"maintenance-decision", MaintenanceDecision},
-		{"maintenance-decision-json-retry", MaintenanceDecisionJSONRetry},
+		{"maintenance-decision", func() (string, error) { return MaintenanceDecision("first", "cautious", false) }},
+		{"maintenance-decision-select", func() (string, error) { return MaintenanceDecision("select", "autonomous", false) }},
+		{"maintenance-decision-audit", func() (string, error) { return MaintenanceDecision("audit", "aggressive", false) }},
+		{"maintenance-decision-report", func() (string, error) { return MaintenanceDecision("report", "", false) }},
+		{"maintenance-decision-json-retry", func() (string, error) { return MaintenanceDecision("report", "", true) }},
 		{"maintenance-execute", func() (string, error) {
-			return MaintenanceExecute([]byte(`{"action_id":"a","operation_id":"o","instruction":"用户原文 {{.Ignore}}\r\n下一行  "}`))
+			return MaintenanceExecute([]byte(`{"action_id":"a","operation_id":"o","instruction":"用户原文 {{.Ignore}}\r\n下一行  "}`), true)
+		}},
+		{"maintenance-execute-delivery", func() (string, error) {
+			return MaintenanceExecute([]byte(`{"action_id":"a","operation_id":"o","instruction":"固定交付指令"}`), false)
 		}},
 		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot)) }},
 		{"testing-readonly", TestingReadOnly},
@@ -124,12 +130,6 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 	}{
 		{"testing", "8ec76ded720a6d01623da9e70c48f6b24795344a82018fd3f59895f6b5154421", TestingRules},
 
-		{"maintenance-first", "ac9c1d8c7abb827251e0d6ed68a79cc033a0920014e2e59b458fea053acd312d", func() ([]byte, error) { return MaintenanceRules("first") }},
-		{"maintenance-followup", "30dba11410c152e7c02b511b201a5dc92ca9f663cba44e24b6735b2371065301", func() ([]byte, error) { return MaintenanceRules("followup") }},
-		{"maintenance-report", "77a94a8fa2e9eac5e5e11f55ac0f0bc3437718a17b39533885d57a309b34a098", func() ([]byte, error) { return MaintenanceRules("report") }},
-		{"maintenance-cautious", "36fb56b30ba9e12306c3066b0f9315752bb5e880dbaaa7261cf543612657c7f4", func() ([]byte, error) { return MaintenanceStrategy("cautious") }},
-		{"maintenance-autonomous", "f0c2470a07e019911ae36c30046e1ad320a5ea60b9a5db46a7d67b404ef57776", func() ([]byte, error) { return MaintenanceStrategy("autonomous") }},
-		{"maintenance-aggressive", "e9ed219ceaf5abdab0b467664db2d247ddf3f57a8da853d918246c993a08130b", func() ([]byte, error) { return MaintenanceStrategy("aggressive") }},
 		{"main-agent", "aa6419dea3bc11e04708face11a55b941c07262842533f8b29ff3860acd063dd", MainAgentRules},
 		{"roadmap-parse", "aa7efda5cdc15f1801427b2a9a845c29bb2e7846aeee9057d4619eb7b2b902d7", RoadmapParseRules},
 		{"roadmap-documents", "62f392fc7d180d272949910dc7a7b32514bd43040c8f5655d354db16bdaff7ea", RoadmapDocumentRules},

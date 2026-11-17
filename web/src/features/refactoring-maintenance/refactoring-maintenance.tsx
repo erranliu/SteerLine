@@ -89,7 +89,6 @@ export type MaintenanceRecord = {
     result?: { summary?: string; question?: string } | null;
     decision_kind?: string;
     decision_summary?: string;
-    decision_rules?: { rules?: string; strategy?: string };
     report_index?: number;
   }[];
   reports?: {

@@ -16,9 +16,9 @@ Roadmap 规划的 `conversation/2` 通过应用管理的固定普通文件交付
 
 单任务规划沿用 `conversation/2`。沟通入口直接提交用户目标，普通消息直接续接原会话。直接规划和显式规划轮次才使用 `task-planning.md`，并引用随规划请求冻结的 `materials/task-planning.md`。首次发往 Runner 前验证规则文件，已受理请求沿原身份对账。用户确认任务卡后才进入独立的任务文档生成。
 
-重构与维护通过正式 file 材料提供 `maintenance/rules.md` 和 `maintenance/context.json`。决策附一份选定的 `maintenance/strategy.md`，合入评审附固定 PR 差异 `maintenance/pr.diff`。首轮只读目录固定在启动提交，其余不提供目录。可写模板直接交付原三级指令和少量事实，消费已停止 Run 的已验证最终 JSON。固定资产缺失阻断，原请求保存实际字节。
+重构与维护由 prompts 从[决策模板](../internal/prompts/maintenance-decision.md)组装完整指令，每次只发送共用规则和当前阶段的判断标准。选题时附适用的一句策略偏好。规则随 generate/1 的 `instruction` 交付。`maintenance/context.json` 提供行动事实，PR 评审另附固定版本的 `maintenance/pr.diff`。首轮使用固定启动提交的只读目录。内置维护方向来自[独立 Markdown 资产](../internal/prompts/materials/refactoring-directions/)，自定义维护方向由[安装实例](integration/install-deploy.md#自定义维护方向)提供，启动时冻结所选原文。
 
-一级正文分为 `materials/maintenance-first.md`、`maintenance-followup.md`、`maintenance-report.md`。SteerLine 按现有策略枚举读取并冻结唯一一份对应策略正文。内置重构方向由 [独立 Markdown 资产](../internal/prompts/materials/refactoring-directions/)提供，按固定提示词治理。自定义方向由[安装实例](integration/install-deploy.md#自定义重构方向)提供。启动时校验预览版本，将选中的原文冻结到行动记录。只读决策文件上下文通过 `direction_prompt` 携带该正文，执行阶段使用决策生成的实施指令。
+可写执行由固定模板包装原执行指令和结构化上下文。SteerLine 选择[发布](../internal/prompts/maintenance-publish.md)或[冲突续作](../internal/prompts/maintenance-conflict.md)模板，并消费已停止 Run 的已验证最终 JSON。固定资产缺失阻断，原请求保存实际字节。
 
 1. 修改对应 Markdown；确需改变组合方式时，在 prompts 及原适配点修改，保持阶段、来源和原请求冻结约束。
 2. 运行 `go test ./internal/prompts -count=1 -v`，核对 `testdata/*.golden.md` 的完整正文差异和 UTF-8 字节数；再按[测试指南](../SteerlineFlow/testing.md)运行正式 L1/L2 与受影响的 owner/L3。黄金样本没有自动接受/更新开关，修改期望值需显式审阅。

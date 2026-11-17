@@ -41,6 +41,7 @@ type Service struct {
 	Qualify              func(context.Context, model.Record) (env.Admission, error)
 	Authorize            func(context.Context, model.Record, func() error) error
 	Verify               func(context.Context, model.Record, model.Result) (*runnercontract.PRFact, string, error)
+	VerifyPublishHead    func(context.Context, model.Record, runnercontract.PRFact, string) error
 	VerifyConflictBase   func(context.Context, model.Record, runnercontract.PRFact) error
 	ReviewDiff           func(context.Context, model.Record, runnercontract.PRFact) (string, error)
 	InvestigationPath    func(string) (string, error)
@@ -314,8 +315,14 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 	if r.Phase == "waiting_input" || r.Phase == "blocked" || r.Phase == "delivered" || r.Phase == "stopped" {
 		return nil
 	}
-	if (r.Phase == "first" || r.Phase == "select") && (r.FinishRequested || r.BudgetExhausted(s.now())) || r.Phase == "finish" && r.LatestOwner == "" {
-		_, e := s.update(ctx, r.ID, func(r *model.Record) error { s.closeAction(r); return nil })
+	if (r.Phase == "first" || r.Phase == "select") && (r.FinishRequested || r.BudgetExhausted(s.now())) ||
+		r.Phase == "finish" && r.PR == nil && acceptedHead(r, 0) == "" {
+		_, e := s.update(ctx, r.ID, func(current *model.Record) error {
+			if current.Revision == r.Revision && !current.StopRequested {
+				s.closeAction(current)
+			}
+			return nil
+		})
 		return e
 	}
 	if s.Admit != nil {
@@ -371,6 +378,12 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 			}
 		}
 		if prepareErr == nil {
+			if current.Phase == "finish" {
+				current.Phase = "execute"
+				if current.WriteKind != "conflict" {
+					current.WriteKind = "publish"
+				}
+			}
 			var op model.Operation
 			op, prepareErr = s.prepareOperation(*current, id, directory, review)
 			if prepareErr == nil {

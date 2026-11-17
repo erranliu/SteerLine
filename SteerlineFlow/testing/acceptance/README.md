@@ -2,7 +2,7 @@
 
 重构任务调试信息（2026-11-17）。[实现与验收](refactoring-task-debug-info.md)
 
-重构与维护两级提示词展示（2026-11-16）。[实现与验收](refactoring-prompt-display.md)
+重构与维护指令展示（2026-11-16）。[实现与验收](refactoring-prompt-display.md)
 
 环境检测自动收尾（2026-11-15）。[实现与验收](environment-automatic-cleanup.md)
 
@@ -30,7 +30,7 @@ SteerAgent 全局配置（2026-11-12）。[验收记录](steer-agent-configurati
 
 任务 DAG 启动反馈（2026-11-11，已实现，未部署）。[验收记录](task-dag-start-feedback.md)
 
-重构方向模板与界面统一（2026-11-11）。[验收记录与提示词差异](refactoring-directions.md)
+维护方向模板与界面统一（2026-11-11）。[验收记录与提示词差异](refactoring-directions.md)
 
 重构与维护最小闭环（2026-11-11，已实现，隔离真实联验通过，未部署）。[验收记录](refactoring-maintenance.md) · [Spec](../../spec/refactoring-maintenance.spec.md) · [Plan](../../plans/refactoring-maintenance.plan.md)
 
