@@ -15,7 +15,6 @@ func TestDecisionRoleBoundary(t *testing.T) {
 		accept, finish bool
 	}{
 		{"first", false, true}, {"select", false, true}, {"audit", true, false},
-		{"finish", false, false},
 	} {
 		var schema struct {
 			Properties map[string]struct{ Enum []string }
@@ -43,7 +42,7 @@ func TestDecisionRoleBoundary(t *testing.T) {
 		{`{"kind":"ask","summary":"范围冲突","question":{"prompt":"如何处理？","facts":["依赖公开接口"],"attempts":[],"options":[{"id":"keep","label":"保留","impact":"保持兼容"}],"recommended_option_id":"keep","recommendation_reason":"低风险"}}`, "first", true},
 		{`{"kind":"ask","summary":"范围冲突","prompt":"execute","question":{"prompt":"如何处理？","facts":["依赖公开接口"],"attempts":[],"options":[{"id":"keep","label":"保留","impact":"保持兼容"}],"recommended_option_id":"keep","recommendation_reason":"低风险"}}`, "audit", false},
 		{`{"kind":"accept","summary":"证据充分"}`, "evidence", false},
-		{`{"kind":"accept","summary":"已交付"}`, "finish", false},
+		{`{"kind":"execute","prompt":"发布原分支","summary":"准备交付"}`, "finish", false},
 	} {
 		_, e := Accept([]byte(v.body), v.mode)
 		if (e == nil) != v.valid {

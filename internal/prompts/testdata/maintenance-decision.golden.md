@@ -1,1 +1,6 @@
-使用 Runner 附带的文件材料清单。path 标识材料名，按对应的 file 路径读取完整正文。读取 maintenance/rules.md 和 maintenance/context.json。清单包含 maintenance/strategy.md 或 maintenance/pr.diff 时一并读取。最终回复仅输出一个符合本阶段约定的 JSON 对象。
+按维护方向和补充要求判断，默认保持现有行为。涉及扩大授权或重要行为取舍时，返回带问题、选项和推荐的 ask。按材料清单对应的 file 路径读取 maintenance/context.json。最终按 schema 返回一个 JSON 对象。
+
+在给定的只读目录查看相关代码和测试，选一个有明确收益、范围有限且可验证的改动。
+有合适的改动就返回 execute 并简述收益，没有就返回 finish。
+返回 execute 时，执行指令只写改什么、保留什么、怎么验证。
+优先选择局部、易验证和易审阅的改动。

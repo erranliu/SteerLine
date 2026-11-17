@@ -54,16 +54,18 @@ test("maintenance report, history and refresh remain observational", async ({
     });
     await expect(start).toBeEnabled();
     await expect(
-      dialog.getByRole("heading", { name: "一级 · 决策提示词" }),
+      dialog.getByRole("heading", { name: "维护方向", exact: true }),
     ).toBeVisible();
     await expect(
-      dialog.getByRole("heading", { name: "二级 · 执行提示词" }),
+      dialog.getByRole("heading", { name: "执行指令", exact: true }),
     ).toBeVisible();
     await expect(dialog.getByLabel("决策策略")).toHaveValue("cautious");
     await expect(dialog.getByLabel("重构轮次")).toHaveValue("1");
-    const preview = dialog.getByLabel("方向提示词", { exact: true });
+    const preview = dialog.getByLabel("维护方向预览", { exact: true });
     await expect(preview).toContainText("简化不必要的抽象与控制流。");
-    await dialog.getByLabel("重构方向").selectOption("custom:shared-fixtures");
+    await dialog
+      .getByLabel("选择维护方向")
+      .selectOption("custom:shared-fixtures");
     await expect
       .poll(() => preview.textContent())
       .toBe("# 收拢共享夹具\r\n\r\n优先处理共享测试夹具。  \r\n");
@@ -147,13 +149,30 @@ test("maintenance report, history and refresh remain observational", async ({
     }),
   });
   await expect(reviews.getByText("展开结论", { exact: true })).toHaveCount(2);
+  await expect(
+    dialogue.getByRole("heading", { name: "SteerLine · 交付", exact: true }),
+  ).toBeVisible();
   const latestReview = reviews.last();
   await latestReview.getByText("展开结论", { exact: true }).click();
   await expect(latestReview.getByText(/head.*base/)).toBeVisible();
-  await implementation.getByText("一级提示词", { exact: true }).click();
+  const direction = dialogue.getByText("优先处理共享测试夹具。", {
+    exact: false,
+  });
+  const instruction = implementation.getByText("实施同方向的有限切片并验证。", {
+    exact: true,
+  });
+  const decision = implementation.getByText("决策指令", { exact: true });
+  const decisionBody = implementation.getByText("按维护方向和补充要求判断", {
+    exact: false,
+  });
+  await expect(direction).toBeVisible();
+  await expect(instruction).toBeVisible();
   await expect(
-    implementation.getByText("优先处理共享测试夹具。", { exact: false }),
+    dialogue.getByText("受控执行", { exact: true }).first(),
   ).toBeVisible();
+  await expect(decisionBody).toBeHidden();
+  await decision.click();
+  await expect(decisionBody).toBeVisible();
   await expect(
     page.getByRole("button", { name: "处理冲突并重新评审" }),
   ).toBeVisible();
@@ -164,6 +183,7 @@ test("maintenance report, history and refresh remain observational", async ({
   await page.reload();
   await expect(latestReview).toBeVisible();
   await expect(latestReview.getByText(/head.*base/)).toBeHidden();
+  await expect(decisionBody).toBeHidden();
   expect(commands).toEqual([]);
   await page.setViewportSize({ width: 375, height: 900 });
   await page.getByRole("button", { name: "返回重构任务列表" }).click();
@@ -182,12 +202,9 @@ test("maintenance report, history and refresh remain observational", async ({
   await page.goBack();
   await expect(copy).toBeVisible();
   await expect(latestReview).toBeVisible();
-  await expect(
-    implementation.getByText("展开指令", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    implementation.getByText("一级提示词", { exact: true }),
-  ).toBeVisible();
+  await expect(direction).toBeVisible();
+  await expect(instruction).toBeVisible();
+  await expect(decision).toBeVisible();
   await page.screenshot({
     path: join(out, "maintenance-mobile.png"),
     fullPage: true,

@@ -1,0 +1,1 @@
+读取本次维护请求的 JSON，执行 instruction 原文并使用随附 context。 请求：{"action_id":"a","operation_id":"o","instruction":"固定交付指令"}。最终只返回一个 JSON 对象，逐字复制 action_id 和 operation_id。outcome 取 done、needs_input 或 blocked。summary、head、base、pr、question 为字符串，缺值填空字符串。head/base 用完整提交值，pr 用完整 PR URL，no_changes 为布尔值。需要用户输入时填写 question。

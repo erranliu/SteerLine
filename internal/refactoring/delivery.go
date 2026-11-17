@@ -44,11 +44,11 @@ func uncertainPublication(r model.Record) bool {
 func (s *Service) closeAction(r *model.Record) {
 	r.FinishRequested = true
 	r.Phase = closingPhase(*r)
-	if r.LatestOwner == "" && r.Candidate == nil {
+	if r.PR == nil && r.Candidate == nil && acceptedHead(*r, 0) == "" {
 		base := r.Frozen.Repository.BaseRevision
-		summary := r.Summary
-		if summary == "" {
-			summary = "行动在发起可写执行前结束"
+		summary := "没有已接受的成果可交付"
+		if r.LatestOwner == "" && r.Summary != "" {
+			summary = r.Summary
 		}
 		r.Candidate = &model.Result{NoChanges: true, Outcome: "done", Head: base, Base: base, Summary: summary}
 		r.Phase = "verifying"
@@ -85,7 +85,7 @@ func (s *Service) applyDecision(r *model.Record, mode string, d decision.Decisio
 	case "accept":
 		for i := len(r.Operations) - 2; i >= 0; i-- {
 			if o := r.Operations[i]; o.Content(*r).WorkflowID == "execute" {
-				if !successfulExecution(o) || o.Result.Outcome != "done" {
+				if !executionCommitted(o) {
 					s.block(r, "原执行缺少可信成功证据，需要补证或修复")
 					return nil
 				}
@@ -103,12 +103,6 @@ func (s *Service) applyDecision(r *model.Record, mode string, d decision.Decisio
 		case "first", "select":
 			r.Round++
 			r.WriteKind = "implement"
-		case "finish":
-			if r.PR != nil || r.WriteKind == "conflict" {
-				r.WriteKind = "conflict"
-			} else {
-				r.WriteKind = "publish"
-			}
 		case "audit":
 			r.WriteKind = "repair"
 		}
@@ -120,6 +114,11 @@ func (s *Service) applyDecision(r *model.Record, mode string, d decision.Decisio
 
 func successfulExecution(o model.Operation) bool {
 	return o.Result != nil && nativeExecutionSucceeded(o.Run)
+}
+
+func executionCommitted(o model.Operation) bool {
+	head := committedHead(o)
+	return head != "" && successfulExecution(o) && o.Result.Outcome == "done" && o.Result.Head == head
 }
 
 func nativeExecutionSucceeded(run *runnercontract.Run) bool {
@@ -224,9 +223,21 @@ func (s *Service) verifyDelivery(ctx context.Context, r model.Record) error {
 		if err != nil {
 			return err
 		}
-		if r.WriteKind == "conflict" && strings.EqualFold(pr.State, "open") && !pr.Merged &&
-			r.PR != nil && r.PR.HeadRevision != pr.HeadRevision && s.VerifyConflictBase != nil {
-			if err := s.VerifyConflictBase(ctx, r, *pr); err != nil {
+		if strings.EqualFold(pr.State, "open") && !pr.Merged {
+			if r.WriteKind == "publish" {
+				accepted := acceptedHead(r, 0)
+				switch {
+				case accepted == "":
+					err = errors.New("缺少已接受成果的提交")
+				case pr.HeadRevision != accepted && s.VerifyPublishHead == nil:
+					err = errors.New("PR head 尚未核实包含已接受成果")
+				case pr.HeadRevision != accepted:
+					err = s.VerifyPublishHead(ctx, r, *pr, accepted)
+				}
+			} else if r.WriteKind == "conflict" && r.PR != nil && r.PR.HeadRevision != pr.HeadRevision && s.VerifyConflictBase != nil {
+				err = s.VerifyConflictBase(ctx, r, *pr)
+			}
+			if err != nil {
 				_, saveErr := s.update(ctx, r.ID, func(current *model.Record) error {
 					if current.Revision == r.Revision && !current.StopRequested {
 						s.block(current, err.Error())

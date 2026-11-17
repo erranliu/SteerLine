@@ -66,30 +66,37 @@ func RoadmapPlanningConflict(decision string) (string, error) {
 	return render("roadmap-planning-conflict", struct{ Decision string }{decision})
 }
 func MainAgentRules() ([]byte, error) { return files.ReadFile("materials/main-agent.md") }
-func MaintenanceRules(phase string) ([]byte, error) {
-	switch phase {
-	case "first", "followup", "report":
-		return files.ReadFile("materials/maintenance-" + phase + ".md")
-	default:
-		return nil, fmt.Errorf("unknown maintenance phase %q", phase)
-	}
-}
-
-func MaintenanceStrategy(strategy string) ([]byte, error) {
-	switch strategy {
-	case "cautious", "autonomous", "aggressive":
-		return files.ReadFile("materials/maintenance-" + strategy + ".md")
-	default:
-		return nil, fmt.Errorf("unknown maintenance strategy %q", strategy)
-	}
-}
 func MaintenanceDirection(id string) ([]byte, error) {
 	return files.ReadFile("materials/refactoring-directions/" + id + ".md")
 }
-func MaintenanceDecision() (string, error)          { return render("maintenance-decision", false) }
-func MaintenanceDecisionJSONRetry() (string, error) { return render("maintenance-decision", true) }
-func MaintenanceExecute(request []byte) (string, error) {
-	return render("maintenance-execute", string(request))
+func MaintenanceDecision(phase, strategy string, retryJSON bool) (string, error) {
+	switch phase {
+	case "first", "select", "audit":
+		if strategy != "cautious" && strategy != "autonomous" && strategy != "aggressive" {
+			return "", fmt.Errorf("unknown maintenance strategy %q", strategy)
+		}
+	case "report":
+	default:
+		return "", fmt.Errorf("unknown maintenance decision phase %q", phase)
+	}
+	return render("maintenance-decision", struct {
+		Phase, Strategy string
+		RetryJSON       bool
+	}{phase, strategy, retryJSON})
+}
+func MaintenanceDelivery(kind string) (string, error) {
+	switch kind {
+	case "publish", "conflict":
+		return render("maintenance-"+kind, nil)
+	default:
+		return "", fmt.Errorf("unknown maintenance delivery %q", kind)
+	}
+}
+func MaintenanceExecute(request []byte, local bool) (string, error) {
+	return render("maintenance-execute", struct {
+		Request string
+		Local   bool
+	}{string(request), local})
 }
 func MainAgentAdvisory(context string) (string, error) {
 	rules, err := MainAgentRules()

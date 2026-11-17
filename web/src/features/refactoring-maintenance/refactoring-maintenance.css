@@ -66,6 +66,10 @@
   margin-block: 20px;
 }
 
+.refactoring-direction {
+  margin-block-end: 10px;
+}
+
 .refactoring-conversation > ol {
   display: grid;
   gap: 10px;
@@ -107,6 +111,10 @@
   white-space: pre-line;
 }
 
+.refactoring-message .refactoring-feedback {
+  white-space: pre-wrap;
+}
+
 .refactoring-message-actions {
   display: flex;
   flex-wrap: wrap;
@@ -121,10 +129,6 @@
 
 .refactoring-message-actions details[open] {
   flex-basis: 100%;
-}
-
-.refactoring-message-actions dd {
-  margin-inline-start: 0;
 }
 
 .refactoring-actions,

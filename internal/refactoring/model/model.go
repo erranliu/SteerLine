@@ -111,10 +111,6 @@ type Frozen struct {
 	Write           runnercontract.ExecutionInput `json:"write"`
 	Read            runnercontract.ExecutionInput `json:"read"`
 	Runner          runnercontract.BuildPin       `json:"runner"`
-	FirstRules      string                        `json:"first_rules"`
-	FollowRules     string                        `json:"follow_rules"`
-	ReportRules     string                        `json:"report_rules"`
-	Strategy        string                        `json:"strategy_prompt"`
 	Pricing         *billing.Policy               `json:"pricing,omitempty"`
 }
 type Command struct {
@@ -240,7 +236,7 @@ func (o *Operation) ObserveRun(run *runnercontract.Run) {
 func (o Operation) Content(r Record) runnerbinding.Content {
 	w := "execute"
 	switch o.Purpose {
-	case "first", "select", "audit", "finish", "report":
+	case "first", "select", "audit", "report":
 		w = "generate"
 	}
 	var rev uint64

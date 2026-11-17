@@ -8,7 +8,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/billing"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	decision "github.com/erranliu/SteerLine/internal/steeragent/maintenance"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -44,6 +43,7 @@ type maintenanceRunner struct {
 	unknown              bool
 	hold                 bool
 	failWrite            bool
+	dirtyWorktree        bool
 	malformedPublication bool
 	rejectStop           bool
 	stops                int
@@ -67,7 +67,7 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 		var g rc.GenerateRunInput
 		_ = json.Unmarshal(req.Input, &g)
 		var ctx decisionContext
-		_ = json.Unmarshal([]byte(*g.Generate.Materials[1].Content), &ctx)
+		_ = json.Unmarshal([]byte(*g.Generate.Materials[0].Content), &ctx)
 		d := decision.Decision{Kind: "execute", Prompt: "执行当前有限切片并验证，保留原分支。", Summary: "已调查"}
 		switch ctx.Mode {
 		case "audit":
@@ -76,8 +76,6 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 			if f.noChanges {
 				d.Kind, d.Prompt = "finish", ""
 			}
-		case "finish":
-			d.Prompt = "交付已有成果并返回PR。"
 		}
 		if f.askMode == ctx.Mode && len(ctx.Answers) == 0 {
 			d.Kind, d.Prompt = "ask", ""
@@ -180,7 +178,7 @@ func (f *maintenanceRunner) Call(_ context.Context, command string, args []strin
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if command == "workspace-git" {
-		commit, clean := strings.Repeat("a", 40), false
+		commit, clean := strings.Repeat("a", 40), !f.dirtyWorktree
 		body, _ := json.Marshal(rc.WorkspaceGit{RunID: args[1], Commit: &commit, Clean: &clean, ObservedAt: time.Now(), Verified: true})
 		return runnerclient.Response{Data: body}, nil
 	}
@@ -205,7 +203,7 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 	f := &maintenanceRunner{t: t, dir: dir, runs: map[string]*rc.Run{}, checks: "SUCCESS"}
 	s := &Service{Project: "project", Store: store, Runner: f, Queue: runnerbinding.NewContentQueue(1), InvestigationPath: func(string) (string, error) { return filepath.Join(dir, "fixed"), nil }, Investigate: func(context.Context, m.Record, string) error { return nil }, Prepare: func(context.Context, m.Start) (m.Frozen, error) {
 		direction, err := readBuiltInDirection("simplify")
-		return m.Frozen{Direction: direction, Repository: rc.Repository{LocalPath: dir, BaseRevision: strings.Repeat("b", 40)}, FirstRules: "首轮规则", FollowRules: "后续规则", ReportRules: "报告规则", Strategy: "策略正文", Runner: rc.BuildPin{StateDir: dir}}, err
+		return m.Frozen{Direction: direction, Repository: rc.Repository{LocalPath: dir, BaseRevision: strings.Repeat("b", 40)}, Runner: rc.BuildPin{StateDir: dir}}, err
 	}, ReviewDiff: func(context.Context, m.Record, rc.PRFact) (string, error) {
 		return "diff --git a/example b/example", nil
 	}, Verify: func(_ context.Context, _ m.Record, v m.Result) (*rc.PRFact, string, error) {
@@ -279,6 +277,17 @@ func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 			writes++
 		}
 	}
+	for _, op := range r.Operations {
+		if op.Purpose == "finish" {
+			t.Fatal("closing dispatched a decision")
+		}
+		if op.Purpose == "publish" {
+			want, err := prompts.MaintenanceDelivery("publish")
+			if err != nil || op.Prompt != want || !strings.Contains(string(op.Request.Input), "accepted_head") {
+				t.Fatal("closure did not dispatch the fixed publication with the accepted revision", err)
+			}
+		}
+	}
 	if writes != 3 {
 		t.Fatalf("two rounds and publication: got %d", writes)
 	}
@@ -286,7 +295,7 @@ func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 		t.Fatal("original Final feedback missing from history")
 	}
 	for _, o := range r.Operations[1:] {
-		if o.Purpose == "select" || o.Purpose == "audit" || o.Purpose == "finish" {
+		if o.Purpose == "select" || o.Purpose == "audit" {
 			if !strings.Contains(o.Feedback, `"kind"`) {
 				t.Fatal("completed decision feedback missing from history", o)
 			}
@@ -296,18 +305,23 @@ func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 	originalOwner := r.LatestOwner
 	f.baseOverride = strings.Repeat("c", 40)
 	r = control(t, s, r, "refactoring_conflict")
-	op, err := s.prepareOperation(r, m.ID(), "", m.ReviewEvidence{})
-	var in rc.GenerateRunInput
-	if err != nil || json.Unmarshal(op.Request.Input, &in) != nil {
-		t.Fatalf("conflict decision request unavailable: %v", err)
-	}
-	var facts decisionContext
-	if err := json.Unmarshal([]byte(*in.Generate.Materials[1].Content), &facts); err != nil {
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool {
+		return r.Phase == "execute" && r.Operations[len(r.Operations)-1].Purpose == "conflict"
+	})
+	op := r.Operations[len(r.Operations)-1]
+	var in rc.RunInput
+	if err := json.Unmarshal(op.Request.Input, &in); err != nil {
 		t.Fatal(err)
 	}
-	if in.Generate.Directory != nil || !facts.ContinueConflict || facts.Mode != "finish" ||
-		facts.PR == nil || facts.PR.URL != originalPR || facts.PR.BaseRevision != f.baseOverride || facts.PR.HeadRevision != r.Reports[0].Head {
-		t.Fatalf("conflict did not freeze the newly verified version of the original PR: %+v", facts)
+	want, err := prompts.MaintenanceDelivery("conflict")
+	if err != nil || in.Workflow.ID != "execute" || in.ReuseWorktreeFromRunID != originalOwner || op.Prompt != want {
+		t.Fatalf("expected fixed conflict workflow: %+v %v", op, err)
+	}
+	body := in.Workflow.PromptOverrides["execute"]
+	for _, value := range []string{originalPR, f.baseOverride, r.Reports[0].Head} {
+		if !strings.Contains(body, value) {
+			t.Fatalf("conflict did not freeze the verified original PR version: %s", body)
+		}
 	}
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
 	if len(r.Reports) != 2 || r.PR.URL != originalPR || r.Round != 2 || r.LatestOwner == originalOwner ||
@@ -337,7 +351,7 @@ func TestMaintenanceNeverAdoptsDecisionTextWithoutStructuredResult(t *testing.T)
 				run.ContentResult.JSON = nil
 			case "invalid decision JSON":
 				run.ContentResult.JSON = json.RawMessage(`{"kind":"execute","summary":"已调查","prompt":""}`)
-				diagnostic = "执行决定缺少提示词"
+				diagnostic = "执行决定缺少执行指令"
 			}
 
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
@@ -377,19 +391,20 @@ func TestMaintenanceUnknownSubmitStopAndFinish(t *testing.T) {
 
 func TestMaintenanceStoppedWriterRemainsSourceForDelivery(t *testing.T) {
 	s, f, r := fixture(t)
-	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "execute" })
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "execute" && r.Round == 2 })
+	acceptedOwner := r.LatestOwner
 	f.hold = true
-	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.LatestOwner != "" })
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.LatestOwner != acceptedOwner })
 	owner := r.LatestOwner
 	r = control(t, s, r, "refactoring_stop")
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "stopped" })
-	if r.LatestOwner != owner || r.Workspace == "" || r.Round != 1 {
+	if r.LatestOwner != owner || r.Workspace == "" || r.Round != 2 {
 		t.Fatal("stopped writer ownership lost", r)
 	}
 	f.hold = false
 	r = control(t, s, r, "refactoring_finish")
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.Round != 1 {
+	if r.Round != 2 {
 		t.Fatal("delivery started another maintenance round")
 	}
 	found := false
@@ -570,7 +585,7 @@ func TestMaintenanceConflictReviewRegeneratesInvalidJSON(t *testing.T) {
 				return last.ID != first.ID && last.RunID != ""
 			})
 			retry := r.Operations[len(r.Operations)-1]
-			want, err := prompts.MaintenanceDecisionJSONRetry()
+			want, err := prompts.MaintenanceDecision("report", "", true)
 			if err != nil || retry.Prompt != want {
 				t.Fatalf("unexpected retry prompt %q: %v", retry.Prompt, err)
 			}
@@ -620,6 +635,21 @@ func TestMaintenancePublicationRejectsPRObjectWithFieldDiagnostic(t *testing.T) 
 		t.Fatalf("invalid PR result was accepted or its field was hidden: %q", o.Feedback)
 	}
 }
+
+func TestMaintenancePublicationRejectsPRHeadMissingAcceptedCommit(t *testing.T) {
+	s, f, r := fixture(t)
+	f.headOverride = strings.Repeat("c", 40)
+	s.VerifyPublishHead = func(_ context.Context, _ m.Record, pr rc.PRFact, accepted string) error {
+		if pr.HeadRevision != f.headOverride || accepted != strings.Repeat("a", 40) {
+			t.Fatalf("wrong delivered/accepted commits: %s %s", pr.HeadRevision, accepted)
+		}
+		return errors.New("PR 没有包含已接受成果")
+	}
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
+	if r.PR != nil || r.Candidate == nil || len(r.Reports) != 0 || r.Diagnostic != "PR 没有包含已接受成果" {
+		t.Fatal("accepted a PR that does not contain the accepted commit", r.Phase, r.Diagnostic)
+	}
+}
 func TestMaintenanceRecoverExcludesOfflineTimeAndDoesNotResubmit(t *testing.T) {
 	s, f, r := fixture(t)
 	base := time.Now().UTC()
@@ -638,51 +668,39 @@ func TestMaintenanceRecoverExcludesOfflineTimeAndDoesNotResubmit(t *testing.T) {
 func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 	s, _, r := fixture(t)
 	r.Frozen.Direction.Prompt = "# 自定义方向\r\n只整理给定范围  \r\n"
-	for _, phase := range []string{"first", "audit", "report"} {
+	for _, phase := range []string{"first", "select", "audit", "report"} {
 		r.Phase = phase
 		dir := ""
-		ruleName := "followup"
 		if phase == "first" {
 			dir = filepath.Join(t.TempDir(), "pinned")
-			ruleName = "first"
 		}
-		if phase == "report" {
-			ruleName = "report"
-		}
-		rules, e := prompts.MaintenanceRules(ruleName)
-		if e != nil {
-			t.Fatal(e)
-		}
-		switch phase {
-		case "first":
-			r.Frozen.FirstRules = string(rules)
-		case "report":
-			r.Frozen.ReportRules = string(rules)
-		default:
-			r.Frozen.FollowRules = string(rules)
-		}
-		op, e := s.prepareOperation(r, m.ID(), dir, m.ReviewEvidence{Diff: "fixture diff"})
-		if e != nil {
-			t.Fatal(e)
+		op, err := s.prepareOperation(r, m.ID(), dir, m.ReviewEvidence{Diff: "fixture diff"})
+		if err != nil {
+			t.Fatal(err)
 		}
 		var input rc.GenerateRunInput
-		if e = json.Unmarshal(op.Request.Input, &input); e != nil {
-			t.Fatal(e)
+		if err = json.Unmarshal(op.Request.Input, &input); err != nil {
+			t.Fatal(err)
 		}
 		g := input.Generate
-		golden, e := os.ReadFile("../prompts/testdata/maintenance-decision.golden.md")
-		if e != nil || g.Instruction != string(golden) || g.Repository != nil || (g.Directory != nil) != (phase == "first") || *g.Materials[0].Content != string(rules) {
-			t.Fatal("wrong decision request", phase, e)
+		want, err := prompts.MaintenanceDecision(phase, r.Input.Strategy, false)
+		if err != nil || g.Instruction != want || op.Prompt != want || g.Repository != nil || (g.Directory != nil) != (phase == "first") {
+			t.Fatal("wrong decision request", phase, err)
 		}
 		if phase == "first" && (g.Directory.Path != dir || g.Directory.Access != "read_only") {
 			t.Fatal(g.Directory)
 		}
-		if phase == "report" && (len(g.Materials) != 3 || g.Materials[2].Path != "maintenance/pr.diff" || *g.Materials[2].Content != "fixture diff") || phase != "report" && (len(g.Materials) != 3 || *g.Materials[2].Content != r.Frozen.Strategy) {
-			t.Fatal("wrong strategy material", phase)
+		count := 1
+		if phase == "report" {
+			count = 2
+		}
+		if len(g.Materials) != count || g.Materials[0].Path != "maintenance/context.json" ||
+			phase == "report" && (g.Materials[1].Path != "maintenance/pr.diff" || *g.Materials[1].Content != "fixture diff") {
+			t.Fatal("unexpected materials", phase, g.Materials)
 		}
 		var facts decisionContext
-		if e = json.Unmarshal([]byte(*g.Materials[1].Content), &facts); e != nil || facts.DirectionPrompt != r.Frozen.Direction.Prompt || facts.Repository.LocalPath != "" || facts.CanStartRound != (phase == "first") {
-			t.Fatal("wrong decision context", phase, e)
+		if err = json.Unmarshal([]byte(*g.Materials[0].Content), &facts); err != nil || facts.DirectionPrompt != r.Frozen.Direction.Prompt || facts.Mode != phase {
+			t.Fatal("wrong decision context", phase, err)
 		}
 	}
 	r.Phase, r.WriteKind, r.PendingPrompt = "execute", "implement", "用户原文\r\n保持 CRLF 与结尾空格  "
@@ -695,7 +713,7 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 		t.Fatal(e)
 	}
 	body := input.Workflow.PromptOverrides["execute"]
-	if input.ResultFile != nil || !strings.Contains(body, `用户原文\r\n保持 CRLF 与结尾空格  `) || strings.ContainsAny(body, "\r\n") || strings.Contains(body, "direction_prompt") ||
+	if input.ResultFile != nil || !strings.Contains(body, "禁止推送和操作 PR") || !strings.Contains(body, `用户原文\r\n保持 CRLF 与结尾空格  `) || strings.ContainsAny(body, "\r\n") || strings.Contains(body, "direction_prompt") ||
 		!strings.Contains(body, `"operation_id":"`+op.ID+`"`) {
 		t.Fatal("wrong writable prompt or context", body)
 	}
@@ -972,10 +990,37 @@ func TestMaintenanceFinishCancelsUnsentImplementation(t *testing.T) {
 	}
 }
 
+func TestMaintenanceFinishDoesNotPublishUncommittedWork(t *testing.T) {
+	s, f, r := fixture(t)
+	f.dirtyWorktree = true
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
+	if r.Round != 1 || r.LatestOwner == "" || r.Operations[len(r.Operations)-1].AcceptedOperation != "" {
+		t.Fatal("dirty execution was accepted", r.Phase, r.Round)
+	}
+	before := len(f.requests)
+	control(t, s, r, "refactoring_finish")
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
+	if r.PR != nil || len(f.requests) != before || r.Summary != "没有已接受的成果可交付" {
+		t.Fatal("finishing dirty work dispatched an operation or misreported the result", r.Phase, r.Summary)
+	}
+}
+
+func TestMaintenanceAuditRetainsRoundGoalAfterRepairs(t *testing.T) {
+	s, _, r := fixture(t)
+	r.Phase, r.Round = "audit", 2
+	for _, purpose := range []string{"implement", "repair", "repair"} {
+		r.Operations = append(r.Operations, m.Operation{Round: 2, State: "complete", Purpose: purpose, Prompt: purpose, Run: &rc.Run{}})
+	}
+	facts := s.context(r, m.ReviewEvidence{})
+	if facts.RoundGoal != "implement" || len(facts.Feedback) != 2 || facts.Feedback[1].Purpose != "repair" {
+		t.Fatalf("audit lost the original goal or recent repairs: %+v", facts)
+	}
+}
+
 func TestMaintenanceAuditUsesPreviousAcceptedWorkspaceHead(t *testing.T) {
 	s, _, r := fixture(t)
 	r.Round, r.Phase = 1, "audit"
-	if got := s.context(r, time.Now()).RoundStart; got != r.Frozen.Repository.BaseRevision {
+	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != r.Frozen.Repository.BaseRevision {
 		t.Fatal("first round baseline differs", got)
 	}
 	head := strings.Repeat("a", 40)
@@ -986,7 +1031,7 @@ func TestMaintenanceAuditUsesPreviousAcceptedWorkspaceHead(t *testing.T) {
 		{Purpose: "audit", Round: 1, AcceptedOperation: "accepted-workspace"},
 		{Purpose: "implement", Round: 2},
 	}
-	if got := s.context(r, time.Now()).RoundStart; got != head {
+	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != head {
 		t.Fatal("second round must use the prior accepted workspace HEAD", got)
 	}
 	r.Phase, r.WriteKind, r.PendingPrompt = "execute", "repair", "只补查本轮差异"
@@ -1004,17 +1049,17 @@ func TestMaintenanceAuditUsesPreviousAcceptedWorkspaceHead(t *testing.T) {
 
 	r.Phase = "audit"
 	clean = false
-	if got := s.context(r, time.Now()).RoundStart; got != "" {
+	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != "" {
 		t.Fatal("dirty workspace HEAD omitted accepted changes", got)
 	}
 	clean = true
 	r.Operations[0].WorkspaceGit.Clean = nil
-	if got := s.context(r, time.Now()).RoundStart; got != "" {
+	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != "" {
 		t.Fatal("workspace cleanliness was not verified", got)
 	}
 	r.Operations[0].WorkspaceGit.Clean = &clean
 	r.Operations[0].WorkspaceGit.Verified = false
-	if got := s.context(r, time.Now()).RoundStart; got != "" {
+	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != "" {
 		t.Fatal("unverified baseline was supplied", got)
 	}
 }
@@ -1027,7 +1072,7 @@ func TestMaintenanceContextBoundsLargeHistory(t *testing.T) {
 		r.Operations = append(r.Operations, m.Operation{ID: m.ID(), Round: i + 1, State: "complete", Purpose: "implement", Feedback: large, Run: &rc.Run{Status: "failed", Final: &rc.Final{NativeOutcome: "failed", Verified: true}}, Result: &m.Result{Outcome: "done", Summary: large}})
 	}
 	r.Operations = append(r.Operations, m.Operation{ID: m.ID(), Round: 500, State: "complete", Purpose: "repair", Run: &rc.Run{Status: "completed", Final: &rc.Final{NativeOutcome: "succeeded", Verified: true}}, Result: &m.Result{Outcome: "done", Summary: "latest bounded evidence"}})
-	f := s.context(r, s.now())
+	f := s.context(r, m.ReviewEvidence{})
 	if len(f.History) > 24 || len(f.Feedback) != 2 || f.Feedback[0].Result.Summary != "latest bounded evidence" {
 		t.Fatal("history or current evidence not bounded", len(f.History), len(f.Feedback))
 	}
@@ -1082,7 +1127,7 @@ func TestMaintenanceRunnerInputRequiresSteerAgentDecision(t *testing.T) {
 		Result: &m.Result{Outcome: "needs_input", Question: "是否保留接口？"},
 	}}
 	s.applyExecution(&r, r.Operations[0])
-	f := s.context(r, s.now())
+	f := s.context(r, m.ReviewEvidence{})
 	if r.Phase != "audit" || r.Question != nil || len(f.Feedback) != 1 || f.Feedback[0].Result.Question != r.Operations[0].Result.Question {
 		t.Fatal("Runner input bypassed SteerAgent or was omitted from its context")
 	}

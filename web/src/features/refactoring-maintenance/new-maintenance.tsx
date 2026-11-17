@@ -297,10 +297,9 @@ export function NewMaintenance({
           <fieldset>
             <div className="refactoring-prompts">
               <section className="refactoring-preview">
-                <h3>一级 · 决策提示词</h3>
-                <p className="muted">交给 SteerAgent · 本次重构任务</p>
+                <h3>维护方向</h3>
                 <label>
-                  重构方向
+                  选择维护方向
                   <select
                     required
                     value={draft.direction}
@@ -313,7 +312,7 @@ export function NewMaintenance({
                     ))}
                   </select>
                 </label>
-                {catalogue.isError && <p role="alert">重构方向查询失败</p>}
+                {catalogue.isError && <p role="alert">维护方向查询失败</p>}
                 {catalogue.data?.diagnostics?.map((message) => (
                   <p className="notice amber" key={message}>
                     {message}
@@ -322,7 +321,7 @@ export function NewMaintenance({
                 {direction && (
                   <pre
                     className="refactoring-prompt-body"
-                    aria-label="方向提示词"
+                    aria-label="维护方向预览"
                   >
                     {direction.prompt}
                   </pre>
@@ -348,7 +347,7 @@ export function NewMaintenance({
                 </label>
               </section>
               <section className="refactoring-preview">
-                <h3>二级 · 执行提示词</h3>
+                <h3>执行指令</h3>
                 <p className="muted">
                   启动后由 SteerAgent 生成，交给 Runner 执行。
                 </p>
