@@ -23,13 +23,13 @@ afterEach(() => {
 });
 const id = "a".repeat(32);
 const builtIn = {
-  id: "simplify",
-  name: "简化设计",
-  prompt: "# 简化设计\n\n简化不必要的抽象与控制流。\n",
+  id: "update-stale-docs",
+  name: "更新过期文档",
+  prompt: "核实并更新过期文档。\n",
   revision: "b".repeat(64),
 };
 const custom = {
-  id: "custom:fixtures",
+  id: "c".repeat(32),
   name: "收拢共享夹具",
   prompt: "# 收拢共享夹具\r\n\r\n第一段。  \r\n第二段。\r\n",
   revision: "c".repeat(64),
@@ -41,8 +41,7 @@ const record: MaintenanceRecord = {
   direction_name: builtIn.name,
   direction_prompt: builtIn.prompt,
   input: {
-    direction: "simplify",
-    requirements: "",
+    direction: builtIn.id,
     profile: "local",
     strategy: "cautious",
     budget: { rounds: 1 },
@@ -90,9 +89,32 @@ function setup(
   readiness = vi.fn(async () => ready),
 ) {
   const api = new Api(identity, "token", "home");
+  const directions = [builtIn, custom];
+  vi.spyOn(api, "getRefactoringDirections").mockImplementation(async () => ({
+    directions: [...directions],
+  }));
+  vi.spyOn(api, "changeRefactoringDirection").mockImplementation(
+    async (input) => {
+      const change = input as {
+        action: string;
+        id?: string;
+        name?: string;
+        prompt?: string;
+      };
+      const index = directions.findIndex((row) => row.id === change.id);
+      if (change.action === "delete") return directions.splice(index, 1)[0];
+      const saved = {
+        id: change.id ?? "d".repeat(32),
+        revision: "d".repeat(64),
+        name: change.name!,
+        prompt: change.prompt!,
+      };
+      if (index === -1) directions.push(saved);
+      else directions[index] = saved;
+      return saved;
+    },
+  );
   vi.spyOn(api, "get").mockImplementation(async (path: string) => {
-    if (path === "/refactoring/directions")
-      return { directions: [builtIn, custom] };
     if (path === "/refactoring") {
       return {
         ongoing: records.filter((r) => r.active),
@@ -181,7 +203,7 @@ it("copies the selected refactoring task and its Runner runs without submitting 
   await detail().findByText("已复制调试信息");
   expect(writeText).toHaveBeenLastCalledWith(
     [
-      "repo · 重构任务 · 简化设计",
+      "repo · 重构任务 · 更新过期文档",
       `请求 / 重构任务 ID：${id}（本次提交及结果）`,
       "状态：Runner 执行中 · 第 1 轮",
       "运行环境：本机 Codex",
@@ -279,6 +301,7 @@ it("starts at full capacity using a versioned ready environment and the default 
     payload: {
       direction: builtIn.id,
       direction_revision: builtIn.revision,
+      direction_prompt: builtIn.prompt,
       strategy: "cautious",
       profile: local.id,
       profile_version: local.version,
@@ -293,26 +316,73 @@ it("starts at full capacity using a versioned ready environment and the default 
 it("keeps the full direction preview and drafts when the sheet closes", async () => {
   setup();
   const sheet = openSheet();
-  const preview = await sheet.findByLabelText("维护方向预览");
+  const preview = await sheet.findByLabelText("方向正文");
   expect(sheet.getByRole("heading", { name: "维护方向" })).toBeVisible();
   expect(sheet.getByRole("heading", { name: "执行指令" })).toBeVisible();
   expect(
     sheet.getByText("启动后由 SteerAgent 生成，交给 Runner 执行。"),
   ).toBeVisible();
-  expect(preview.textContent).toBe(builtIn.prompt);
-  fireEvent.change(sheet.getByLabelText("选择维护方向"), {
+  expect(preview).toHaveValue(builtIn.prompt);
+  fireEvent.change(sheet.getByLabelText("重构方向"), {
     target: { value: custom.id },
   });
-  expect(preview.textContent).toBe(custom.prompt);
-  fireEvent.change(sheet.getByLabelText("补充要求"), {
+  expect(preview).toHaveValue(custom.prompt.replaceAll("\r\n", "\n"));
+  fireEvent.change(preview, {
     target: { value: "先检查共享夹具" },
   });
   fireEvent.click(sheet.getByRole("button", { name: "关闭" }));
   const reopened = openSheet();
-  expect(reopened.getByLabelText("补充要求")).toHaveValue("先检查共享夹具");
-  expect(reopened.getByLabelText("维护方向预览").textContent).toBe(
-    custom.prompt,
-  );
+  expect(reopened.getByLabelText("方向正文")).toHaveValue("先检查共享夹具");
+});
+
+it("starts with the edited body without saving it to the catalogue", async () => {
+  const { api, submit } = setup();
+  const sheet = openSheet();
+  const body = await sheet.findByLabelText("方向正文");
+  fireEvent.change(body, { target: { value: "本次只更新部署文档" } });
+  const start = sheet.getByRole("button", { name: "启动重构任务" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  expect(submit.mock.calls[0][0].payload).toMatchObject({
+    direction: builtIn.id,
+    direction_prompt: "本次只更新部署文档",
+  });
+  expect(api.changeRefactoringDirection).not.toHaveBeenCalled();
+});
+
+it("saves built-in edits as a new direction and can update its body before launch", async () => {
+  const { api, submit } = setup();
+  const sheet = openSheet();
+  const body = await sheet.findByLabelText("方向正文");
+  fireEvent.change(body, { target: { value: "检查部署文档" } });
+  fireEvent.click(sheet.getByRole("button", { name: "另存为新方向" }));
+  fireEvent.change(sheet.getByLabelText("新方向名称"), {
+    target: { value: "部署文档" },
+  });
+  const start = sheet.getByRole("button", { name: "启动重构任务" });
+  expect(start).toBeDisabled();
+  fireEvent.submit(start.closest("form")!);
+  expect(submit).not.toHaveBeenCalled();
+  fireEvent.click(sheet.getByRole("button", { name: "保存新方向" }));
+  await sheet.findByText("已保存方向");
+  expect(api.changeRefactoringDirection).toHaveBeenLastCalledWith({
+    action: "create",
+    name: "部署文档",
+    prompt: "检查部署文档",
+  });
+  expect(sheet.getByLabelText("重构方向")).toHaveValue("d".repeat(32));
+  fireEvent.change(body, { target: { value: "检查手动部署文档" } });
+  fireEvent.click(sheet.getByRole("button", { name: "保存到方向" }));
+  await sheet.findByText("已保存方向");
+  expect(api.changeRefactoringDirection).toHaveBeenLastCalledWith({
+    action: "update",
+    id: "d".repeat(32),
+    revision: "d".repeat(64),
+    name: "部署文档",
+    prompt: "检查手动部署文档",
+  });
+  expect(submit).not.toHaveBeenCalled();
 });
 
 it("shows direction, instructions and feedback by default and expands decisions individually", async () => {
@@ -331,7 +401,6 @@ it("shows direction, instructions and feedback by default and expands decisions 
     {
       ...record,
       round: 1,
-      input: { ...record.input, requirements: "保持原接口。" },
       operations: [
         {
           ...operation,
@@ -414,12 +483,11 @@ it("shows direction, instructions and feedback by default and expands decisions 
     "补证完成",
     "审计通过",
     "建议合入 · 此评审已过期或正在复核",
-    "保持原接口。",
   ]) {
     expect(dialogue.getByText(preview, { exact: true })).toBeVisible();
   }
   expect(dialogue.getByRole("heading", { name: "维护方向" })).toBeVisible();
-  const direction = dialogue.getByText(/简化不必要的抽象与控制流/);
+  const direction = dialogue.getByText(/核实并更新过期文档/);
   expect(direction).toBeVisible();
   expect(direction.textContent).toBe(builtIn.prompt);
   const [implement, , repair, response, audit, review] = dialogue
@@ -471,7 +539,7 @@ it("shows pending execution without adding to the Runner count", async () => {
 it("shows the maintenance direction before SteerAgent generates an execution instruction", async () => {
   setup([{ ...record, phase: "first", question: undefined }]);
   expect(await screen.findByText("等待 SteerAgent 生成执行指令")).toBeVisible();
-  expect(screen.getByText(/简化不必要的抽象与控制流/)).toBeVisible();
+  expect(screen.getByText(/核实并更新过期文档/)).toBeVisible();
 });
 
 it("requires explicit confirmation of a changed qualification and blocks stale cached data", async () => {
@@ -515,7 +583,7 @@ it("keeps the startup failure on the action and can copy its input into a new dr
   const sheet = openSheet();
   const start = sheet.getByRole("button", { name: "启动重构任务" });
   await waitFor(() => expect(start).toBeEnabled());
-  fireEvent.change(sheet.getByLabelText("补充要求"), {
+  fireEvent.change(sheet.getByLabelText("方向正文"), {
     target: { value: "检查共享夹具" },
   });
   submit.mockImplementationOnce(async (envelope) => {
@@ -526,7 +594,7 @@ it("keeps the startup failure on the action and can copy its input into a new dr
       phase: "blocked",
       startup_failed: true,
       source_commit: "",
-      direction_prompt: undefined,
+      direction_prompt: envelope.payload.direction_prompt,
       round: 0,
       input: envelope.payload,
       active: false,
@@ -555,7 +623,7 @@ it("keeps the startup failure on the action and can copy its input into a new dr
   expect(requestedCommit).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "带入新建" }));
   expect(screen.getByRole("dialog")).toBeInTheDocument();
-  expect(screen.getByLabelText("补充要求")).toHaveValue("检查共享夹具");
+  expect(screen.getByLabelText("方向正文")).toHaveValue("检查共享夹具");
 });
 
 it("closes immediately and keeps the current view when the start receipt arrives late", async () => {
@@ -587,7 +655,7 @@ it("closes immediately and keeps the current view when the start receipt arrives
   const sheet = openSheet();
   const start = sheet.getByRole("button", { name: "启动重构任务" });
   await waitFor(() => expect(start).toBeEnabled());
-  fireEvent.change(sheet.getByLabelText("选择维护方向"), {
+  fireEvent.change(sheet.getByLabelText("重构方向"), {
     target: { value: custom.id },
   });
   fireEvent.click(start);
@@ -598,7 +666,7 @@ it("closes immediately and keeps the current view when the start receipt arrives
       "提交待确认",
     ),
   ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /简化设计.*待答复/ }));
+  fireEvent.click(screen.getByRole("button", { name: /更新过期文档.*待答复/ }));
   await screen.findByText(record.question!.prompt);
   openSheet();
   await act(async () => release());
@@ -617,7 +685,7 @@ it("closes immediately and keeps the current view when the start receipt arrives
     ).toBeInTheDocument(),
   );
   // The list can eventually drop a completed action as server history advances.
-  fireEvent.click(screen.getByRole("button", { name: /简化设计.*待答复/ }));
+  fireEvent.click(screen.getByRole("button", { name: /更新过期文档.*待答复/ }));
   records.pop();
   await act(async () => {
     await client.refetchQueries({
@@ -678,7 +746,7 @@ it("keeps known details operable when the list fails and isolates drafts by ques
   fireEvent.click(screen.getByRole("button", { name: /另一维护方向/ }));
   await screen.findByText(second.question.prompt);
   expect(screen.getByLabelText("补充说明（可选）")).toHaveValue("");
-  fireEvent.click(screen.getByRole("button", { name: /简化设计.*待答复/ }));
+  fireEvent.click(screen.getByRole("button", { name: /更新过期文档.*待答复/ }));
   await screen.findByText(record.question!.prompt);
   expect(screen.getByLabelText("补充说明（可选）")).toHaveValue("第一条草稿");
   vi.mocked(api.get).mockRejectedValueOnce(new Error("index failure"));

@@ -136,20 +136,7 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		{"roadmap-spec-guide", "a39d6ae2bc64bb682ba0cbe39efc688ac7dfee03a247a61f3f1340c902f8f50c", RoadmapSpecGuide},
 		{"roadmap-planning", "d405343c050b42dad6cd74d63d2d53e52ee34551965bd21ecb79fa49bb362261", RoadmapPlanningRules},
 		{"task-planning", "a5b7292f94a899eac4908c3bd3b34007d6a19ffdb63addfa085b506f09029ff6", TaskPlanningRules},
-	}
-	for _, direction := range []struct{ id, sha256 string }{
-		{"simplify", "0eae9dbb8636492f585982d01964e43b8a3116d6957ed5fb92f39437477b1abd"},
-		{"cleanup", "feac63c598b83c95ffa1ec682f41a7a1d5b86ef277b1022f42fa61694a2a8e7d"},
-		{"boundaries", "6d2e4581612d586a8d41d9a7bdce889f3228f0654a5433747df64f201a428a5b"},
-		{"readability", "773a8da0d06062805ec61c91f0177bd316d5307806c331131e1c575d980f0f11"},
-		{"docs-tests", "c38c3472c7e3cfead403511934779c3dc677251a6d518d660dd0b36a08ad0eaf"},
-	} {
-		cases = append(cases, struct {
-			name, sha256 string
-			read         func() ([]byte, error)
-		}{"maintenance-direction/" + direction.id, direction.sha256, func() ([]byte, error) {
-			return MaintenanceDirection(direction.id)
-		}})
+		{"maintenance-direction/update-stale-docs", "17d6729aacb257dbf42b0f42385eeddd3950e59bbf93aadddea223068a42ed99", MaintenanceDirection},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

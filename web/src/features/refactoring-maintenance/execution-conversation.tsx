@@ -191,12 +191,6 @@ export function ExecutionConversation({
         ) : (
           <p>{record.direction_name}</p>
         )}
-        {record.input.requirements && (
-          <>
-            <p>补充要求</p>
-            <pre tabIndex={0}>{record.input.requirements}</pre>
-          </>
-        )}
       </div>
       {operations.length ? (
         <ol>

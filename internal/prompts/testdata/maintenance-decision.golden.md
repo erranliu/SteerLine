@@ -1,4 +1,4 @@
-按维护方向和补充要求判断，默认保持现有行为。涉及扩大授权或重要行为取舍时，返回带问题、选项和推荐的 ask。按材料清单对应的 file 路径读取 maintenance/context.json。最终按 schema 返回一个 JSON 对象。
+根据 direction_prompt 中的重构方向判断，默认保持现有行为。涉及扩大授权或重要行为取舍时，返回带问题、选项和推荐的 ask。按材料清单对应的 file 路径读取 maintenance/context.json。最终按 schema 返回一个 JSON 对象。
 
 在给定的只读目录查看相关代码和测试，选一个有明确收益、范围有限且可验证的改动。
 有合适的改动就返回 execute 并简述收益，没有就返回 finish。

@@ -55,6 +55,7 @@ func TestRefactoringTransactionalSlotCASAndActivity(t *testing.T) {
 	s := openDomainTestStore(t)
 	ctx := context.Background()
 	r := m.Record{ID: m.ID(), Project: "p", Revision: 1, Phase: "select", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	r.Input.DirectionPrompt = strings.Repeat("本次方向正文", 1000)
 	cmd := m.Command{ID: r.ID, Raw: json.RawMessage(`{"start":1}`), Action: "refactoring_start", Target: "p", Expected: 1}
 	if e := s.SaveRefactoring(ctx, r, 0, &cmd); e != nil {
 		t.Fatal(e)
@@ -98,6 +99,11 @@ func TestRefactoringTransactionalSlotCASAndActivity(t *testing.T) {
 	facts, _, e := s.ReadAsyncActivityFacts(ctx, "p", ports.AsyncActivityRead{Source: "refactoring", Filter: "summary", Limit: 50})
 	if e != nil || len(facts) != len(others)+1 {
 		t.Fatal(facts, e)
+	}
+	for _, fact := range facts {
+		if strings.Contains(string(fact.Payload), "本次方向正文") {
+			t.Fatal("activity summary included the full direction prompt")
+		}
 	}
 	page, e := query.ReadAsyncActivities(ctx, s, "p", "instance", query.AsyncActivityOptions{Sources: []string{"refactoring"}, Filter: "ongoing"})
 	if e != nil || len(page.Items) != len(others)+1 || page.Items[0].SteerAgent.Type != "maintenance" {

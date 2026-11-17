@@ -336,7 +336,7 @@
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.refactoring-maintenance",
       "name": "维护多轮、审计和原PR交付",
-      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner/provider夹具：宽窄屏预览方向原文、拒绝过期版本、安装模板修改后继续使用冻结正文；两轮、失败修复、发布复用同一worktree最新持有者；结构化人工答复、预算自动收尾、按核验PR版本独立评审且正文保持、原PR手动更新；三条并发及第四条排队接位；刷新零命令、活动分类和资源清理。原生模型与真实PR由live专项验证。",
+      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner/provider夹具：浏览器验证安装级方向增改删与重名拦截、宽窄屏编辑正文、拒绝过期版本、任务保持冻结正文；两轮、失败修复、发布复用同一worktree最新持有者；结构化人工答复、预算自动收尾、按核验PR版本独立评审且正文保持、原PR手动更新；三条并发及第四条排队接位；刷新零命令、活动分类和资源清理。原生模型与真实PR由live专项验证。",
       "id": "runtime.refactoring-maintenance",
       "note": "Windows/Go/Git/Node/Edge；先构建Web，独立home/repo/provider/浏览器输出。串行准备，受控不证明真实模型工程判断。",
       "level": "L3"

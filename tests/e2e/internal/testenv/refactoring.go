@@ -11,6 +11,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
+	"github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	ref "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
@@ -68,11 +69,12 @@ func RefactoringMaintenance(s *Scenario) {
 	s.Must(e)
 	defer client.Close()
 	prefix := "/projects/" + identity.ProjectID
-	directionsDir := filepath.Join(p.Home, "etc", "refactoring-directions")
-	s.Must(os.MkdirAll(directionsDir, 0700))
-	template := filepath.Join(directionsDir, "shared-fixtures.md")
-	const directionPrompt = "# 收拢共享夹具\r\n\r\n优先处理共享测试夹具。  \r\n"
-	s.Must(os.WriteFile(template, []byte(directionPrompt), 0600))
+	const templatePrompt = "优先处理共享测试夹具。  \n"
+	const directionPrompt = templatePrompt + "\nask-once"
+	var template ref.Direction
+	s.Must(client.Post(s.Context, applicationcontract.RefactoringDirectionsPath, ref.DirectionChange{
+		Action: "create", Name: "收拢共享夹具", Prompt: templatePrompt,
+	}, &template))
 	var record struct {
 		ID              string
 		Revision        uint64
@@ -86,7 +88,7 @@ func RefactoringMaintenance(s *Scenario) {
 		DirectionName   string `json:"direction_name"`
 		DirectionPrompt string `json:"direction_prompt"`
 	}
-	stale := ref.Start{Direction: "custom:shared-fixtures", DirectionRevision: ref.Digest([]byte("old")), Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 1}}
+	stale := ref.Start{Direction: template.ID, DirectionRevision: ref.Digest([]byte("old")), DirectionPrompt: templatePrompt, Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 1}}
 	var startView maintenanceReadiness
 	s.Wait("ready maintenance start", func() (bool, error) {
 		if err := client.Get(s.Context, prefix+"/refactoring/readiness", &startView); err != nil {
@@ -118,8 +120,8 @@ func RefactoringMaintenance(s *Scenario) {
 	}
 	var accepted httpcontract.CommandResponse
 	s.Must(client.Post(s.Context, prefix+"/commands", staleRequest, &accepted))
-	if accepted.Status != "applied" || waitStartup(staleRequest.RequestID) != "重构提示词已更新，请刷新并查看最新正文后重新启动" {
-		s.t.Fatal("stale preview did not block background startup", accepted)
+	if accepted.Status != "rejected" || !strings.Contains(accepted.Diagnostic, "重构方向已更新") {
+		s.t.Fatal("stale preview was accepted", accepted)
 	}
 	readiness := func(want string) {
 		s.t.Helper()
@@ -159,7 +161,7 @@ func RefactoringMaintenance(s *Scenario) {
 	fixturePath := filepath.Join(runnerstatepath.Directory(p.Home), "caller-fixture.json")
 	before, e := os.ReadFile(fixturePath)
 	s.Must(e)
-	stale.DirectionRevision = ref.Digest([]byte(directionPrompt))
+	stale.DirectionRevision = template.Revision
 	staleRequest.RequestID = ref.ID()
 	staleRequest.Payload, e = json.Marshal(stale)
 	s.Must(e)
@@ -228,7 +230,15 @@ func RefactoringMaintenance(s *Scenario) {
 	if record.Question == nil || record.DirectionName != "收拢共享夹具" || record.DirectionPrompt != directionPrompt {
 		s.t.Fatal("missing question or direction snapshot", record)
 	}
-	s.Must(os.WriteFile(template, []byte("# 新模板\n\n更新后的内容。\n"), 0600))
+	var catalogue ref.DirectionCatalogue
+	s.Must(client.Get(s.Context, applicationcontract.RefactoringDirectionsPath, &catalogue))
+	if len(catalogue.Directions) != 2 || catalogue.Directions[1] != template {
+		s.t.Fatal("browser edits unexpectedly changed the shared template", catalogue)
+	}
+	var updated ref.Direction
+	s.Must(client.Post(s.Context, applicationcontract.RefactoringDirectionsPath, ref.DirectionChange{
+		Action: "update", ID: template.ID, Revision: template.Revision, Name: "新模板", Prompt: "更新后的内容。\n",
+	}, &updated))
 	// GETs and command replay must not create work or refresh identities.
 	var replay httpcontract.CommandResponse
 	s.Must(client.Post(s.Context, prefix+"/commands", request, &replay))
@@ -347,8 +357,8 @@ func RefactoringMaintenance(s *Scenario) {
 	}
 	browser(record.ID, "history")
 	parallelStart := stale
-	parallelStart.DirectionRevision = ref.Digest([]byte("# 新模板\n\n更新后的内容。\n"))
-	parallelStart.Requirements = "hold-controlled-run"
+	parallelStart.DirectionRevision = updated.Revision
+	parallelStart.DirectionPrompt = "hold-controlled-run"
 	var parallel []string
 	for i := 0; i < 4; i++ {
 		s.Wait("admit controlled maintenance action", func() (bool, error) {

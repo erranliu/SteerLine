@@ -25,11 +25,11 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 	run.Execution = rc.Execution{AttemptID: "attempt-" + id, SessionID: "session-" + id, TurnID: "turn-" + id}
 	const reportBody = "受控审计报告：原收益保持。冲突审计：双方意图与验证已记录。参考费用未覆盖范围已披露。"
 	type contextFacts struct {
-		Mode         string
-		Requirements string
-		Answers      []ref.Answer
-		PR           *rc.PRFact
-		Feedback     []struct {
+		Mode            string
+		DirectionPrompt string `json:"direction_prompt"`
+		Answers         []ref.Answer
+		PR              *rc.PRFact
+		Feedback        []struct {
 			Purpose string
 			Result  *ref.Result
 		}
@@ -58,7 +58,7 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 				delete(decision, "prompt")
 			}
 		case "first":
-			if strings.Contains(facts.Requirements, "ask-once") && len(facts.Answers) == 0 {
+			if strings.Contains(facts.DirectionPrompt, "ask-once") && len(facts.Answers) == 0 {
 				decision["kind"] = "ask"
 				delete(decision, "prompt")
 				decision["question"] = ref.QuestionBody{Prompt: "是否保留公共接口？", Facts: []string{"当前接口有调用方"}, Attempts: []string{}, Options: []ref.QuestionOption{{ID: "keep", Label: "保留公共接口", Impact: "维持兼容"}}, RecommendedOptionID: "keep", RecommendationReason: "兼容现有调用"}
@@ -91,7 +91,7 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 			}
 			run.Materials = append(run.Materials, rc.Material{Kind: "file", Path: doc.Path, Digest: ref.Digest([]byte(*doc.Content)), SnapshotPath: path, ExecutionLocation: path})
 		}
-		if strings.Contains(facts.Requirements, "hold-controlled-run") {
+		if strings.Contains(facts.DirectionPrompt, "hold-controlled-run") {
 			run.Status, run.StopStatus, run.Closed, run.Final = "running", "running", false, nil
 		} else {
 			raw, _ := json.Marshal(decision)

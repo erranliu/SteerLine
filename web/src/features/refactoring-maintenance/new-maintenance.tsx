@@ -5,6 +5,13 @@ import { useWorkspace } from "../../app/context";
 import type { ProjectReadiness } from "../../shared/api/types";
 import { Button } from "../../shared/ui/button";
 import { environmentLink } from "../environment-checks/use-readiness";
+import {
+  defaultDirection,
+  DirectionCatalogueStatus,
+  useDirectionCatalogue,
+  useDirectionChange,
+  validDirectionPrompt,
+} from "./directions";
 
 type Profile = { id: string; name: string; model?: string; version: string };
 type Environment = {
@@ -25,16 +32,10 @@ type Readiness = {
   steer_agent?: { model: string; reasoning_effort: string };
   reason?: string;
 };
-type Catalogue = {
-  directions: { id: string; name: string; prompt: string; revision: string }[];
-  diagnostics?: string[];
-};
-
 const empty = {
   environment: "",
   profile: "",
-  direction: "simplify",
-  requirements: "",
+  direction: defaultDirection,
   strategy: "cautious",
   dollars: "",
   minutes: "",
@@ -44,7 +45,7 @@ const empty = {
 export type StartInput = {
   direction: string;
   direction_revision: string;
-  requirements: string;
+  direction_prompt: string;
   strategy: string;
   profile: string;
   profile_version: string;
@@ -105,7 +106,6 @@ export function NewMaintenance({
     initial
       ? {
           direction: initial.direction,
-          requirements: initial.requirements,
           strategy: initial.strategy,
           environment: initial.environment_key,
           profile: initial.profile,
@@ -115,6 +115,16 @@ export function NewMaintenance({
         }
       : empty,
   );
+  const [directionEdit, setDirectionEdit] = useState(() =>
+    initial
+      ? {
+          revision: initial.direction_revision,
+          prompt: initial.direction_prompt,
+        }
+      : undefined,
+  );
+  const [copyName, setCopyName] = useState<string>();
+  const [directionSaved, setDirectionSaved] = useState(false);
   const [confirmed, setConfirmed] = useState(() =>
     initial
       ? JSON.stringify([
@@ -139,12 +149,8 @@ export function NewMaintenance({
     retry: false,
     refetchInterval: 10000,
   });
-  const catalogue = useQuery({
-    queryKey: [...scope, "directions"],
-    queryFn: ({ signal }) =>
-      api.get<Catalogue>("/refactoring/directions", signal),
-    enabled: open && online,
-  });
+  const catalogue = useDirectionCatalogue(open);
+  const directionChange = useDirectionChange();
   const ready = readiness.data;
   const options =
     ready?.environments.filter((item) => item.status === "ready") ?? [];
@@ -158,6 +164,10 @@ export function NewMaintenance({
   const direction = catalogue.data?.directions.find(
     (item) => item.id === draft.direction,
   );
+  const directionPrompt = directionEdit?.prompt ?? direction?.prompt ?? "";
+  const directionStale =
+    !!directionEdit && directionEdit.revision !== direction?.revision;
+  const promptValid = validDirectionPrompt(directionPrompt);
   const available = online && readiness.isSuccess;
 
   useEffect(() => {
@@ -219,8 +229,6 @@ export function NewMaintenance({
     rounds >= 0 &&
     rounds <= 10000 &&
     !!(draft.dollars || draft.minutes || rounds);
-  const requirementsValid =
-    new TextEncoder().encode(draft.requirements).length <= 32 * 1024;
   const canStart =
     available &&
     ready?.project.status === "ready" &&
@@ -228,9 +236,12 @@ export function NewMaintenance({
     !needsConfirmation &&
     !!direction &&
     catalogue.isSuccess &&
+    !directionStale &&
+    !directionChange.isPending &&
+    copyName === undefined &&
     !submissionPending &&
     budgetValid &&
-    requirementsValid;
+    promptValid;
   const other = ready?.environments.find(
     (item) => item.environment_key === draft.environment,
   );
@@ -252,7 +263,7 @@ export function NewMaintenance({
       aria-labelledby="new-maintenance-title"
       onCancel={(e) => {
         e.preventDefault();
-        close();
+        if (!directionChange.isPending) close();
       }}
     >
       <section className="refactoring-panel">
@@ -261,6 +272,7 @@ export function NewMaintenance({
           <Button
             ref={closeButton}
             variant="ghost"
+            disabled={directionChange.isPending}
             onClick={close}
             type="button"
           >
@@ -276,7 +288,7 @@ export function NewMaintenance({
               {
                 direction: direction.id,
                 direction_revision: direction.revision,
-                requirements: draft.requirements,
+                direction_prompt: directionPrompt,
                 strategy: draft.strategy,
                 profile: profile.id,
                 profile_version: profile.version,
@@ -299,12 +311,24 @@ export function NewMaintenance({
               <section className="refactoring-preview">
                 <h3>维护方向</h3>
                 <label>
-                  选择维护方向
+                  重构方向
                   <select
                     required
                     value={draft.direction}
-                    onChange={(e) => change("direction", e.target.value)}
+                    disabled={directionChange.isPending}
+                    onChange={(e) => {
+                      change("direction", e.target.value);
+                      setDirectionEdit(undefined);
+                      setCopyName(undefined);
+                      setDirectionSaved(false);
+                      directionChange.reset();
+                    }}
                   >
+                    {catalogue.data && !direction && (
+                      <option value={draft.direction} disabled>
+                        原方向已不可用
+                      </option>
+                    )}
                     {catalogue.data?.directions.map((item) => (
                       <option value={item.id} key={item.id}>
                         {item.name}
@@ -312,28 +336,151 @@ export function NewMaintenance({
                     ))}
                   </select>
                 </label>
-                {catalogue.isError && <p role="alert">维护方向查询失败</p>}
-                {catalogue.data?.diagnostics?.map((message) => (
-                  <p className="notice amber" key={message}>
-                    {message}
-                  </p>
-                ))}
-                {direction && (
-                  <pre
-                    className="refactoring-prompt-body"
-                    aria-label="维护方向预览"
-                  >
-                    {direction.prompt}
-                  </pre>
+                {open && <DirectionCatalogueStatus catalogue={catalogue} />}
+                {(direction || directionEdit) && (
+                  <>
+                    <label>
+                      方向正文
+                      <textarea
+                        rows={8}
+                        disabled={directionChange.isPending}
+                        value={directionPrompt}
+                        onChange={(e) => {
+                          const revision =
+                            directionEdit?.revision ?? direction?.revision;
+                          if (revision)
+                            setDirectionEdit({
+                              revision,
+                              prompt: e.target.value,
+                            });
+                          setDirectionSaved(false);
+                        }}
+                      />
+                    </label>
+                    {!promptValid && (
+                      <p role="status">方向正文必填，最多 32 KiB。</p>
+                    )}
+                    {directionStale && (
+                      <p role="status">
+                        方向已更新或删除。可另存当前正文，或重新选择方向。
+                      </p>
+                    )}
+                    {direction && directionStale && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setDirectionEdit(undefined)}
+                      >
+                        加载最新正文
+                      </Button>
+                    )}
+                    <div className="refactoring-direction-actions">
+                      {direction && direction.id !== defaultDirection && (
+                        <Button
+                          type="button"
+                          disabled={
+                            !promptValid ||
+                            directionStale ||
+                            directionPrompt === direction.prompt ||
+                            directionChange.isPending
+                          }
+                          onClick={() =>
+                            directionChange.mutate(
+                              {
+                                action: "update",
+                                id: direction.id,
+                                revision: direction.revision,
+                                name: direction.name,
+                                prompt: directionPrompt,
+                              },
+                              {
+                                onSuccess: (row) => {
+                                  setDirectionEdit({
+                                    revision: row.revision,
+                                    prompt: row.prompt,
+                                  });
+                                  setDirectionSaved(true);
+                                },
+                              },
+                            )
+                          }
+                        >
+                          保存到方向
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={!promptValid || directionChange.isPending}
+                        onClick={() => setCopyName("")}
+                      >
+                        另存为新方向
+                      </Button>
+                    </div>
+                    {copyName !== undefined && (
+                      <div className="refactoring-direction-actions">
+                        <label>
+                          新方向名称
+                          <input
+                            disabled={directionChange.isPending}
+                            value={copyName}
+                            onChange={(e) => setCopyName(e.target.value)}
+                          />
+                        </label>
+                        <Button
+                          type="button"
+                          disabled={
+                            !copyName.trim() ||
+                            !promptValid ||
+                            directionChange.isPending
+                          }
+                          onClick={() =>
+                            directionChange.mutate(
+                              {
+                                action: "create",
+                                name: copyName,
+                                prompt: directionPrompt,
+                              },
+                              {
+                                onSuccess: (row) => {
+                                  change("direction", row.id);
+                                  setDirectionEdit({
+                                    revision: row.revision,
+                                    prompt: row.prompt,
+                                  });
+                                  setCopyName(undefined);
+                                  setDirectionSaved(true);
+                                },
+                              },
+                            )
+                          }
+                        >
+                          保存新方向
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={directionChange.isPending}
+                          onClick={() => {
+                            setCopyName(undefined);
+                            directionChange.reset();
+                          }}
+                        >
+                          取消
+                        </Button>
+                      </div>
+                    )}
+                    {directionChange.error && (
+                      <p role="alert">{directionChange.error.message}</p>
+                    )}
+                    {directionSaved && !directionChange.error && (
+                      <p role="status">已保存方向</p>
+                    )}
+                    <p className="muted">
+                      直接启动时，当前正文仅用于本次重构任务。
+                    </p>
+                  </>
                 )}
-                <label>
-                  补充要求
-                  <textarea
-                    maxLength={32768}
-                    value={draft.requirements}
-                    onChange={(e) => change("requirements", e.target.value)}
-                  />
-                </label>
                 <label>
                   决策策略
                   <select
@@ -545,7 +692,6 @@ export function NewMaintenance({
                 请填写至少一项有效的正数预算，轮次最多 10000。
               </p>
             )}
-            {!requirementsValid && <p role="status">补充要求最多 32 KiB。</p>}
             {submissionPending && (
               <p role="status">上一条提交待确认，确认后可以继续提交。</p>
             )}

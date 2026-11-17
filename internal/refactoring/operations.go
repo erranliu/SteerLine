@@ -36,7 +36,6 @@ type roundSummary struct {
 
 type decisionContext struct {
 	Mode            string                 `json:"mode"`
-	Requirements    string                 `json:"requirements"`
 	DirectionPrompt string                 `json:"direction_prompt"`
 	Round           int                    `json:"round,omitempty"`
 	RoundStart      string                 `json:"round_start,omitempty"`
@@ -61,7 +60,7 @@ func clippedSummary(s string, size int) string {
 
 func (s *Service) context(r model.Record, review model.ReviewEvidence) decisionContext {
 	f := decisionContext{
-		Mode: r.Phase, Requirements: r.Input.Requirements, DirectionPrompt: r.Frozen.Direction.Prompt,
+		Mode: r.Phase, DirectionPrompt: r.Frozen.Direction.Prompt,
 	}
 	if r.Phase == "report" {
 		f.PR, f.Checks = r.PR, review.Checks

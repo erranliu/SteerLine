@@ -66,8 +66,8 @@ func RoadmapPlanningConflict(decision string) (string, error) {
 	return render("roadmap-planning-conflict", struct{ Decision string }{decision})
 }
 func MainAgentRules() ([]byte, error) { return files.ReadFile("materials/main-agent.md") }
-func MaintenanceDirection(id string) ([]byte, error) {
-	return files.ReadFile("materials/refactoring-directions/" + id + ".md")
+func MaintenanceDirection() ([]byte, error) {
+	return files.ReadFile("materials/refactoring-directions/update-stale-docs.md")
 }
 func MaintenanceDecision(phase, strategy string, retryJSON bool) (string, error) {
 	switch phase {

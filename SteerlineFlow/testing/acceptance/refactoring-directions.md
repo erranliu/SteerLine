@@ -1,6 +1,6 @@
 # 维护方向模板与界面统一
 
-重构与维护复用项目维护的面板样式和共享控件。内置与安装级自定义方向共用目录、完整原文预览和启动版本校验。每次行动冻结所选方向，单次目标和范围通过“补充要求”传入。[产品设计](../../../docs/product-design/refactoring-maintenance.md#维护方向) · [安装说明](../../../docs/integration/install-deploy.md#自定义维护方向)
+重构与维护复用项目维护的面板样式和共享控件。内置与安装级自定义方向共用目录、完整原文预览和启动版本校验。每次行动冻结所选方向，单次目标和范围通过“补充要求”传入。[产品设计](../../../docs/product-design/refactoring-maintenance.md#维护方向) · [安装说明](../../../docs/integration/install-deploy.md#自定义重构方向)
 
 ## 提示词差异
 
@@ -11,11 +11,11 @@
 | 正式资产 | UTF-8/LF 字节（修改前 → 修改后） | 迁移的方向正文 |
 | --- | --- | --- |
 | [当时的公共规则](https://github.com/erranliu/SteerLine/blob/371ef2d6939eec90557c17506d38f39c94de324c/internal/prompts/materials/maintenance.md) | 4955 → 4905 | 读取实际选择的方向及单次补充要求 |
-| [简化设计](../../../internal/prompts/materials/refactoring-directions/simplify.md) | 0 → 56 | 简化不必要的抽象与控制流。 |
-| [清理冗余](../../../internal/prompts/materials/refactoring-directions/cleanup.md) | 0 → 59 | 清理已证实无用或重复的代码。 |
-| [理顺职责](../../../internal/prompts/materials/refactoring-directions/boundaries.md) | 0 → 47 | 理顺模块职责与依赖。 |
-| [提升可维护性](../../../internal/prompts/materials/refactoring-directions/readability.md) | 0 → 68 | 改善命名、错误处理和复杂表达。 |
-| [整理文档与测试](../../../internal/prompts/materials/refactoring-directions/docs-tests.md) | 0 → 68 | 修复文档、测试与实现不一致。 |
+| [简化设计](https://github.com/erranliu/SteerLine/blob/db4615a3740f64b2324df9034c52051bd0bd8ab0/internal/prompts/materials/refactoring-directions/simplify.md) | 0 → 56 | 简化不必要的抽象与控制流。 |
+| [清理冗余](https://github.com/erranliu/SteerLine/blob/db4615a3740f64b2324df9034c52051bd0bd8ab0/internal/prompts/materials/refactoring-directions/cleanup.md) | 0 → 59 | 清理已证实无用或重复的代码。 |
+| [理顺职责](https://github.com/erranliu/SteerLine/blob/db4615a3740f64b2324df9034c52051bd0bd8ab0/internal/prompts/materials/refactoring-directions/boundaries.md) | 0 → 47 | 理顺模块职责与依赖。 |
+| [提升可维护性](https://github.com/erranliu/SteerLine/blob/db4615a3740f64b2324df9034c52051bd0bd8ab0/internal/prompts/materials/refactoring-directions/readability.md) | 0 → 68 | 改善命名、错误处理和复杂表达。 |
+| [整理文档与测试](https://github.com/erranliu/SteerLine/blob/db4615a3740f64b2324df9034c52051bd0bd8ab0/internal/prompts/materials/refactoring-directions/docs-tests.md) | 0 → 68 | 修复文档、测试与实现不一致。 |
 
 实际只读短提示为 251 → 251 字节，可写短提示为 547 → 547 字节。预览与只读决策读取同一正文，以启动时校验的版本冻结到行动记录。只读 Runner 的 `maintenance/context.json` 携带完整 `direction_prompt`，可写初始化文件使用决策生成的实施指令。独立审核批准最终正文、字节守卫与文件接线，并复核安装目录边界、Windows 文件名匹配和可写初始化限额相关修复。
 

@@ -43,6 +43,32 @@ test("maintenance report, history and refresh remain observational", async ({
     page.getByRole("heading", { name: "重构与维护", exact: true }),
   ).toBeVisible();
   if (!id) {
+    await page.getByRole("button", { name: "管理重构方向" }).click();
+    const manager = page.getByRole("dialog", { name: "管理重构方向" });
+    await expect(manager.getByText("更新过期文档")).toBeVisible();
+    await manager.getByLabel("方向名称").fill("更新过期文档");
+    await manager.getByLabel("方向正文").fill("浏览器流程测试");
+    await manager.getByRole("button", { name: "保存方向" }).click();
+    await expect(manager.getByRole("alert")).toContainText(
+      "重构方向名称已存在",
+    );
+    await manager.getByLabel("方向名称").fill("浏览器测试方向");
+    await manager.getByRole("button", { name: "保存方向" }).click();
+    await expect(
+      manager.getByRole("button", { name: "编辑 浏览器测试方向" }),
+    ).toBeVisible();
+    await manager.getByLabel("方向名称").fill("已改名测试方向");
+    await manager.getByRole("button", { name: "保存方向" }).click();
+    await expect(
+      manager.getByRole("button", { name: "编辑 已改名测试方向" }),
+    ).toBeVisible();
+    await manager.getByRole("button", { name: "删除方向" }).click();
+    await manager.getByRole("button", { name: "确认删除" }).click();
+    await expect(manager.getByText("已删除方向")).toBeVisible();
+    await expect(
+      manager.getByRole("button", { name: "编辑 已改名测试方向" }),
+    ).toHaveCount(0);
+    await manager.getByRole("button", { name: "关闭" }).click();
     const opener = page.getByRole("button", { name: "新建重构任务" });
     await opener.focus();
     await page.keyboard.press("Enter");
@@ -61,15 +87,14 @@ test("maintenance report, history and refresh remain observational", async ({
     ).toBeVisible();
     await expect(dialog.getByLabel("决策策略")).toHaveValue("cautious");
     await expect(dialog.getByLabel("重构轮次")).toHaveValue("1");
-    const preview = dialog.getByLabel("维护方向预览", { exact: true });
-    await expect(preview).toContainText("简化不必要的抽象与控制流。");
-    await dialog
-      .getByLabel("选择维护方向")
-      .selectOption("custom:shared-fixtures");
-    await expect
-      .poll(() => preview.textContent())
-      .toBe("# 收拢共享夹具\r\n\r\n优先处理共享测试夹具。  \r\n");
-    await dialog.getByLabel("补充要求").fill("ask-once");
+    const preview = dialog.getByRole("textbox", {
+      name: "方向正文",
+      exact: true,
+    });
+    await expect(preview).toHaveValue(/找出与当前实现/);
+    await dialog.getByLabel("重构方向").selectOption({ label: "收拢共享夹具" });
+    await expect(preview).toHaveValue("优先处理共享测试夹具。  \n");
+    await preview.fill("优先处理共享测试夹具。  \n\nask-once");
     await dialog.getByLabel("重构轮次").fill("2");
     await page.screenshot({
       path: join(out, "maintenance-direction-desktop.png"),
@@ -162,9 +187,12 @@ test("maintenance report, history and refresh remain observational", async ({
     exact: true,
   });
   const decision = implementation.getByText("决策指令", { exact: true });
-  const decisionBody = implementation.getByText("按维护方向和补充要求判断", {
-    exact: false,
-  });
+  const decisionBody = implementation.getByText(
+    "根据 direction_prompt 中的重构方向判断",
+    {
+      exact: false,
+    },
+  );
   await expect(direction).toBeVisible();
   await expect(instruction).toBeVisible();
   await expect(
