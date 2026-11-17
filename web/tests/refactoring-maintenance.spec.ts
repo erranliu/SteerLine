@@ -43,12 +43,15 @@ test("maintenance report, history and refresh remain observational", async ({
     page.getByRole("heading", { name: "重构与维护", exact: true }),
   ).toBeVisible();
   if (!id) {
-    const opener = page.getByRole("button", { name: "新建维护行动" });
+    const opener = page.getByRole("button", { name: "新建重构任务" });
     await opener.focus();
     await page.keyboard.press("Enter");
-    const dialog = page.getByRole("dialog", { name: "新建维护行动" });
+    const dialog = page.getByRole("dialog", { name: "新建重构任务" });
     await expect(dialog).toBeVisible();
-    const start = dialog.getByRole("button", { name: "开始维护", exact: true });
+    const start = dialog.getByRole("button", {
+      name: "启动重构任务",
+      exact: true,
+    });
     await expect(start).toBeEnabled();
     await expect(
       dialog.getByRole("heading", { name: "一级 · 决策提示词" }),
@@ -93,7 +96,7 @@ test("maintenance report, history and refresh remain observational", async ({
     expect(startResponse.ok()).toBe(true);
     await expect(
       page
-        .getByRole("region", { name: "维护详情" })
+        .getByRole("region", { name: "重构任务详情" })
         .getByText("待答复", { exact: true }),
     ).toBeVisible();
     expect(commands).toEqual(["refactoring_start"]);
@@ -121,10 +124,12 @@ test("maintenance report, history and refresh remain observational", async ({
   }
   await expect(
     page
-      .getByRole("region", { name: "维护详情" })
+      .getByRole("region", { name: "重构任务详情" })
       .getByText("已交付", { exact: true }),
   ).toBeVisible();
-  const detail = page.getByRole("region", { name: "维护详情" });
+  const detail = page.getByRole("region", { name: "重构任务详情" });
+  const copy = detail.getByRole("button", { name: "复制调试信息" });
+  await expect(copy).toBeVisible();
   await expect(detail.getByLabel("执行指令", { exact: true })).toBeVisible();
   const reports = detail.getByText("PR 合入评审（2）", { exact: true });
   await expect(reports).toBeVisible();
@@ -149,9 +154,21 @@ test("maintenance report, history and refresh remain observational", async ({
   ).toBeHidden();
   expect(commands).toEqual([]);
   await page.setViewportSize({ width: 375, height: 900 });
-  await page.getByRole("button", { name: "返回行动列表" }).click();
-  await expect(page.getByRole("region", { name: "行动列表" })).toBeVisible();
+  await page.getByRole("button", { name: "返回重构任务列表" }).click();
+  const list = page.getByRole("region", { name: "重构任务列表" });
+  const row = list.getByRole("listitem").filter({
+    has: page.locator(`[data-action="${id}"]`),
+  });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await row.getByRole("button", { name: "复制调试信息" }).click();
+  await expect(row.getByRole("status")).toHaveText("已复制调试信息");
+  const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clipboard).toContain(`重构任务 ID：${id}`);
+  expect(clipboard).toMatch(/Runner Run ID：run-/);
+  await expect(list).toBeVisible();
+  expect(commands).toEqual([]);
   await page.goBack();
+  await expect(copy).toBeVisible();
   await expect(reports).toBeVisible();
   await expect(detail.getByLabel("方向提示词", { exact: true })).toBeVisible();
   await expect(detail.getByLabel("执行指令", { exact: true })).toBeVisible();

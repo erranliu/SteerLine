@@ -257,7 +257,7 @@ export function NewMaintenance({
     >
       <section className="refactoring-panel">
         <header className="refactoring-heading">
-          <h2 id="new-maintenance-title">新建维护行动</h2>
+          <h2 id="new-maintenance-title">新建重构任务</h2>
           <Button
             ref={closeButton}
             variant="ghost"
@@ -298,7 +298,7 @@ export function NewMaintenance({
             <div className="refactoring-prompts">
               <section className="refactoring-preview">
                 <h3>一级 · 决策提示词</h3>
-                <p className="muted">交给 SteerAgent · 本次行动</p>
+                <p className="muted">交给 SteerAgent · 本次重构任务</p>
                 <label>
                   重构方向
                   <select
@@ -313,7 +313,7 @@ export function NewMaintenance({
                     ))}
                   </select>
                 </label>
-                {catalogue.isError && <p role="alert">维护方向查询失败</p>}
+                {catalogue.isError && <p role="alert">重构方向查询失败</p>}
                 {catalogue.data?.diagnostics?.map((message) => (
                   <p className="notice amber" key={message}>
                     {message}
@@ -497,7 +497,7 @@ export function NewMaintenance({
               </label>
             </div>
             <p className="muted">
-              至少设置一项预算。任一项耗尽后，行动进入收尾。
+              至少设置一项预算。任一项耗尽后，重构任务进入收尾。
             </p>
             {ready && (
               <div className="refactoring-confirm">
@@ -551,7 +551,7 @@ export function NewMaintenance({
               <p role="status">上一条提交待确认，确认后可以继续提交。</p>
             )}
             <Button disabled={!canStart} variant="default" type="submit">
-              开始维护
+              启动重构任务
             </Button>
           </fieldset>
         </form>

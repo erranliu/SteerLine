@@ -119,9 +119,22 @@ export function requestExecutionInfo(
 }
 
 export function CopyExecutionInfo({ info }: { info: ExecutionInfo }) {
-  const [feedback, setFeedback] = useState<{ text: string; failed: boolean }>();
+  return (
+    <CopyInfoButton text={formatExecutionInfo(info)} label="复制执行信息" />
+  );
+}
+
+export function CopyInfoButton({
+  text,
+  label,
+}: {
+  text: string | (() => Promise<string>);
+  label: string;
+}) {
+  const [feedback, setFeedback] = useState<
+    { kind: "copied" | "load-failed" } | { kind: "manual"; text: string }
+  >();
   const [copying, setCopying] = useState(false);
-  const text = formatExecutionInfo(info);
   return (
     <span className="copy-execution-info">
       <Button
@@ -131,29 +144,36 @@ export function CopyExecutionInfo({ info }: { info: ExecutionInfo }) {
         onClick={async () => {
           setCopying(true);
           setFeedback(undefined);
+          let content: string | undefined;
           try {
+            content = typeof text === "string" ? text : await text();
             if (!navigator.clipboard?.writeText)
               throw new Error("剪贴板不可用");
-            await navigator.clipboard.writeText(text);
-            setFeedback({ text: "已复制执行信息", failed: false });
+            await navigator.clipboard.writeText(content);
+            setFeedback({ kind: "copied" });
           } catch {
-            setFeedback({ text, failed: true });
+            setFeedback(
+              content === undefined
+                ? { kind: "load-failed" }
+                : { kind: "manual", text: content },
+            );
           } finally {
             setCopying(false);
           }
         }}
       >
         <Copy size={13} />
-        复制执行信息
+        {label}
       </Button>
-      {feedback &&
-        (feedback.failed ? (
-          <span role="alert">
-            复制失败，请手动复制：<pre>{feedback.text}</pre>
-          </span>
-        ) : (
-          <span role="status">{feedback.text}</span>
-        ))}
+      {feedback?.kind === "manual" && (
+        <span role="alert">
+          复制失败，请手动复制：<pre>{feedback.text}</pre>
+        </span>
+      )}
+      {feedback?.kind === "load-failed" && (
+        <span role="alert">读取失败，请重试</span>
+      )}
+      {feedback?.kind === "copied" && <span role="status">已{label}</span>}
     </span>
   );
 }

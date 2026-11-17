@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
   CopyExecutionInfo,
+  CopyInfoButton,
   formatExecutionInfo,
   requestExecutionInfo,
 } from "./execution-info";
@@ -72,4 +73,24 @@ it("keeps the exact selected identities available for manual copying after clipb
   fireEvent.click(screen.getByRole("button", { name: "复制执行信息" }));
   expect(await screen.findByRole("status")).toHaveTextContent("已复制执行信息");
   expect(writeText.mock.calls[0][0]).toContain("请求 ID：old");
+});
+
+it("allows retrying when the copy content could not be read", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  const loadText = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("unavailable"))
+    .mockResolvedValueOnce("重构任务 ID：task");
+  render(<CopyInfoButton text={loadText} label="复制调试信息" />);
+  const button = screen.getByRole("button", { name: "复制调试信息" });
+  fireEvent.click(button);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "读取失败，请重试",
+  );
+  expect(writeText).not.toHaveBeenCalled();
+
+  fireEvent.click(button);
+  expect(await screen.findByRole("status")).toHaveTextContent("已复制调试信息");
+  expect(writeText).toHaveBeenCalledWith("重构任务 ID：task");
 });

@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { requestByID } from "../../shared/api/journal";
@@ -7,6 +12,10 @@ import type { StoredRequest } from "../../shared/api/types";
 import { Button } from "../../shared/ui/button";
 import { SafeLink } from "../../shared/ui/status";
 import { useAbandonedActivities } from "../activities/abandonment-marks";
+import {
+  CopyInfoButton,
+  formatExecutionInfo,
+} from "../activities/execution-info";
 import { useActivityFeedback } from "../activities/feedback/feedback";
 import { NewMaintenance, type StartInput } from "./new-maintenance";
 import "./refactoring-maintenance.css";
@@ -91,10 +100,13 @@ type Summary = Pick<
   | "updated_at"
   | "created_at"
   | "summary"
+  | "diagnostic"
   | "wait_reason"
   | "elapsed_seconds"
   | "wall_seconds"
 >;
+type DebugRecord = Summary &
+  Partial<Pick<MaintenanceRecord, "input" | "source_commit" | "operations">>;
 
 type Index = {
   ongoing: Summary[];
@@ -106,7 +118,7 @@ type Index = {
 
 const phases: Record<string, string> = {
   start_pending: "提交待确认",
-  start_accepted: "已受理，正在读取行动状态",
+  start_accepted: "已受理，正在读取重构任务状态",
   checking_start: "正在核验启动条件",
   queued: "排队中",
   submission_unknown: "提交结果待核实",
@@ -166,6 +178,7 @@ const rejectedStart = (row: StartRequest) =>
 export function RefactoringMaintenance() {
   const { api, identity, online, submit, requests, pendingRequests } =
     useWorkspace();
+  const queryClient = useQueryClient();
   const feedback = useActivityFeedback();
   const [params, setParams] = useSearchParams();
   const selected = params.get("action") ?? "";
@@ -210,12 +223,16 @@ export function RefactoringMaintenance() {
     enabled: online,
     refetchInterval: 2000,
   });
+  const taskDetail = (id: string) =>
+    queryOptions({
+      queryKey: [...scope, id],
+      queryFn: ({ signal }) =>
+        api.get<MaintenanceRecord>("/refactoring/" + id, signal),
+      retry: false,
+    });
   const detail = useQuery({
-    queryKey: [...scope, selected],
-    queryFn: ({ signal }) =>
-      api.get<MaintenanceRecord>("/refactoring/" + selected, signal),
+    ...taskDetail(selected),
     enabled: online && /^[a-f0-9]{32}$/.test(selected),
-    retry: false,
     refetchInterval: 1500,
   });
   const first = index.data?.pages[0];
@@ -477,6 +494,17 @@ export function RefactoringMaintenance() {
       : controlReceipt?.diagnostic || errors[selected];
   const actionDisabled =
     !online || !detail.isSuccess || sending.includes(selected) || !!pending;
+  const rowDebugText = (row: Summary) => {
+    const query = taskDetail(row.id);
+    const project = identity.repository_identity;
+    if (online && known.has(row.id))
+      return async () =>
+        formatDebugInfo(await queryClient.fetchQuery(query), project);
+    return formatDebugInfo(
+      queryClient.getQueryData(query.queryKey) ?? row,
+      project,
+    );
+  };
   const renderRows = (rows: Summary[]) =>
     rows.length ? (
       <ul className="refactoring-list">
@@ -513,11 +541,12 @@ export function RefactoringMaintenance() {
                 </time>
               )}
             </button>
+            <CopyInfoButton label="复制调试信息" text={rowDebugText(r)} />
           </li>
         ))}
       </ul>
     ) : (
-      <p className="muted">暂无行动</p>
+      <p className="muted">暂无重构任务</p>
     );
   return (
     <div className="refactoring-page">
@@ -538,7 +567,7 @@ export function RefactoringMaintenance() {
                   search: "?" + new URLSearchParams({ action: action.id }),
                 }}
               >
-                核实原行动
+                核实原重构任务
               </Link>
             </p>
           ))}
@@ -548,7 +577,7 @@ export function RefactoringMaintenance() {
           ref={newButton}
           onClick={() => setOpened(true)}
         >
-          新建维护行动
+          新建重构任务
         </Button>
       </header>
       <NewMaintenance
@@ -564,14 +593,16 @@ export function RefactoringMaintenance() {
         <section
           ref={list}
           className="settings-panel refactoring-panel refactoring-sidebar"
-          aria-label="行动列表"
+          aria-label="重构任务列表"
         >
           {(!online || index.isError) && (
             <p className="notice amber" role="status">
-              行动列表当前待核实{first ? "，显示上次已知结果" : ""}
+              重构任务列表当前待核实{first ? "，显示上次已知结果" : ""}
             </p>
           )}
-          {online && index.isPending && <p role="status">正在读取行动列表</p>}
+          {online && index.isPending && (
+            <p role="status">正在读取重构任务列表</p>
+          )}
           {(first || projectedStarts.length > 0) && (
             <>
               <h2>进行中 {progressing.length}</h2>
@@ -582,7 +613,7 @@ export function RefactoringMaintenance() {
             <>
               <h2>待答复 {waiting.length}</h2>
               {renderRows(waiting)}
-              <h2>维护历史</h2>
+              <h2>重构任务历史</h2>
               {renderRows(history)}
               {index.hasNextPage && (
                 <Button
@@ -614,7 +645,7 @@ export function RefactoringMaintenance() {
                 );
               }}
             >
-              返回行动列表
+              返回重构任务列表
             </Button>
           )}
           {selected &&
@@ -622,20 +653,20 @@ export function RefactoringMaintenance() {
             (!online || detail.isError || !/^[a-f0-9]{32}$/.test(selected)) && (
               <p className="notice amber" role="status">
                 {current
-                  ? "维护详情当前待核实，显示上次已知结果"
-                  : "无法读取此行动，请返回行动列表"}
+                  ? "重构任务详情当前待核实，显示上次已知结果"
+                  : "无法读取此重构任务，请返回重构任务列表"}
               </p>
             )}
           {selected &&
             online &&
             !selectedStart &&
             !current &&
-            detail.isFetching && <p role="status">正在读取维护详情</p>}
-          {!selected && <p className="muted">选择一条行动查看详情</p>}
+            detail.isFetching && <p role="status">正在读取重构任务详情</p>}
+          {!selected && <p className="muted">选择一个重构任务查看详情</p>}
           {!current && selectedStart && (
             <section
               className="settings-panel refactoring-panel"
-              aria-label="维护详情"
+              aria-label="重构任务详情"
             >
               <h2>
                 {selectedStart.directionName ??
@@ -693,6 +724,35 @@ function operationLabel(operation: Operation) {
   return `第 ${operation.round} 轮 · ${operationNames[operation.purpose] ?? operation.purpose}`;
 }
 
+function formatDebugInfo(current: DebugRecord, project: string) {
+  const lines = [
+    formatExecutionInfo({
+      project,
+      title: `重构任务 · ${current.direction_name}`,
+      requestID: current.id,
+      record: { id: current.id, label: "重构任务" },
+    }),
+    `状态：${phases[current.phase] ?? current.phase}${current.round > 0 ? ` · 第 ${current.round} 轮` : ""}`,
+  ];
+  if (current.environment_name)
+    lines.push(`运行环境：${current.environment_name}`);
+  if (current.source_commit) lines.push(`起始提交：${current.source_commit}`);
+  else if (current.input?.base_commit)
+    lines.push(`申请的起始提交：${current.input.base_commit}`);
+  if (current.wait_reason) lines.push(`等待原因：${current.wait_reason}`);
+  if (current.diagnostic) lines.push(`诊断：${current.diagnostic}`);
+  if (!current.input) lines.push("运行详情未加载");
+  for (const operation of current.operations ?? []) {
+    lines.push(
+      "",
+      `${operationLabel(operation)} · ${operationStates[operation.state] ?? operation.state}`,
+      `操作 ID：${operation.id}`,
+      `Runner Run ID：${operation.run_id || "尚未取得"}`,
+    );
+  }
+  return lines.join("\n");
+}
+
 function OperationFeedback({ operation }: { operation: Operation }) {
   return (
     <details>
@@ -744,7 +804,10 @@ function MaintenanceDetail({
   const strategy =
     strategyNames[current.input.strategy] ?? current.input.strategy;
   return (
-    <section className="settings-panel refactoring-panel" aria-label="维护详情">
+    <section
+      className="settings-panel refactoring-panel"
+      aria-label="重构任务详情"
+    >
       <h2>{current.direction_name}</h2>
       <p>
         <span>{phases[current.phase] ?? current.phase}</span>
@@ -778,6 +841,10 @@ function MaintenanceDetail({
         </div>
       )}
       <div className="refactoring-actions">
+        <CopyInfoButton
+          label="复制调试信息"
+          text={formatDebugInfo(current, identity.repository_identity)}
+        />
         {current.can_finish && (
           <Button
             disabled={disabled}
@@ -899,7 +966,7 @@ function MaintenanceDetail({
       <div className="refactoring-prompts">
         <section className="refactoring-preview">
           <h3>一级 · 决策提示词</h3>
-          <p className="muted">交给 SteerAgent · 本次行动</p>
+          <p className="muted">交给 SteerAgent · 本次重构任务</p>
           {current.direction_prompt ? (
             <pre className="refactoring-prompt-body" aria-label="方向提示词">
               {current.direction_prompt}
@@ -959,7 +1026,7 @@ function MaintenanceDetail({
             <p className="muted">
               {current.active
                 ? "等待 SteerAgent 生成执行提示词"
-                : "本次行动未生成执行提示词"}
+                : "本次重构任务未生成执行提示词"}
             </p>
           )}
           {executions.length > 1 && (
