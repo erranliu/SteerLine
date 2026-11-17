@@ -62,6 +62,71 @@
   line-height: 1.7;
 }
 
+.refactoring-conversation {
+  margin-block: 20px;
+}
+
+.refactoring-conversation > ol {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.refactoring-message {
+  min-width: 0;
+  margin-inline-end: min(8%, 48px);
+  padding: 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  overflow-wrap: anywhere;
+}
+
+.refactoring-message[data-speaker="runner"] {
+  margin-inline: min(8%, 48px) 0;
+  background: var(--color-background);
+}
+
+.refactoring-message h4,
+.refactoring-message p {
+  margin: 0;
+}
+
+.refactoring-message time {
+  font-size: 0.8rem;
+}
+
+.refactoring-message .refactoring-message-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  margin-block: 5px;
+  overflow: hidden;
+  white-space: pre-line;
+}
+
+.refactoring-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.refactoring-panel .refactoring-message-actions details {
+  min-width: 0;
+  padding-block: 4px 0;
+  border: 0;
+}
+
+.refactoring-message-actions details[open] {
+  flex-basis: 100%;
+}
+
+.refactoring-message-actions dd {
+  margin-inline-start: 0;
+}
+
 .refactoring-actions,
 .refactoring-heading {
   display: flex;

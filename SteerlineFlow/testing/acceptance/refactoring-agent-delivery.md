@@ -44,6 +44,16 @@ Runner 使用 #157 之前的 `8be179f29e0b9eac8572f447439a15cd7d776213`。公开
 
 本次未更新安装版，未复跑真实 Runner L4。
 
+## 2026-11-17 执行对话
+
+受测基线为 `001ecb7623e18a9b7bb89d4adca9f392908ce3f9` 加本次改动。维护详情按时间展示执行指令、回执、审计结论和合入评审。一级提示词从对应决策保存的请求中读取。
+
+- Go 查询定向回归、12 项维护页组件测试和 Web 生产构建通过。Edge 独立夹具通过桌面和 375 像素视口的逐条展开验证。
+- L1 和 L2 `smoke.delivery` 复验通过。报告根为 `C:/Users/lmas1/.codex/visualizations/2026/11/17/01a1e7ad-1b33-7e70-973b-90806344730e/steerline-controlled-kdb1ywqd/`，各级入口为 `L1/summary.json` 和 `L2/summary.json`。
+- L3 `runtime.refactoring-maintenance` 复验通过，见同一根目录的 `L3/summary.json`。浏览器验证了同一条时间线内的两版评审、按条展开一级提示词、刷新后恢复折叠，以及 375 像素视口的历史记录阅读。
+
+以 #577 合入提交 `9c45e0c1d2bcb86267c4c3c910268179aaf1b8e8` 为基线 rebase 后，Web 构建、18 项前端定向测试、Go 查询定向测试、L1 和受控 L3 均通过。L3 浏览器同时验证详情的复制按钮、历史列表复制 Run ID、两版评审和窄屏阅读。分级报告根为 `C:/Users/lmas1/.codex/visualizations/2026/11/17/01a1e7ad-1b33-7e70-973b-90806344730e/steerline-dialogue-rebase-5sinic8v/`，L2 核心交付结果沿用上次报告。
+
 ## 前置能力验证
 
 2026-11-12 使用 SteerLine 基线 `400e15dcfab24074d0062caeb46d35043a5e09e8`，工作树仅有待审文档。通过临时 Go overlay 运行两个诊断用例，2 项通过、零跳过。探针源码、实际命令和原始报告保存于 `C:\SteerlineDebug\wt-1851-refactoring-agent-preflight\diagnostics\preflight-20261112T083901Z-5d21ad1d\`。结果入口为 `report/summary.json`，逐项日志见 `report/go-test.jsonl`。
