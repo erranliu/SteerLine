@@ -17,6 +17,11 @@ import {
   formatExecutionInfo,
 } from "../activities/execution-info";
 import { useActivityFeedback } from "../activities/feedback/feedback";
+import {
+  ExecutionConversation,
+  operationPurposeLabel,
+  operationStateLabel,
+} from "./execution-conversation";
 import { NewMaintenance, type StartInput } from "./new-maintenance";
 import "./refactoring-maintenance.css";
 
@@ -32,7 +37,6 @@ export type MaintenanceRecord = {
   input: Input;
   direction_name: string;
   direction_prompt?: string;
-  decision_rules?: { rules?: string; strategy?: string };
   round: number;
   active: boolean;
   source_commit: string;
@@ -79,6 +83,14 @@ export type MaintenanceRecord = {
     feedback: string;
     prompt: string;
     run_id?: string;
+    run_status?: string;
+    created_at?: string;
+    completed_at?: string | null;
+    result?: { summary?: string; question?: string } | null;
+    decision_kind?: string;
+    decision_summary?: string;
+    decision_rules?: { rules?: string; strategy?: string };
+    report_index?: number;
   }[];
   reports?: {
     body: string;
@@ -136,33 +148,11 @@ const phases: Record<string, string> = {
   delivered: "已交付",
 };
 
-const operationNames: Record<string, string> = {
-  first: "首轮选题",
-  select: "后续选题",
-  audit: "成果审计",
-  finish: "收尾决策",
-  report: "PR 合入评审",
-  implement: "实施",
-  repair: "修复或补证",
-  publish: "交付",
-  conflict: "处理冲突",
-};
-
-const operationStates: Record<string, string> = {
-  pending: "待提交",
-  submitted: "已提交",
-  complete: "已完成",
-  rejected: "已拒绝",
-  cancelled: "已取消",
-};
-
 const strategyNames: Record<string, string> = {
   cautious: "谨慎决策",
   autonomous: "完全自主",
   aggressive: "激进决策",
 };
-
-type Operation = NonNullable<MaintenanceRecord["operations"]>[number];
 
 const narrowScreen = "(max-width: 760px)";
 
@@ -524,7 +514,7 @@ export function RefactoringMaintenance() {
               <strong>{r.direction_name}</strong>
               <span>
                 {phases[r.phase] ?? r.phase}
-                {r.round > 0 && ` · 第 ${r.round} 轮`}
+                {r.round > 0 && ` · 重构轮次 ${r.round}`}
               </span>
               <span>
                 {r.environment_name && r.environment_name + " · "}
@@ -720,10 +710,6 @@ function duration(seconds: number) {
     : Math.floor(seconds / 60) + " 分钟";
 }
 
-function operationLabel(operation: Operation) {
-  return `第 ${operation.round} 轮 · ${operationNames[operation.purpose] ?? operation.purpose}`;
-}
-
 function formatDebugInfo(current: DebugRecord, project: string) {
   const lines = [
     formatExecutionInfo({
@@ -745,30 +731,12 @@ function formatDebugInfo(current: DebugRecord, project: string) {
   for (const operation of current.operations ?? []) {
     lines.push(
       "",
-      `${operationLabel(operation)} · ${operationStates[operation.state] ?? operation.state}`,
+      `第 ${operation.round} 轮 · ${operationPurposeLabel(operation.purpose)} · ${operationStateLabel(operation.state)}`,
       `操作 ID：${operation.id}`,
       `Runner Run ID：${operation.run_id || "尚未取得"}`,
     );
   }
   return lines.join("\n");
-}
-
-function OperationFeedback({ operation }: { operation: Operation }) {
-  return (
-    <details>
-      <summary>
-        {operation.workflow === "execute" ? "执行反馈" : "决策反馈"}与运行信息
-      </summary>
-      <p>
-        {operationStates[operation.state] ?? operation.state} · Runner Run ID{" "}
-        <code>{operation.run_id || "尚未取得"}</code>
-      </p>
-      <pre tabIndex={0}>
-        {operation.feedback ||
-          (operation.state === "complete" ? "未返回文字" : "暂无反馈")}
-      </pre>
-    </details>
-  );
 }
 
 function MaintenanceDetail({
@@ -796,11 +764,10 @@ function MaintenanceDetail({
   const { identity } = useWorkspace();
   const [choice, setChoice] = useState({ question: "", option: "" });
   const option = choice.question === current.question?.id ? choice.option : "";
-  const operations = current.operations ?? [];
-  const decisions = operations.filter((o) => o.workflow === "generate");
-  const decision = decisions.at(-1);
-  const executions = operations.filter((o) => o.workflow === "execute");
-  const execution = executions.at(-1);
+  const executionCount =
+    current.operations?.filter(
+      (operation) => operation.workflow === "execute" && operation.run_id,
+    ).length ?? 0;
   const strategy =
     strategyNames[current.input.strategy] ?? current.input.strategy;
   return (
@@ -811,7 +778,10 @@ function MaintenanceDetail({
       <h2>{current.direction_name}</h2>
       <p>
         <span>{phases[current.phase] ?? current.phase}</span>
-        {current.round > 0 && ` · 第 ${current.round} 轮`}
+        {" · "}
+        <span>重构轮次 {current.round}</span>
+        {" · "}
+        <span>Runner 执行 {executionCount} 次</span>
       </p>
       {current.wait_reason && <p role="status">{current.wait_reason}</p>}
       {error && (
@@ -963,89 +933,7 @@ function MaintenanceDetail({
           </Button>
         </form>
       )}
-      <div className="refactoring-prompts">
-        <section className="refactoring-preview">
-          <h3>一级 · 决策提示词</h3>
-          <p className="muted">交给 SteerAgent · 本次重构任务</p>
-          {current.direction_prompt ? (
-            <pre className="refactoring-prompt-body" aria-label="方向提示词">
-              {current.direction_prompt}
-            </pre>
-          ) : (
-            <p className="muted">暂无方向提示词</p>
-          )}
-          {current.input.requirements && (
-            <>
-              <h4>补充要求</h4>
-              <pre className="refactoring-prompt-body">
-                {current.input.requirements}
-              </pre>
-            </>
-          )}
-          <details>
-            <summary>内置决策规则</summary>
-            {decision ? (
-              <>
-                <p>{operationLabel(decision)}</p>
-                {decision.prompt && (
-                  <>
-                    <h4>决策短指令</h4>
-                    <pre tabIndex={0}>{decision.prompt}</pre>
-                  </>
-                )}
-                {current.decision_rules?.rules && (
-                  <>
-                    <h4>阶段规则</h4>
-                    <pre tabIndex={0}>{current.decision_rules.rules}</pre>
-                  </>
-                )}
-                {current.decision_rules?.strategy && (
-                  <>
-                    <h4>策略规则 · {strategy}</h4>
-                    <pre tabIndex={0}>{current.decision_rules.strategy}</pre>
-                  </>
-                )}
-              </>
-            ) : (
-              <p className="muted">等待准备 SteerAgent 决策请求</p>
-            )}
-          </details>
-        </section>
-        <section className="refactoring-preview">
-          <h3>二级 · 执行提示词</h3>
-          <p className="muted">SteerAgent 生成 → Runner 执行</p>
-          {execution ? (
-            <>
-              <h4>{operationLabel(execution)}</h4>
-              <pre className="refactoring-prompt-body" aria-label="执行指令">
-                {execution.prompt}
-              </pre>
-              <OperationFeedback key={execution.id} operation={execution} />
-            </>
-          ) : (
-            <p className="muted">
-              {current.active
-                ? "等待 SteerAgent 生成执行提示词"
-                : "本次重构任务未生成执行提示词"}
-            </p>
-          )}
-          {executions.length > 1 && (
-            <details>
-              <summary>历史执行提示词（{executions.length - 1}）</summary>
-              {executions
-                .slice(0, -1)
-                .reverse()
-                .map((o) => (
-                  <article key={o.id}>
-                    <h4>{operationLabel(o)}</h4>
-                    <pre className="refactoring-prompt-body">{o.prompt}</pre>
-                    <OperationFeedback operation={o} />
-                  </article>
-                ))}
-            </details>
-          )}
-        </section>
-      </div>
+      <ExecutionConversation key={current.id} record={current} />
       <details>
         <summary>运行信息</summary>
         {current.summary && <p>{current.summary}</p>}
@@ -1100,48 +988,7 @@ function MaintenanceDetail({
           费用包含主会话与已登记内部调用；不覆盖子
           Agent、工具内部模型和不可观测供应商调用。
         </p>
-        {decisions.length > 0 && (
-          <details>
-            <summary>决策记录（{decisions.length}）</summary>
-            {decisions
-              .slice()
-              .reverse()
-              .map((o) => (
-                <article key={o.id}>
-                  <h4>{operationLabel(o)}</h4>
-                  {o.id !== decision?.id && <pre tabIndex={0}>{o.prompt}</pre>}
-                  <OperationFeedback operation={o} />
-                </article>
-              ))}
-          </details>
-        )}
       </details>
-      {!!current.reports?.length && (
-        <details>
-          <summary>PR 合入评审（{current.reports.length}）</summary>
-          {current.reports.map((r, i) => (
-            <article key={i}>
-              <h3>PR 合入评审 {i + 1}</h3>
-              <p>
-                head {r.head} · base {r.base}
-              </p>
-              <p>
-                {
-                  {
-                    merge: "建议合入",
-                    revise: "建议修改后再审",
-                    insufficient_evidence: "证据不足",
-                  }[r.recommendation]
-                }
-              </p>
-              {current.report_stale && i === current.reports!.length - 1 && (
-                <p>此评审已过期或正在复核。</p>
-              )}
-              <div className="refactoring-pre">{r.body}</div>
-            </article>
-          ))}
-        </details>
-      )}
     </section>
   );
 }

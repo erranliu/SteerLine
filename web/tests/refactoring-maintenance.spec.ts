@@ -130,15 +130,29 @@ test("maintenance report, history and refresh remain observational", async ({
   const detail = page.getByRole("region", { name: "重构任务详情" });
   const copy = detail.getByRole("button", { name: "复制调试信息" });
   await expect(copy).toBeVisible();
-  await expect(detail.getByLabel("执行指令", { exact: true })).toBeVisible();
-  const reports = detail.getByText("PR 合入评审（2）", { exact: true });
-  await expect(reports).toBeVisible();
-  await reports.click();
+  const dialogue = detail.getByRole("region", { name: "执行对话" });
+  const implementation = dialogue
+    .getByRole("listitem")
+    .filter({
+      has: page.getByRole("heading", {
+        name: "SteerAgent · 实施",
+        exact: true,
+      }),
+    })
+    .first();
+  const reviews = dialogue.getByRole("listitem").filter({
+    has: page.getByRole("heading", {
+      name: "SteerAgent · PR 合入评审",
+      exact: true,
+    }),
+  });
+  await expect(reviews.getByText("展开结论", { exact: true })).toHaveCount(2);
+  const latestReview = reviews.last();
+  await latestReview.getByText("展开结论", { exact: true }).click();
+  await expect(latestReview.getByText(/head.*base/)).toBeVisible();
+  await implementation.getByText("一级提示词", { exact: true }).click();
   await expect(
-    detail.getByRole("heading", { name: "PR 合入评审 2" }),
-  ).toBeVisible();
-  await expect(
-    detail.getByText("优先处理共享测试夹具。", { exact: false }),
+    implementation.getByText("优先处理共享测试夹具。", { exact: false }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "处理冲突并重新评审" }),
@@ -148,10 +162,8 @@ test("maintenance report, history and refresh remain observational", async ({
   await detail.getByText("运行信息", { exact: true }).click();
   await expect(billingCoverage).toBeVisible();
   await page.reload();
-  await expect(reports).toBeVisible();
-  await expect(
-    detail.getByRole("heading", { name: "PR 合入评审 2" }),
-  ).toBeHidden();
+  await expect(latestReview).toBeVisible();
+  await expect(latestReview.getByText(/head.*base/)).toBeHidden();
   expect(commands).toEqual([]);
   await page.setViewportSize({ width: 375, height: 900 });
   await page.getByRole("button", { name: "返回重构任务列表" }).click();
@@ -169,9 +181,13 @@ test("maintenance report, history and refresh remain observational", async ({
   expect(commands).toEqual([]);
   await page.goBack();
   await expect(copy).toBeVisible();
-  await expect(reports).toBeVisible();
-  await expect(detail.getByLabel("方向提示词", { exact: true })).toBeVisible();
-  await expect(detail.getByLabel("执行指令", { exact: true })).toBeVisible();
+  await expect(latestReview).toBeVisible();
+  await expect(
+    implementation.getByText("展开指令", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    implementation.getByText("一级提示词", { exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: join(out, "maintenance-mobile.png"),
     fullPage: true,

@@ -317,23 +317,50 @@ it("keeps the full direction preview and drafts when the sheet closes", async ()
   expect(reopened.getByLabelText("方向提示词").textContent).toBe(custom.prompt);
 });
 
-it("keeps both prompt bodies visible and folds rules, feedback, and history", async () => {
-  const requirements = "保持原接口。";
+it("shows the execution dialogue in order and expands each message and its own decision prompt", async () => {
   const instruction = "补充验证。  \r\n核对调用方。\r\n";
   const operation = { round: 1, state: "complete", feedback: "", prompt: "" };
+  const reports = [
+    {
+      body: "固定 PR 版本验证通过。\n附录：测试结果。",
+      head: "review-head",
+      base: "review-base",
+      created_at: "2026-11-16T11:39:00Z",
+      recommendation: "merge" as const,
+    },
+  ];
   setup([
     {
       ...record,
-      input: { ...record.input, requirements },
-      decision_rules: { rules: "冻结的阶段规则", strategy: "冻结的策略规则" },
+      round: 1,
+      input: { ...record.input, requirements: "保持原接口。" },
       operations: [
-        { ...operation, id: "first", workflow: "generate", purpose: "first" },
+        {
+          ...operation,
+          id: "first",
+          workflow: "generate",
+          purpose: "first",
+          decision_kind: "execute",
+          decision_summary: "选定一个切片",
+          decision_rules: { rules: "首轮规则" },
+        },
         {
           ...operation,
           id: "implement",
           workflow: "execute",
           purpose: "implement",
           prompt: "最初的实施指令",
+          feedback: "原始回执",
+          run_id: "run-implement",
+        },
+        {
+          ...operation,
+          id: "audit-repair",
+          workflow: "generate",
+          purpose: "audit",
+          decision_kind: "execute",
+          decision_summary: "缺少可核对的测试证据",
+          decision_rules: { rules: "审计规则" },
         },
         {
           ...operation,
@@ -341,49 +368,99 @@ it("keeps both prompt bodies visible and folds rules, feedback, and history", as
           workflow: "execute",
           purpose: "repair",
           prompt: instruction,
-          feedback: "补证完成",
+          feedback: "补证回执原文",
           run_id: "run-repair",
+          result: { summary: "补证完成" },
         },
         {
           ...operation,
           id: "audit",
           workflow: "generate",
           purpose: "audit",
-          prompt: "最新决策短指令",
+          decision_summary: "审计通过",
+          feedback: "审计结论全文",
+        },
+        {
+          ...operation,
+          id: "report",
+          workflow: "generate",
+          purpose: "report",
+          decision_rules: { rules: "合入评审规则" },
+          report_index: 0,
         },
       ],
+      reports,
+      report_stale: true,
     },
   ]);
   const detail = within(
     await screen.findByRole("region", { name: "重构任务详情" }),
   );
+  expect(detail.getByText("重构轮次 1", { exact: true })).toBeVisible();
+  expect(detail.getByText("Runner 执行 2 次")).toBeVisible();
+  const dialogue = within(detail.getByRole("region", { name: "执行对话" }));
   expect(
-    detail.getByRole("heading", { name: "一级 · 决策提示词" }),
-  ).toBeVisible();
-  expect(
-    detail.getByRole("heading", { name: "二级 · 执行提示词" }),
-  ).toBeVisible();
-  expect(detail.getByLabelText("方向提示词")).toBeVisible();
-  expect(detail.getByText(requirements)).toBeVisible();
-  expect(detail.getByLabelText("执行指令")).toBeVisible();
-  expect(detail.getByLabelText("执行指令").textContent).toBe(instruction);
-  expect(detail.getByText(record.question!.prompt)).toBeVisible();
-
-  for (const [summary, content] of [
-    ["内置决策规则", "冻结的阶段规则"],
-    ["历史执行提示词（1）", "最初的实施指令"],
-    ["运行信息", record.source_commit],
+    dialogue.getAllByRole("heading", { level: 4 }).map((h) => h.textContent),
+  ).toEqual([
+    "SteerAgent · 实施",
+    "Runner · 实施反馈",
+    "SteerAgent · 成果审计 → 修复或补证",
+    "Runner · 修复或补证反馈",
+    "SteerAgent · 成果审计",
+    "SteerAgent · PR 合入评审",
+  ]);
+  for (const preview of [
+    "回执未通过核验",
+    "缺少可核对的测试证据",
+    "补证完成",
+    "审计通过",
+    "建议合入 · 此评审已过期或正在复核",
   ]) {
-    expect(detail.getByText(content)).not.toBeVisible();
-    fireEvent.click(detail.getByText(summary));
-    expect(detail.getByText(content)).toBeVisible();
+    expect(dialogue.getByText(preview, { exact: true })).toBeVisible();
   }
-  expect(detail.getByText("最新决策短指令")).toBeVisible();
-  expect(detail.getByText("冻结的策略规则")).toBeVisible();
-  expect(detail.getByText("补证完成")).not.toBeVisible();
-  fireEvent.click(detail.getAllByText("执行反馈与运行信息")[0]);
-  expect(detail.getByText("补证完成")).toBeVisible();
-  expect(detail.getByText("run-repair")).toBeVisible();
+  const [implement, , repair, response, audit, review] = dialogue
+    .getAllByRole("listitem")
+    .map((message) => within(message));
+  expect(repair.getByText(/核对调用方/)).not.toBeVisible();
+  fireEvent.click(repair.getByText("展开指令"));
+  expect(repair.getByText(/核对调用方/).textContent).toBe(instruction);
+  fireEvent.click(repair.getByText("一级提示词"));
+  expect(repair.getByText("审计规则")).toBeVisible();
+  expect(repair.getByText("保持原接口。")).toBeVisible();
+  expect(implement.getByText("首轮规则")).not.toBeVisible();
+  expect(response.getByText("补证回执原文")).not.toBeVisible();
+  fireEvent.click(response.getByText("展开回执"));
+  expect(response.getByText("补证回执原文")).toBeVisible();
+  expect(response.getByText("run-repair")).toBeVisible();
+  fireEvent.click(audit.getByText("展开结论"));
+  expect(audit.getByText("审计结论全文")).toBeVisible();
+  expect(review.getByText("review-head")).not.toBeVisible();
+  fireEvent.click(review.getByText("展开结论"));
+  expect(review.getByText("review-head")).toBeVisible();
+  fireEvent.click(review.getByText("一级提示词"));
+  expect(review.getByText("合入评审规则")).toBeVisible();
+  expect(detail.getByText(record.question!.prompt)).toBeVisible();
+});
+
+it("shows pending execution without adding to the Runner count", async () => {
+  setup([
+    {
+      ...record,
+      operations: [
+        {
+          id: "pending",
+          purpose: "implement",
+          workflow: "execute",
+          round: 1,
+          state: "pending",
+          prompt: "实施指令",
+          feedback: "",
+        },
+      ],
+    },
+  ]);
+  expect(await screen.findByText("待提交")).toBeVisible();
+  expect(screen.getByText("Runner 执行 0 次")).toBeVisible();
 });
 
 it("shows a waiting state before SteerAgent generates an execution prompt", async () => {
@@ -466,6 +543,8 @@ it("keeps the startup failure on the action and can copy its input into a new dr
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "环境已变化，请重新检测",
   );
+  expect(screen.getByText("检查共享夹具")).not.toBeVisible();
+  fireEvent.click(screen.getByText("维护要求", { exact: true }));
   expect(screen.getByText("检查共享夹具")).toBeVisible();
   const requestedCommit = screen.getByText(/申请的起始提交/);
   expect(requestedCommit).not.toBeVisible();
