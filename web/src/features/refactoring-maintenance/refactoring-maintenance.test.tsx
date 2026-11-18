@@ -50,6 +50,7 @@ const record: MaintenanceRecord = {
   active: true,
   source_commit: "b".repeat(40),
   elapsed_seconds: 65,
+  remaining_budget: { rounds: 0, exhausted: true },
   cost_complete: false,
   question: {
     id: "question",
@@ -142,6 +143,37 @@ function openSheet() {
   fireEvent.click(screen.getByRole("button", { name: "新建重构任务" }));
   return within(screen.getByRole("dialog"));
 }
+
+it.each([
+  ["queued", "", { rounds: 1, exhausted: false }, "1 轮", ""],
+  ["first", "", { rounds: 0, exhausted: true }, "0 轮", "完成本轮后推进 PR"],
+  [
+    "execute",
+    "publish",
+    { dollars: "0", exhausted: true },
+    "$0",
+    "正在验证并创建 PR",
+  ],
+  [
+    "first",
+    "",
+    { dollars: "0.05", cost_pending: true, exhausted: false },
+    "$0.05",
+    "费用待结算",
+  ],
+] as const)(
+  "shows the separate budget at %s %s",
+  async (phase, stage, remaining_budget, balance, status) => {
+    setup([{ ...record, phase, delivery_stage: stage, remaining_budget }]);
+    const budget = await screen.findByRole("region", { name: "剩余重构预算" });
+    expect(budget.previousElementSibling).toHaveTextContent(builtIn.name);
+    expect(within(budget).getByText(balance, { exact: true })).toBeVisible();
+    if (status) expect(budget).toHaveTextContent(status);
+    expect(budget.textContent?.includes("重构预算已用完")).toBe(
+      remaining_budget.exhausted,
+    );
+  },
+);
 
 it.each([
   ["early_finish", "提前结束并创建 PR", "execute", ""],

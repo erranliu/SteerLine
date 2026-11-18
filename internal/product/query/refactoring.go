@@ -64,6 +64,7 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 		breakdown[key] = map[string]any{"amount": value, "complete": full}
 	}
 	out := RefactoringSummary(r, now)
+	out["remaining_budget"] = r.RemainingBudget(now)
 	out["cost_breakdown"] = breakdown
 	out["input"] = r.Input
 	out["direction_prompt"] = r.Frozen.Direction.Prompt

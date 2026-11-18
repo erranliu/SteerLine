@@ -485,29 +485,51 @@ func (r Record) CostTotal() (*string, bool) {
 	v := sum.FloatString(18)
 	return &v, complete
 }
-func (r Record) BudgetExhausted(now time.Time) bool {
+
+type RemainingBudget struct {
+	Rounds      *int     `json:"rounds,omitempty"`
+	Dollars     string   `json:"dollars,omitempty"`
+	Seconds     *float64 `json:"seconds,omitempty"`
+	CostPending bool     `json:"cost_pending,omitempty"`
+	Exhausted   bool     `json:"exhausted"`
+}
+
+func (r Record) RemainingBudget(now time.Time) RemainingBudget {
 	b := r.Input.Budget
-	if b.Rounds > 0 && r.Round >= b.Rounds {
-		return true
+	var remaining RemainingBudget
+	if b.Rounds > 0 {
+		rounds := max(0, b.Rounds-r.Round)
+		remaining.Rounds = &rounds
+		remaining.Exhausted = rounds == 0
 	}
 	if b.Minutes != "" {
 		n, _ := new(big.Rat).SetString(b.Minutes)
-		elapsed := new(big.Rat).SetFrac(big.NewInt(int64(r.Elapsed(now))), big.NewInt(int64(time.Minute)))
-		if elapsed.Cmp(n) >= 0 {
-			return true
-		}
+		n.Mul(n, big.NewRat(60, 1))
+		n.Sub(n, big.NewRat(int64(r.Elapsed(now)), int64(time.Second)))
+		seconds, _ := n.Float64()
+		seconds = max(0, seconds)
+		remaining.Seconds = &seconds
+		remaining.Exhausted = remaining.Exhausted || n.Sign() <= 0
 	}
 	if b.Dollars != "" {
 		n, _ := new(big.Rat).SetString(b.Dollars)
-		v, _ := r.CostTotal()
+		v, complete := r.CostTotal()
 		if v != nil {
 			amount, _ := new(big.Rat).SetString(*v)
-			if amount.Cmp(n) >= 0 {
-				return true
-			}
+			n.Sub(n, amount)
+		}
+		remaining.CostPending = !complete
+		remaining.Exhausted = remaining.Exhausted || n.Sign() <= 0
+		remaining.Dollars = "0"
+		if n.Sign() > 0 {
+			remaining.Dollars = strings.TrimRight(strings.TrimRight(n.FloatString(18), "0"), ".")
 		}
 	}
-	return false
+	return remaining
+}
+
+func (r Record) BudgetExhausted(now time.Time) bool {
+	return r.RemainingBudget(now).Exhausted
 }
 
 func ValidID(s string) bool       { return validID.MatchString(s) }

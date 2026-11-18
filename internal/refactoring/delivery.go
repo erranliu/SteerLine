@@ -44,12 +44,9 @@ func (s *Service) closeAction(r *model.Record) {
 
 func (s *Service) applyDecision(r *model.Record, mode string, d decision.Decision) error {
 	r.Summary = d.Summary
-	if mode == "first" || mode == "select" {
-		_, costComplete := r.CostTotal()
-		if r.FinishRequested || r.BudgetExhausted(s.now()) || r.Input.Budget.Dollars != "" && !costComplete {
-			s.closeAction(r)
-			return nil
-		}
+	if (mode == "first" || mode == "select") && r.FinishRequested {
+		s.closeAction(r)
+		return nil
 	}
 	switch d.Kind {
 	case "ask":
@@ -88,7 +85,6 @@ func (s *Service) applyDecision(r *model.Record, mode string, d decision.Decisio
 	case "execute":
 		switch mode {
 		case "first", "select":
-			r.Round++
 			r.WriteKind = "implement"
 		case "audit":
 			r.WriteKind = "repair"

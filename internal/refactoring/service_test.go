@@ -264,9 +264,42 @@ func control(t *testing.T, s *Service, r m.Record, action string) m.Record {
 	return out
 }
 
+func TestMaintenanceChargesOneRoundAtInvestigationDispatch(t *testing.T) {
+	s, f, r := fixture(t)
+	ctx := context.Background()
+	r, err := s.update(ctx, r.ID, func(r *m.Record) error {
+		r.Input.Budget = m.Budget{Rounds: 1}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) == 1 })
+	if r.Round != 0 || r.Operations[0].State != "pending" {
+		t.Fatal("pending investigation consumed a round", r.Round, r.Operations[0].State)
+	}
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Operations[0].RunID != "" })
+	if r.Round != 1 || !r.BudgetExhausted(s.now()) {
+		t.Fatal("investigation did not exhaust the only available round", r.Round)
+	}
+	run := f.runs[r.Operations[0].RunID]
+	run.Status = "failed"
+	run.Final = nil
+	run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: "human_input_required"}
+
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
+	if r.Round != 1 || len(r.Operations) != 6 || r.Operations[1].Purpose != "first" ||
+		r.Operations[1].Round != 1 || r.PR == nil {
+		t.Fatal("retry must stay in the last round and lead to its PR", r.Round, r.Phase, len(r.Operations))
+	}
+}
+
 func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 	s, f, r := fixture(t)
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) == 1 && r.Operations[0].RunID != "" })
+	if r.Round != 1 || r.Operations[0].Round != 1 {
+		t.Fatal("first investigation did not consume a round", r.Round, r.Operations[0].Round)
+	}
 	run := f.runs[r.Operations[0].RunID]
 	// The verified Final can supply feedback while the structured result
 	// independently supplies the decision.
@@ -362,7 +395,7 @@ func TestMaintenanceNeverAdoptsDecisionTextWithoutStructuredResult(t *testing.T)
 			}
 
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
-			if !strings.Contains(r.Diagnostic, diagnostic) || r.Round != 0 || r.PendingPrompt != "" || r.Active() {
+			if !strings.Contains(r.Diagnostic, diagnostic) || r.Round != 1 || r.PendingPrompt != "" || r.Active() {
 				t.Fatalf("unusable structured result advanced the action: %+v", r)
 			}
 			if len(r.Operations) != 1 || !r.Operations[0].Settled() || r.Operations[0].Feedback != text {
@@ -443,7 +476,7 @@ func TestMaintenanceNoChangesSkipsReview(t *testing.T) {
 	s, f, r := fixture(t)
 	f.noChanges = true
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.PR != nil || len(r.Reports) != 0 || r.Round != 0 ||
+	if r.PR != nil || len(r.Reports) != 0 || r.Round != 1 ||
 		len(r.Operations) != 1 || r.Operations[0].Purpose != "first" {
 		t.Fatal("no changes created PR or new round", r)
 	}
@@ -768,12 +801,31 @@ func TestMaintenanceDollarGapAndExhaustionFinishWithoutQuestion(t *testing.T) {
 				return nil
 			})
 			amount := "0.2"
-			s.ReadCost = func(context.Context, m.Record, m.Operation) (m.Cost, error) {
-				return m.Cost{Amount: &amount, Complete: full, ObservedAt: s.now(), Diagnostic: map[bool]string{false: "registered parser uncovered"}[full]}, nil
+			if !full {
+				amount = "0.05"
+			}
+			s.ReadCost = func(_ context.Context, _ m.Record, operation m.Operation) (m.Cost, error) {
+				observed := amount
+				if !full && operation.Purpose != "first" {
+					observed = "0.02"
+				}
+				return m.Cost{Amount: &observed, Complete: full, ObservedAt: s.now(), Diagnostic: map[bool]string{false: "registered parser uncovered"}[full]}, nil
+			}
+			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) == 1 && r.Operations[0].RunID != "" })
+			if budget := r.RemainingBudget(s.now()); budget.Dollars != "0.1" || !budget.CostPending {
+				t.Fatal("balance changed before usage was returned", budget)
+			}
+			if !full {
+				f.runs[r.Operations[0].RunID].UpdatedAt = s.now()
+				r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Operations[0].Cost.Amount != nil })
+				if budget := r.RemainingBudget(s.now()); budget.Dollars != "0.05" || !budget.CostPending || r.Operations[0].Settled() {
+					t.Fatal("partial usage must update balance while settlement continues", budget)
+				}
+				f.runs[r.Operations[0].RunID].UpdatedAt = s.now().Add(-time.Minute)
 			}
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-			if r.Round != 0 || r.Question != nil {
-				t.Fatal("budget created new round or human wait", r)
+			if r.Round != 1 || r.Question != nil || r.PR == nil {
+				t.Fatal("budget must finish the current round and deliver its PR", r.Phase, r.Round)
 			}
 			calls := len(f.requests)
 			future := s.now().Add(time.Minute)
@@ -783,18 +835,10 @@ func TestMaintenanceDollarGapAndExhaustionFinishWithoutQuestion(t *testing.T) {
 				t.Fatal(e)
 			}
 			saved, _ := s.Store.Refactoring(context.Background(), s.Project, r.ID)
-			if len(f.requests) != calls || len(saved.Reports) != 0 {
+			if len(f.requests) != calls || len(saved.Reports) != 1 {
 				t.Fatal("late fees regenerated delivery")
 			}
 		})
-	}
-	s, _, r := fixture(t)
-	r.Round = 2
-	if e := s.applyDecision(&r, "select", decision.Decision{Kind: "ask", Summary: "追加预算？"}); e != nil {
-		t.Fatal(e)
-	}
-	if r.Phase != "verifying" || r.Question != nil {
-		t.Fatal("exhausted selection must finish")
 	}
 }
 func TestMaintenanceInvalidReportSourcePreservesCandidate(t *testing.T) {
@@ -1004,7 +1048,7 @@ func TestMaintenanceFinishCancelsUnsentImplementation(t *testing.T) {
 	before := len(f.requests)
 	r = control(t, s, r, "refactoring_finish")
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.Round != 0 || r.PR != nil || len(f.requests) != before {
+	if r.Round != 1 || r.PR != nil || len(f.requests) != before {
 		t.Fatal("finish sent an unsent implementation", r)
 	}
 }

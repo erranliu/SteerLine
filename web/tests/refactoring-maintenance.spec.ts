@@ -155,6 +155,9 @@ test("maintenance report, history and refresh remain observational", async ({
       .getByRole("heading", { name: "已创建 PR", exact: true }),
   ).toBeVisible();
   const detail = page.getByRole("region", { name: "重构任务详情" });
+  const budget = detail.getByRole("region", { name: "剩余重构预算" });
+  await expect(budget).toContainText("重构预算已用完");
+  await expect(budget.getByText("0 轮", { exact: true })).toBeVisible();
   const result = detail.getByRole("region", { name: "交付结果" });
   await expect(result.getByRole("link", { name: "查看 PR" })).toHaveAttribute(
     "href",
@@ -243,6 +246,7 @@ test("maintenance report, history and refresh remain observational", async ({
   await page.goBack();
   await expect(copy).toBeVisible();
   await expect(latestReview).toBeVisible();
+  await expect(budget).toBeVisible();
   await expect(direction).toBeVisible();
   await expect(instruction).toBeVisible();
   await expect(decision).toBeVisible();
