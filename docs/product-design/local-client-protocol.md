@@ -130,7 +130,9 @@ Web 只作受限同源 `/api/v2/application/...` 转接；原生 `/native/identi
 
 重构与维护独立于下表的项目基线维护：`GET /refactoring`、`GET /refactoring/<action-id>` 只读取保存事实；`refactoring_start/answer/finish/stop/conflict/review` 沿同一命令信封及 journal，回执的 `refactoring` 仅含行动 ID/版本。启动 target 是 repository_identity、版本 1。启动回执 `applied` 表示原请求与同 ID 行动已保存，启动资格核验由后台推进，查询通过行动状态 `checking_start`、排队或阻断结果反映。后继操作 target 为原行动，采用其版本；停止/结束允许同一行动的较早已知版本，人工答复仍须匹配原 question_id 和当前版本。详情不返回冻结执行 settings 或传输原请求。完整规则归[产品设计](refactoring-maintenance.md)与[路由](../../internal/app/refactoring_routes.go)。 人工答复正文包含 `question_id`、`option_id` 和可选 `note`，按原行动版本恢复待答用途。PR 核验及独立合入评审进度由行动状态及已保存事实展示。
 
-`GET /refactoring/readiness` 按已观察的基线返回项目基线、运行环境、资格版本、可用方案及其有效配置版本。启动携带所选环境键、资格版本、方案标识及版本、起始提交和方向版本。服务在受理及首次派发边界重新核实。`GET /refactoring` 返回进行中与待答复的摘要、历史首页及推进名额计数。使用 `history_before` 读取后续历史页。按行动 ID 查询详情。所有 GET 只读。
+`GET /refactoring/readiness` 按已观察的基线返回项目基线、运行环境、资格版本、可用方案及其有效配置版本。启动携带所选环境键、资格版本、方案标识及版本、起始提交、方向标识和版本，以及本次实际使用的方向正文。受理时校验方向版本并冻结正文，执行资格由后台核验。`GET /refactoring` 返回进行中与待答复的摘要、历史首页及推进名额计数。使用 `history_before` 读取后续历史页。按行动 ID 查询详情。所有项目 GET 只读。
+
+安装级 `GET /v2/application/refactoring-directions` 返回方向目录。`POST` 到同一路径使用 `create`、`update` 或 `delete`，其中更新和删除须提供方向 ID 和版本。内置方向始终由应用提供。
 
 维护动作沿原项目 actor、命令 journal 和原请求回执，不使用图/控制 revision。
 

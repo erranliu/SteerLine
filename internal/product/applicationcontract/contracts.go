@@ -53,6 +53,16 @@ type Catalog struct {
 
 const ProjectRegistrationPath = "/projects/registration"
 const ProjectRegistrationPromptPath = ProjectRegistrationPath + "/prompt"
+const RefactoringDirectionsPath = "/refactoring-directions"
+const RefactoringDirectionBodyLimit = 256 << 10
+
+type RefactoringDirectionChange struct {
+	Action   string `json:"action"`
+	ID       string `json:"id,omitempty"`
+	Revision string `json:"revision,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Prompt   string `json:"prompt,omitempty"`
+}
 
 type ProjectRegistrationPrompt struct {
 	InitializationPrompt string `json:"initialization_prompt"`

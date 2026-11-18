@@ -202,8 +202,7 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 	t.Cleanup(func() { store.Close() })
 	f := &maintenanceRunner{t: t, dir: dir, runs: map[string]*rc.Run{}, checks: "SUCCESS"}
 	s := &Service{Project: "project", Store: store, Runner: f, Queue: runnerbinding.NewContentQueue(1), InvestigationPath: func(string) (string, error) { return filepath.Join(dir, "fixed"), nil }, Investigate: func(context.Context, m.Record, string) error { return nil }, Prepare: func(context.Context, m.Start) (m.Frozen, error) {
-		direction, err := readBuiltInDirection("simplify")
-		return m.Frozen{Direction: direction, Repository: rc.Repository{LocalPath: dir, BaseRevision: strings.Repeat("b", 40)}, Runner: rc.BuildPin{StateDir: dir}}, err
+		return m.Frozen{Repository: rc.Repository{LocalPath: dir, BaseRevision: strings.Repeat("b", 40)}, Runner: rc.BuildPin{StateDir: dir}}, nil
 	}, ReviewDiff: func(context.Context, m.Record, rc.PRFact) (string, error) {
 		return "diff --git a/example b/example", nil
 	}, Verify: func(_ context.Context, _ m.Record, v m.Result) (*rc.PRFact, string, error) {
@@ -218,11 +217,14 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 		return &rc.PRFact{URL: v.PR, HeadRevision: head, BaseRevision: base, HeadBranch: "codex/maintenance", State: "open"}, f.checks, nil
 	}}
 	cmd := m.Command{ID: m.ID(), Action: "refactoring_start", Target: s.Project, Expected: 1, Raw: json.RawMessage(`{"start":true}`)}
-	direction, e := readBuiltInDirection("simplify")
+	s.ResolveDirection = func(ctx context.Context, in m.Start) (m.Direction, error) {
+		return ResolveDirection(ctx, in, nil)
+	}
+	direction, e := DefaultDirection()
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := s.Command(context.Background(), cmd, &m.Start{Direction: direction.ID, DirectionRevision: direction.Revision, Profile: "local", EnvironmentKey: "test-key", EnvironmentRevision: 1, ProfileVersion: strings.Repeat("c", 64), BaseCommit: strings.Repeat("b", 40), Strategy: "cautious", Budget: m.Budget{Rounds: 2}})
+	r, e := s.Command(context.Background(), cmd, &m.Start{Direction: direction.ID, DirectionRevision: direction.Revision, DirectionPrompt: direction.Prompt, Profile: "local", EnvironmentKey: "test-key", EnvironmentRevision: 1, ProfileVersion: strings.Repeat("c", 64), BaseCommit: strings.Repeat("b", 40), Strategy: "cautious", Budget: m.Budget{Rounds: 2}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -701,6 +703,9 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 		var facts decisionContext
 		if err = json.Unmarshal([]byte(*g.Materials[0].Content), &facts); err != nil || facts.DirectionPrompt != r.Frozen.Direction.Prompt || facts.Mode != phase {
 			t.Fatal("wrong decision context", phase, err)
+		}
+		if strings.Contains(*g.Materials[0].Content, `"requirements":`) {
+			t.Fatal("obsolete supplemental requirements sent to Runner", phase)
 		}
 	}
 	r.Phase, r.WriteKind, r.PendingPrompt = "execute", "implement", "用户原文\r\n保持 CRLF 与结尾空格  "

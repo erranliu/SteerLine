@@ -23,12 +23,10 @@ import {
   operationStateLabel,
 } from "./execution-conversation";
 import { NewMaintenance, type StartInput } from "./new-maintenance";
+import { ManageDirections } from "./directions";
 import "./refactoring-maintenance.css";
 
-type Input = Pick<
-  StartInput,
-  "direction" | "requirements" | "profile" | "strategy" | "budget"
-> &
+type Input = Pick<StartInput, "direction" | "profile" | "strategy" | "budget"> &
   Partial<StartInput>;
 export type MaintenanceRecord = {
   id: string;
@@ -172,6 +170,7 @@ export function RefactoringMaintenance() {
   const [params, setParams] = useSearchParams();
   const selected = params.get("action") ?? "";
   const [opened, setOpened] = useState(false);
+  const [managingDirections, setManagingDirections] = useState(false);
   const [form, setForm] = useState<{ key: number; input?: StartInput }>({
     key: 0,
   });
@@ -561,14 +560,26 @@ export function RefactoringMaintenance() {
             </p>
           ))}
         </div>
-        <Button
-          variant="default"
-          ref={newButton}
-          onClick={() => setOpened(true)}
-        >
-          新建重构任务
-        </Button>
+        <div className="refactoring-direction-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setManagingDirections(true)}
+          >
+            管理重构方向
+          </Button>
+          <Button
+            variant="default"
+            ref={newButton}
+            onClick={() => setOpened(true)}
+          >
+            新建重构任务
+          </Button>
+        </div>
       </header>
+      {managingDirections && (
+        <ManageDirections close={() => setManagingDirections(false)} />
+      )}
       <NewMaintenance
         key={form.key}
         open={opened}

@@ -42,6 +42,7 @@ func (s *Service) freezeStart(ctx context.Context, r model.Record) error {
 	if err != nil {
 		return err
 	}
+	frozen.Direction = r.Frozen.Direction
 	save := func() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()

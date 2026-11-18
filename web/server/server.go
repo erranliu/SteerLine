@@ -366,6 +366,10 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if r.URL.Path == "/api/v2/application"+contract.RefactoringDirectionsPath && r.URL.RawQuery == "" && (r.Method == "GET" || r.Method == "POST") {
+		s.refactoringDirections(w, r, session.CSRF)
+		return
+	}
 	if (r.URL.Path == "/api/web/usage-collection" || r.URL.Path == "/api/web/usage-collection/status") && r.Method == "GET" && r.URL.RawQuery == "" {
 		var result cfg.UsageCollection
 		if err := s.options.Client.Get(r.Context(), strings.TrimPrefix(r.URL.Path, "/api/web"), &result); err != nil {

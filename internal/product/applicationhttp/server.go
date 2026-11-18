@@ -70,6 +70,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.registerProject(w, r)
 		return
 	}
+	if r.URL.Path == root+contract.RefactoringDirectionsPath && r.URL.RawQuery == "" && (r.Method == "GET" || r.Method == "POST") {
+		s.refactoringDirections(w, r)
+		return
+	}
 	if r.URL.Path == root+contract.ProjectRegistrationPromptPath && r.Method == "GET" && r.URL.RawQuery == "" {
 		source, ok := s.Directory.(interface {
 			ProjectRegistrationPrompt() (contract.ProjectRegistrationPrompt, error)

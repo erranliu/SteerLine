@@ -131,6 +131,19 @@ export class Api {
         : this.lifetime.signal,
     });
   }
+  getRefactoringDirections<T>(signal: AbortSignal) {
+    return json<T>("/api/v2/application/refactoring-directions", { signal });
+  }
+  changeRefactoringDirection<T>(change: object) {
+    return json<T>("/api/v2/application/refactoring-directions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": this.csrf,
+      },
+      body: JSON.stringify(change),
+    });
+  }
   envelope(
     action: string,
     target_id: string,

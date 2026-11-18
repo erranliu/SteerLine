@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+安装级重构方向（2026-11-17）。[实现与验收](refactoring-direction-storage.md)
+
 重构任务调试信息（2026-11-17）。[实现与验收](refactoring-task-debug-info.md)
 
 重构与维护指令展示（2026-11-16）。[实现与验收](refactoring-prompt-display.md)

@@ -24,7 +24,7 @@ func (s *SQLiteStore) ReadAsyncActivityFacts(ctx context.Context, project string
 	case "refactoring":
 		table = "refactoring_actions a"
 		id = "a.action_id"
-		payload = `json_set(json_remove(CAST(a.payload AS TEXT),'$.frozen','$.operations','$.answers','$.pending_prompt','$.reports','$.candidate'),
+		payload = `json_set(json_remove(CAST(a.payload AS TEXT),'$.frozen','$.input.direction_prompt','$.operations','$.answers','$.pending_prompt','$.reports','$.candidate'),
 			'$.direction_name', COALESCE(NULLIF(json_extract(a.payload,'$.frozen.direction.name'),''),json_extract(a.payload,'$.input.direction')),
 			'$.environment_name', json_extract(a.payload,'$.frozen.environment_name'),
 			'$.phase', CASE WHEN a.slot=0 AND json_extract(a.payload,'$.phase') NOT IN ('delivered','stopped','blocked','waiting_input','stopping','checking_start')

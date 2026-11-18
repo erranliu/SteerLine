@@ -51,9 +51,28 @@
   overflow: auto;
 }
 
-.refactoring-panel .refactoring-prompt-body {
-  max-height: none;
-  overflow: visible;
+.refactoring-direction-actions,
+.refactoring-direction-list > li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.refactoring-direction-list {
+  list-style: none;
+  padding: 0;
+}
+
+.refactoring-direction-list > li {
+  justify-content: space-between;
+  padding-block: 6px;
+  border-bottom: 1px solid var(--ui-line);
+  overflow-wrap: anywhere;
+}
+
+.refactoring-panel textarea {
+  inline-size: 100%;
 }
 
 .refactoring-preview :is(p, pre) {

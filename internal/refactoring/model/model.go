@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/billing"
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
@@ -24,6 +25,14 @@ var ErrConflict = errors.New("维护版本或推进名额冲突，请刷新")
 var ErrEnvironmentChanged = errors.New("运行环境资格已变化，请重新核实")
 var ErrQualificationUnverified = errors.New("运行环境资格待重新核实")
 var ErrPRClosed = errors.New("原PR已关闭或合并")
+var ErrDirectionMissing = errors.New("重构方向已删除，请重新选择")
+var ErrDirectionConflict = errors.New("重构方向已修改或删除，请刷新后重试")
+var ErrDirectionDuplicate = errors.New("重构方向名称已存在")
+var ErrDirectionInvalid = errors.New("重构方向操作无效或目标为内置方向")
+
+type DirectionInputError string
+
+func (e DirectionInputError) Error() string { return string(e) }
 
 const Concurrency = 3
 const PhaseCheckingStart = "checking_start"
@@ -37,16 +46,38 @@ const (
 var validID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var revisionID = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 var decimal = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]{1,18})?$`)
-var directionID = regexp.MustCompile(`^(custom:)?[a-z0-9][a-z0-9-]{0,63}$`)
 var directionRevision = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
-func ValidDirectionID(id string) bool { return directionID.MatchString(id) }
+const DefaultDirectionID = "update-stale-docs"
+const DefaultDirectionName = "更新过期文档"
+
+func ValidDirectionRevision(revision string) bool { return directionRevision.MatchString(revision) }
+
+func ValidateDirectionPrompt(prompt string) error {
+	if strings.TrimSpace(prompt) == "" || len(prompt) > 32<<10 || !utf8.ValidString(prompt) || strings.ContainsRune(prompt, 0) {
+		return DirectionInputError("方向正文必填，须为有效文本且最多 32 KiB")
+	}
+	return nil
+}
 
 type Direction struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Prompt   string `json:"prompt"`
 	Revision string `json:"revision"`
+}
+
+type DirectionChange struct {
+	Action   string `json:"action"`
+	ID       string `json:"id,omitempty"`
+	Revision string `json:"revision,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Prompt   string `json:"prompt,omitempty"`
+}
+
+type DirectionCatalogue struct {
+	Directions  []Direction `json:"directions"`
+	Diagnostics []string    `json:"diagnostics,omitempty"`
 }
 
 func ID() string {
@@ -66,7 +97,7 @@ type Budget struct {
 type Start struct {
 	Direction           string `json:"direction"`
 	DirectionRevision   string `json:"direction_revision"`
-	Requirements        string `json:"requirements"`
+	DirectionPrompt     string `json:"direction_prompt"`
 	Profile             string `json:"profile"`
 	ProfileVersion      string `json:"profile_version"`
 	EnvironmentKey      string `json:"environment_key"`
@@ -77,10 +108,13 @@ type Start struct {
 }
 
 func (s Start) Validate() error {
-	if !ValidDirectionID(s.Direction) || !directionRevision.MatchString(s.DirectionRevision) {
+	if (s.Direction != DefaultDirectionID && !ValidID(s.Direction)) || !ValidDirectionRevision(s.DirectionRevision) {
 		return errors.New("重构方向或预览版本无效，请刷新后重试")
 	}
-	if s.Profile == "" || (s.Strategy != "cautious" && s.Strategy != "autonomous" && s.Strategy != "aggressive") || len(s.Requirements) > 32<<10 {
+	if err := ValidateDirectionPrompt(s.DirectionPrompt); err != nil {
+		return err
+	}
+	if s.Profile == "" || (s.Strategy != "cautious" && s.Strategy != "autonomous" && s.Strategy != "aggressive") {
 		return errors.New("方向、执行配置或策略无效")
 	}
 	if s.Budget.Rounds < 0 || s.Budget.Rounds > 10000 || (s.Budget.Rounds == 0 && s.Budget.Dollars == "" && s.Budget.Minutes == "") {

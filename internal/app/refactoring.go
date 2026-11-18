@@ -42,6 +42,9 @@ func newRefactoringPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Cl
 	p := &refactoringPort{config: c, store: store, materials: materials}
 	p.service = &refactoring.Service{Project: c.Identity(), Store: store, Runner: cli, Admit: admit, Prepare: p.prepare, Qualify: p.qualifyFirst, Verify: p.verify, VerifyPublishHead: p.verifyPublishHead, VerifyConflictBase: p.verifyConflictBase, ReviewDiff: p.reviewDiff, ReadCost: p.cost, Queue: c.runtimeGenerations, InvestigationPath: investigationPath, Investigate: p.investigation, ReleaseInvestigation: releaseInvestigation}
 	p.service.StartContext = c.withProfiles
+	p.service.ResolveDirection = func(ctx context.Context, in ref.Start) (ref.Direction, error) {
+		return refactoring.ResolveDirection(ctx, in, (sqlite.RefactoringDirections{Home: c.runnerHome()}).Read)
+	}
 	p.service.Reserve = func(ctx context.Context, commit string, save func() error) error {
 		return reserver.reserveReadyExecution(ctx, commit, func() error {
 			return c.reserveCurrentProfiles(ctx, save)
@@ -70,10 +73,6 @@ func (p *refactoringPort) remoteBranchHead(ctx context.Context, remote, branch s
 
 func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen, error) {
 	var out ref.Frozen
-	direction, e := refactoring.ResolveDirection(HomeDir(), in.Direction, in.DirectionRevision)
-	if e != nil {
-		return out, e
-	}
 	c := p.config
 	m := c.runtimeMaintenance
 	if m == nil || c.runtimeNative == nil {
@@ -163,7 +162,6 @@ func (p *refactoringPort) prepare(ctx context.Context, in ref.Start) (ref.Frozen
 		return out, e
 	}
 	out.Environment, out.EnvironmentName, out.ProfileName = &proof, refactoringEnvironmentName(profile.Execution.Target), profile.Name
-	out.Direction = direction
 	out.Repository = runnercontract.Repository{URL: remoteURL, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: observation.Commit}
 	out.Documents = runnercontract.Documents{Spec: runnercontract.Document{Path: requirementsPath}, Plan: runnercontract.Document{Path: entry.TestingCatalogue}}
 	out.Write, out.Read, out.Runner = *write.Execution, read, cli.BuildPin()
@@ -595,9 +593,6 @@ func (p *refactoringPort) read(ctx context.Context, route string, values url.Val
 	}
 	if len(values) > 0 {
 		return nil, errors.New("维护查询不接受额外参数")
-	}
-	if route == "/refactoring/directions" {
-		return refactoring.ListDirections(HomeDir()), nil
 	}
 	id := strings.TrimPrefix(route, "/refactoring/")
 	if !ref.ValidID(id) {

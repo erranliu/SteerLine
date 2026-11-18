@@ -35,6 +35,7 @@ type Service struct {
 	Store                Store
 	Runner               Runner
 	StartContext         func(context.Context) context.Context
+	ResolveDirection     func(context.Context, model.Start) (model.Direction, error)
 	Prepare              func(context.Context, model.Start) (model.Frozen, error)
 	Reserve              func(context.Context, string, func() error) error
 	Admit                func(context.Context) error
@@ -168,8 +169,12 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		if r, found, err := s.replay(ctx, c); found {
 			return r, err
 		}
+		direction, err := s.ResolveDirection(ctx, *in)
+		if err != nil {
+			return model.Record{}, err
+		}
 		now := s.now()
-		r := model.Record{ID: c.ID, Project: s.Project, Input: *in, Phase: model.PhaseCheckingStart, CreatedAt: now, EnqueuedAt: now, Operations: []model.Operation{}, Answers: []model.Answer{}, Reports: []model.Report{}}
+		r := model.Record{ID: c.ID, Project: s.Project, Input: *in, Frozen: model.Frozen{Direction: direction}, Phase: model.PhaseCheckingStart, CreatedAt: now, EnqueuedAt: now, Operations: []model.Operation{}, Answers: []model.Answer{}, Reports: []model.Report{}}
 		e = s.save(ctx, &r, &c)
 		return r, e
 	}

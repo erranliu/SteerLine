@@ -146,16 +146,16 @@ console.log('checks passed');
 	defer client.Close()
 	prefix := "/projects/" + identity.ProjectID
 	var catalogue struct{ Directions []ref.Direction }
-	s.Must(client.Get(s.Context, prefix+"/refactoring/directions", &catalogue))
+	s.Must(client.Get(s.Context, "/refactoring-directions", &catalogue))
 	var directionRevision string
 	for _, direction := range catalogue.Directions {
-		if direction.ID == "simplify" {
+		if direction.ID == ref.DefaultDirectionID {
 			directionRevision = direction.Revision
 			break
 		}
 	}
 	if directionRevision == "" {
-		s.t.Fatal("missing simplify direction")
+		s.t.Fatal("missing built-in direction")
 	}
 	post := func(action, target string, revision uint64, payload any) (string, httpcontract.CommandResponse) {
 		body, e := json.Marshal(payload)
@@ -182,7 +182,7 @@ console.log('checks passed');
 			}
 		}
 		var ready bool
-		start, ready = view.bind(ref.Start{Direction: "simplify", DirectionRevision: directionRevision, Requirements: "完成两个独立切片。第一轮只简化 alpha.cjs，含该轮审计需要的任何补证和修复。第一轮验收后，第二轮只简化 beta.cjs，保留第一轮已验收的改动。两轮均保留 calculate 导出及行为并运行 node check.cjs。每轮结束前把本轮改动提交到原受管工作区，使 git status 干净。最终提交须同时包含两文件的简化，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。", Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
+		start, ready = view.bind(ref.Start{Direction: ref.DefaultDirectionID, DirectionRevision: directionRevision, DirectionPrompt: "完成两个独立切片。第一轮只简化 alpha.cjs，含该轮审计需要的任何补证和修复。第一轮验收后，第二轮只简化 beta.cjs，保留第一轮已验收的改动。两轮均保留 calculate 导出及行为并运行 node check.cjs。每轮结束前把本轮改动提交到原受管工作区，使 git status 干净。最终提交须同时包含两文件的简化，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。", Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
 		return ready, nil
 	})
 	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, start)
@@ -190,7 +190,7 @@ console.log('checks passed');
 		s.t.Fatalf("refactoring_start: %s", started.Diagnostic)
 	}
 	peer := start
-	peer.Requirements = "只简化 gamma.cjs 的冗余布尔分支，保留 calculate 导出及行为。验证 node check.cjs，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。"
+	peer.DirectionPrompt = "只简化 gamma.cjs 的冗余布尔分支，保留 calculate 导出及行为。验证 node check.cjs，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。"
 	peer.Budget.Rounds = 1
 	var peerID string
 	if remote == nil {
