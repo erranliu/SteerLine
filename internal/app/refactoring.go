@@ -355,7 +355,7 @@ func (p *refactoringPort) verify(ctx context.Context, r ref.Record, result ref.R
 	if !ref.ValidRevision(info.HeadRevision) || !ref.ValidRevision(info.BaseRevision) {
 		return nil, "", errors.New("原PR平台未返回可信的head/base提交")
 	}
-	fact := &runnercontract.PRFact{URL: info.URL, Provider: c.PR.Kind, Repository: info.Repository, HeadRepository: info.HeadRepository, Number: func() int { n, _ := c.PR.PRNumber(info.URL); return n }(), BaseBranch: info.BaseBranch, BaseRevision: info.BaseRevision, HeadBranch: info.HeadBranch, HeadRevision: info.HeadRevision, Draft: info.Draft, State: info.State, Merged: info.Merged, CheckedAt: time.Now().UTC()}
+	fact := &runnercontract.PRFact{URL: info.URL, Title: info.Title, Provider: c.PR.Kind, Repository: info.Repository, HeadRepository: info.HeadRepository, Number: func() int { n, _ := c.PR.PRNumber(info.URL); return n }(), BaseBranch: info.BaseBranch, BaseRevision: info.BaseRevision, HeadBranch: info.HeadBranch, HeadRevision: info.HeadRevision, Draft: info.Draft, State: info.State, Merged: info.Merged, CheckedAt: time.Now().UTC()}
 	return fact, info.Checks, nil
 }
 

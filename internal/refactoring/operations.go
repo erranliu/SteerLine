@@ -126,35 +126,12 @@ type executionRequest struct {
 	Context     executionContext `json:"context"`
 }
 
-func committedHead(o model.Operation) string {
-	if git := o.WorkspaceGit; git != nil && git.Verified && git.Clean != nil && *git.Clean && git.Commit != nil && model.ValidRevision(*git.Commit) {
-		return *git.Commit
-	}
-	return ""
-}
-
-func acceptedHead(r model.Record, round int) string {
-	var accepted string
-	for i := len(r.Operations) - 1; i >= 0; i-- {
-		o := r.Operations[i]
-		if round > 0 && o.Round != round {
-			continue
-		}
-		if accepted == "" {
-			accepted = o.AcceptedOperation
-		} else if o.ID == accepted {
-			return committedHead(o)
-		}
-	}
-	return ""
-}
-
 func roundStart(r model.Record) string {
 	if r.Round == 1 {
 		return r.Frozen.Repository.BaseRevision
 	}
 	if r.Round > 1 {
-		return acceptedHead(r, r.Round-1)
+		return r.AcceptedHead(r.Round - 1)
 	}
 	return ""
 }
@@ -180,7 +157,7 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 			}
 			context.Publication, context.PR = r.Frozen.Publication, r.PR
 			if o.Purpose == "publish" {
-				context.AcceptedHead = acceptedHead(r, 0)
+				context.AcceptedHead = r.AcceptedHead(0)
 				if context.AcceptedHead == "" {
 					return o, errors.New("缺少已接受成果的提交")
 				}

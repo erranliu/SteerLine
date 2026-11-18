@@ -29,7 +29,7 @@ func TestGiteaQueryPreservesExplicitDraftState(t *testing.T) {
 					return
 				}
 				fact := map[string]any{
-					"html_url": "http://" + r.Host + "/owner/repo/pulls/7", "number": 7, "state": "open", "merged": false,
+					"html_url": "http://" + r.Host + "/owner/repo/pulls/7", "title": "更新部署文档", "number": 7, "state": "open", "merged": false,
 					"base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "owner/repo"}},
 					"head": map[string]any{"ref": test.headRef, "label": "candidate", "repo": map[string]string{"full_name": "owner/repo"}},
 				}
@@ -48,8 +48,8 @@ func TestGiteaQueryPreservesExplicitDraftState(t *testing.T) {
 			if want, known := test.draft.(bool); known && (fact.Draft == nil || *fact.Draft != want) || !known && fact.Draft != nil {
 				t.Fatalf("draft fact = %v, expected %v", fact.Draft, test.draft)
 			}
-			if fact.HeadBranch != "candidate" {
-				t.Fatalf("head branch = %q", fact.HeadBranch)
+			if fact.HeadBranch != "candidate" || fact.Title != "更新部署文档" {
+				t.Fatalf("head branch/title = %q/%q", fact.HeadBranch, fact.Title)
 			}
 		})
 	}

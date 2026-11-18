@@ -33,6 +33,7 @@ type maintenanceRunner struct {
 	unchangedConflict    bool
 	wrongConflictPR      bool
 	rejectConflict       bool
+	rejectPublish        bool
 	askMode              string
 	t                    *testing.T
 	dir                  string
@@ -60,6 +61,10 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 	}
 	if f.rejectConflict && in.Title == "重构与维护 · conflict" {
 		f.rejectConflict = false
+		return runnerclient.Receipt{}, &runnerclient.Failure{Code: "fixture_rejected"}
+	}
+	if f.rejectPublish && in.Title == "重构与维护 · publish" {
+		f.rejectPublish = false
 		return runnerclient.Receipt{}, &runnerclient.Failure{Code: "fixture_rejected"}
 	}
 	run := &rc.Run{RunID: id, Revision: 2, InputDigest: m.Digest(req.Input), Workflow: in.Workflow, Correlation: in.Correlation, StopStatus: "stopped", Status: "completed", UpdatedAt: time.Now().Add(-time.Minute), Final: &rc.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command-" + id, AttemptID: id, SessionID: "session-" + id, TurnID: "turn-" + id}}
@@ -214,7 +219,7 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 		if f.headOverride != "" {
 			head = f.headOverride
 		}
-		return &rc.PRFact{URL: v.PR, HeadRevision: head, BaseRevision: base, HeadBranch: "codex/maintenance", State: "open"}, f.checks, nil
+		return &rc.PRFact{URL: v.PR, Title: "更新部署文档", Number: 1, HeadRevision: head, BaseRevision: base, HeadBranch: "codex/maintenance", State: "open"}, f.checks, nil
 	}}
 	cmd := m.Command{ID: m.ID(), Action: "refactoring_start", Target: s.Project, Expected: 1, Raw: json.RawMessage(`{"start":true}`)}
 	s.ResolveDirection = func(ctx context.Context, in m.Start) (m.Direction, error) {
@@ -383,11 +388,8 @@ func TestMaintenanceUnknownSubmitStopAndFinish(t *testing.T) {
 	if f.stops != 2 || len(f.requests) != 1 {
 		t.Fatal("stop rejection must reconcile original without resubmit", f.stops, len(f.requests))
 	}
-	f.hold = false
-	r = control(t, s, r, "refactoring_finish")
-	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.Round != 0 || len(r.Reports) != 0 {
-		t.Fatal(r)
+	if r.CanFinish() || r.FinishAction() != "" {
+		t.Fatal("stopping before any accepted work offered PR delivery", r)
 	}
 }
 
@@ -622,8 +624,16 @@ func TestMaintenanceFailedPublicationCannotBecomeCandidate(t *testing.T) {
 		t.Fatal("failed native execution became delivery", r)
 	}
 	c := m.Command{ID: m.ID(), Action: "refactoring_finish", Target: r.ID, Expected: r.Revision, Raw: json.RawMessage(`{}`)}
-	if _, err := s.Command(context.Background(), c, nil); err == nil {
-		t.Fatal("uncertain publication allowed another publish")
+	if r.FinishAction() != "verify_publication" {
+		t.Fatal("uncertain publication must offer original-result verification", r.FinishAction())
+	}
+	before := len(f.requests)
+	if _, err := s.Command(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
+	if len(f.requests) != before || r.Candidate != nil {
+		t.Fatal("verification issued another write or accepted a failed result")
 	}
 }
 
@@ -670,6 +680,7 @@ func TestMaintenanceRecoverExcludesOfflineTimeAndDoesNotResubmit(t *testing.T) {
 func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 	s, _, r := fixture(t)
 	r.Frozen.Direction.Prompt = "# 自定义方向\r\n只整理给定范围  \r\n"
+	r.PR = &rc.PRFact{URL: "https://example.test/repo/pull/1", Title: "更新部署文档"}
 	for _, phase := range []string{"first", "select", "audit", "report"} {
 		r.Phase = phase
 		dir := ""
@@ -703,6 +714,9 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 		var facts decisionContext
 		if err = json.Unmarshal([]byte(*g.Materials[0].Content), &facts); err != nil || facts.DirectionPrompt != r.Frozen.Direction.Prompt || facts.Mode != phase {
 			t.Fatal("wrong decision context", phase, err)
+		}
+		if phase == "report" && (facts.PR == nil || facts.PR.Title != r.PR.Title) {
+			t.Fatal("review lost the verified platform title")
 		}
 		if strings.Contains(*g.Materials[0].Content, `"requirements":`) {
 			t.Fatal("obsolete supplemental requirements sent to Runner", phase)
@@ -970,7 +984,7 @@ func TestMaintenanceAcceptedPublicationNeedingInputDoesNotReplay(t *testing.T) {
 	}
 	r.Operations = append(r.Operations, o)
 	s.applyExecution(&r, o)
-	if r.Phase != "blocked" || !uncertainPublication(r) {
+	if r.Phase != "blocked" || !r.PublicationUnverified() {
 		t.Fatal("input request did not establish that initial publication had no side effects", r.Phase)
 	}
 	r.PR = &rc.PRFact{URL: "https://example.test/repo/pull/1"}
@@ -1003,10 +1017,8 @@ func TestMaintenanceFinishDoesNotPublishUncommittedWork(t *testing.T) {
 		t.Fatal("dirty execution was accepted", r.Phase, r.Round)
 	}
 	before := len(f.requests)
-	control(t, s, r, "refactoring_finish")
-	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.PR != nil || len(f.requests) != before || r.Summary != "没有已接受的成果可交付" {
-		t.Fatal("finishing dirty work dispatched an operation or misreported the result", r.Phase, r.Summary)
+	if r.CanFinish() || r.FinishAction() != "" || r.PR != nil || len(f.requests) != before {
+		t.Fatal("dirty work offered PR delivery without any accepted changes", r.Phase, r.Summary)
 	}
 }
 

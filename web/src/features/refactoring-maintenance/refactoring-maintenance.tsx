@@ -10,7 +10,6 @@ import { useWorkspace } from "../../app/context";
 import { requestByID } from "../../shared/api/journal";
 import type { StoredRequest } from "../../shared/api/types";
 import { Button } from "../../shared/ui/button";
-import { SafeLink } from "../../shared/ui/status";
 import { useAbandonedActivities } from "../activities/abandonment-marks";
 import {
   CopyInfoButton,
@@ -24,6 +23,12 @@ import {
 } from "./execution-conversation";
 import { NewMaintenance, type StartInput } from "./new-maintenance";
 import { ManageDirections } from "./directions";
+import {
+  DeliveryResult,
+  finishActions,
+  type DeliveryStage,
+  type FinishAction,
+} from "./delivery-result";
 import "./refactoring-maintenance.css";
 
 type Input = Pick<StartInput, "direction" | "profile" | "strategy" | "budget"> &
@@ -67,7 +72,19 @@ export type MaintenanceRecord = {
     recommended_option_id: string;
     recommendation_reason: string;
   };
-  pr?: { url: string };
+  pr?: {
+    url: string;
+    title?: string;
+    number?: number;
+    state?: string;
+    merged?: boolean;
+    head_revision?: string;
+    base_revision?: string;
+  };
+  delivery_summary?: string;
+  delivery_stage?: DeliveryStage;
+  delivery_result?: "" | "pr" | "no_changes";
+  finish_action?: FinishAction | "";
   can_finish: boolean;
   can_stop: boolean;
   can_conflict: boolean;
@@ -113,6 +130,8 @@ type Summary = Pick<
   | "wait_reason"
   | "elapsed_seconds"
   | "wall_seconds"
+  | "delivery_stage"
+  | "delivery_result"
 >;
 type DebugRecord = Summary &
   Partial<Pick<MaintenanceRecord, "input" | "source_commit" | "operations">>;
@@ -136,14 +155,28 @@ const phases: Record<string, string> = {
   report: "PR 合入评审中",
   execute: "Runner 执行中",
   audit: "独立审计中",
-  finish: "收尾中",
+  finish: "正在验证并创建 PR",
   verifying: "核验交付",
   waiting_input: "待答复",
   stopping: "停止待结算",
   stopped: "已停止",
   blocked: "已阻断",
-  delivered: "已交付",
+  delivered: "任务已完成",
 };
+
+function phaseLabel(
+  record: Pick<
+    MaintenanceRecord,
+    "phase" | "delivery_stage" | "delivery_result"
+  >,
+) {
+  if (record.phase === "delivered")
+    return record.delivery_result === "pr" ? "已创建 PR" : "已完成 · 无需修改";
+  if (record.phase === "blocked" && record.delivery_stage) return "交付失败";
+  if (record.phase === "execute" && record.delivery_stage === "publish")
+    return "正在验证并创建 PR";
+  return phases[record.phase] ?? record.phase;
+}
 
 const strategyNames: Record<string, string> = {
   cautious: "谨慎决策",
@@ -511,7 +544,7 @@ export function RefactoringMaintenance() {
             >
               <strong>{r.direction_name}</strong>
               <span>
-                {phases[r.phase] ?? r.phase}
+                {phaseLabel(r)}
                 {r.round > 0 && ` · 重构轮次 ${r.round}`}
               </span>
               <span>
@@ -728,7 +761,7 @@ function formatDebugInfo(current: DebugRecord, project: string) {
       requestID: current.id,
       record: { id: current.id, label: "重构任务" },
     }),
-    `状态：${phases[current.phase] ?? current.phase}${current.round > 0 ? ` · 第 ${current.round} 轮` : ""}`,
+    `状态：${phaseLabel(current)}${current.round > 0 ? ` · 第 ${current.round} 轮` : ""}`,
   ];
   if (current.environment_name)
     lines.push(`运行环境：${current.environment_name}`);
@@ -780,6 +813,9 @@ function MaintenanceDetail({
     ).length ?? 0;
   const strategy =
     strategyNames[current.input.strategy] ?? current.input.strategy;
+  const finish = current.finish_action
+    ? finishActions[current.finish_action]
+    : undefined;
   return (
     <section
       className="settings-panel refactoring-panel"
@@ -787,12 +823,13 @@ function MaintenanceDetail({
     >
       <h2>{current.direction_name}</h2>
       <p>
-        <span>{phases[current.phase] ?? current.phase}</span>
+        <span>{phaseLabel(current)}</span>
         {" · "}
         <span>重构轮次 {current.round}</span>
         {" · "}
         <span>Runner 执行 {executionCount} 次</span>
       </p>
+      <DeliveryResult record={current} />
       {current.wait_reason && <p role="status">{current.wait_reason}</p>}
       {error && (
         <p className="notice amber" role="alert">
@@ -825,7 +862,7 @@ function MaintenanceDetail({
           label="复制调试信息"
           text={formatDebugInfo(current, identity.repository_identity)}
         />
-        {current.can_finish && (
+        {current.can_finish && finish && (
           <Button
             disabled={disabled}
             onClick={() =>
@@ -837,7 +874,7 @@ function MaintenanceDetail({
               )
             }
           >
-            结束并交付
+            {finish.label}
           </Button>
         )}
         {current.can_stop && (
@@ -882,8 +919,8 @@ function MaintenanceDetail({
             重新评审
           </Button>
         )}
-        {current.pr && <SafeLink url={current.pr.url}>查看 PR</SafeLink>}
       </div>
+      {finish && <p className="muted">{finish.explanation}</p>}
       {current.question && (
         <form
           onSubmit={(e) => {

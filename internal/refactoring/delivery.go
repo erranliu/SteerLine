@@ -28,23 +28,10 @@ func closingPhase(r model.Record) string {
 	return "finish"
 }
 
-func uncertainPublication(r model.Record) bool {
-	if r.Candidate != nil || r.PR != nil {
-		return false
-	}
-	for i := len(r.Operations) - 1; i >= 0; i-- {
-		o := r.Operations[i]
-		if o.Purpose == "publish" {
-			return o.State == "complete"
-		}
-	}
-	return false
-}
-
 func (s *Service) closeAction(r *model.Record) {
 	r.FinishRequested = true
 	r.Phase = closingPhase(*r)
-	if r.PR == nil && r.Candidate == nil && acceptedHead(*r, 0) == "" {
+	if r.PR == nil && r.Candidate == nil && r.AcceptedHead(0) == "" {
 		base := r.Frozen.Repository.BaseRevision
 		summary := "没有已接受的成果可交付"
 		if r.LatestOwner == "" && r.Summary != "" {
@@ -117,7 +104,7 @@ func successfulExecution(o model.Operation) bool {
 }
 
 func executionCommitted(o model.Operation) bool {
-	head := committedHead(o)
+	head := o.CommittedHead()
 	return head != "" && successfulExecution(o) && o.Result.Outcome == "done" && o.Result.Head == head
 }
 
@@ -221,11 +208,17 @@ func (s *Service) verifyDelivery(ctx context.Context, r model.Record) error {
 		var err error
 		pr, _, err = s.verifyPR(ctx, r, value)
 		if err != nil {
-			return err
+			_, saveErr := s.update(ctx, r.ID, func(current *model.Record) error {
+				if current.Revision == r.Revision && !current.StopRequested {
+					s.block(current, err.Error())
+				}
+				return nil
+			})
+			return saveErr
 		}
 		if strings.EqualFold(pr.State, "open") && !pr.Merged {
 			if r.WriteKind == "publish" {
-				accepted := acceptedHead(r, 0)
+				accepted := r.AcceptedHead(0)
 				switch {
 				case accepted == "":
 					err = errors.New("缺少已接受成果的提交")
@@ -265,7 +258,7 @@ func (s *Service) verifyDelivery(ctx context.Context, r model.Record) error {
 			current.Phase = "report"
 			current.Diagnostic = ""
 		case pr == nil && current.PR == nil && value.NoChanges && value.Outcome == "done" &&
-			model.ValidRevision(value.Head) && model.ValidRevision(value.Base):
+			model.ValidRevision(value.Head) && value.Head == value.Base:
 			current.Summary = value.Summary
 			s.deliver(current)
 		default:

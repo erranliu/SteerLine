@@ -61,6 +61,7 @@ const record: MaintenanceRecord = {
     recommendation_reason: "易验证",
   },
   can_finish: true,
+  finish_action: "early_finish",
   can_stop: true,
   can_conflict: false,
   operations: [],
@@ -141,6 +142,187 @@ function openSheet() {
   fireEvent.click(screen.getByRole("button", { name: "新建重构任务" }));
   return within(screen.getByRole("dialog"));
 }
+
+it.each([
+  ["early_finish", "提前结束并创建 PR", "execute", ""],
+  ["resume_delivery", "继续交付 PR", "stopped", "publish"],
+  ["retry_publish", "重试创建 PR", "blocked", "publish"],
+  ["retry_conflict", "重试更新 PR", "blocked", "publish"],
+  ["verify_pr", "重新核验 PR", "blocked", "verify"],
+  ["verify_publication", "重新核验 PR", "blocked", "publish"],
+  ["retry_review", "重试评审", "blocked", "review"],
+] as const)(
+  "offers %s as an explicit delivery operation",
+  async (action, label, phase, stage) => {
+    const { submit } = setup([
+      {
+        ...record,
+        phase,
+        question: undefined,
+        active: phase === "execute",
+        can_stop: phase === "execute",
+        finish_action: action,
+        delivery_stage: stage,
+      },
+    ]);
+    const button = await screen.findByRole("button", {
+      name: label,
+    });
+    expect(
+      screen.queryByRole("button", { name: "结束并交付" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(button);
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(submit.mock.calls[0][0]).toMatchObject({
+      action: "refactoring_finish",
+      target_id: id,
+      expected_version: record.revision,
+      payload: {},
+    });
+  },
+);
+
+it("presents the created PR with its summary and current review as the task result", async () => {
+  const { submit } = setup([
+    {
+      ...record,
+      phase: "delivered",
+      delivery_stage: "complete",
+      delivery_result: "pr",
+      finish_action: "",
+      active: false,
+      question: undefined,
+      can_stop: false,
+      can_finish: false,
+      delivery_summary: "更新了安装和部署操作说明。",
+      pr: {
+        url: "https://example.test/repo/pull/42",
+        number: 42,
+        title: "更新部署文档",
+        head_revision: "head",
+        base_revision: "base",
+      },
+      reports: [
+        {
+          head: "head",
+          base: "base",
+          body: "文档与实现一致。",
+          recommendation: "merge",
+          created_at: "2026-11-18T08:00:00Z",
+        },
+      ],
+    },
+  ]);
+  const result = within(
+    await screen.findByRole("region", { name: "交付结果" }),
+  );
+  expect(result.getByRole("heading", { name: "已创建 PR" })).toBeVisible();
+  expect(
+    result.getByRole("heading", { name: "PR #42 · 更新部署文档" }),
+  ).toBeVisible();
+  expect(result.getByRole("link", { name: "查看 PR" })).toHaveAttribute(
+    "href",
+    "https://example.test/repo/pull/42",
+  );
+  expect(result.getByText("更新了安装和部署操作说明。")).toBeVisible();
+  expect(result.getByText("评审建议合入")).toBeVisible();
+  expect(
+    within(screen.getByRole("region", { name: "重构任务详情" })).queryByRole(
+      "button",
+      { name: /交付|创建 PR/ },
+    ),
+  ).not.toBeInTheDocument();
+  expect(submit).not.toHaveBeenCalled();
+});
+
+it("keeps the PR visible during review and withholds an outdated recommendation", async () => {
+  setup([
+    {
+      ...record,
+      phase: "report",
+      question: undefined,
+      can_finish: false,
+      finish_action: "",
+      delivery_stage: "review",
+      pr: { url: "https://example.test/repo/pull/42" },
+      reports: [
+        {
+          head: "old-head",
+          base: "old-base",
+          body: "旧评审",
+          recommendation: "merge",
+          created_at: "2026-11-18T08:00:00Z",
+        },
+      ],
+      report_stale: true,
+    },
+  ]);
+  const result = within(
+    await screen.findByRole("region", { name: "交付结果" }),
+  );
+  expect(result.getByRole("link", { name: "查看 PR" })).toBeVisible();
+  expect(
+    result.getByRole("heading", { name: "PR 已创建，正在评审" }),
+  ).toBeVisible();
+  expect(result.queryByText("评审建议合入")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /提前结束|继续交付/ }),
+  ).not.toBeInTheDocument();
+});
+
+it("shows an explicit no-change outcome and offers no PR operation after completion", async () => {
+  setup([
+    {
+      ...record,
+      phase: "delivered",
+      delivery_stage: "complete",
+      delivery_result: "no_changes",
+      active: false,
+      can_finish: false,
+      can_stop: false,
+      finish_action: "",
+      question: undefined,
+      summary: "检查部署文档后确认内容与当前实现一致。",
+    },
+  ]);
+  const result = within(
+    await screen.findByRole("region", { name: "交付结果" }),
+  );
+  expect(
+    result.getByRole("heading", { name: "已完成 · 无需修改" }),
+  ).toBeVisible();
+  expect(
+    result.getByText("检查部署文档后确认内容与当前实现一致。"),
+  ).toBeVisible();
+  expect(
+    result.queryByRole("link", { name: "查看 PR" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /交付|创建 PR/ }),
+  ).not.toBeInTheDocument();
+});
+
+it("waits for a stopped execution to settle before offering delivery recovery", async () => {
+  setup([
+    {
+      ...record,
+      phase: "stopping",
+      delivery_stage: "publish",
+      question: undefined,
+      can_finish: false,
+      can_stop: false,
+      finish_action: "",
+    },
+  ]);
+  await screen.findByText("停止待结算", { selector: "span" });
+  const detail = within(screen.getByRole("region", { name: "重构任务详情" }));
+  expect(
+    detail.queryByRole("region", { name: "交付结果" }),
+  ).not.toBeInTheDocument();
+  expect(
+    detail.queryByRole("button", { name: /交付|创建 PR/ }),
+  ).not.toBeInTheDocument();
+});
 
 it("copies the selected refactoring task and its Runner runs without submitting a command", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
@@ -320,7 +502,9 @@ it("keeps the full direction preview and drafts when the sheet closes", async ()
   expect(sheet.getByRole("heading", { name: "维护方向" })).toBeVisible();
   expect(sheet.getByRole("heading", { name: "执行指令" })).toBeVisible();
   expect(
-    sheet.getByText("启动后由 SteerAgent 生成，交给 Runner 执行。"),
+    sheet.getByText(
+      "启动后自动实施和验证，完成后创建 PR 并评审。没有有效改动时保存调查结论。",
+    ),
   ).toBeVisible();
   expect(preview).toHaveValue(builtIn.prompt);
   fireEvent.change(sheet.getByLabelText("重构方向"), {

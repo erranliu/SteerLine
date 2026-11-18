@@ -74,6 +74,15 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 	out["operations"] = ops
 	out["reports"] = r.Reports
 	out["pr"] = r.PR
+	deliverySummary := r.Summary
+	for i := len(r.Operations) - 1; i >= 0; i-- {
+		o := r.Operations[i]
+		if (o.Purpose == "publish" || o.Purpose == "conflict") && o.Result != nil && o.Result.Outcome == "done" {
+			deliverySummary = o.Result.Summary
+			break
+		}
+	}
+	out["delivery_summary"] = deliverySummary
 	out["amount"] = amount
 	out["cost_complete"] = complete
 	out["untracked"] = []string{"subagents", "tool_internal_models", "unobserved_provider_calls"}
@@ -103,6 +112,12 @@ func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 	if direction == "" {
 		direction = r.Input.Direction
 	}
+	result := ""
+	if r.PR != nil {
+		result = "pr"
+	} else if r.Phase == "delivered" {
+		result = "no_changes"
+	}
 	return map[string]any{
 		"id": r.ID, "revision": r.Revision, "direction_name": direction,
 		"environment_name": r.Frozen.EnvironmentName, "profile_name": r.Frozen.ProfileName,
@@ -111,6 +126,7 @@ func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 		"elapsed_seconds": r.Elapsed(now).Seconds(), "wall_seconds": wallEnd.Sub(r.CreatedAt).Seconds(),
 		"created_at": r.CreatedAt, "updated_at": r.UpdatedAt, "active": r.Active(),
 		"can_finish": r.CanFinish(), "can_stop": r.Active() && !r.StopRequested,
+		"finish_action": r.FinishAction(), "delivery_stage": r.DeliveryStage(), "delivery_result": result,
 		"can_review":   r.CanReview(),
 		"can_conflict": r.Phase == "delivered" && r.PR != nil && !r.PR.Merged && r.PR.State == "open",
 	}
