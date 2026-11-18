@@ -220,11 +220,9 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 			if n := len(r.Operations); n > 0 && r.Operations[n-1].Purpose == "implement" && r.Operations[n-1].State == "pending" {
 				r.Operations[n-1].State = "cancelled"
 				r.PendingPrompt = ""
-				r.Round--
 				r.Phase = closingPhase(r)
 			} else if r.PendingPrompt != "" {
 				r.PendingPrompt = ""
-				r.Round--
 				r.Phase = closingPhase(r)
 			}
 		}
@@ -327,7 +325,14 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 	if r.Phase == "waiting_input" || r.Phase == "blocked" || r.Phase == "delivered" || r.Phase == "stopped" {
 		return nil
 	}
-	if (r.Phase == "first" || r.Phase == "select") && (r.FinishRequested || r.BudgetExhausted(s.now())) ||
+	selecting := r.Phase == "first" || r.Phase == "select"
+	startingRound := selecting && (len(r.Operations) == 0 || r.Operations[len(r.Operations)-1].Purpose != r.Phase)
+	exhausted := false
+	if startingRound {
+		budget := r.RemainingBudget(s.now())
+		exhausted = budget.Exhausted || budget.CostPending
+	}
+	if selecting && (r.FinishRequested || exhausted) ||
 		r.Phase == "finish" && r.PR == nil && r.AcceptedHead(0) == "" {
 		_, e := s.update(ctx, r.ID, func(current *model.Record) error {
 			if current.Revision == r.Revision && !current.StopRequested {
@@ -409,7 +414,11 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 				}
 			}
 			var op model.Operation
-			op, prepareErr = s.prepareOperation(*current, id, directory, review)
+			operationRecord := *current
+			if startingRound {
+				operationRecord.Round++
+			}
+			op, prepareErr = s.prepareOperation(operationRecord, id, directory, review)
 			if prepareErr == nil {
 				current.Operations = append(current.Operations, op)
 				current.PendingPrompt = ""
@@ -722,7 +731,20 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 		if err != nil {
 			cost = model.Cost{Diagnostic: err.Error(), ObservedAt: s.now()}
 		}
+		if !cost.Complete && cost.Amount == nil {
+			cost.Amount = o.Cost.Amount
+		}
 		if !cost.Complete && r.Input.Budget.Dollars != "" && !r.StopRequested && s.now().Sub(run.UpdatedAt) < 35*time.Second {
+			if cost.Amount != nil && (o.Cost.Amount == nil || *cost.Amount != *o.Cost.Amount) {
+				_, err := s.update(ctx, r.ID, func(r *model.Record) error {
+					last := &r.Operations[len(r.Operations)-1]
+					if last.ID == o.ID && !last.Settled() {
+						last.Cost = cost
+					}
+					return nil
+				})
+				return err
+			}
 			return nil
 		}
 		o.Cost = cost

@@ -253,6 +253,9 @@ func (s *Service) refreshCost(ctx context.Context, r model.Record) error {
 		cost = o.Cost
 		cost.Diagnostic = err.Error()
 	}
+	if !cost.Complete && cost.Amount == nil {
+		cost.Amount = o.Cost.Amount
+	}
 	cost.ObservedAt = s.now()
 	_, err = s.update(ctx, r.ID, func(current *model.Record) error {
 		current.Operations[i].Cost = cost
@@ -274,6 +277,13 @@ func (s *Service) markSubmitted(ctx context.Context, id string, operation model.
 	}
 	queued := last.Content(r).WorkflowID == "generate" && s.Queue != nil
 	key := "refactoring:" + last.ID
+	startingRound := last.Round > r.Round
+	if startingRound && r.BudgetExhausted(s.now()) {
+		last.State = "cancelled"
+		r.WaitReason = ""
+		s.closeAction(&r)
+		return false, s.save(ctx, &r, nil)
+	}
 	if queued && !s.Queue.AcquireContent(s.Project, key) {
 		if r.WaitReason == model.WaitSharedCapacity {
 			return false, nil
@@ -290,6 +300,9 @@ func (s *Service) markSubmitted(ctx context.Context, id string, operation model.
 		r.ConflictPending = false
 	}
 	last.State = "submitted"
+	if startingRound {
+		r.Round = last.Round
+	}
 	if err = s.save(ctx, &r, nil, proof...); err != nil {
 		if queued {
 			s.Queue.UpdateContent(s.Project, key, last.CreatedAt, false, false)

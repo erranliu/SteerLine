@@ -55,6 +55,13 @@ export type MaintenanceRecord = {
   summary?: string;
   diagnostic?: string;
   elapsed_seconds: number;
+  remaining_budget: {
+    rounds?: number;
+    dollars?: string;
+    seconds?: number;
+    cost_pending?: boolean;
+    exhausted: boolean;
+  };
   amount?: string;
   cost_complete: boolean;
   wall_seconds?: number;
@@ -753,6 +760,44 @@ function duration(seconds: number) {
     : Math.floor(seconds / 60) + " 分钟";
 }
 
+function RemainingBudget({ record }: { record: MaintenanceRecord }) {
+  const budget = record.remaining_budget;
+  const balances = [
+    budget.rounds === undefined ? "" : `${budget.rounds} 轮`,
+    budget.dollars === undefined ? "" : `$${budget.dollars}`,
+    budget.seconds === undefined
+      ? ""
+      : budget.seconds > 0 && budget.seconds < 1
+        ? "不足 1 秒"
+        : duration(budget.seconds),
+  ].filter(Boolean);
+  let next = "";
+  if (
+    budget.exhausted &&
+    record.active &&
+    !record.pr &&
+    !["blocked", "stopped", "stopping", "waiting_input"].includes(record.phase)
+  ) {
+    if (record.delivery_stage === "verify") next = "正在核验交付结果";
+    else if (record.delivery_stage === "publish") next = "正在验证并创建 PR";
+    else next = "完成本轮后推进 PR";
+  }
+  return (
+    <section
+      className="refactoring-budget"
+      aria-label="剩余重构预算"
+      data-exhausted={budget.exhausted}
+    >
+      <strong>剩余重构预算</strong>
+      <span>{balances.join(" · ")}</span>
+      {budget.cost_pending && <span className="muted">费用待结算</span>}
+      {budget.exhausted && (
+        <span role="status">重构预算已用完{next && ` · ${next}`}</span>
+      )}
+    </section>
+  );
+}
+
 function formatDebugInfo(current: DebugRecord, project: string) {
   const lines = [
     formatExecutionInfo({
@@ -822,6 +867,7 @@ function MaintenanceDetail({
       aria-label="重构任务详情"
     >
       <h2>{current.direction_name}</h2>
+      <RemainingBudget record={current} />
       <p>
         <span>{phaseLabel(current)}</span>
         {" · "}

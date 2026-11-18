@@ -2,6 +2,23 @@
   margin-bottom: 10px;
 }
 
+.refactoring-budget {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-block: 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  overflow-wrap: anywhere;
+}
+
+.refactoring-budget[data-exhausted="true"] [role="status"] {
+  font-weight: 600;
+}
+
 .refactoring-result {
   margin-block: 16px;
   padding: 16px;
