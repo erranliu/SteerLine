@@ -162,7 +162,7 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 			if purpose == "conflict" {
 				url = provider.PR.URL
 			}
-			pr := em.PRInfo{URL: url, Repository: provider.RepositoryName(), HeadRepository: provider.RepositoryName(), BaseBranch: provider.BranchName(), BaseRevision: value.Base, HeadBranch: branch, HeadRevision: head, State: "open", Body: "Original PR description"}
+			pr := em.PRInfo{URL: url, Title: "收拢共享夹具", Repository: provider.RepositoryName(), HeadRepository: provider.RepositoryName(), BaseBranch: provider.BranchName(), BaseRevision: value.Base, HeadBranch: branch, HeadRevision: head, State: "open", Body: "Original PR description"}
 			if provider.PRs == nil {
 				provider.PRs = map[string]em.PRInfo{}
 			}

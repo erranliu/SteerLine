@@ -95,6 +95,7 @@ func queryGitea(ctx context.Context, p model.PRProviderConfig, number int) (mode
 	}
 	var pr struct {
 		Body        string     `json:"body"`
+		Title       string     `json:"title"`
 		URL         string     `json:"html_url"`
 		Number      int        `json:"number"`
 		State       string     `json:"state"`
@@ -119,6 +120,6 @@ func queryGitea(ctx context.Context, p model.PRProviderConfig, number int) (mode
 	if pr.Head.Branch == fmt.Sprintf("refs/pull/%d/head", number) {
 		pr.Head.Branch = pr.Head.Label
 	}
-	return model.PRInfo{Body: pr.Body, URL: pr.URL, Repository: pr.Base.Repo.Name, BaseBranch: pr.Base.Branch, BaseRevision: pr.Base.Revision, HeadRepository: pr.Head.Repo.Name,
+	return model.PRInfo{Body: pr.Body, Title: pr.Title, URL: pr.URL, Repository: pr.Base.Repo.Name, BaseBranch: pr.Base.Branch, BaseRevision: pr.Base.Revision, HeadRepository: pr.Head.Repo.Name,
 		HeadBranch: pr.Head.Branch, HeadRevision: pr.Head.Revision, Draft: pr.Draft, State: state, Merged: *pr.Merged, MergedAt: pr.MergedAt, MergeCommit: pr.MergeCommit}, nil
 }

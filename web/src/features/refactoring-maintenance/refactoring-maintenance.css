@@ -2,6 +2,29 @@
   margin-bottom: 10px;
 }
 
+.refactoring-result {
+  margin-block: 16px;
+  padding: 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  overflow-wrap: anywhere;
+}
+
+.refactoring-result h3,
+.refactoring-result h4 {
+  margin-block: 0 8px;
+}
+
+.refactoring-result-link a {
+  display: inline-flex;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: #10281c;
+  font-weight: 600;
+}
+
 .refactoring-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -10,6 +10,7 @@ import (
 // Go module dependency on the independently versioned Runner implementation.
 type PRFact struct {
 	URL                  string     `json:"url"`
+	Title                string     `json:"title,omitempty"`
 	Provider             string     `json:"provider"`
 	Repository           string     `json:"repository"`
 	Number               int        `json:"number"`

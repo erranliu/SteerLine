@@ -496,7 +496,8 @@ export function NewMaintenance({
               <section className="refactoring-preview">
                 <h3>执行指令</h3>
                 <p className="muted">
-                  启动后由 SteerAgent 生成，交给 Runner 执行。
+                  启动后自动实施和验证，完成后创建 PR
+                  并评审。没有有效改动时保存调查结论。
                 </p>
               </section>
             </div>

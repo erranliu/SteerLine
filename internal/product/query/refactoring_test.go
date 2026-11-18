@@ -2,12 +2,43 @@ package query
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	refactoring "github.com/erranliu/SteerLine/internal/refactoring/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
+
+func TestRefactoringDeliveryResultAndRecoveryActions(t *testing.T) {
+	clean, head := true, strings.Repeat("a", 40)
+	record := refactoring.Record{Authorized: true, Phase: "execute",
+		Operations: []refactoring.Operation{
+			{ID: "write", State: "complete", Purpose: "implement", WorkspaceGit: &runnercontract.WorkspaceGit{Verified: true, Clean: &clean, Commit: &head}},
+			{ID: "audit", State: "complete", Purpose: "audit", AcceptedOperation: "write"},
+		}}
+	for _, test := range []struct {
+		phase, kind, action, stage, result string
+		pr                                 *runnercontract.PRFact
+	}{
+		{"execute", "implement", "early_finish", "", "", nil},
+		{"stopped", "", "resume_delivery", "", "", nil},
+		{"blocked", "publish", "retry_publish", "publish", "", nil},
+		{"blocked", "", "retry_review", "review", "pr", &runnercontract.PRFact{URL: "https://example.test/pull/1"}},
+		{"delivered", "", "", "complete", "pr", &runnercontract.PRFact{URL: "https://example.test/pull/1"}},
+		{"delivered", "", "", "complete", "no_changes", nil},
+	} {
+		t.Run(test.phase+"/"+test.kind+"/"+test.result, func(t *testing.T) {
+			r := record
+			r.Phase, r.WriteKind, r.PR = test.phase, test.kind, test.pr
+			view := Refactoring(r, time.Now())
+			if view["finish_action"] != test.action || view["can_finish"] != (test.action != "") ||
+				view["delivery_stage"] != test.stage || view["delivery_result"] != test.result {
+				t.Fatalf("incorrect delivery result or recovery: %+v", view)
+			}
+		})
+	}
+}
 
 func TestRefactoringShowsDecisionInstructionForEachOperation(t *testing.T) {
 	completedAt := time.Now()

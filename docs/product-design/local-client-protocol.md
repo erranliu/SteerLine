@@ -134,6 +134,8 @@ Web 只作受限同源 `/api/v2/application/...` 转接；原生 `/native/identi
 
 安装级 `GET /v2/application/refactoring-directions` 返回方向目录。`POST` 到同一路径使用 `create`、`update` 或 `delete`，其中更新和删除须提供方向 ID 和版本。内置方向始终由应用提供。
 
+重构查询的 `finish_action` 区分提前结束、停止后续交付、重试创建/更新 PR、核验原发布和重试评审。`delivery_stage` 与 `delivery_result` 提供交付进度及 PR/无改动结果。恢复继续使用原行动的 `refactoring_finish` 命令，服务按保存状态选择原步骤。PR 发布结果不明时只重读原 Run。
+
 维护动作沿原项目 actor、命令 journal 和原请求回执，不使用图/控制 revision。
 
 | action | target_id / expected_version | payload |

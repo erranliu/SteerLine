@@ -152,9 +152,22 @@ test("maintenance report, history and refresh remain observational", async ({
   await expect(
     page
       .getByRole("region", { name: "重构任务详情" })
-      .getByText("已交付", { exact: true }),
+      .getByRole("heading", { name: "已创建 PR", exact: true }),
   ).toBeVisible();
   const detail = page.getByRole("region", { name: "重构任务详情" });
+  const result = detail.getByRole("region", { name: "交付结果" });
+  await expect(result.getByRole("link", { name: "查看 PR" })).toHaveAttribute(
+    "href",
+    /\/pull\/\d+$/,
+  );
+  await expect(result.getByRole("heading", { level: 4 })).toContainText("PR #");
+  await expect(result.getByText("评审建议合入", { exact: true })).toBeVisible();
+  await expect(
+    detail.getByRole("button", { name: "提前结束并创建 PR" }),
+  ).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "继续交付 PR" })).toHaveCount(
+    0,
+  );
   const copy = detail.getByRole("button", { name: "复制调试信息" });
   await expect(copy).toBeVisible();
   const dialogue = detail.getByRole("region", { name: "执行对话" });

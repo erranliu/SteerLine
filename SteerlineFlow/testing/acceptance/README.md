@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+重构任务自动交付与分阶段恢复（2026-11-18）。[实现与验收](refactoring-pr-delivery.md)
+
 安装级重构方向（2026-11-17）。[实现与验收](refactoring-direction-storage.md)
 
 重构任务调试信息（2026-11-17）。[实现与验收](refactoring-task-debug-info.md)

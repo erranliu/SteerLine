@@ -12,7 +12,7 @@ def gh(*args):
 
 def query(number, repository):
     raw = json.loads(gh("pr", "view", number, "--repo", repository, "--json",
-                        "url,state,mergedAt,mergeCommit,baseRefName,headRefOid,"
+                        "url,title,state,mergedAt,mergeCommit,baseRefName,headRefOid,"
                         "headRefName,headRepository,headRepositoryOwner,isDraft"))
     merged_at = raw.get("mergedAt")
     merged = merged_at is not None
@@ -26,6 +26,7 @@ def query(number, repository):
         head_repository = head_owner["login"] + "/" + head_repo["name"]
     return {
         "url": raw["url"],
+        "title": raw["title"],
         "repository": repository,
         "base_branch": raw["baseRefName"],
         "head_repository": head_repository,

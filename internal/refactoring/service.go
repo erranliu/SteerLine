@@ -200,8 +200,15 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		if !r.CanFinish() {
 			return r, errors.New("当前行动不可收尾")
 		}
-		if !r.Active() && uncertainPublication(r) {
-			return r, errors.New("原发布结果未核实，请先核对原请求和原PR")
+		if r.PublicationUnverified() {
+			last := &r.Operations[len(r.Operations)-1]
+			if last.Purpose != "publish" || last.RunID == "" {
+				return r, errors.New("缺少可核验的原发布 Run")
+			}
+			last.State = "submitted"
+			r.Phase = "execute"
+			r.StopRequested = false
+			r.EnqueuedAt = s.now()
 		}
 		if n := len(r.Operations); n > 0 {
 			last := &r.Operations[n-1]
@@ -321,7 +328,7 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 		return nil
 	}
 	if (r.Phase == "first" || r.Phase == "select") && (r.FinishRequested || r.BudgetExhausted(s.now())) ||
-		r.Phase == "finish" && r.PR == nil && acceptedHead(r, 0) == "" {
+		r.Phase == "finish" && r.PR == nil && r.AcceptedHead(0) == "" {
 		_, e := s.update(ctx, r.ID, func(current *model.Record) error {
 			if current.Revision == r.Revision && !current.StopRequested {
 				s.closeAction(current)
@@ -354,12 +361,24 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 		var err error
 		pr, review, err = s.reviewEvidence(ctx, r)
 		if err != nil {
-			return err
+			_, saveErr := s.update(ctx, r.ID, func(current *model.Record) error {
+				if current.Revision == r.Revision && !current.StopRequested {
+					s.block(current, err.Error())
+				}
+				return nil
+			})
+			return saveErr
 		}
 		if review.Limitation != "" {
 			latest, checks, err := s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
 			if err != nil {
-				return err
+				_, saveErr := s.update(ctx, r.ID, func(current *model.Record) error {
+					if current.Revision == r.Revision && !current.StopRequested {
+						s.block(current, err.Error())
+					}
+					return nil
+				})
+				return saveErr
 			}
 			if !matchesVersion(pr, latest.URL, latest.HeadRevision, latest.BaseRevision) || checks != review.Checks {
 				return nil
@@ -714,7 +733,19 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 	if o.Purpose == "report" && decisionSucceeded && !r.StopRequested {
 		latest, latestChecks, e = s.verifyPR(ctx, r, model.Result{PR: r.PR.URL})
 		if e != nil {
-			return e
+			_, saveErr := s.update(ctx, r.ID, func(current *model.Record) error {
+				if current.Revision == r.Revision && !current.StopRequested {
+					last := &current.Operations[len(current.Operations)-1]
+					last.State = "complete"
+					last.Feedback = feedback
+					last.Cost = o.Cost
+					now := s.now()
+					last.CompletedAt = &now
+					s.block(current, e.Error())
+				}
+				return nil
+			})
+			return saveErr
 		}
 		conflictBaseErr = s.verifyConflictReviewBase(ctx, r, *latest)
 	}

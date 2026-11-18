@@ -350,8 +350,97 @@ func (r Record) HasRunnerBinding() bool {
 }
 
 func (r Record) CanFinish() bool {
-	return r.Authorized && (r.Phase == "stopped" || r.Phase == "blocked" ||
-		r.Active() && !r.FinishRequested && !r.StopRequested)
+	return r.FinishAction() != ""
+}
+
+// FinishAction identifies the next authorized delivery operation for the UI and
+// command handler. An accepted publication is reconciled before any new write.
+func (r Record) FinishAction() string {
+	if !r.Authorized {
+		return ""
+	}
+	if r.Phase == "stopped" || r.Phase == "blocked" {
+		if r.Unsettled() {
+			return ""
+		}
+		if r.Phase == "stopped" && (r.Candidate != nil || r.PR != nil || r.AcceptedHead(0) != "") {
+			return "resume_delivery"
+		}
+		if r.Candidate != nil {
+			return "verify_pr"
+		}
+		if r.PR != nil {
+			if r.WriteKind == "conflict" {
+				return "retry_conflict"
+			}
+			return "retry_review"
+		}
+		if r.PublicationUnverified() {
+			return "verify_publication"
+		}
+		if r.AcceptedHead(0) != "" {
+			return "retry_publish"
+		}
+		return ""
+	}
+	if r.Active() && !r.FinishRequested && !r.StopRequested &&
+		r.Phase != "finish" && r.Phase != "verifying" && r.Phase != "report" &&
+		r.WriteKind != "publish" && r.WriteKind != "conflict" {
+		return "early_finish"
+	}
+	return ""
+}
+
+func (r Record) PublicationUnverified() bool {
+	if r.Candidate != nil || r.PR != nil {
+		return false
+	}
+	for i := len(r.Operations) - 1; i >= 0; i-- {
+		if o := r.Operations[i]; o.Purpose == "publish" {
+			return o.State == "complete"
+		}
+	}
+	return false
+}
+
+func (o Operation) CommittedHead() string {
+	if git := o.WorkspaceGit; git != nil && git.Verified && git.Clean != nil && *git.Clean &&
+		git.Commit != nil && ValidRevision(*git.Commit) {
+		return *git.Commit
+	}
+	return ""
+}
+
+func (r Record) AcceptedHead(round int) string {
+	var accepted string
+	for i := len(r.Operations) - 1; i >= 0; i-- {
+		o := r.Operations[i]
+		if round > 0 && o.Round != round {
+			continue
+		}
+		if accepted == "" {
+			accepted = o.AcceptedOperation
+		} else if o.ID == accepted {
+			return o.CommittedHead()
+		}
+	}
+	return ""
+}
+
+func (r Record) DeliveryStage() string {
+	if r.Phase == "delivered" {
+		return "complete"
+	}
+	if r.Candidate != nil {
+		return "verify"
+	}
+	if r.PR != nil && r.WriteKind != "conflict" {
+		return "review"
+	}
+	if r.FinishRequested || r.Phase == "finish" || r.WriteKind == "publish" || r.WriteKind == "conflict" {
+		return "publish"
+	}
+	return ""
 }
 
 func (r *Record) Resume(now time.Time) {
@@ -361,7 +450,7 @@ func (r *Record) Resume(now time.Time) {
 }
 
 func (r Record) CanReview() bool {
-	return !r.Active() && r.PR != nil && !r.PR.Merged && r.PR.State == "open" && r.WriteKind != "conflict"
+	return r.Phase == "delivered" && !r.Active() && r.PR != nil && !r.PR.Merged && r.PR.State == "open" && r.WriteKind != "conflict"
 }
 func (r Record) Elapsed(now time.Time) time.Duration {
 	d := time.Duration(r.ElapsedNanos)
