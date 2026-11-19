@@ -258,4 +258,21 @@ func TestLocalGroupCommandsKeepOwnerUnfilteredAndHTTPComplete(t *testing.T) {
 	if err := validateLocalGroups([]localGroup{{ID: "a", Packages: []string{"./one"}}, {ID: "b", Packages: []string{"./one"}}}); err == nil {
 		t.Fatal("overlapping groups accepted")
 	}
+	for _, mode := range []string{"disjoint", "overlap", "owner-first", "owner-last", "duplicate-root"} {
+		a := localGroup{ID: "a", Packages: []string{"./one"}, Tests: []string{"TestA"}}
+		b := localGroup{ID: "b", Packages: []string{"./one"}, Tests: []string{"TestB"}}
+		switch mode {
+		case "overlap":
+			b.Tests = []string{"TestA"}
+		case "owner-first":
+			a.Tests = nil
+		case "owner-last":
+			b.Tests = nil
+		case "duplicate-root":
+			b.Tests = []string{"TestB", "TestB"}
+		}
+		if err := validateLocalGroups([]localGroup{a, b}); (err == nil) != (mode == "disjoint") {
+			t.Fatal("invalid package partition admission", mode, err)
+		}
+	}
 }

@@ -74,6 +74,9 @@ func runLocalSuite(opts options, def localSuite) int {
 		}
 	}
 	timeout := 30 * time.Minute
+	if def.ID == "go.deployment" {
+		timeout = 45 * time.Minute
+	}
 	if def.ID == "go.roadmap" {
 		timeout = 50 * time.Minute
 	}
@@ -131,7 +134,10 @@ func localGroupCommand(tag string, group localGroup) []string {
 }
 
 func validateLocalGroups(groups []localGroup) error {
-	ids, packages := map[string]bool{}, map[string]bool{}
+	ids := map[string]bool{}
+	// nil owns the complete package. Multiple groups may only partition a
+	// package by explicit, disjoint roots; owner and partial scopes never mix.
+	packages := map[string]map[string]bool{}
 	if len(groups) == 0 {
 		return fmt.Errorf("local suite has no groups")
 	}
@@ -141,17 +147,24 @@ func validateLocalGroups(groups []localGroup) error {
 		}
 		ids[group.ID] = true
 		for _, pkg := range group.Packages {
-			if !strings.HasPrefix(pkg, "./") || packages[pkg] {
+			previous, seen := packages[pkg]
+			if !strings.HasPrefix(pkg, "./") || seen && (len(group.Tests) == 0 || previous == nil) {
 				return fmt.Errorf("invalid or repeated local package %s", pkg)
 			}
-			packages[pkg] = true
-		}
-		roots := map[string]bool{}
-		for _, name := range group.Tests {
-			if name == "" || strings.Contains(name, "/") || roots[name] {
-				return fmt.Errorf("invalid or repeated assigned root %s", name)
+			if len(group.Tests) == 0 {
+				packages[pkg] = nil
+				continue
 			}
-			roots[name] = true
+			if !seen {
+				previous = map[string]bool{}
+				packages[pkg] = previous
+			}
+			for _, name := range group.Tests {
+				if name == "" || strings.Contains(name, "/") || previous[name] {
+					return fmt.Errorf("invalid or repeated assigned root %s", name)
+				}
+				previous[name] = true
+			}
 		}
 	}
 	return nil

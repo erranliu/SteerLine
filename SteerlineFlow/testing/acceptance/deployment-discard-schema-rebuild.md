@@ -14,7 +14,11 @@
 
 ## 隔离验证
 
-证据根：`C:\SteerlineDebug\wt-e0bd-discard-schema`。定向命令、正式报告和结果将在本轮验证完成后补充。新增用例归原 `TestDeploymentDiscardRuns`，没有缩小正式 `go.deployment` 的根或参数；可读列表与机器清单同步说明新增覆盖。
+证据根：`C:\SteerlineDebug\wt-e0bd-discard-schema`。新增用例归原 `TestDeploymentDiscardRuns`；可读列表与机器清单同步说明新增覆盖。
+
+首轮正式专项中，完整 `TestDeploymentDiscardRuns` 通过，耗时 1247.3 秒；原 App 合并组随后在中断恢复检查中达到 25 分钟总时限，整套报告保持失败，不作为整体通过复用。将放弃重建根单独放入 `go-deployment-discard`，其余 App 根仍在 `go-deployment-app`，合计仍为 Windows 11 / 其他平台 10 根，全部串行、保留全部子项及每组 count1/25m/p1/parallel1。部署整套有界时限从 30 调整为 45 分钟。
+
+测试分组只允许同包的明确互斥根拆分，全包 owner 与局部根混合、重复根或缺失/额外执行仍拒绝。跨 Windows/Linux/macOS 核对 App 根并集与完整原选择一致，现有失败、缺报告、skip、零匹配及进度传播检查保留。分组验证与最终完整专项结果将在完成后补充。
 
 schema 51→52 仅修改维护记录的语义，没有 SQL 表定义变化，因此 schema 51 夹具沿其实际表结构保存旧版本记录。任务图用例核实全部任务/契约/DAG 保留、原库字节不变、普通当前格式读写拒绝旧库。离线全流程覆盖正常原宿主及新版未打开项目的失败回执、已更换 Runner 的冷核验、未完成恢复授权拒绝，以及各归属与生命周期边界。
 
