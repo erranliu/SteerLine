@@ -1,5 +1,9 @@
 # 验收流程与记录
 
+放弃旧运行时直接重建当前 schema 状态，并恢复全部项目未打开的失败启动（2026-11-19）。[修复与验证](deployment-discard-schema-rebuild.md)
+
+schema 51/52 部署恢复（2026-11-19）：用户授权放弃旧运行，归档旧状态后重建任务库；20 个任务、8 条依赖保留，后端、Web、Runner 与四项目就绪。[维护记录](deployment-schema52-recovery-20261119.md)
+
 重构维护自然语言执行与预算收尾（2026-11-18，已实施，受控、公开协议及本机真实并发和原 PR 冲突续作验收通过）。[验收规划](maintenance-conversation-budget.md)
 
 重构任务剩余预算（2026-11-18）。[实现与验收](refactoring-remaining-budget.md)

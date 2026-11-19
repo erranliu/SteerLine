@@ -15,6 +15,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/app/host"
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
@@ -28,7 +29,7 @@ import (
 
 func TestDeploymentDiscardRuns(t *testing.T) {
 	t.Run("offline-flow", testDiscardOfflineFlow)
-	for _, schema := range []string{"current", "schema44", "schema45"} {
+	for _, schema := range []string{"current", "schema44", "schema45", "schema51"} {
 		t.Run("task-graph-"+schema, func(t *testing.T) {
 			c, _ := nativeTaskFixture(t)
 			prepareStoppedRunRepository(t, c)
@@ -72,6 +73,8 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 				makeDiscardSchema44(t, c)
 			case "schema45":
 				makeDiscardSchema45(t, c)
+			case "schema51":
+				execDiscardFixtureSQL(t, c, `UPDATE schema_migrations SET version=51`)
 			}
 			beforeFile, err := os.ReadFile(filepath.Join(c.RunDir, "steerline.db"))
 			require(t, err)
@@ -185,7 +188,7 @@ func TestDeploymentDiscardRuns(t *testing.T) {
 }
 
 func testDiscardOfflineFlow(t *testing.T) {
-	for _, fault := range []string{"original", "schema46", "schema44", "schema44-missing-shutdown", "schema44-wrong-host", "schema44-invalid-definition", "schema44-unbound-roadmap", "unsupported-schema", "future-schema", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown",
+	for _, fault := range []string{"original", "schema51", "unstarted", "unstarted-new-runner", "unstarted-new-runner-pending-resume", "unstarted-live-owner", "unstarted-unclosed", "unstarted-project", "unstarted-repository", "unstarted-runner", "unstarted-build-mismatch", "unstarted-active-checkpoint", "unstarted-current-owner", "unstarted-partial", "unstarted-locked", "schema46", "schema44", "schema44-missing-shutdown", "schema44-wrong-host", "schema44-invalid-definition", "schema44-unbound-roadmap", "unsupported-schema", "future-schema", "saved-profile", "changed-during-preparation", "changed-runner", "missing-shutdown", "interrupted", "interrupted-wrong-host", "interrupted-wrong-repository", "interrupted-wrong-runner", "interrupted-locked", "corrupt-shutdown", "stale-shutdown",
 		"environment-missing", "environment-preparing", "environment-rejected", "environment-accepted", "environment-foreign", "environment-outside-inventory", "environment-unavailable"} {
 		t.Run(fault, func(t *testing.T) { testDiscardOfflineConfiguration(t, fault) })
 	}
@@ -226,6 +229,10 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	require(t, err)
 	process.Created = "previous-os-generation"
 	cp.Service.ProcessIdentity.Created = process.Created
+	unstarted := strings.HasPrefix(fault, "unstarted")
+	if unstarted {
+		process.Created = "failed-start-generation"
+	}
 	interrupted := strings.HasPrefix(fault, "interrupted") || fault == "missing-shutdown" || fault == "schema44-missing-shutdown"
 	if strings.HasPrefix(fault, "interrupted") {
 		cp.Service.Status, cp.Service.Ready = "ready", true
@@ -237,6 +244,24 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 		cp.Repository.Branch = "foreign"
 	case "interrupted-wrong-runner":
 		cp.Service.RunnerBuild.ResourceDigest = "foreign"
+	case "unstarted-live-owner":
+		live, err := httpclient.CurrentProcessIdentity()
+		require(t, err)
+		owner := hostcontract.ProcessIdentity{Kind: live.Kind, PID: live.PID, Created: live.Created, Executable: live.Executable}
+		cp.Service.ProcessIdentity = &owner
+	case "unstarted-current-owner":
+		cp.Service.ProcessIdentity.Created = process.Created
+	case "unstarted-repository":
+		cp.Repository.Branch = "foreign"
+	case "unstarted-runner":
+		cp.Service.RunnerBuild.StateDir = t.TempDir()
+	case "unstarted-build-mismatch":
+		cp.Service.RunnerBuild.Version = "foreign"
+	case "unstarted-active-checkpoint":
+		cp.Service.Status, cp.Service.Ready = "ready", true
+	case "unstarted-new-runner", "unstarted-new-runner-pending-resume":
+		cp.Service.RunnerBuild.SHA256 = strings.Repeat("a", 64)
+		cp.Service.RunnerBuild.Version = "previous-runner"
 	}
 	_, err = store.SaveCheckpoint(ctx, cp)
 	require(t, err)
@@ -247,6 +272,21 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	backend, _ := components(HomeDir())
 	require(t, localservice.Write(backend.dir, "instance.json", id))
 	original := contract.Shutdown{Version: 2, Runner: d.runner.result(), Identity: id, Projects: d.ShutdownResults(), Clean: true}
+	if unstarted {
+		original.Clean, original.Diagnostic = false, "startup recovery: unsupported SQLite schema 51"
+		original.Runner = &contract.RunnerShutdown{Attempted: true, StateDir: cp.Service.RunnerBuild.StateDir, Diagnostic: "original Runner shutdown remains unverified"}
+		for i := range original.Projects {
+			original.Projects[i].InstanceID = ""
+		}
+		switch fault {
+		case "unstarted-unclosed":
+			original.Projects[0].LocalClosed = false
+		case "unstarted-project":
+			original.Projects[0].ProjectID = "foreign"
+		case "unstarted-partial":
+			original.Projects[0].InstanceID = "different-project-instance"
+		}
+	}
 	if !interrupted {
 		if fault == "stale-shutdown" {
 			original.Identity.InstanceID = localservice.Token()
@@ -256,7 +296,7 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 			require(t, os.WriteFile(filepath.Join(backend.dir, "shutdown.json"), []byte(`{`), 0600))
 		}
 	}
-	if fault == "interrupted-locked" {
+	if fault == "interrupted-locked" || fault == "unstarted-locked" {
 		lock, err := host.LockRepository(c.RunDir)
 		require(t, err)
 		defer lock.Close()
@@ -274,6 +314,9 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 		makeDiscardSchema44(t, c)
 	} else if fault == "schema46" {
 		execDiscardFixtureSQL(t, c, `DROP TABLE refactoring_actions; UPDATE schema_migrations SET version=46`)
+	} else if fault == "schema51" || unstarted {
+		// Schema 52 changed maintenance payload semantics, not SQL definitions.
+		execDiscardFixtureSQL(t, c, `UPDATE schema_migrations SET version=51`)
 	}
 	switch fault {
 	case "schema44-invalid-definition":
@@ -293,6 +336,12 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 	if strings.HasPrefix(fault, "environment-") {
 		seedDiscardUnknownEnvironment(t, c, *cp.Service.RunnerBuild, fault)
 	}
+	if strings.HasPrefix(fault, "unstarted-new-runner") {
+		run := &runnercontract.Run{RunID: "previous-run", Revision: 1, InputDigest: "previous-input", Status: "completed", StopStatus: "stopped", Closed: true,
+			ResumeRequired: fault == "unstarted-new-runner-pending-resume"}
+		require(t, os.WriteFile(filepath.Join(cp.Service.RunnerBuild.StateDir, "caller-fixture.json"), mustJSON(map[string]any{"runs": map[string]any{run.RunID: run}}), 0600))
+		require(t, os.WriteFile(filepath.Join(cp.Service.RunnerBuild.StateDir, "idle-run-fixture.json"), mustJSON(runnerclient.Inspection{Run: run}), 0600))
+	}
 	originalDB, err := os.ReadFile(filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
 	result, err := prepareApplicationDiscard(ctx, exe, strings.Repeat("c", 32), func() error {
@@ -305,6 +354,7 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 		fault == "corrupt-shutdown" || fault == "stale-shutdown" || fault == "schema44-wrong-host" ||
 		fault == "schema44-invalid-definition" || fault == "schema44-unbound-roadmap" || fault == "unsupported-schema" || fault == "future-schema" ||
 		fault == "environment-foreign" || fault == "environment-outside-inventory" || fault == "environment-unavailable"
+	blocked = blocked || unstarted && fault != "unstarted" && fault != "unstarted-new-runner"
 	if blocked {
 		if err == nil {
 			t.Fatal("discard accepted changed ownership or concurrent configuration", fault)
@@ -315,6 +365,9 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 		if strings.HasPrefix(fault, "environment-") && !strings.Contains(err.Error(), "activity "+strings.Repeat("a", 32)+" round 1") {
 			t.Fatal("discard did not identify the unverified environment round", err)
 		}
+		if fault == "unstarted-new-runner-pending-resume" && !strings.Contains(err.Error(), "drained") {
+			t.Fatal("changed Runner did not verify original pending controls", err)
+		}
 		if _, err := os.Stat(filepath.Join(c.RunDir, "steerline.db")); err != nil {
 			t.Fatal("blocked discard moved original state", err)
 		}
@@ -324,6 +377,17 @@ func testDiscardOfflineConfiguration(t *testing.T, fault string) {
 		return
 	}
 	require(t, err)
+	if unstarted {
+		if result.Discard.UnstartedHost == nil || *result.Discard.UnstartedHost != id || result.Stopped == nil || len(result.Stopped.Projects) != 1 ||
+			result.Stopped.Projects[0].CheckpointProcess == nil || result.Stopped.Projects[0].CheckpointProcess.Created != cp.Service.ProcessIdentity.Created || result.Stopped.Projects[0].InstanceID != cp.Service.InstanceID {
+			t.Fatal("failed startup lost its original checkpoint owner", result)
+		}
+		var savedShutdown contract.Shutdown
+		require(t, localservice.ReadPrivateJSON(filepath.Join(result.Discard.Archive, "original-shutdown.json"), &savedShutdown, 1<<20))
+		if !reflect.DeepEqual(savedShutdown, original) {
+			t.Fatal("discard rewrote failed host shutdown", savedShutdown)
+		}
+	}
 	if interrupted {
 		if result.Discard.InterruptedHost == nil || *result.Discard.InterruptedHost != id || result.Stopped == nil || len(result.Stopped.Projects) != 1 || result.Stopped.Projects[0].InstanceID != cp.Service.InstanceID {
 			t.Fatal("missing interrupted host or checkpoint evidence", result)
