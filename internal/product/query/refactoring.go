@@ -1,6 +1,8 @@
 package query
 
 import (
+	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"math/big"
 	"time"
 
@@ -14,7 +16,8 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 	reportIndex := 0
 	for i, o := range r.Operations {
 		workflow := o.Content(r).WorkflowID
-		op := map[string]any{"id": o.ID, "purpose": o.Purpose, "round": o.Round, "state": o.State, "feedback": o.Feedback, "result": o.Result, "cost": o.Cost, "created_at": o.CreatedAt, "completed_at": o.CompletedAt, "prompt": o.Prompt, "run_id": o.RunID, "workflow": workflow}
+		op := map[string]any{"id": o.ID, "purpose": o.Purpose, "target_id": o.TargetID, "state": o.State, "feedback": o.Feedback, "result": o.Result, "cost": o.Cost, "created_at": o.CreatedAt, "completed_at": o.CompletedAt, "prompt": o.Prompt, "run_id": o.RunID, "workflow": workflow}
+		op["sent_request"] = maintenanceSentRequest(o)
 		if o.Run != nil {
 			op["run_status"] = o.Run.Status
 		}
@@ -64,6 +67,7 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 		breakdown[key] = map[string]any{"amount": value, "complete": full}
 	}
 	out := RefactoringSummary(r, now)
+	out["close_reason"] = r.CloseReason
 	out["remaining_budget"] = r.RemainingBudget(now)
 	out["cost_breakdown"] = breakdown
 	out["input"] = r.Input
@@ -122,7 +126,7 @@ func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 	return map[string]any{
 		"id": r.ID, "revision": r.Revision, "direction_name": direction,
 		"environment_name": r.Frozen.EnvironmentName, "profile_name": r.Frozen.ProfileName,
-		"phase": phase, "round": r.Round, "slot": r.Slot, "wait_reason": wait,
+		"phase": phase, "slot": r.Slot, "wait_reason": wait,
 		"summary": r.Summary, "diagnostic": r.Diagnostic, "enqueued_at": r.EnqueuedAt,
 		"elapsed_seconds": r.Elapsed(now).Seconds(), "wall_seconds": wallEnd.Sub(r.CreatedAt).Seconds(),
 		"created_at": r.CreatedAt, "updated_at": r.UpdatedAt, "active": r.Active(),
@@ -131,4 +135,24 @@ func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 		"can_review":   r.CanReview(),
 		"can_conflict": r.Phase == "delivered" && r.PR != nil && !r.PR.Merged && r.PR.State == "open",
 	}
+}
+
+// Project only model-facing fields from the frozen request, never execution settings.
+func maintenanceSentRequest(o refactoring.Operation) any {
+	if o.Purpose == "first" || o.Purpose == "select" || o.Purpose == "audit" || o.Purpose == "report" {
+		var in runnercontract.GenerateRunInput
+		if json.Unmarshal(o.Request.Input, &in) != nil {
+			return nil
+		}
+		materials := make([]map[string]string, 0, len(in.Generate.Materials))
+		for _, doc := range in.Generate.Materials {
+			materials = append(materials, map[string]string{"kind": doc.Kind, "path": doc.Path})
+		}
+		return map[string]any{"instruction": in.Generate.Instruction, "materials": materials, "output_schema": in.Generate.OutputSchema}
+	}
+	var in runnercontract.RunInput
+	if json.Unmarshal(o.Request.Input, &in) != nil {
+		return nil
+	}
+	return map[string]any{"instruction": in.Workflow.PromptOverrides["execute"]}
 }

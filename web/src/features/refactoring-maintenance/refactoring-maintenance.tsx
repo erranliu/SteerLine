@@ -40,7 +40,6 @@ export type MaintenanceRecord = {
   input: Input;
   direction_name: string;
   direction_prompt?: string;
-  round: number;
   active: boolean;
   source_commit: string;
   source_branch?: string;
@@ -55,8 +54,8 @@ export type MaintenanceRecord = {
   summary?: string;
   diagnostic?: string;
   elapsed_seconds: number;
+  close_reason?: string;
   remaining_budget: {
-    rounds?: number;
     dollars?: string;
     seconds?: number;
     cost_pending?: boolean;
@@ -99,8 +98,7 @@ export type MaintenanceRecord = {
   operations?: {
     id: string;
     purpose: string;
-    round: number;
-    state: string;
+      state: string;
     workflow: "generate" | "execute";
     feedback: string;
     prompt: string;
@@ -111,6 +109,11 @@ export type MaintenanceRecord = {
     result?: { summary?: string; question?: string } | null;
     decision_kind?: string;
     decision_summary?: string;
+    sent_request?: {
+      instruction: string;
+      materials?: { kind: string; path: string }[];
+      output_schema?: unknown;
+    };
     report_index?: number;
   }[];
   reports?: {
@@ -127,7 +130,6 @@ type Summary = Pick<
   | "direction_name"
   | "phase"
   | "environment_name"
-  | "round"
   | "slot"
   | "enqueued_at"
   | "updated_at"
@@ -157,7 +159,7 @@ const phases: Record<string, string> = {
   checking_start: "正在核验启动条件",
   queued: "排队中",
   submission_unknown: "提交结果待核实",
-  first: "首轮调查中",
+  first: "初始调查中",
   select: "准备中",
   report: "PR 合入评审中",
   execute: "Runner 执行中",
@@ -314,7 +316,6 @@ export function RefactoringMaintenance() {
     environment_name: row.environmentName,
     phase:
       row.response?.status === "applied" ? "start_accepted" : "start_pending",
-    round: 0,
     created_at: row.created_at,
     enqueued_at: row.created_at,
     elapsed_seconds: 0,
@@ -552,7 +553,6 @@ export function RefactoringMaintenance() {
               <strong>{r.direction_name}</strong>
               <span>
                 {phaseLabel(r)}
-                {r.round > 0 && ` · 重构轮次 ${r.round}`}
               </span>
               <span>
                 {r.environment_name && r.environment_name + " · "}
@@ -763,7 +763,6 @@ function duration(seconds: number) {
 function RemainingBudget({ record }: { record: MaintenanceRecord }) {
   const budget = record.remaining_budget;
   const balances = [
-    budget.rounds === undefined ? "" : `${budget.rounds} 轮`,
     budget.dollars === undefined ? "" : `$${budget.dollars}`,
     budget.seconds === undefined
       ? ""
@@ -780,7 +779,7 @@ function RemainingBudget({ record }: { record: MaintenanceRecord }) {
   ) {
     if (record.delivery_stage === "verify") next = "正在核验交付结果";
     else if (record.delivery_stage === "publish") next = "正在验证并创建 PR";
-    else next = "完成本轮后推进 PR";
+    else next = "完成当前工作后推进 PR";
   }
   return (
     <section
@@ -789,7 +788,8 @@ function RemainingBudget({ record }: { record: MaintenanceRecord }) {
       data-exhausted={budget.exhausted}
     >
       <strong>剩余重构预算</strong>
-      <span>{balances.join(" · ")}</span>
+      <span>{balances.join(" · ") || "完成一项改进后交付"}</span>
+      {record.close_reason && !budget.exhausted && <span role="status">{record.close_reason}</span>}
       {budget.cost_pending && <span className="muted">费用待结算</span>}
       {budget.exhausted && (
         <span role="status">重构预算已用完{next && ` · ${next}`}</span>
@@ -806,7 +806,7 @@ function formatDebugInfo(current: DebugRecord, project: string) {
       requestID: current.id,
       record: { id: current.id, label: "重构任务" },
     }),
-    `状态：${phaseLabel(current)}${current.round > 0 ? ` · 第 ${current.round} 轮` : ""}`,
+    `状态：${phaseLabel(current)}`,
   ];
   if (current.environment_name)
     lines.push(`运行环境：${current.environment_name}`);
@@ -819,7 +819,7 @@ function formatDebugInfo(current: DebugRecord, project: string) {
   for (const operation of current.operations ?? []) {
     lines.push(
       "",
-      `第 ${operation.round} 轮 · ${operationPurposeLabel(operation.purpose)} · ${operationStateLabel(operation.state)}`,
+      `${operationPurposeLabel(operation.purpose)} · ${operationStateLabel(operation.state)}`,
       `操作 ID：${operation.id}`,
       `Runner Run ID：${operation.run_id || "尚未取得"}`,
     );
@@ -871,7 +871,6 @@ function MaintenanceDetail({
       <p>
         <span>{phaseLabel(current)}</span>
         {" · "}
-        <span>重构轮次 {current.round}</span>
         {" · "}
         <span>Runner 执行 {executionCount} 次</span>
       </p>
@@ -1052,9 +1051,6 @@ function MaintenanceDetail({
             ? current.input.budget.minutes + " 分钟"
             : "时间未设置"}{" "}
           ·{" "}
-          {current.input.budget.rounds
-            ? current.input.budget.rounds + " 轮"
-            : "轮次未设置"}{" "}
           · 已用 {duration(current.elapsed_seconds)}
         </p>
         <p>

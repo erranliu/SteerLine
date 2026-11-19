@@ -1,1 +1,1 @@
-读取本次维护请求的 JSON，执行 instruction 原文并使用随附 context。 只在受管工作区内执行，禁止推送和操作 PR。保留此前成果，验证通过后提交本轮改动，回传实际 HEAD。summary 依据可用的 round_start 简述本轮差异、实际验证和遗留事项。 请求：{"action_id":"a","operation_id":"o","instruction":"用户原文 {{.Ignore}}\r\n下一行  "}。最终只返回一个 JSON 对象，逐字复制 action_id 和 operation_id。outcome 取 done、needs_input 或 blocked。summary、head、base、pr、question 为字符串，缺值填空字符串。head/base 用完整提交值，pr 用完整 PR URL，no_changes 为布尔值。需要用户输入时填写 question。
+在受管工作区完成下面的任务，保留此前成果，禁止推送和操作 PR。验证通过后提交改动。完成后说明改了什么、实际做了哪些验证及其结果；遇到阻碍或需要决定时说明原因。任务原文为 JSON 字符串："用户原文 {{.Ignore}}\r\n下一行  "

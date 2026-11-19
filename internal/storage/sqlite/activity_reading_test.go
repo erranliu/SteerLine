@@ -67,7 +67,7 @@ func TestActivityReadingEnvironmentSummaryExcludesLargeOriginalPayloads(t *testi
 		}
 		a, err := query.ProjectAsyncActivity("p", "i", facts[0], time.Now())
 		require(t, err)
-		if a.State != "waiting" || a.Diagnostic != "needs context" || len(a.RequestIDs) != 1 || a.RequestIDs[0] != "start" {
+		if a.State != "running" || a.Phase != "检测中" || a.Diagnostic != "needs context" || len(a.RequestIDs) != 1 || a.RequestIDs[0] != "start" {
 			t.Fatalf("narrow summary lost original state: %+v", a)
 		}
 	}

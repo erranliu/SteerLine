@@ -736,20 +736,21 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		}
 		if e.ID == "runtime.refactoring-maintenance" {
 			var proof struct {
-				Rounds, Executes int
-				Same             bool `json:"same_workspace"`
-				Original         bool `json:"original_pr"`
-				Audit            bool `json:"independent_audit"`
-				Direction        bool `json:"direction_template"`
-				Browser          bool
-				Overlap          int    `json:"overlapping_controlled_runs"`
-				Queued           string `json:"queued_action"`
+				Executes      int
+				DefaultTarget bool `json:"default_target"`
+				Same          bool `json:"same_workspace"`
+				Original      bool `json:"original_pr"`
+				Audit         bool `json:"independent_audit"`
+				Direction     bool `json:"direction_template"`
+				Browser       bool
+				Overlap       int    `json:"overlapping_controlled_runs"`
+				Queued        string `json:"queued_action"`
 			}
 			raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "refactoring-proof.json"))
 			if err != nil {
 				return err
 			}
-			if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Original || !proof.Audit || !proof.Browser || !proof.Direction || proof.Overlap != 3 || proof.Queued == "" {
+			if json.Unmarshal(raw, &proof) != nil || !proof.DefaultTarget || proof.Executes < 3 || !proof.Same || !proof.Original || !proof.Audit || !proof.Browser || !proof.Direction || proof.Overlap != 3 || proof.Queued == "" {
 				return errors.New("maintenance evidence incomplete")
 			}
 		}
@@ -776,22 +777,26 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		if e.Env == "live" {
 			if e.ID == "refactoring.local-codex" {
 				var proof struct {
-					Rounds, Executes int
-					Same             bool   `json:"same_workspace"`
-					PR               string `json:"original_pr"`
-					Report           bool   `json:"review_matches_pr_version"`
-					PRBodyUnchanged  bool   `json:"pr_body_unchanged"`
-					Conflict         bool   `json:"conflict_audit"`
-					Overlap          bool   `json:"native_overlap"`
-					ParallelPR       string `json:"parallel_pr"`
-					Head, Base       string
+					Executes              int
+					DefaultTarget         bool   `json:"default_target"`
+					Same                  bool   `json:"same_workspace"`
+					PR                    string `json:"original_pr"`
+					Report                bool   `json:"review_matches_pr_version"`
+					PRBodyUnchanged       bool   `json:"pr_body_unchanged"`
+					PublicationStage      bool   `json:"pr_created_after_acceptance"`
+					Conflict              bool   `json:"conflict_audit"`
+					Overlap               bool   `json:"native_overlap"`
+					ParallelPR            string `json:"parallel_pr"`
+					Head, Base            string
+					TargetID              string          `json:"target_id"`
+					ImplementationTargets map[string]bool `json:"verified_implementation_targets"`
 				}
 				raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "refactoring-live-proof.json"))
 				if err != nil {
 					return err
 				}
-				if json.Unmarshal(raw, &proof) != nil || proof.Rounds != 2 || proof.Executes < 4 || !proof.Same || !proof.Report || !proof.PRBodyUnchanged || !proof.Conflict ||
-					!proof.Overlap || proof.PR == "" || proof.ParallelPR == "" || proof.ParallelPR == proof.PR || proof.Head == "" || proof.Base == "" {
+				if json.Unmarshal(raw, &proof) != nil || !proof.DefaultTarget || proof.Executes < 3 || !proof.Same || !proof.Report || !proof.PRBodyUnchanged || !proof.PublicationStage || !proof.Conflict ||
+					len(proof.ImplementationTargets) != 1 || !proof.ImplementationTargets[proof.TargetID] || proof.TargetID == "" || !proof.Overlap || proof.PR == "" || proof.ParallelPR == "" || proof.ParallelPR == proof.PR || proof.Head == "" || proof.Base == "" {
 					return errors.New("native maintenance proof incomplete")
 				}
 				continue

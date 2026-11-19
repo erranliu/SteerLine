@@ -44,13 +44,13 @@ const record: MaintenanceRecord = {
     direction: builtIn.id,
     profile: "local",
     strategy: "cautious",
-    budget: { rounds: 1 },
+    budget: {},
   },
-  round: 1,
+
   active: true,
   source_commit: "b".repeat(40),
   elapsed_seconds: 65,
-  remaining_budget: { rounds: 0, exhausted: true },
+  remaining_budget: { exhausted: false },
   cost_complete: false,
   question: {
     id: "question",
@@ -145,8 +145,8 @@ function openSheet() {
 }
 
 it.each([
-  ["queued", "", { rounds: 1, exhausted: false }, "1 轮", ""],
-  ["first", "", { rounds: 0, exhausted: true }, "0 轮", "完成本轮后推进 PR"],
+  ["queued", "", { exhausted: false }, "完成一项改进后交付", ""],
+  ["first", "", { seconds: 0, exhausted: true }, "0 秒", "完成当前工作后推进 PR"],
   [
     "execute",
     "publish",
@@ -347,7 +347,7 @@ it("waits for a stopped execution to settle before offering delivery recovery", 
     },
   ]);
   await screen.findByText("停止待结算", { selector: "span" });
-  const detail = within(screen.getByRole("region", { name: "重构任务详情" }));
+  const detail = within(await screen.findByRole("region", { name: "重构任务详情" }));
   expect(
     detail.queryByRole("region", { name: "交付结果" }),
   ).not.toBeInTheDocument();
@@ -369,7 +369,7 @@ it("copies the selected refactoring task and its Runner runs without submitting 
         {
           id: "decision-operation",
           purpose: "first",
-          round: 1,
+
           workflow: "generate",
           state: "complete",
           feedback: "决策反馈正文",
@@ -379,7 +379,7 @@ it("copies the selected refactoring task and its Runner runs without submitting 
         {
           id: "execution-operation",
           purpose: "implement",
-          round: 1,
+
           workflow: "execute",
           state: "submitted",
           feedback: "",
@@ -399,7 +399,7 @@ it("copies the selected refactoring task and its Runner runs without submitting 
         {
           id: "history-operation",
           purpose: "implement",
-          round: 1,
+
           workflow: "execute",
           state: "complete",
           feedback: "",
@@ -419,15 +419,15 @@ it("copies the selected refactoring task and its Runner runs without submitting 
     [
       "repo · 重构任务 · 更新过期文档",
       `请求 / 重构任务 ID：${id}（本次提交及结果）`,
-      "状态：Runner 执行中 · 第 1 轮",
+      "状态：Runner 执行中",
       "运行环境：本机 Codex",
       `起始提交：${record.source_commit}`,
       "",
-      "第 1 轮 · 首轮选题 · 已完成",
+      "初始选题 · 已完成",
       "操作 ID：decision-operation",
       "Runner Run ID：decision-run",
       "",
-      "第 1 轮 · 实施 · 已提交",
+      "实施 · 已提交",
       "操作 ID：execution-operation",
       "Runner Run ID：execution-run",
     ].join("\n"),
@@ -444,11 +444,11 @@ it("copies the selected refactoring task and its Runner runs without submitting 
   const historyText = [
     "repo · 重构任务 · 历史方向",
     `请求 / 重构任务 ID：${historyID}（本次提交及结果）`,
-    "状态：已阻断 · 第 1 轮",
+    "状态：已阻断",
     `起始提交：${record.source_commit}`,
     "诊断：运行环境不可用",
     "",
-    "第 1 轮 · 实施 · 已完成",
+    "实施 · 已完成",
     "操作 ID：history-operation",
     "Runner Run ID：history-run",
   ].join("\n");
@@ -505,7 +505,8 @@ it("starts at full capacity using a versioned ready environment and the default 
   expect(sheet.getByText("推进名额已满，提交后进入队列。")).toBeInTheDocument();
   expect(sheet.getByLabelText("运行环境")).toHaveValue(key);
   expect(sheet.getByLabelText("决策策略")).toHaveValue("cautious");
-  expect(sheet.getByLabelText("重构轮次")).toHaveValue(1);
+  expect(sheet.queryByLabelText("重构轮次")).not.toBeInTheDocument();
+  expect(sheet.getByText(/预算可选/)).toBeVisible();
   fireEvent.click(start);
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
   expect(submit.mock.calls[0][0]).toMatchObject({
@@ -522,7 +523,7 @@ it("starts at full capacity using a versioned ready environment and the default 
       environment_key: key,
       environment_revision: 2,
       base_commit: ready.project.commit,
-      budget: { rounds: 1 },
+      budget: {},
     },
   });
 });
@@ -603,7 +604,7 @@ it("saves built-in edits as a new direction and can update its body before launc
 
 it("shows direction, instructions and feedback by default and expands decisions individually", async () => {
   const instruction = "补充验证。  \r\n核对调用方。\r\n";
-  const operation = { round: 1, state: "complete", feedback: "", prompt: "" };
+  const operation = { state: "complete", feedback: "", prompt: "" };
   const reports = [
     {
       body: "固定 PR 版本验证通过。\n附录：测试结果。",
@@ -616,7 +617,7 @@ it("shows direction, instructions and feedback by default and expands decisions 
   setup([
     {
       ...record,
-      round: 1,
+
       operations: [
         {
           ...operation,
@@ -679,7 +680,7 @@ it("shows direction, instructions and feedback by default and expands decisions 
   const detail = within(
     await screen.findByRole("region", { name: "重构任务详情" }),
   );
-  expect(detail.getByText("重构轮次 1", { exact: true })).toBeVisible();
+  expect(detail.queryByText(/重构轮次/)).not.toBeInTheDocument();
   expect(detail.getByText("Runner 执行 2 次")).toBeVisible();
   const dialogue = within(detail.getByRole("region", { name: "执行对话" }));
   expect(
@@ -694,9 +695,9 @@ it("shows direction, instructions and feedback by default and expands decisions 
     "SteerAgent · PR 合入评审",
   ]);
   for (const preview of [
-    "回执未通过核验",
+    "原始回执",
     "缺少可核对的测试证据",
-    "补证完成",
+    "补证回执原文",
     "审计通过",
     "建议合入 · 此评审已过期或正在复核",
   ]) {
@@ -740,7 +741,7 @@ it("shows pending execution without adding to the Runner count", async () => {
           id: "pending",
           purpose: "implement",
           workflow: "execute",
-          round: 1,
+
           state: "pending",
           prompt: "实施指令",
           feedback: "",
@@ -811,7 +812,7 @@ it("keeps the startup failure on the action and can copy its input into a new dr
       startup_failed: true,
       source_commit: "",
       direction_prompt: envelope.payload.direction_prompt,
-      round: 0,
+
       input: envelope.payload,
       active: false,
       can_stop: false,
@@ -857,7 +858,7 @@ it("closes immediately and keeps the current view when the start receipt arrives
       phase: "checking_start",
       direction_name: custom.name,
       slot: false,
-      round: 0,
+
       elapsed_seconds: 0,
       question: undefined,
     });
@@ -996,4 +997,26 @@ it("links maintenance activity and receipts to the same action", () => {
   expect(requestDestination(envelope)).toBe(
     `/projects/project/refactoring?action=${envelope.request_id}`,
   );
+});
+
+it("expands the saved Runner request and decision schema separately from task text", async () => {
+  setup([{ ...record, operations: [{
+    id: "decision", purpose: "audit", workflow: "generate", state: "complete", prompt: "决策正文", feedback: "", decision_summary: "需要补证",
+    sent_request: { instruction: "保存的决策正文", materials: [{kind: "file", path: "maintenance/context.json"}], output_schema: {type: "object"} },
+  }, {
+    id: "implementation", purpose: "repair", workflow: "execute", state: "complete", prompt: "补充验证", feedback: "已验证并提交。",
+    sent_request: {instruction: "固定执行边界\n\n补充验证"},
+  }] }]);
+  const dialogue = within(await screen.findByRole("region", {name: "执行对话"}));
+  expect(dialogue.getByText("已验证并提交。")).toBeVisible();
+  expect(dialogue.getByText("保存的决策正文")).not.toBeVisible();
+  fireEvent.click(dialogue.getByText("决策指令"));
+  const requests = dialogue.getAllByText("发送给 Runner 的请求");
+  fireEvent.click(requests[0]);
+  expect(dialogue.getByText("保存的决策正文")).toBeVisible();
+  expect(dialogue.getByText(/maintenance\/context.json/)).toBeVisible();
+  fireEvent.click(dialogue.getByText("输出约束"));
+  expect(dialogue.getByText(/"type": "object"/)).toBeVisible();
+  fireEvent.click(requests[1]);
+  expect(dialogue.getByText(/固定执行边界/)).toBeVisible();
 });

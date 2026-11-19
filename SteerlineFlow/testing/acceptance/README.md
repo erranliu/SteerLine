@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+重构维护自然语言执行与预算收尾（2026-11-18，已实施，受控、公开协议及本机真实并发和原 PR 冲突续作验收通过）。[验收规划](maintenance-conversation-budget.md)
+
 重构任务剩余预算（2026-11-18）。[实现与验收](refactoring-remaining-budget.md)
 
 重构任务自动交付与分阶段恢复（2026-11-18）。[实现与验收](refactoring-pr-delivery.md)

@@ -30,8 +30,10 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 		Answers         []ref.Answer
 		PR              *rc.PRFact
 		Feedback        []struct {
-			Purpose string
-			Result  *ref.Result
+			Purpose  string
+			Status   string
+			Feedback string
+			Result   *ref.Result
 		}
 	}
 	var facts contextFacts
@@ -51,7 +53,7 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 		decision := map[string]any{"kind": "execute", "prompt": "实施同方向的有限切片并验证。", "summary": "受控决策，非真实模型判断"}
 		switch facts.Mode {
 		case "audit":
-			if len(facts.Feedback) > 0 && facts.Feedback[0].Result != nil && facts.Feedback[0].Result.Outcome == "blocked" {
+			if len(facts.Feedback) > 0 && facts.Feedback[len(facts.Feedback)-1].Status == "failed" {
 				decision["prompt"] = "修复原工作区失败切片并验证。"
 			} else {
 				decision["kind"] = "accept"
@@ -175,6 +177,12 @@ func (s *RunnerFixture) submitRefactoring(stateDir string, request rc.Request) (
 		}
 		raw, _ := json.Marshal(value)
 		run.Final.Text = string(raw)
+		if purpose == "implement" || purpose == "repair" {
+			run.Final.Text = "已修改 maintenance-result.txt 并验证、提交。"
+			if run.Status == "failed" {
+				run.Final.Text = "实施失败，修改尚未提交，需要继续修复。"
+			}
+		}
 	}
 	s.Runs[id] = run
 	s.Providers[id] = providerPath

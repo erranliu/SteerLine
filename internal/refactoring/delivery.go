@@ -31,10 +31,10 @@ func closingPhase(r model.Record) string {
 func (s *Service) closeAction(r *model.Record) {
 	r.FinishRequested = true
 	r.Phase = closingPhase(*r)
-	if r.PR == nil && r.Candidate == nil && r.AcceptedHead(0) == "" {
+	if r.PR == nil && r.Candidate == nil && r.AcceptedHead() == "" {
 		base := r.Frozen.Repository.BaseRevision
 		summary := "没有已接受的成果可交付"
-		if r.LatestOwner == "" && r.Summary != "" {
+		if r.Summary != "" {
 			summary = r.Summary
 		}
 		r.Candidate = &model.Result{NoChanges: true, Outcome: "done", Head: base, Base: base, Summary: summary}
@@ -43,6 +43,7 @@ func (s *Service) closeAction(r *model.Record) {
 }
 
 func (s *Service) applyDecision(r *model.Record, mode string, d decision.Decision) error {
+	s.applyBudget(r)
 	r.Summary = d.Summary
 	if (mode == "first" || mode == "select") && r.FinishRequested {
 		s.closeAction(r)
@@ -65,19 +66,25 @@ func (s *Service) applyDecision(r *model.Record, mode string, d decision.Decisio
 	case "blocked":
 		s.block(r, d.Summary)
 	case "finish":
-		s.closeAction(r)
-	case "accept":
-		for i := len(r.Operations) - 2; i >= 0; i-- {
-			if o := r.Operations[i]; o.Content(*r).WorkflowID == "execute" {
-				if !executionCommitted(o) {
-					s.block(r, "原执行缺少可信成功证据，需要补证或修复")
-					return nil
-				}
-				r.Operations[len(r.Operations)-1].AcceptedOperation = o.ID
-				break
+		if mode == "audit" {
+			o := currentExecution(*r)
+			if o == nil || o.CommittedHead() == "" || o.CommittedHead() != r.TargetStart {
+				s.block(r, "无法确认当前目标无改动，需处理已有提交或未提交修改")
+				return nil
 			}
 		}
-		if r.FinishRequested || r.BudgetExhausted(s.now()) {
+		s.closeAction(r)
+	case "accept":
+		o := currentExecution(*r)
+		if o == nil || !executionCommitted(*o) || o.CommittedHead() == r.TargetStart || !model.ValidRevision(r.TargetStart) {
+			s.block(r, "原执行缺少可信成功证据，需要补证或修复")
+			return nil
+		}
+		r.Operations[len(r.Operations)-1].AcceptedOperation = o.ID
+		if r.Input.Budget.DefaultTarget() {
+			r.FinishRequested, r.CloseReason = true, "已完成默认的一项改进"
+		}
+		if r.FinishRequested {
 			s.closeAction(r)
 		} else {
 			r.Phase = "select"
@@ -85,6 +92,12 @@ func (s *Service) applyDecision(r *model.Record, mode string, d decision.Decisio
 	case "execute":
 		switch mode {
 		case "first", "select":
+			r.TargetID = r.Operations[len(r.Operations)-1].ID
+			r.TargetPrompt = d.Prompt
+			r.TargetStart = r.AcceptedHead()
+			if r.TargetStart == "" {
+				r.TargetStart = r.Frozen.Repository.BaseRevision
+			}
 			r.WriteKind = "implement"
 		case "audit":
 			r.WriteKind = "repair"
@@ -100,8 +113,31 @@ func successfulExecution(o model.Operation) bool {
 }
 
 func executionCommitted(o model.Operation) bool {
-	head := o.CommittedHead()
-	return head != "" && successfulExecution(o) && o.Result.Outcome == "done" && o.Result.Head == head
+	return o.CommittedHead() != "" && nativeExecutionSucceeded(o.Run)
+}
+
+func currentExecution(r model.Record) *model.Operation {
+	for i := len(r.Operations) - 1; i >= 0; i-- {
+		o := &r.Operations[i]
+		if o.TargetID == r.TargetID && (o.Purpose == "implement" || o.Purpose == "repair") && o.State == "complete" {
+			return o
+		}
+	}
+	return nil
+}
+
+// applyBudget latches the host's closing policy. Usage pending here has already
+// passed the bounded collection window in observe.
+func (s *Service) applyBudget(r *model.Record) {
+	if r.FinishRequested || r.StopRequested {
+		return
+	}
+	budget := r.RemainingBudget(s.now())
+	if budget.Exhausted {
+		r.FinishRequested, r.CloseReason = true, "重构预算已用尽"
+	} else if budget.CostPending && !r.Unsettled() {
+		r.FinishRequested, r.CloseReason = true, "费用尚无法核实，收尾已有成果"
+	}
 }
 
 func nativeExecutionSucceeded(run *runnercontract.Run) bool {
@@ -214,7 +250,7 @@ func (s *Service) verifyDelivery(ctx context.Context, r model.Record) error {
 		}
 		if strings.EqualFold(pr.State, "open") && !pr.Merged {
 			if r.WriteKind == "publish" {
-				accepted := r.AcceptedHead(0)
+				accepted := r.AcceptedHead()
 				switch {
 				case accepted == "":
 					err = errors.New("缺少已接受成果的提交")

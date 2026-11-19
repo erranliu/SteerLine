@@ -47,24 +47,27 @@ func checkRemoteEvidence(id, out string) error {
 			return errors.New("missing ready remote maintenance environment proof")
 		}
 		var proof struct {
-			Rounds, Executes     int
-			Remote               bool
-			Profile              string
-			LocalDecisions       bool         `json:"local_decisions"`
-			Same                 bool         `json:"same_workspace"`
-			PR                   string       `json:"original_pr"`
-			Reviewed             bool         `json:"review_matches_pr_version"`
-			PRBodyUnchanged      bool         `json:"pr_body_unchanged"`
-			Conflict             bool         `json:"conflict_audit"`
-			ImplementationRounds map[int]bool `json:"verified_implementation_rounds"`
-			Head, Base           string
+			Executes              int
+			DefaultTarget         bool `json:"default_target"`
+			Remote                bool
+			Profile               string
+			LocalDecisions        bool            `json:"local_decisions"`
+			Same                  bool            `json:"same_workspace"`
+			PR                    string          `json:"original_pr"`
+			Reviewed              bool            `json:"review_matches_pr_version"`
+			PRBodyUnchanged       bool            `json:"pr_body_unchanged"`
+			PublicationStage      bool            `json:"pr_created_after_acceptance"`
+			Conflict              bool            `json:"conflict_audit"`
+			TargetID              string          `json:"target_id"`
+			ImplementationTargets map[string]bool `json:"verified_implementation_targets"`
+			Head, Base            string
 		}
 		if err := read("refactoring-live-proof.json", &proof); err != nil {
 			return err
 		}
-		if !proof.Remote || proof.Profile != frozen.Profile.ID || !proof.LocalDecisions || proof.Rounds != 2 || proof.Executes < 4 ||
-			!proof.Same || proof.PR == "" || !proof.Reviewed || !proof.PRBodyUnchanged || !proof.Conflict ||
-			!proof.ImplementationRounds[1] || !proof.ImplementationRounds[2] || proof.Head == "" || proof.Base == "" {
+		if !proof.Remote || proof.Profile != frozen.Profile.ID || !proof.LocalDecisions || !proof.DefaultTarget || proof.Executes < 3 ||
+			!proof.Same || proof.PR == "" || !proof.Reviewed || !proof.PRBodyUnchanged || !proof.PublicationStage || !proof.Conflict ||
+			len(proof.ImplementationTargets) != 1 || proof.TargetID == "" || !proof.ImplementationTargets[proof.TargetID] || proof.Head == "" || proof.Base == "" {
 			return errors.New("remote maintenance proof incomplete")
 		}
 		return nil

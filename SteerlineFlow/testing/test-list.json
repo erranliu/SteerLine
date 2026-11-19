@@ -335,8 +335,8 @@
     {
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.refactoring-maintenance",
-      "name": "维护多轮、审计和原PR交付",
-      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner/provider夹具：浏览器验证安装级方向增改删与重名拦截、宽窄屏编辑正文、拒绝过期版本、任务保持冻结正文、自动交付结果卡及 PR 链接；两轮、失败修复、发布复用同一worktree最新持有者；结构化人工答复、预算自动收尾、按核验PR版本独立评审且正文保持、原PR手动更新；三条并发及第四条排队接位；刷新零命令、活动分类和资源清理。原生模型与真实PR由live专项验证。",
+      "name": "维护目标续作、审计和原PR交付",
+      "check": "真实应用/Git/SQLite/HTTP/Edge与公开Runner/provider夹具：浏览器验证安装级方向增改删与重名拦截、宽窄屏编辑正文、拒绝过期版本、任务保持冻结正文、自动交付结果卡及 PR 链接；默认目标、自然语言失败修复、发布复用同一worktree最新持有者；结构化人工答复、预算自动收尾、按核验PR版本独立评审且正文保持、原PR手动更新；三条并发及第四条排队接位；刷新零命令、活动分类和资源清理。原生模型与真实PR由live专项验证。",
       "id": "runtime.refactoring-maintenance",
       "note": "Windows/Go/Git/Node/Edge；先构建Web，独立home/repo/provider/浏览器输出。串行准备，受控不证明真实模型工程判断。",
       "level": "L3"
@@ -346,11 +346,11 @@
       "environment": "live",
       "level": "L4",
       "name": "远端 Orca Codex 重构维护交付",
-      "check": "使用固定 Runner、显式远端方案及专属 GitHub 测试分支。从正式环境检测就绪启动两轮远端执行，核对本机只读决策、Git 取证、工作区复用、独立评审及原 PR 冲突续作，并清理本轮测试资源。",
+      "check": "使用固定 Runner、显式远端方案及专属 GitHub 测试分支。从正式环境检测就绪启动远端目标实施及续作，核对本机只读决策、Git 取证、工作区复用、独立评审及原 PR 冲突续作，并清理本轮测试资源。",
       "id": "refactoring.remote-orca"
     },
     {
-      "check": "固定新Runner与本机Codex，独立GitHub测试base：同项目同环境两条Run重叠，各自在原worktree和分支交付draft PR，核验head/base后独立评审且正文保持；目标推进形成真实Git冲突后手动更新原PR并登记新基线和第二份评审；所有Run与服务停止、关闭本轮PR并清理自有分支。",
+      "check": "固定新Runner与本机Codex，独立GitHub测试base：同项目同环境两条Run重叠，各自在原worktree和分支交付draft PR，以GitHub创建时间核验接受后才进入发布，核验head/base后独立评审且正文保持；目标推进形成真实Git冲突后手动更新原PR并登记新基线和第二份评审；所有Run与服务停止、关闭本轮PR并清理自有分支。",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=refactoring -env=live -scenario refactoring.local-codex",
       "name": "本机真实维护与冲突交付",
       "environment": "live",

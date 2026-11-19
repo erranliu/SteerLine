@@ -49,7 +49,7 @@ func TestAppDomainSelectionPreservesPlatformOwnersAndExplicitRoots(t *testing.T)
 			t.Fatal(goos, dep)
 		}
 		road := domainGroupsForGOOS("go.roadmap", goos)
-		if len(road) != 3 || len(road[0].Tests) != 0 || len(road[1].Tests) != 11 || len(road[2].Tests) != 1 {
+		if len(road) != 3 || len(road[0].Tests) != 0 || len(road[1].Tests) != 16 || len(road[2].Tests) != 1 {
 			t.Fatal(goos, road)
 		}
 		if !slices.Equal(dep[0].Packages, []string{"./internal/app/host"}) || len(dep[0].Tests) != 0 {

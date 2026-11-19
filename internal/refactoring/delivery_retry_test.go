@@ -53,7 +53,7 @@ func TestMaintenanceRetriesPRVerificationAndReviewWithoutPublishing(t *testing.T
 			s.Verify = verify
 			r = control(t, s, r, "refactoring_finish")
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-			if r.PR == nil || len(f.requests) != before+1 || r.Round != 2 {
+			if r.PR == nil || len(f.requests) != before+1 {
 				t.Fatal("retry must only review the existing publication", r.Phase, len(f.requests)-before)
 			}
 			var input runnercontract.GenerateRunInput

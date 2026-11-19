@@ -79,7 +79,6 @@ func RefactoringMaintenance(s *Scenario) {
 		ID              string
 		Revision        uint64
 		Phase           string
-		Round           int
 		Diagnostic      string
 		Reports         []ref.Report
 		Operations      []ref.Operation
@@ -88,7 +87,7 @@ func RefactoringMaintenance(s *Scenario) {
 		DirectionName   string `json:"direction_name"`
 		DirectionPrompt string `json:"direction_prompt"`
 	}
-	stale := ref.Start{Direction: template.ID, DirectionRevision: ref.Digest([]byte("old")), DirectionPrompt: templatePrompt, Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 1}}
+	stale := ref.Start{Direction: template.ID, DirectionRevision: ref.Digest([]byte("old")), DirectionPrompt: templatePrompt, Profile: profile, Strategy: "cautious", Budget: ref.Budget{}}
 	var startView maintenanceReadiness
 	s.Wait("ready maintenance start", func() (bool, error) {
 		if err := client.Get(s.Context, prefix+"/refactoring/readiness", &startView); err != nil {
@@ -247,7 +246,7 @@ func RefactoringMaintenance(s *Scenario) {
 	}
 	browser(record.ID, "answer")
 	wait("delivered")
-	if record.Round != 2 || len(record.Reports) != 1 || record.PR == nil || record.Reports[0].Recommendation == "" {
+	if len(record.Reports) != 1 || record.PR == nil || record.Reports[0].Recommendation == "" {
 		s.t.Fatal("delivery missing", record)
 	}
 	original := record.PR.URL
@@ -326,8 +325,8 @@ func RefactoringMaintenance(s *Scenario) {
 		identityKey = r.WorkspaceIdentity
 		origin = r.WorkspaceOriginRunID
 	}
-	if writes != 4 {
-		s.t.Fatalf("first, repair, second, publication: got %d", writes)
+	if writes != 3 {
+		s.t.Fatalf("implementation, repair, publication: got %d", writes)
 	}
 	provider, e := controlled.Read(fixture.Providers[latest])
 	s.Must(e)
@@ -341,7 +340,7 @@ func RefactoringMaintenance(s *Scenario) {
 	}
 	command("refactoring_conflict", record.ID, record.Revision, struct{}{})
 	wait("delivered")
-	if len(record.Reports) != 2 || record.PR.URL != original || record.Round != 2 || record.DirectionPrompt != directionPrompt {
+	if len(record.Reports) != 2 || record.PR.URL != original || record.DirectionPrompt != directionPrompt {
 		s.t.Fatal("conflict changed original action/PR")
 	}
 	var activities api.AsyncActivities
@@ -438,6 +437,6 @@ func RefactoringMaintenance(s *Scenario) {
 		}
 		return false, err
 	})
-	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-proof.json"), map[string]any{"rounds": 2, "executes": writes, "same_workspace": true, "original_pr": true, "independent_audit": true, "browser": true, "direction_template": true, "head": record.Reports[1].Head, "pr": original, "overlapping_controlled_runs": 3, "queued_action": parallel[3]}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-proof.json"), map[string]any{"default_target": true, "executes": writes, "same_workspace": true, "original_pr": true, "independent_audit": true, "browser": true, "direction_template": true, "head": record.Reports[1].Head, "pr": original, "overlapping_controlled_runs": 3, "queued_action": parallel[3]}))
 	s.Must(s.FinishBody())
 }

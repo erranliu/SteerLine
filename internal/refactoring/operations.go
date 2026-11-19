@@ -14,7 +14,7 @@ import (
 
 type contextOperation struct {
 	ID            string                       `json:"operation_id"`
-	Round         int                          `json:"round"`
+	TargetID      string                       `json:"target_id,omitempty"`
 	Purpose       string                       `json:"purpose"`
 	Prompt        string                       `json:"prompt,omitempty"`
 	Feedback      string                       `json:"feedback,omitempty"`
@@ -27,23 +27,23 @@ type contextOperation struct {
 	WorkspaceGit  *runnercontract.WorkspaceGit `json:"workspace_git,omitempty"`
 }
 
-type roundSummary struct {
-	ID      string `json:"operation_id"`
-	Round   int    `json:"round"`
-	Outcome string `json:"outcome"`
-	Summary string `json:"summary,omitempty"`
+type acceptedSummary struct {
+	ID       string `json:"operation_id"`
+	TargetID string `json:"target_id,omitempty"`
+	Outcome  string `json:"outcome"`
+	Summary  string `json:"summary,omitempty"`
 }
 
 type decisionContext struct {
 	Mode            string                 `json:"mode"`
 	DirectionPrompt string                 `json:"direction_prompt"`
-	Round           int                    `json:"round,omitempty"`
-	RoundStart      string                 `json:"round_start,omitempty"`
-	RoundGoal       string                 `json:"round_goal,omitempty"`
+	TargetID        string                 `json:"target_id,omitempty"`
+	TargetStart     string                 `json:"target_start,omitempty"`
+	TargetPrompt    string                 `json:"target_prompt,omitempty"`
 	PR              *runnercontract.PRFact `json:"pr,omitempty"`
 	Checks          string                 `json:"checks,omitempty"`
 	Feedback        []contextOperation     `json:"feedback,omitempty"`
-	History         []roundSummary         `json:"history,omitempty"`
+	History         []acceptedSummary      `json:"history,omitempty"`
 	Answers         []model.Answer         `json:"answers,omitempty"`
 	Question        *model.Question        `json:"answered_question,omitempty"`
 }
@@ -66,46 +66,38 @@ func (s *Service) context(r model.Record, review model.ReviewEvidence) decisionC
 		f.PR, f.Checks = r.PR, review.Checks
 		return f
 	}
-	f.Round = r.Round
-	if r.Phase == "audit" {
-		f.RoundStart = roundStart(r)
-	}
+	f.TargetID, f.TargetStart, f.TargetPrompt = r.TargetID, r.TargetStart, r.TargetPrompt
 	if n := len(r.Answers); n > 0 {
-		f.Answers = r.Answers[n-1:]
+		f.Answers = r.Answers
 		for i := len(r.Operations) - 1; i >= 0; i-- {
-			if q := r.Operations[i].Question; q != nil && q.ID == f.Answers[0].QuestionID {
+			if q := r.Operations[i].Question; q != nil && q.ID == f.Answers[n-1].QuestionID {
 				f.Question = q
 				break
 			}
 		}
 
 	}
-	executions := 0
-	for i := len(r.Operations) - 1; i >= 0; i-- {
+	for i := 0; i < len(r.Operations); i++ {
 		o := r.Operations[i]
 		if !o.Settled() {
 			continue
 		}
-		if r.Phase == "audit" && o.Round == r.Round && o.Purpose == "implement" && f.RoundGoal == "" {
-			f.RoundGoal = clippedSummary(o.Prompt, 16<<10)
-		}
-		if o.Content(r).WorkflowID == "execute" && o.Run != nil && executions < 2 {
-			item := contextOperation{ID: o.ID, Round: o.Round, Purpose: o.Purpose, Prompt: o.Prompt, Result: o.Result, Question: o.Run.Question, WorkspaceGit: o.WorkspaceGit, Status: o.Run.Status, Diagnostic: clippedSummary(o.Run.Diagnostic, 2048)}
+		if o.Content(r).WorkflowID == "execute" && o.Run != nil && o.TargetID == r.TargetID {
+			item := contextOperation{ID: o.ID, TargetID: o.TargetID, Purpose: o.Purpose, Prompt: o.Prompt, Result: o.Result, Question: o.Run.Question, WorkspaceGit: o.WorkspaceGit, Status: o.Run.Status, Diagnostic: o.Run.Diagnostic}
 			item.Committed = executionCommitted(o)
 			if o.Run.Final != nil {
 				item.NativeOutcome = o.Run.Final.NativeOutcome
 			}
 			if o.Result == nil {
-				item.Feedback = clippedSummary(o.Feedback, 16<<10)
+				item.Feedback = o.Feedback
 			}
 			f.Feedback = append(f.Feedback, item)
-			executions++
 		}
 	}
 	for i := len(r.Operations) - 1; i >= 0 && len(f.History) < 24; i-- {
 		o := r.Operations[i]
 		if o.Settled() && o.AcceptedOperation != "" {
-			f.History = append(f.History, roundSummary{ID: o.ID, Round: o.Round, Outcome: o.Purpose, Summary: clippedSummary(o.DecisionSummary, 512)})
+			f.History = append(f.History, acceptedSummary{ID: o.ID, TargetID: o.TargetID, Outcome: o.Purpose, Summary: clippedSummary(o.DecisionSummary, 512)})
 		}
 	}
 	return f
@@ -115,7 +107,6 @@ type executionContext struct {
 	Publication   map[string]string      `json:"publication,omitempty"`
 	ManagedBranch string                 `json:"managed_branch,omitempty"`
 	PR            *runnercontract.PRFact `json:"pr,omitempty"`
-	RoundStart    string                 `json:"round_start,omitempty"`
 	AcceptedHead  string                 `json:"accepted_head,omitempty"`
 }
 
@@ -126,19 +117,9 @@ type executionRequest struct {
 	Context     executionContext `json:"context"`
 }
 
-func roundStart(r model.Record) string {
-	if r.Round == 1 {
-		return r.Frozen.Repository.BaseRevision
-	}
-	if r.Round > 1 {
-		return r.AcceptedHead(r.Round - 1)
-	}
-	return ""
-}
-
 func (s *Service) prepareOperation(r model.Record, id, directory string, review model.ReviewEvidence) (model.Operation, error) {
 	now := s.now()
-	o := model.Operation{ID: id, Purpose: r.Phase, Round: r.Round, State: "pending", CreatedAt: now, Investigation: directory, Closing: r.FinishRequested}
+	o := model.Operation{ID: id, Purpose: r.Phase, TargetID: r.TargetID, State: "pending", CreatedAt: now, Investigation: directory, Closing: r.FinishRequested || r.Input.Budget.DefaultTarget() && r.TargetID != ""}
 	if r.Phase == "report" {
 		o.PRVersion = prVersion(r.PR)
 		o.ReviewChecks = review.Checks
@@ -157,14 +138,11 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 			}
 			context.Publication, context.PR = r.Frozen.Publication, r.PR
 			if o.Purpose == "publish" {
-				context.AcceptedHead = r.AcceptedHead(0)
+				context.AcceptedHead = r.AcceptedHead()
 				if context.AcceptedHead == "" {
 					return o, errors.New("缺少已接受成果的提交")
 				}
 			}
-		}
-		if local {
-			context.RoundStart = roundStart(r)
 		}
 		for i := len(r.Operations) - 1; i >= 0; i-- {
 			if run := r.Operations[i].Run; run != nil && run.RunID == r.LatestOwner {
@@ -179,6 +157,9 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 		if err != nil {
 			return o, err
 		}
+		if local {
+			data = []byte(o.Prompt)
+		}
 		body, err := prompts.MaintenanceExecute(data, local)
 		if err != nil {
 			return o, err
@@ -188,10 +169,10 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 		retryJSON := false
 		if n := len(r.Operations); n > 0 {
 			prior := r.Operations[n-1]
-			retryJSON = prior.State == "complete" && prior.Purpose == r.Phase && prior.Round == r.Round &&
+			retryJSON = prior.State == "complete" && prior.Purpose == r.Phase && prior.TargetID == r.TargetID &&
 				prior.Run != nil && decisionNeedsJSONRepair(prior.Run.ContentResult)
 		}
-		body, err := prompts.MaintenanceDecision(r.Phase, r.Input.Strategy, retryJSON)
+		body, err := prompts.MaintenanceDecision(r.Phase, r.Input.Strategy, retryJSON, r.FinishRequested || r.Input.Budget.DefaultTarget() && r.TargetID != "")
 		if err != nil {
 			return o, err
 		}

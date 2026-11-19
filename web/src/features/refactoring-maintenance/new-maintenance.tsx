@@ -39,7 +39,6 @@ const empty = {
   strategy: "cautious",
   dollars: "",
   minutes: "",
-  rounds: "1",
 };
 
 export type StartInput = {
@@ -52,7 +51,7 @@ export type StartInput = {
   environment_key: string;
   environment_revision: number;
   base_commit: string;
-  budget: { dollars?: string; minutes?: string; rounds?: number };
+  budget: { dollars?: string; minutes?: string };
 };
 
 function validBudget(value: string) {
@@ -111,7 +110,6 @@ export function NewMaintenance({
           profile: initial.profile,
           dollars: initial.budget.dollars ?? "",
           minutes: initial.budget.minutes ?? "",
-          rounds: initial.budget.rounds ? String(initial.budget.rounds) : "",
         }
       : empty,
   );
@@ -221,14 +219,7 @@ export function NewMaintenance({
     setDraft((old) => ({ ...old, [field]: value }));
   const needsConfirmation =
     selectedVersion !== "" && confirmed !== selectedVersion;
-  const rounds = Number(draft.rounds);
-  const budgetValid =
-    validBudget(draft.dollars) &&
-    validBudget(draft.minutes) &&
-    Number.isInteger(rounds) &&
-    rounds >= 0 &&
-    rounds <= 10000 &&
-    !!(draft.dollars || draft.minutes || rounds);
+  const budgetValid = validBudget(draft.dollars) && validBudget(draft.minutes);
   const canStart =
     available &&
     ready?.project.status === "ready" &&
@@ -298,7 +289,6 @@ export function NewMaintenance({
                 budget: {
                   dollars: draft.dollars,
                   minutes: draft.minutes,
-                  rounds,
                 },
               },
               direction.name,
@@ -631,20 +621,9 @@ export function NewMaintenance({
                   onChange={(e) => change("minutes", e.target.value)}
                 />
               </label>
-              <label>
-                重构轮次
-                <input
-                  type="number"
-                  min="1"
-                  max="10000"
-                  step="1"
-                  value={draft.rounds}
-                  onChange={(e) => change("rounds", e.target.value)}
-                />
-              </label>
             </div>
             <p className="muted">
-              至少设置一项预算。任一项耗尽后，重构任务进入收尾。
+              预算可选。不填写时完成一项改进后交付。任一预算耗尽后，完成必要收尾并推进 PR。
             </p>
             {ready && (
               <div className="refactoring-confirm">

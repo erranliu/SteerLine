@@ -148,6 +148,9 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 			data, _ = json.Marshal(fields)
 		}
 		run.Final.Text = string(data)
+		if purpose == "implement" || purpose == "repair" {
+			run.Final.Text = "已完成切片并验证，已提交。"
+		}
 		if f.failWrite {
 			run.Final.NativeOutcome = "failed"
 			run.Status = "failed"
@@ -229,7 +232,7 @@ func fixture(t *testing.T) (*Service, *maintenanceRunner, m.Record) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := s.Command(context.Background(), cmd, &m.Start{Direction: direction.ID, DirectionRevision: direction.Revision, DirectionPrompt: direction.Prompt, Profile: "local", EnvironmentKey: "test-key", EnvironmentRevision: 1, ProfileVersion: strings.Repeat("c", 64), BaseCommit: strings.Repeat("b", 40), Strategy: "cautious", Budget: m.Budget{Rounds: 2}})
+	r, e := s.Command(context.Background(), cmd, &m.Start{Direction: direction.ID, DirectionRevision: direction.Revision, DirectionPrompt: direction.Prompt, Profile: "local", EnvironmentKey: "test-key", EnvironmentRevision: 1, ProfileVersion: strings.Repeat("c", 64), BaseCommit: strings.Repeat("b", 40), Strategy: "cautious", Budget: m.Budget{}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -264,23 +267,23 @@ func control(t *testing.T, s *Service, r m.Record, action string) m.Record {
 	return out
 }
 
-func TestMaintenanceChargesOneRoundAtInvestigationDispatch(t *testing.T) {
+func TestMaintenanceDefaultTargetSurvivesInvestigationRetry(t *testing.T) {
 	s, f, r := fixture(t)
 	ctx := context.Background()
 	r, err := s.update(ctx, r.ID, func(r *m.Record) error {
-		r.Input.Budget = m.Budget{Rounds: 1}
+		r.Input.Budget = m.Budget{}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) == 1 })
-	if r.Round != 0 || r.Operations[0].State != "pending" {
-		t.Fatal("pending investigation consumed a round", r.Round, r.Operations[0].State)
+	if r.TargetID != "" || r.Operations[0].State != "pending" {
+		t.Fatal("pending investigation selected a target", r)
 	}
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Operations[0].RunID != "" })
-	if r.Round != 1 || !r.BudgetExhausted(s.now()) {
-		t.Fatal("investigation did not exhaust the only available round", r.Round)
+	if r.BudgetExhausted(s.now()) {
+		t.Fatal("default mode has no numeric budget")
 	}
 	run := f.runs[r.Operations[0].RunID]
 	run.Status = "failed"
@@ -288,25 +291,21 @@ func TestMaintenanceChargesOneRoundAtInvestigationDispatch(t *testing.T) {
 	run.ContentResult = &rc.ContentResult{Status: "failed", Diagnostic: "human_input_required"}
 
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.Round != 1 || len(r.Operations) != 6 || r.Operations[1].Purpose != "first" ||
-		r.Operations[1].Round != 1 || r.PR == nil {
-		t.Fatal("retry must stay in the last round and lead to its PR", r.Round, r.Phase, len(r.Operations))
+	if len(r.Operations) != 6 || r.Operations[1].Purpose != "first" || r.TargetID != r.Operations[1].ID || r.PR == nil {
+		t.Fatal("retry must stay in the last round and lead to its PR", r.TargetID, r.Phase, len(r.Operations))
 	}
 }
 
 func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 	s, f, r := fixture(t)
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return len(r.Operations) == 1 && r.Operations[0].RunID != "" })
-	if r.Round != 1 || r.Operations[0].Round != 1 {
-		t.Fatal("first investigation did not consume a round", r.Round, r.Operations[0].Round)
-	}
 	run := f.runs[r.Operations[0].RunID]
 	// The verified Final can supply feedback while the structured result
 	// independently supplies the decision.
 	run.Final.Text = "原生反馈仅供展示"
 	run.ContentResult.Source = *run.Final
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.Round != 2 || len(r.Reports) != 1 || r.PR == nil {
+	if len(r.Reports) != 1 || r.PR == nil {
 		t.Fatal(r)
 	}
 	writes := 0
@@ -328,8 +327,8 @@ func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 			}
 		}
 	}
-	if writes != 3 {
-		t.Fatalf("two rounds and publication: got %d", writes)
+	if writes != 2 {
+		t.Fatalf("one target and publication: got %d", writes)
 	}
 	if r.Operations[0].Feedback != "原生反馈仅供展示" {
 		t.Fatal("original Final feedback missing from history")
@@ -364,7 +363,7 @@ func TestMaintenanceBudgetDeliveryAndOriginalPR(t *testing.T) {
 		}
 	}
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if len(r.Reports) != 2 || r.PR.URL != originalPR || r.Round != 2 || r.LatestOwner == originalOwner ||
+	if len(r.Reports) != 2 || r.PR.URL != originalPR || r.LatestOwner == originalOwner ||
 		r.Reports[0].Base == f.baseOverride || r.Reports[1].Base != f.baseOverride || f.prBody != "" {
 		t.Fatal("conflict must update original action/PR", r)
 	}
@@ -395,7 +394,7 @@ func TestMaintenanceNeverAdoptsDecisionTextWithoutStructuredResult(t *testing.T)
 			}
 
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
-			if !strings.Contains(r.Diagnostic, diagnostic) || r.Round != 1 || r.PendingPrompt != "" || r.Active() {
+			if !strings.Contains(r.Diagnostic, diagnostic) || r.PendingPrompt != "" || r.Active() {
 				t.Fatalf("unusable structured result advanced the action: %+v", r)
 			}
 			if len(r.Operations) != 1 || !r.Operations[0].Settled() || r.Operations[0].Feedback != text {
@@ -428,21 +427,28 @@ func TestMaintenanceUnknownSubmitStopAndFinish(t *testing.T) {
 
 func TestMaintenanceStoppedWriterRemainsSourceForDelivery(t *testing.T) {
 	s, f, r := fixture(t)
-	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "execute" && r.Round == 2 })
+	var err error
+	r, err = s.update(context.Background(), r.ID, func(r *m.Record) error { r.Input.Budget = m.Budget{Minutes: "100"}; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = tickUntil(t, s, r.ID, func(r m.Record) bool {
+		return r.Phase == "execute" && r.WriteKind == "implement" && r.AcceptedHead() != ""
+	})
 	acceptedOwner := r.LatestOwner
 	f.hold = true
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.LatestOwner != acceptedOwner })
 	owner := r.LatestOwner
 	r = control(t, s, r, "refactoring_stop")
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "stopped" })
-	if r.LatestOwner != owner || r.Workspace == "" || r.Round != 2 {
+	if r.LatestOwner != owner || r.Workspace == "" {
 		t.Fatal("stopped writer ownership lost", r)
 	}
 	f.hold = false
 	r = control(t, s, r, "refactoring_finish")
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.Round != 2 {
-		t.Fatal("delivery started another maintenance round")
+	if r.TargetID == "" {
+		t.Fatal("delivery lost the selected target")
 	}
 	found := false
 	for _, request := range f.requests {
@@ -476,7 +482,7 @@ func TestMaintenanceNoChangesSkipsReview(t *testing.T) {
 	s, f, r := fixture(t)
 	f.noChanges = true
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.PR != nil || len(r.Reports) != 0 || r.Round != 1 ||
+	if r.PR != nil || len(r.Reports) != 0 ||
 		len(r.Operations) != 1 || r.Operations[0].Purpose != "first" {
 		t.Fatal("no changes created PR or new round", r)
 	}
@@ -560,7 +566,7 @@ func TestMaintenanceRetriesFailedDecisionOutputOnce(t *testing.T) {
 				return last.ID != first.ID && last.RunID != ""
 			})
 			second := r.Operations[len(r.Operations)-1]
-			if second.Purpose != "audit" || second.Round != first.Round || second.Request.RequestID == first.Request.RequestID || !r.Operations[len(r.Operations)-2].Settled() {
+			if second.Purpose != "audit" || second.TargetID != first.TargetID || second.Request.RequestID == first.Request.RequestID || !r.Operations[len(r.Operations)-2].Settled() {
 				t.Fatal("failed audit did not start one fresh decision in the same round", r)
 			}
 			var original, retry rc.GenerateRunInput
@@ -622,7 +628,7 @@ func TestMaintenanceConflictReviewRegeneratesInvalidJSON(t *testing.T) {
 				return last.ID != first.ID && last.RunID != ""
 			})
 			retry := r.Operations[len(r.Operations)-1]
-			want, err := prompts.MaintenanceDecision("report", "", true)
+			want, err := prompts.MaintenanceDecision("report", "", true, false)
 			if err != nil || retry.Prompt != want {
 				t.Fatalf("unexpected retry prompt %q: %v", retry.Prompt, err)
 			}
@@ -729,7 +735,7 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 			t.Fatal(err)
 		}
 		g := input.Generate
-		want, err := prompts.MaintenanceDecision(phase, r.Input.Strategy, false)
+		want, err := prompts.MaintenanceDecision(phase, r.Input.Strategy, false, false)
 		if err != nil || g.Instruction != want || op.Prompt != want || g.Repository != nil || (g.Directory != nil) != (phase == "first") {
 			t.Fatal("wrong decision request", phase, err)
 		}
@@ -765,8 +771,9 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 		t.Fatal(e)
 	}
 	body := input.Workflow.PromptOverrides["execute"]
-	if input.ResultFile != nil || !strings.Contains(body, "禁止推送和操作 PR") || !strings.Contains(body, `用户原文\r\n保持 CRLF 与结尾空格  `) || strings.ContainsAny(body, "\r\n") || strings.Contains(body, "direction_prompt") ||
-		!strings.Contains(body, `"operation_id":"`+op.ID+`"`) {
+	encodedPrompt, _ := json.Marshal(r.PendingPrompt)
+	if input.ResultFile != nil || !strings.Contains(body, "禁止推送和操作 PR") || !strings.Contains(body, string(encodedPrompt)) || strings.ContainsAny(body, "\r\n") || strings.Contains(body, "direction_prompt") ||
+		strings.Contains(body, "operation_id") || strings.Contains(body, "schema") {
 		t.Fatal("wrong writable prompt or context", body)
 	}
 
@@ -824,8 +831,8 @@ func TestMaintenanceDollarGapAndExhaustionFinishWithoutQuestion(t *testing.T) {
 				f.runs[r.Operations[0].RunID].UpdatedAt = s.now().Add(-time.Minute)
 			}
 			r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-			if r.Round != 1 || r.Question != nil || r.PR == nil {
-				t.Fatal("budget must finish the current round and deliver its PR", r.Phase, r.Round)
+			if r.Question != nil || r.PR != nil || len(r.Operations) != 1 || r.CloseReason == "" {
+				t.Fatal("budget exhausted before choosing a target should finish without a PR", r.Phase, r.TargetID)
 			}
 			calls := len(f.requests)
 			future := s.now().Add(time.Minute)
@@ -835,7 +842,7 @@ func TestMaintenanceDollarGapAndExhaustionFinishWithoutQuestion(t *testing.T) {
 				t.Fatal(e)
 			}
 			saved, _ := s.Store.Refactoring(context.Background(), s.Project, r.ID)
-			if len(f.requests) != calls || len(saved.Reports) != 1 {
+			if len(f.requests) != calls || len(saved.Reports) != 0 {
 				t.Fatal("late fees regenerated delivery")
 			}
 		})
@@ -1048,7 +1055,7 @@ func TestMaintenanceFinishCancelsUnsentImplementation(t *testing.T) {
 	before := len(f.requests)
 	r = control(t, s, r, "refactoring_finish")
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "delivered" })
-	if r.Round != 1 || r.PR != nil || len(f.requests) != before {
+	if r.PR != nil || len(f.requests) != before {
 		t.Fatal("finish sent an unsent implementation", r)
 	}
 }
@@ -1057,8 +1064,8 @@ func TestMaintenanceFinishDoesNotPublishUncommittedWork(t *testing.T) {
 	s, f, r := fixture(t)
 	f.dirtyWorktree = true
 	r = tickUntil(t, s, r.ID, func(r m.Record) bool { return r.Phase == "blocked" })
-	if r.Round != 1 || r.LatestOwner == "" || r.Operations[len(r.Operations)-1].AcceptedOperation != "" {
-		t.Fatal("dirty execution was accepted", r.Phase, r.Round)
+	if r.LatestOwner == "" || r.Operations[len(r.Operations)-1].AcceptedOperation != "" {
+		t.Fatal("dirty execution was accepted", r.Phase, r.TargetID)
 	}
 	before := len(f.requests)
 	if r.CanFinish() || r.FinishAction() != "" || r.PR != nil || len(f.requests) != before {
@@ -1066,82 +1073,32 @@ func TestMaintenanceFinishDoesNotPublishUncommittedWork(t *testing.T) {
 	}
 }
 
-func TestMaintenanceAuditRetainsRoundGoalAfterRepairs(t *testing.T) {
+func TestMaintenanceAuditRetainsGoalAndOrderedRepairs(t *testing.T) {
 	s, _, r := fixture(t)
-	r.Phase, r.Round = "audit", 2
+	r.Phase, r.TargetID, r.TargetStart, r.TargetPrompt = "audit", m.ID(), strings.Repeat("b", 40), "original goal"
 	for _, purpose := range []string{"implement", "repair", "repair"} {
-		r.Operations = append(r.Operations, m.Operation{Round: 2, State: "complete", Purpose: purpose, Prompt: purpose, Run: &rc.Run{}})
+		r.Operations = append(r.Operations, m.Operation{TargetID: r.TargetID, State: "complete", Purpose: purpose, Prompt: purpose, Feedback: purpose, Run: &rc.Run{}})
 	}
 	facts := s.context(r, m.ReviewEvidence{})
-	if facts.RoundGoal != "implement" || len(facts.Feedback) != 2 || facts.Feedback[1].Purpose != "repair" {
-		t.Fatalf("audit lost the original goal or recent repairs: %+v", facts)
+	if facts.TargetPrompt != "original goal" || facts.TargetStart != r.TargetStart || len(facts.Feedback) != 3 || facts.Feedback[0].Purpose != "implement" || facts.Feedback[2].Purpose != "repair" {
+		t.Fatalf("lost original goal or ordered dialogue: %+v", facts)
 	}
 }
 
-func TestMaintenanceAuditUsesPreviousAcceptedWorkspaceHead(t *testing.T) {
+func TestMaintenanceContextExcludesOtherTargetsAndBlocksOversizeCurrentEvidence(t *testing.T) {
 	s, _, r := fixture(t)
-	r.Round, r.Phase = 1, "audit"
-	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != r.Frozen.Repository.BaseRevision {
-		t.Fatal("first round baseline differs", got)
-	}
-	head := strings.Repeat("a", 40)
-	clean := true
-	r.Round = 2
-	r.Operations = []m.Operation{
-		{ID: "accepted-workspace", Purpose: "implement", Round: 1, WorkspaceGit: &rc.WorkspaceGit{Commit: &head, Clean: &clean, Verified: true}},
-		{Purpose: "audit", Round: 1, AcceptedOperation: "accepted-workspace"},
-		{Purpose: "implement", Round: 2},
-	}
-	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != head {
-		t.Fatal("second round must use the prior accepted workspace HEAD", got)
-	}
-	r.Phase, r.WriteKind, r.PendingPrompt = "execute", "repair", "只补查本轮差异"
-	op, err := s.prepareOperation(r, m.ID(), "", m.ReviewEvidence{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var in rc.RunInput
-	if err := json.Unmarshal(op.Request.Input, &in); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(in.Workflow.PromptOverrides["execute"], `"round_start":"`+head+`"`) {
-		t.Fatal("repair request lacks the same round baseline")
-	}
-
-	r.Phase = "audit"
-	clean = false
-	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != "" {
-		t.Fatal("dirty workspace HEAD omitted accepted changes", got)
-	}
-	clean = true
-	r.Operations[0].WorkspaceGit.Clean = nil
-	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != "" {
-		t.Fatal("workspace cleanliness was not verified", got)
-	}
-	r.Operations[0].WorkspaceGit.Clean = &clean
-	r.Operations[0].WorkspaceGit.Verified = false
-	if got := s.context(r, m.ReviewEvidence{}).RoundStart; got != "" {
-		t.Fatal("unverified baseline was supplied", got)
-	}
-}
-
-func TestMaintenanceContextBoundsLargeHistory(t *testing.T) {
-	s, _, r := fixture(t)
-	r.Phase = "audit"
-	large := strings.Repeat("old evidence to exclude ", 3000)
-	for i := range 500 {
-		r.Operations = append(r.Operations, m.Operation{ID: m.ID(), Round: i + 1, State: "complete", Purpose: "implement", Feedback: large, Run: &rc.Run{Status: "failed", Final: &rc.Final{NativeOutcome: "failed", Verified: true}}, Result: &m.Result{Outcome: "done", Summary: large}})
-	}
-	r.Operations = append(r.Operations, m.Operation{ID: m.ID(), Round: 500, State: "complete", Purpose: "repair", Run: &rc.Run{Status: "completed", Final: &rc.Final{NativeOutcome: "succeeded", Verified: true}}, Result: &m.Result{Outcome: "done", Summary: "latest bounded evidence"}})
-	f := s.context(r, m.ReviewEvidence{})
-	if len(f.History) > 24 || len(f.Feedback) != 2 || f.Feedback[0].Result.Summary != "latest bounded evidence" {
-		t.Fatal("history or current evidence not bounded", len(f.History), len(f.Feedback))
-	}
+	r.Phase, r.TargetID = "audit", m.ID()
+	large := strings.Repeat("evidence ", 200000)
+	r.Operations = []m.Operation{{ID: m.ID(), TargetID: "previous", Purpose: "implement", State: "complete", Feedback: large, Run: &rc.Run{}}}
 	if _, err := s.prepareOperation(r, m.ID(), "", m.ReviewEvidence{}); err != nil {
 		t.Fatal(err)
 	}
-	if r.Operations[0].Feedback != large {
-		t.Fatal("context projection rewrote original evidence")
+	r.Operations = append(r.Operations, m.Operation{ID: m.ID(), TargetID: r.TargetID, Purpose: "repair", State: "complete", Feedback: large, Run: &rc.Run{}})
+	if _, err := s.prepareOperation(r, m.ID(), "", m.ReviewEvidence{}); err == nil {
+		t.Fatal("oversize current dialogue was silently truncated")
+	}
+	if r.Operations[1].Feedback != large {
+		t.Fatal("original evidence changed")
 	}
 }
 
@@ -1181,7 +1138,6 @@ func TestMaintenanceRefreshesDeliveredReviewOnVersionChange(t *testing.T) {
 
 func TestMaintenanceRunnerInputRequiresSteerAgentDecision(t *testing.T) {
 	s, _, r := fixture(t)
-	r.Round = 1
 	r.Operations = []m.Operation{{
 		ID: m.ID(), State: "complete", Purpose: "implement",
 		Run:    &rc.Run{Status: "completed", Final: &rc.Final{Verified: true, NativeOutcome: "succeeded"}},

@@ -14,7 +14,7 @@ func TestDecisionRoleBoundary(t *testing.T) {
 		mode           string
 		accept, finish bool
 	}{
-		{"first", false, true}, {"select", false, true}, {"audit", true, false},
+		{"first", false, true}, {"select", false, true}, {"audit", true, true},
 	} {
 		var schema struct {
 			Properties map[string]struct{ Enum []string }
