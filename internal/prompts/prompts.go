@@ -69,7 +69,7 @@ func MainAgentRules() ([]byte, error) { return files.ReadFile("materials/main-ag
 func MaintenanceDirection() ([]byte, error) {
 	return files.ReadFile("materials/refactoring-directions/update-stale-docs.md")
 }
-func MaintenanceDecision(phase, strategy string, retryJSON bool) (string, error) {
+func MaintenanceDecision(phase, strategy string, retryJSON, closing bool) (string, error) {
 	switch phase {
 	case "first", "select", "audit":
 		if strategy != "cautious" && strategy != "autonomous" && strategy != "aggressive" {
@@ -82,7 +82,8 @@ func MaintenanceDecision(phase, strategy string, retryJSON bool) (string, error)
 	return render("maintenance-decision", struct {
 		Phase, Strategy string
 		RetryJSON       bool
-	}{phase, strategy, retryJSON})
+		Closing         bool
+	}{phase, strategy, retryJSON, closing})
 }
 func MaintenanceDelivery(kind string) (string, error) {
 	switch kind {
@@ -93,6 +94,13 @@ func MaintenanceDelivery(kind string) (string, error) {
 	}
 }
 func MaintenanceExecute(request []byte, local bool) (string, error) {
+	if local {
+		encoded, err := json.Marshal(string(request))
+		if err != nil {
+			return "", err
+		}
+		request = encoded
+	}
 	return render("maintenance-execute", struct {
 		Request string
 		Local   bool

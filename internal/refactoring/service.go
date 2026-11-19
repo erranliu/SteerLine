@@ -226,7 +226,7 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 				r.Phase = closingPhase(r)
 			}
 		}
-		if r.Phase == "waiting_input" {
+		if r.Phase == "waiting_input" && r.Question != nil && r.Question.Mode != "audit" {
 			r.Phase = closingPhase(r)
 			r.Question = nil
 			r.EnqueuedAt = s.now()
@@ -237,6 +237,7 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 			r.Phase = closingPhase(r)
 		}
 		r.FinishRequested = true
+		r.CloseReason = "用户要求提前结束并创建 PR"
 		r.FinishedAt = nil
 	case "refactoring_answer":
 		if r.Phase != "waiting_input" || r.Question == nil || r.Question.ID != c.QuestionID || len(c.Note) > 32<<10 {
@@ -252,7 +253,7 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 		if chosen == nil {
 			return r, errors.New("原问题中没有该选项")
 		}
-		r.Answers = append(r.Answers, model.Answer{QuestionID: c.QuestionID, Option: *chosen, Note: c.Note})
+		r.Answers = append(r.Answers, model.Answer{QuestionID: c.QuestionID, Question: r.Question, Option: *chosen, Note: c.Note})
 		r.Phase = r.Question.Mode
 		r.Question = nil
 		r.EnqueuedAt = s.now()
@@ -305,6 +306,21 @@ func (s *Service) Command(ctx context.Context, c model.Command, in *model.Start)
 }
 
 func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
+	updated := r
+	s.applyBudget(&updated)
+	if updated.FinishRequested != r.FinishRequested {
+		var err error
+		r, err = s.update(ctx, r.ID, func(current *model.Record) error {
+			if current.Revision == updated.Revision {
+				s.applyBudget(current)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	if len(r.Operations) > 0 {
 		o := r.Operations[len(r.Operations)-1]
 		if !o.Settled() {
@@ -326,14 +342,8 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 		return nil
 	}
 	selecting := r.Phase == "first" || r.Phase == "select"
-	startingRound := selecting && (len(r.Operations) == 0 || r.Operations[len(r.Operations)-1].Purpose != r.Phase)
-	exhausted := false
-	if startingRound {
-		budget := r.RemainingBudget(s.now())
-		exhausted = budget.Exhausted || budget.CostPending
-	}
-	if selecting && (r.FinishRequested || exhausted) ||
-		r.Phase == "finish" && r.PR == nil && r.AcceptedHead(0) == "" {
+	if selecting && r.FinishRequested ||
+		r.Phase == "finish" && r.PR == nil && r.AcceptedHead() == "" {
 		_, e := s.update(ctx, r.ID, func(current *model.Record) error {
 			if current.Revision == r.Revision && !current.StopRequested {
 				s.closeAction(current)
@@ -414,11 +424,7 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 				}
 			}
 			var op model.Operation
-			operationRecord := *current
-			if startingRound {
-				operationRecord.Round++
-			}
-			op, prepareErr = s.prepareOperation(operationRecord, id, directory, review)
+			op, prepareErr = s.prepareOperation(*current, id, directory, review)
 			if prepareErr == nil {
 				current.Operations = append(current.Operations, op)
 				current.PendingPrompt = ""
@@ -698,7 +704,7 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 	}
 	var result *model.Result
 	if binding.WorkflowID == "execute" {
-		if nativeFinalBound(run) {
+		if (o.Purpose == "publish" || o.Purpose == "conflict") && nativeFinalBound(run) {
 			var value model.Result
 			var fieldType *json.UnmarshalTypeError
 			decoder := json.NewDecoder(bytes.NewReader([]byte(run.Final.Text)))
@@ -812,7 +818,7 @@ func (s *Service) observe(ctx context.Context, r model.Record, o model.Operation
 				alreadyRetried := false
 				if len(r.Operations) > 1 {
 					previous := r.Operations[len(r.Operations)-2]
-					alreadyRetried = previous.Purpose == o.Purpose && previous.Round == o.Round && previous.Run != nil && retryableDecisionFailure(previous.Run.ContentResult)
+					alreadyRetried = previous.Purpose == o.Purpose && previous.TargetID == o.TargetID && previous.Run != nil && retryableDecisionFailure(previous.Run.ContentResult)
 				}
 				if !alreadyRetried {
 					r.Diagnostic = "只读决策未完成，重试一次：" + detail

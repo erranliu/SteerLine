@@ -71,7 +71,7 @@ func allowedKinds(mode string) []string {
 	case "first", "select":
 		return []string{"execute", "ask", "finish", "blocked"}
 	case "audit":
-		return []string{"execute", "ask", "accept", "blocked"}
+		return []string{"execute", "ask", "accept", "finish", "blocked"}
 	default:
 		return []string{}
 	}

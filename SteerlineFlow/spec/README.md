@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+重构维护自然语言执行与预算收尾（2026-11-18，已实施，受控、公开协议及本机真实并发和原 PR 冲突续作验收通过）。[Spec](maintenance-conversation-budget.spec.md) · [Plan](../plans/maintenance-conversation-budget.plan.md) · [测试安排](../plans/maintenance-conversation-budget.tests.json) · [验收规划](../testing/acceptance/maintenance-conversation-budget.md)。实施/修复使用自然语言回执，SteerAgent 按对话上下文审计，SteerLine 管理两种推进许可；移除维护轮次，空预算默认完成一个目标后交付。
+
 活动中心放弃活动（2026-11-13）。[Spec](activity-abandonment.spec.md) · [Plan](../plans/activity-abandonment.plan.md) · [测试选择](../plans/activity-abandonment.tests.json) · [验收记录](../testing/acceptance/activity-abandonment.md)。正式活动统一归档，明确六类来源的当前界面退出、停止策略和原请求核实入口。
 
 重构与维护并发与运行环境选择（2026-11-12，已实现，受控通过，真实交付整链未通过）。[Spec](refactoring-maintenance-concurrency.spec.md) · [Plan](../plans/refactoring-maintenance-concurrency.plan.md) · [测试选择](../plans/refactoring-maintenance-concurrency.tests.json) · [专属验收](../testing/acceptance/refactoring-maintenance-concurrency.md)

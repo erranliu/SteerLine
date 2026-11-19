@@ -3,7 +3,7 @@ import type { MaintenanceRecord } from "./refactoring-maintenance";
 type Operation = NonNullable<MaintenanceRecord["operations"]>[number];
 
 const purposes: Record<string, string> = {
-  first: "首轮选题",
+  first: "初始选题",
   select: "后续选题",
   audit: "成果审计",
   finish: "收尾决策",
@@ -104,6 +104,7 @@ function AgentMessage({
           <pre tabIndex={0}>{operation.prompt}</pre>
         </>
       )}
+      {execution && <SentRequest operation={operation} />}
       <div className="refactoring-message-actions">
         {!execution && conclusion && (
           <details>
@@ -121,6 +122,7 @@ function AgentMessage({
           <details>
             <summary>决策指令</summary>
             <pre tabIndex={0}>{decision.prompt}</pre>
+            <SentRequest operation={decision} />
           </details>
         )}
       </div>
@@ -128,10 +130,28 @@ function AgentMessage({
   );
 }
 
+function SentRequest({ operation }: { operation: Operation }) {
+  const request = operation.sent_request;
+  if (!request) return null;
+  return (
+    <details>
+      <summary>发送给 Runner 的请求</summary>
+      <pre tabIndex={0}>{request.instruction}</pre>
+      {!!request.materials?.length && (
+        <ul>{request.materials.map((item) => <li key={item.path}>{item.kind} · {item.path}</li>)}</ul>
+      )}
+      {request.output_schema != null && (
+        <details><summary>输出约束</summary><pre tabIndex={0}>{JSON.stringify(request.output_schema, null, 2)}</pre></details>
+      )}
+    </details>
+  );
+}
+
 function RunnerMessage({ operation }: { operation: Operation }) {
   const state = operationStateLabel(operation.state);
   const result = operation.result;
   const summary =
+    (["implement", "repair"].includes(operation.purpose) ? operation.feedback : "") ||
     result?.summary ||
     result?.question ||
     (operation.state === "complete"

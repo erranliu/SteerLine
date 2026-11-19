@@ -86,7 +86,7 @@ test("maintenance report, history and refresh remain observational", async ({
       dialog.getByRole("heading", { name: "执行指令", exact: true }),
     ).toBeVisible();
     await expect(dialog.getByLabel("决策策略")).toHaveValue("cautious");
-    await expect(dialog.getByLabel("重构轮次")).toHaveValue("1");
+    await expect(dialog.getByText(/预算可选/)).toBeVisible();
     const preview = dialog.getByRole("textbox", {
       name: "方向正文",
       exact: true,
@@ -95,7 +95,6 @@ test("maintenance report, history and refresh remain observational", async ({
     await dialog.getByLabel("重构方向").selectOption({ label: "收拢共享夹具" });
     await expect(preview).toHaveValue("优先处理共享测试夹具。  \n");
     await preview.fill("优先处理共享测试夹具。  \n\nask-once");
-    await dialog.getByLabel("重构轮次").fill("2");
     await page.screenshot({
       path: join(out, "maintenance-direction-desktop.png"),
       fullPage: true,
@@ -156,8 +155,8 @@ test("maintenance report, history and refresh remain observational", async ({
   ).toBeVisible();
   const detail = page.getByRole("region", { name: "重构任务详情" });
   const budget = detail.getByRole("region", { name: "剩余重构预算" });
-  await expect(budget).toContainText("重构预算已用完");
-  await expect(budget.getByText("0 轮", { exact: true })).toBeVisible();
+  await expect(budget).toContainText("已完成默认的一项改进");
+  await expect(budget.getByText("完成一项改进后交付", { exact: true })).toBeVisible();
   const result = detail.getByRole("region", { name: "交付结果" });
   await expect(result.getByRole("link", { name: "查看 PR" })).toHaveAttribute(
     "href",
@@ -203,16 +202,11 @@ test("maintenance report, history and refresh remain observational", async ({
     exact: true,
   });
   const decision = implementation.getByText("决策指令", { exact: true });
-  const decisionBody = implementation.getByText(
-    "根据 direction_prompt 中的重构方向判断",
-    {
-      exact: false,
-    },
-  );
+  const decisionBody = decision.locator("..").locator(":scope > pre");
   await expect(direction).toBeVisible();
   await expect(instruction).toBeVisible();
   await expect(
-    dialogue.getByText("受控执行", { exact: true }).first(),
+    dialogue.getByText("已修改 maintenance-result.txt 并验证、提交。", { exact: true }).first(),
   ).toBeVisible();
   await expect(decisionBody).toBeHidden();
   await decision.click();

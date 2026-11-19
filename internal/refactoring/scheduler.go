@@ -277,11 +277,18 @@ func (s *Service) markSubmitted(ctx context.Context, id string, operation model.
 	}
 	queued := last.Content(r).WorkflowID == "generate" && s.Queue != nil
 	key := "refactoring:" + last.ID
-	startingRound := last.Round > r.Round
-	if startingRound && r.BudgetExhausted(s.now()) {
+	s.applyBudget(&r)
+	startingTarget := last.Purpose == "first" || last.Purpose == "select" || last.Purpose == "implement"
+	if startingTarget && r.FinishRequested {
 		last.State = "cancelled"
 		r.WaitReason = ""
+		r.PendingPrompt = ""
 		s.closeAction(&r)
+		return false, s.save(ctx, &r, nil)
+	}
+	if last.Purpose == "audit" && last.Closing != (r.FinishRequested || r.Input.Budget.DefaultTarget() && r.TargetID != "") {
+		last.State = "cancelled"
+		r.WaitReason = ""
 		return false, s.save(ctx, &r, nil)
 	}
 	if queued && !s.Queue.AcquireContent(s.Project, key) {
@@ -300,9 +307,6 @@ func (s *Service) markSubmitted(ctx context.Context, id string, operation model.
 		r.ConflictPending = false
 	}
 	last.State = "submitted"
-	if startingRound {
-		r.Round = last.Round
-	}
 	if err = s.save(ctx, &r, nil, proof...); err != nil {
 		if queued {
 			s.Queue.UpdateContent(s.Project, key, last.CreatedAt, false, false)

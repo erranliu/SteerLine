@@ -1,0 +1,11 @@
+{
+  "tests": [
+    "l1.minimum",
+    "smoke.delivery",
+    "go.http",
+    "go.storage",
+    "go.runner-result",
+    "runtime.refactoring-maintenance",
+    "refactoring.local-codex"
+  ]
+}

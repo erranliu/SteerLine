@@ -339,9 +339,14 @@ func testPublishedResultFile(t *testing.T, arrangementMode string) {
 func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat *Catalog, base runnercontract.RunInput, nativeState string) {
 	t.Helper()
 	input := base
-	executePrompt, promptErr := prompts.MaintenanceExecute([]byte(`{"action_id":"fixture","operation_id":"fixture","instruction":"controlled maintenance writer"}`), true)
+	task := "controlled maintenance writer\r\nkeep final spaces  "
+	executePrompt, promptErr := prompts.MaintenanceExecute([]byte(task), true)
 	if promptErr != nil {
 		t.Fatal(promptErr)
+	}
+	encodedTask, _ := json.Marshal(task)
+	if strings.ContainsAny(executePrompt, "\r\n") || !strings.Contains(executePrompt, string(encodedTask)) {
+		t.Fatal("execute lost the original task or violated the single-line contract")
 	}
 	input.Workflow = runnercontract.Workflow{ID: "execute", Version: 1, PromptOverrides: map[string]string{"execute": executePrompt}}
 	input.Publication = runnercontract.Publication{}
@@ -435,7 +440,7 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 		t.Fatal(err)
 	}
 	contextBody := "{\"mode\":\"first\"}"
-	readPrompt, promptErr := prompts.MaintenanceDecision("first", "cautious", false)
+	readPrompt, promptErr := prompts.MaintenanceDecision("first", "cautious", false, false)
 	if promptErr != nil {
 		t.Fatal(promptErr)
 	}
@@ -461,7 +466,7 @@ func testMaintenancePublicReuse(t *testing.T, ctx context.Context, c Client, cat
 	}
 	g.Generate.Directory = nil
 	g.Generate.OutputSchema = maintenance.Schema("select")
-	g.Generate.Instruction, err = prompts.MaintenanceDecision("select", "cautious", false)
+	g.Generate.Instruction, err = prompts.MaintenanceDecision("select", "cautious", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

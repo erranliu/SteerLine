@@ -19,13 +19,14 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		name   string
 		render func() (string, error)
 	}{
-		{"maintenance-decision", func() (string, error) { return MaintenanceDecision("first", "cautious", false) }},
-		{"maintenance-decision-select", func() (string, error) { return MaintenanceDecision("select", "autonomous", false) }},
-		{"maintenance-decision-audit", func() (string, error) { return MaintenanceDecision("audit", "aggressive", false) }},
-		{"maintenance-decision-report", func() (string, error) { return MaintenanceDecision("report", "", false) }},
-		{"maintenance-decision-json-retry", func() (string, error) { return MaintenanceDecision("report", "", true) }},
+		{"maintenance-decision", func() (string, error) { return MaintenanceDecision("first", "cautious", false, false) }},
+		{"maintenance-decision-select", func() (string, error) { return MaintenanceDecision("select", "autonomous", false, false) }},
+		{"maintenance-decision-audit", func() (string, error) { return MaintenanceDecision("audit", "aggressive", false, false) }},
+		{"maintenance-decision-audit-closing", func() (string, error) { return MaintenanceDecision("audit", "aggressive", false, true) }},
+		{"maintenance-decision-report", func() (string, error) { return MaintenanceDecision("report", "", false, false) }},
+		{"maintenance-decision-json-retry", func() (string, error) { return MaintenanceDecision("report", "", true, false) }},
 		{"maintenance-execute", func() (string, error) {
-			return MaintenanceExecute([]byte(`{"action_id":"a","operation_id":"o","instruction":"用户原文 {{.Ignore}}\r\n下一行  "}`), true)
+			return MaintenanceExecute([]byte("用户原文 {{.Ignore}}\r\n下一行  "), true)
 		}},
 		{"maintenance-execute-delivery", func() (string, error) {
 			return MaintenanceExecute([]byte(`{"action_id":"a","operation_id":"o","instruction":"固定交付指令"}`), false)

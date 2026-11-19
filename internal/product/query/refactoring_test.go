@@ -77,3 +77,21 @@ func TestRefactoringShowsDecisionInstructionForEachOperation(t *testing.T) {
 		t.Fatalf("accepted review operation = %#v", ops[3])
 	}
 }
+
+func TestMaintenanceSentRequestProjectionPreservesInstructionWithoutPrivateSettings(t *testing.T) {
+	raw := json.RawMessage(`{"execution":{"settings":{"token":"private-secret"}},"generate":{"instruction":"saved instruction","output_schema":{"type":"object"},"materials":[{"kind":"file","path":"maintenance/context.json","content":"private-context"}]}}`)
+	r := refactoring.Record{Operations: []refactoring.Operation{{Purpose: "audit", Request: runnercontract.Request{Input: raw}}}}
+	view := Refactoring(r, time.Now())
+	ops := view["operations"].([]map[string]any)
+	sent := ops[0]["sent_request"].(map[string]any)
+	if sent["instruction"] != "saved instruction" || sent["output_schema"] == nil {
+		t.Fatal(sent)
+	}
+	body, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "private-secret") || strings.Contains(string(body), "private-context") || strings.Contains(string(body), `"round"`) {
+		t.Fatal("projection exposed private fields or retired round", string(body))
+	}
+}

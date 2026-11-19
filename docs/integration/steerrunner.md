@@ -79,7 +79,7 @@ v7 及更早状态由原安装收尾，新安装使用分离的 home 与当前�
 | 项目材料与测试安排生成 | [项目维护](../product-design/project-maintenance.md)；生成 Run 不伪造开发候选 |
 | Roadmap 解析及固定版本文档生成 | [Roadmap 设计](../product-design/roadmap-promotion.md)；文件版本证明不等于模型逐文件已读或结论正确 |
 | 项目环境检测与结果封存 | [项目环境工作流](../../SteerlineFlow/spec/project-environment-workflow.spec.md)；使用普通 Run，旧专用 Check 已退役 |
-| 重构与维护 | [实现边界](../architecture/refactoring-maintenance.md)。本地 Codex。generate/1 的 instruction 携带完整的当次决策指令，文件材料提供行动事实或固定 PR 差异。首轮绑定固定提交的只读目录。写入使用 execute/1 和已验证的最终 JSON 回复，后继引用最新 `reuse_worktree_from_run_id`。PR 查询返回完整 `head_revision` 和目标分支当前 `base_revision`，可选 `checks` 是对应 head 的平台检查汇总。评审由 SteerLine 保存，详见[验收](../../SteerlineFlow/testing/acceptance/refactoring-agent-delivery.md)。 |
+| 重构与维护 | [实现边界](../architecture/refactoring-maintenance.md)。本地 Codex。generate/1 的 instruction 携带完整的当次决策指令，文件材料提供行动事实或固定 PR 差异。首轮绑定固定提交的只读目录。实施和修复使用 execute/1 的已绑定自然语言 Final，由 SteerAgent 通过上下文审计；发布和冲突续作使用已验证的最终 JSON 回复，后继引用最新 `reuse_worktree_from_run_id`。PR 查询返回完整 `head_revision` 和目标分支当前 `base_revision`，可选 `checks` 是对应 head 的平台检查汇总。评审由 SteerLine 保存，详见[验收](../../SteerlineFlow/testing/acceptance/refactoring-agent-delivery.md)。 |
 | 候选测试进度 | [progress-file](runtime-progress.md)；旧 R2 候选产物收集已移除 |
 | 用量、费用及远端采集授权 | [计费职责](../../SteerlineFlow/spec/billing-ownership.spec.md) · [验收](../../SteerlineFlow/testing/acceptance/billing-ownership.md)；Runner 提供用量，SteerLine 管理价表和估算，采集授权独立 |
 

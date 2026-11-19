@@ -71,7 +71,7 @@ console.log('checks passed');
 `,
 	}
 	if remote != nil {
-		files["AGENTS.md"] += "For each authorized implementation write, run node check.cjs and git diff --check, stage only that round's permitted file, commit it on the managed branch, and verify that git status --porcelain is empty before reporting done. In the summary include the changed file and concise before-and-after code from the committed diff, plus the actual check results. Use exactly the output contract supplied by the runner for each action. Before sending the final JSON, compare action_id and operation_id character for character with the top-level request IDs, including the last character.\n"
+		files["AGENTS.md"] += "For each authorized implementation write, run node check.cjs and git diff --check, stage only authorized files, commit it on the managed branch, and verify that git status --porcelain is empty before reporting done. In the summary include the changed file and concise before-and-after code from the committed diff, plus the actual check results.\n"
 	}
 	for path, body := range files {
 		s.Must(os.WriteFile(filepath.Join(p.Repo, path), []byte(body), 0600))
@@ -117,24 +117,27 @@ console.log('checks passed');
 		s.Must(err)
 		s.Must(controlled.Write(filepath.Join(s.Output, stage+"-report.json"), report))
 	}
+	prCreated := map[string]time.Time{}
 	verifyPR := func(url string, report ref.Report) string {
 		var pr struct {
 			Body    string
-			Head    string `json:"headRefOid"`
-			BaseOID string `json:"baseRefOid"`
-			Base    string `json:"baseRefName"`
-			Draft   bool   `json:"isDraft"`
+			Head    string    `json:"headRefOid"`
+			BaseOID string    `json:"baseRefOid"`
+			Base    string    `json:"baseRefName"`
+			Draft   bool      `json:"isDraft"`
+			Created time.Time `json:"createdAt"`
 		}
 		number := strings.TrimPrefix(url, "https://github.com/"+githubRepository+"/pull/")
 		if number == url || number == "" {
 			s.t.Fatal("maintenance PR escaped the test repository")
 		}
-		raw, err := p.gh(s.Context, githubMaintenancePRArgs(number, `.data.repository.pullRequest | {body,headRefOid,baseRefName,baseRefOid:.baseRef.target.oid,isDraft}`)...)
+		raw, err := p.gh(s.Context, githubMaintenancePRArgs(number, `.data.repository.pullRequest | {body,headRefOid,baseRefName,baseRefOid:.baseRef.target.oid,isDraft,createdAt}`)...)
 		s.Must(err)
 		s.Must(json.Unmarshal(raw, &pr))
-		if report.Body == "" || report.Recommendation == "" || pr.Head != report.Head || pr.BaseOID != report.Base || pr.Base != p.BaseBranch || !pr.Draft {
+		if report.Body == "" || report.Recommendation == "" || pr.Head != report.Head || pr.BaseOID != report.Base || pr.Base != p.BaseBranch || !pr.Draft || pr.Created.IsZero() {
 			s.t.Fatal("draft PR and review version mismatch")
 		}
+		prCreated[url] = pr.Created
 		return pr.Body
 	}
 	project, e := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
@@ -182,7 +185,7 @@ console.log('checks passed');
 			}
 		}
 		var ready bool
-		start, ready = view.bind(ref.Start{Direction: ref.DefaultDirectionID, DirectionRevision: directionRevision, DirectionPrompt: "完成两个独立切片。第一轮只简化 alpha.cjs，含该轮审计需要的任何补证和修复。第一轮验收后，第二轮只简化 beta.cjs，保留第一轮已验收的改动。两轮均保留 calculate 导出及行为并运行 node check.cjs。每轮结束前把本轮改动提交到原受管工作区，使 git status 干净。最终提交须同时包含两文件的简化，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。", Profile: profile, Strategy: "cautious", Budget: ref.Budget{Rounds: 2, Minutes: "25"}})
+		start, ready = view.bind(ref.Start{Direction: ref.DefaultDirectionID, DirectionRevision: directionRevision, DirectionPrompt: "本次唯一目标是共同简化 alpha.cjs 和 beta.cjs 的冗余实现，验收须同时包含两文件的简化。保留 calculate 导出及行为并运行 node check.cjs。只修改这两个文件，提交到原受管工作区并保持 git status 干净。交付一个 draft PR，之后保留原 PR 正文。", Profile: profile, Strategy: "cautious", Budget: ref.Budget{}})
 		return ready, nil
 	})
 	id, started := post("refactoring_start", identity.RepositoryIdentity, 1, start)
@@ -191,7 +194,7 @@ console.log('checks passed');
 	}
 	peer := start
 	peer.DirectionPrompt = "只简化 gamma.cjs 的冗余布尔分支，保留 calculate 导出及行为。验证 node check.cjs，不能修改检查或项目材料。交付一个 draft PR，之后保留原 PR 正文。"
-	peer.Budget.Rounds = 1
+	peer.Budget = ref.Budget{}
 	var peerID string
 	if remote == nil {
 		peerID, started = post("refactoring_start", identity.RepositoryIdentity, 1, peer)
@@ -203,14 +206,12 @@ console.log('checks passed');
 		ID                string
 		Revision          uint64
 		Phase, Diagnostic string
-		Round             int
 		Reports           []ref.Report
 		PR                *struct{ URL string }
 		Question          *ref.Question
 		Operations        []struct {
 			ID                       string
 			Purpose, State, Feedback string
-			Round                    int
 			RunID                    string `json:"run_id"`
 			Result                   *ref.Result
 			Cost                     ref.Cost
@@ -228,8 +229,14 @@ console.log('checks passed');
 	}()
 	if peerID != "" {
 		currentRun := func(action string) (string, error) {
-			var state struct{ Operations []ref.Operation }
+			var state struct {
+				Phase, Diagnostic string
+				Operations        []ref.Operation
+			}
 			err := client.Get(s.Context, prefix+"/refactoring/"+action, &state)
+			if err == nil && (state.Phase == "blocked" || state.Phase == "waiting_input" || state.Phase == "stopped") {
+				s.t.Fatalf("native maintenance cannot reach overlap: %s: %s", state.Phase, state.Diagnostic)
+			}
 			if err != nil || len(state.Operations) == 0 {
 				return "", err
 			}
@@ -264,6 +271,9 @@ console.log('checks passed');
 			samples := make([]sample, 0, 3)
 			for _, runID := range []string{a, b, a} {
 				item, err := observe(runID)
+				if err == nil && item.Run != nil && item.Run.Status == "blocked" && item.Run.StopStatus != "stopped" {
+					s.t.Fatalf("original native Run requires reconciliation: %s: %s", runID, item.Run.Diagnostic)
+				}
 				if err != nil || item.Run == nil || item.Run.Status != "running" || item.Run.Final != nil || item.Run.Execution.SessionID == "" {
 					return false, err
 				}
@@ -302,8 +312,8 @@ console.log('checks passed');
 		})
 	}
 	wait(1)
-	if view.Round != 2 || view.PR == nil || view.Reports[0].Base != baseline {
-		s.t.Fatal("two rounds and PR required", view)
+	if view.PR == nil || view.Reports[0].Base != baseline {
+		s.t.Fatal("default target and PR required", view)
 	}
 	original := view.PR.URL
 	initial := view.Reports[0]
@@ -359,8 +369,8 @@ console.log('checks passed');
 		}
 	}
 	wait(2)
-	if view.PR.URL != original || view.Round != 2 {
-		s.t.Fatal("original PR/round changed")
+	if view.PR.URL != original {
+		s.t.Fatal("original PR changed")
 	}
 	last := view.Reports[len(view.Reports)-1]
 	if last.Base != advanced || last.Head == initial.Head {
@@ -387,6 +397,26 @@ console.log('checks passed');
 	records, e := reader.Refactorings(s.Context, p.ProjectID)
 	s.Must(e)
 	var r ref.Record
+	publicationStarted := map[string]time.Time{}
+	verifyPublicationStage := func(record ref.Record) {
+		if record.PR == nil {
+			s.t.Fatal("missing original maintenance PR")
+		}
+		for _, op := range record.Operations {
+			if op.Purpose != "publish" {
+				continue
+			}
+			// GitHub createdAt has second precision. Compare against the first
+			// host publication operation, including when a repair created a PR.
+			created := prCreated[record.PR.URL]
+			if created.IsZero() || op.CreatedAt.IsZero() || created.Before(op.CreatedAt.Truncate(time.Second)) {
+				s.t.Fatal("native implementation published a PR before host acceptance")
+			}
+			publicationStarted[record.PR.URL] = op.CreatedAt
+			return
+		}
+		s.t.Fatal("missing host publication operation")
+	}
 	var otherCost any
 	parallelPR := ""
 	if peerID == "" {
@@ -409,7 +439,9 @@ console.log('checks passed');
 		}
 
 		otherCost, parallelPR = peerCost, second.PR.URL
+		verifyPublicationStage(other)
 	}
+	verifyPublicationStage(r)
 	if remote != nil {
 		if r.Frozen.Read.Adapter != "codex-app-server" || r.Frozen.Read.Target.Kind != "local" ||
 			r.Frozen.Write.Adapter != "orca-terminal" || r.Frozen.Write.Target != s.Run.Remote.Profile.Execution.Target ||
@@ -422,11 +454,11 @@ console.log('checks passed');
 	closingSeen := false
 	sessions := map[string]bool{}
 	var gitFacts []*runnercontract.WorkspaceGit
-	roundEvidence := map[int]bool{}
-	accepted := map[int]string{}
+	targetEvidence := map[string]bool{}
+	accepted := map[string]string{}
 	for _, o := range r.Operations {
 		if o.Purpose == "audit" && o.AcceptedOperation != "" {
-			accepted[o.Round] = o.AcceptedOperation
+			accepted[o.TargetID] = o.AcceptedOperation
 		}
 	}
 	for _, o := range r.Operations {
@@ -450,13 +482,13 @@ console.log('checks passed');
 		sessions[exec.SessionID] = true
 		if o.WorkspaceGit != nil {
 			gitFacts = append(gitFacts, o.WorkspaceGit)
-			if o.ID == accepted[o.Round] && o.WorkspaceGit.RunID == run.RunID && o.WorkspaceGit.Verified &&
+			if o.ID == accepted[o.TargetID] && o.WorkspaceGit.RunID == run.RunID && o.WorkspaceGit.Verified &&
 				o.WorkspaceGit.Commit != nil && o.WorkspaceGit.Clean != nil && *o.WorkspaceGit.Clean {
-				roundEvidence[o.Round] = true
+				targetEvidence[o.TargetID] = true
 			}
 		}
 	}
-	if writes < 4 {
+	if writes < 3 {
 		s.t.Fatal("native execute chain incomplete")
 	}
 	if len(gitFacts) < 2 {
@@ -466,7 +498,7 @@ console.log('checks passed');
 	if amount == nil && remote == nil {
 		s.t.Fatal("missing observed reference usage")
 	}
-	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-live-proof.json"), map[string]any{"rounds": r.Round, "profile": profile, "remote": remote != nil, "local_decisions": r.Frozen.Read.Target.Kind == "local", "verified_implementation_rounds": roundEvidence, "executes": writes, "same_workspace": true, "workspace_git": gitFacts, "original_pr": original, "parallel_pr": parallelPR, "parallel_amount": otherCost, "native_overlap": peerID != "", "review_matches_pr_version": true, "pr_body_unchanged": true, "conflict_audit": true, "verified_both_trees": true, "amount": amount, "cost_complete": complete, "pricing": "declared fixture reference rates", "head": last.Head, "base": last.Base}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "refactoring-live-proof.json"), map[string]any{"default_target": true, "target_id": r.TargetID, "profile": profile, "remote": remote != nil, "local_decisions": r.Frozen.Read.Target.Kind == "local", "verified_implementation_targets": targetEvidence, "executes": writes, "same_workspace": true, "workspace_git": gitFacts, "original_pr": original, "parallel_pr": parallelPR, "parallel_amount": otherCost, "native_overlap": peerID != "", "review_matches_pr_version": true, "pr_body_unchanged": true, "pr_created_after_acceptance": true, "pr_created_at": prCreated, "publication_started_at": publicationStarted, "conflict_audit": true, "verified_both_trees": true, "amount": amount, "cost_complete": complete, "pricing": "declared fixture reference rates", "head": last.Head, "base": last.Base}))
 	s.Must(s.FinishBody())
 }
 

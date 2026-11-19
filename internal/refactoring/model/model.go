@@ -92,8 +92,12 @@ func Digest(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(
 type Budget struct {
 	Dollars string `json:"dollars,omitempty"`
 	Minutes string `json:"minutes,omitempty"`
-	Rounds  int    `json:"rounds,omitempty"`
 }
+
+func (b Budget) DefaultTarget() bool {
+	return b.Dollars == "" && b.Minutes == ""
+}
+
 type Start struct {
 	Direction           string `json:"direction"`
 	DirectionRevision   string `json:"direction_revision"`
@@ -116,9 +120,6 @@ func (s Start) Validate() error {
 	}
 	if s.Profile == "" || (s.Strategy != "cautious" && s.Strategy != "autonomous" && s.Strategy != "aggressive") {
 		return errors.New("方向、执行配置或策略无效")
-	}
-	if s.Budget.Rounds < 0 || s.Budget.Rounds > 10000 || (s.Budget.Rounds == 0 && s.Budget.Dollars == "" && s.Budget.Minutes == "") {
-		return errors.New("至少设置一项有效正数预算")
 	}
 	for _, v := range []string{s.Budget.Dollars, s.Budget.Minutes} {
 		if v != "" {
@@ -184,6 +185,7 @@ type QuestionOption struct {
 }
 type Answer struct {
 	QuestionID string         `json:"question_id"`
+	Question   *Question      `json:"question,omitempty"`
 	Option     QuestionOption `json:"option"`
 	Note       string         `json:"note,omitempty"`
 }
@@ -242,7 +244,7 @@ type Operation struct {
 	Question          *Question                    `json:"question,omitempty"`
 	ID                string                       `json:"id"`
 	Purpose           string                       `json:"purpose"`
-	Round             int                          `json:"round"`
+	TargetID          string                       `json:"target_id,omitempty"`
 	Request           runnercontract.Request       `json:"request"`
 	InputDigest       string                       `json:"input_digest,omitempty"`
 	RunID             string                       `json:"run_id,omitempty"`
@@ -297,7 +299,10 @@ type Record struct {
 	ConflictReview  bool                   `json:"conflict_review,omitempty"`
 	FinishRequested bool                   `json:"finish_requested"`
 	StopRequested   bool                   `json:"stop_requested"`
-	Round           int                    `json:"round"`
+	TargetID        string                 `json:"target_id,omitempty"`
+	TargetStart     string                 `json:"target_start,omitempty"`
+	TargetPrompt    string                 `json:"target_prompt,omitempty"`
+	CloseReason     string                 `json:"close_reason,omitempty"`
 	LatestOwner     string                 `json:"latest_owner,omitempty"`
 	Origin          string                 `json:"origin,omitempty"`
 	Identity        string                 `json:"workspace_identity,omitempty"`
@@ -363,7 +368,7 @@ func (r Record) FinishAction() string {
 		if r.Unsettled() {
 			return ""
 		}
-		if r.Phase == "stopped" && (r.Candidate != nil || r.PR != nil || r.AcceptedHead(0) != "") {
+		if r.Phase == "stopped" && (r.Candidate != nil || r.PR != nil || r.AcceptedHead() != "") {
 			return "resume_delivery"
 		}
 		if r.Candidate != nil {
@@ -378,7 +383,7 @@ func (r Record) FinishAction() string {
 		if r.PublicationUnverified() {
 			return "verify_publication"
 		}
-		if r.AcceptedHead(0) != "" {
+		if r.AcceptedHead() != "" {
 			return "retry_publish"
 		}
 		return ""
@@ -411,13 +416,10 @@ func (o Operation) CommittedHead() string {
 	return ""
 }
 
-func (r Record) AcceptedHead(round int) string {
+func (r Record) AcceptedHead() string {
 	var accepted string
 	for i := len(r.Operations) - 1; i >= 0; i-- {
 		o := r.Operations[i]
-		if round > 0 && o.Round != round {
-			continue
-		}
 		if accepted == "" {
 			accepted = o.AcceptedOperation
 		} else if o.ID == accepted {
@@ -487,7 +489,6 @@ func (r Record) CostTotal() (*string, bool) {
 }
 
 type RemainingBudget struct {
-	Rounds      *int     `json:"rounds,omitempty"`
 	Dollars     string   `json:"dollars,omitempty"`
 	Seconds     *float64 `json:"seconds,omitempty"`
 	CostPending bool     `json:"cost_pending,omitempty"`
@@ -497,11 +498,6 @@ type RemainingBudget struct {
 func (r Record) RemainingBudget(now time.Time) RemainingBudget {
 	b := r.Input.Budget
 	var remaining RemainingBudget
-	if b.Rounds > 0 {
-		rounds := max(0, b.Rounds-r.Round)
-		remaining.Rounds = &rounds
-		remaining.Exhausted = rounds == 0
-	}
 	if b.Minutes != "" {
 		n, _ := new(big.Rat).SetString(b.Minutes)
 		n.Mul(n, big.NewRat(60, 1))
