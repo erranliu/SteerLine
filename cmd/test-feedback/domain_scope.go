@@ -58,8 +58,11 @@ func domainGroupsForGOOS(suite, goos string) []localGroup {
 		if goos == "windows" {
 			groups = append(groups, localGroup{ID: "go-deployment-service", Packages: []string{"./internal/localservice"}})
 		}
+		appRoots := domainRootsForGOOS(suite, "internal/app", goos)
+		appRoots = slices.DeleteFunc(appRoots, func(root string) bool { return root == "TestDeploymentDiscardRuns" })
 		return append(groups,
-			localGroup{ID: "go-deployment-app", Packages: []string{"./internal/app"}, Tests: domainRootsForGOOS(suite, "internal/app", goos)},
+			localGroup{ID: "go-deployment-app", Packages: []string{"./internal/app"}, Tests: appRoots},
+			localGroup{ID: "go-deployment-discard", Packages: []string{"./internal/app"}, Tests: []string{"TestDeploymentDiscardRuns"}},
 			localGroup{ID: "go-deployment-upgrade", Packages: []string{"./internal/runnerclient"}, Tests: domainRootsForGOOS(suite, "internal/runnerclient", goos)})
 	}
 	return []localGroup{

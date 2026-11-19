@@ -14,6 +14,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -31,9 +32,10 @@ type ApplicationStopVerification struct {
 	Runner         runnerclient.StoppedVerification `json:"runner"`
 }
 type ProjectStopVerification struct {
-	ConfigID   string `json:"config_id"`
-	ProjectID  string `json:"project_id"`
-	InstanceID string `json:"instance_id"`
+	ConfigID          string                        `json:"config_id"`
+	ProjectID         string                        `json:"project_id"`
+	InstanceID        string                        `json:"instance_id"`
+	CheckpointProcess *httpcontract.ProcessIdentity `json:"checkpoint_process,omitempty"`
 }
 
 // A restart proof deliberately makes no native-resource-settlement claim.
@@ -227,15 +229,15 @@ func recheckableShutdown(r contract.Shutdown, id contract.Identity) error {
 }
 
 func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin) (ProjectStopVerification, error) {
-	return verifyProjectOfflineMode(ctx, c, p, id, runnerProof, restartPin, nil, false)
+	return verifyProjectOfflineMode(ctx, c, p, id, runnerProof, restartPin, nil, false, nil)
 }
 
 // Discard preparation already holds the repository lock for the complete swap.
-func verifyDiscardProject(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, proof runnerclient.StoppedVerification, original runnerclient.Client, interrupted bool) (ProjectStopVerification, error) {
-	return verifyProjectOfflineMode(ctx, c, p, id, proof, nil, &original, interrupted)
+func verifyDiscardProject(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, proof runnerclient.StoppedVerification, original runnerclient.Client, interrupted bool, owner *httpcontract.ProcessIdentity) (ProjectStopVerification, error) {
+	return verifyProjectOfflineMode(ctx, c, p, id, proof, nil, &original, interrupted, owner)
 }
 
-func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, discardRunner *runnerclient.Client, interrupted bool) (ProjectStopVerification, error) {
+func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, discardRunner *runnerclient.Client, interrupted bool, owner *httpcontract.ProcessIdentity) (ProjectStopVerification, error) {
 	discard := discardRunner != nil
 	proof := ProjectStopVerification{ConfigID: p.ConfigID, ProjectID: p.ProjectID, InstanceID: p.InstanceID}
 	open := OpenNativeTaskReader
@@ -276,9 +278,10 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 		proof.InstanceID = p.InstanceID
 	}
 	if discard {
-		if err = verifyDiscardCheckpoint(snapshot.Checkpoint, c, p, id, interrupted); err != nil {
+		if err = verifyDiscardCheckpoint(snapshot.Checkpoint, c, p, id, interrupted, owner); err != nil {
 			return proof, err
 		}
+		proof.CheckpointProcess = owner
 	} else if interrupted {
 		if err = verifyCheckpointHost(snapshot.Checkpoint, p, id); err != nil {
 			return proof, err
@@ -455,7 +458,21 @@ func verifyStoppedCheckpoint(cp *hostcontract.ServiceCheckpoint, c Config, p con
 // An exited interrupted host cannot publish a receipt. Discard proves local
 // closure through exact host exit and actual locks, retaining checkpoint
 // ownership and requiring independent native settlement before the swap.
-func verifyDiscardCheckpoint(cp *hostcontract.ServiceCheckpoint, c Config, p contract.ProjectShutdown, id contract.Identity, interrupted bool) error {
+func verifyDiscardCheckpoint(cp *hostcontract.ServiceCheckpoint, c Config, p contract.ProjectShutdown, id contract.Identity, interrupted bool, owner *httpcontract.ProcessIdentity) error {
+	if owner != nil {
+		if cp == nil || cp.Service.ProcessIdentity == nil || cp.Service.Status != "stopped" || cp.Service.Ready || owner.Kind != "os" ||
+			*owner == id.Process || !runnerbinding.SamePath(owner.Executable, id.Process.Executable) {
+			return errors.New("previous project stopped checkpoint owner is unverified")
+		}
+		exited, err := httpclient.ProcessExited(*owner)
+		if err != nil || !exited {
+			return errors.Join(err, errors.New("previous project host exit is unverified"))
+		}
+		if err := verifyCheckpointProcess(cp, p, *owner); err != nil {
+			return err
+		}
+		return verifyCheckpointBindings(cp, c)
+	}
 	if !interrupted {
 		return verifyStoppedCheckpoint(cp, c, p, id)
 	}
@@ -483,6 +500,10 @@ func verifyCheckpointBindings(cp *hostcontract.ServiceCheckpoint, c Config) erro
 }
 
 func verifyCheckpointHost(cp *hostcontract.ServiceCheckpoint, p contract.ProjectShutdown, id contract.Identity) error {
+	return verifyCheckpointProcess(cp, p, id.Process)
+}
+
+func verifyCheckpointProcess(cp *hostcontract.ServiceCheckpoint, p contract.ProjectShutdown, owner httpcontract.ProcessIdentity) error {
 	if cp == nil || cp.Service.InstanceID != p.InstanceID || cp.Service.ProcessIdentity == nil {
 		return errors.New("original project checkpoint identity differs")
 	}
@@ -490,7 +511,7 @@ func verifyCheckpointHost(cp *hostcontract.ServiceCheckpoint, p contract.Project
 		return errors.New("original project frozen configuration digest is missing or invalid")
 	}
 	process := cp.Service.ProcessIdentity
-	if process.Kind != id.Process.Kind || process.PID != id.Process.PID || process.Created != id.Process.Created || process.Executable != id.Process.Executable {
+	if process.Kind != owner.Kind || process.PID != owner.PID || process.Created != owner.Created || process.Executable != owner.Executable {
 		return errors.New("original project checkpoint belongs to another host process")
 	}
 	return nil

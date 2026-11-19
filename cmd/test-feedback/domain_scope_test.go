@@ -41,9 +41,9 @@ func domainSourceFixture(t *testing.T) string {
 func TestAppDomainSelectionPreservesPlatformOwnersAndExplicitRoots(t *testing.T) {
 	for _, goos := range []string{"windows", "linux", "darwin"} {
 		dep := domainGroupsForGOOS("go.deployment", goos)
-		wantGroups, wantApp := 3, 10
+		wantGroups, wantApp := 4, 10
 		if goos == "windows" {
-			wantGroups, wantApp = 4, 11
+			wantGroups, wantApp = 5, 11
 		}
 		if len(dep) != wantGroups || len(domainRootsForGOOS("go.deployment", "internal/app", goos)) != wantApp {
 			t.Fatal(goos, dep)
@@ -57,6 +57,17 @@ func TestAppDomainSelectionPreservesPlatformOwnersAndExplicitRoots(t *testing.T)
 		}
 		if goos == "windows" && (!slices.Equal(dep[1].Packages, []string{"./internal/localservice"}) || len(dep[1].Tests) != 0) {
 			t.Fatal("Windows service owner changed", dep)
+		}
+		var appRoots []string
+		for _, group := range dep {
+			if slices.Equal(group.Packages, []string{"./internal/app"}) {
+				appRoots = append(appRoots, group.Tests...)
+			}
+		}
+		slices.Sort(appRoots)
+		if !slices.Equal(appRoots, domainRootsForGOOS("go.deployment", "internal/app", goos)) ||
+			!slices.Equal(dep[len(dep)-2].Tests, []string{"TestDeploymentDiscardRuns"}) {
+			t.Fatal("deployment App partition lost, duplicated or moved a root", dep)
 		}
 		upgrade := dep[len(dep)-1]
 		if !slices.Equal(upgrade.Tests, []string{"TestUpgradeDrainedUsesCandidateProofAndBothBusinessReaders"}) {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,6 +56,7 @@ type DeploymentDiscard struct {
 	Moves           []discardMove                     `json:"moves"`
 	StopDiagnostic  string                            `json:"stop_diagnostic,omitempty"`
 	InterruptedHost *contract.Identity                `json:"interrupted_host,omitempty"`
+	UnstartedHost   *contract.Identity                `json:"unstarted_host,omitempty"`
 }
 
 type DiscardedProject struct {
@@ -144,12 +146,14 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	if err != nil && !interrupted {
 		return fail(err)
 	}
+	unstarted := false
 	if !interrupted {
-		if err := recheckableShutdown(shutdown, *b.Identity); err != nil {
+		unstarted, err = recheckableDiscardShutdown(shutdown, *b.Identity, pin)
+		if err != nil {
 			return fail(err)
 		}
-		if shutdown.Runner == nil || !runnerbinding.SamePath(shutdown.Runner.StateDir, pin.StateDir) ||
-			shutdown.Runner.ExecutableSHA256 != pin.SHA256 || shutdown.Runner.ResourceDigest != pin.ResourceDigest || shutdown.Runner.Version != pin.Version {
+		if !unstarted && (!runnerbinding.SamePath(shutdown.Runner.StateDir, pin.StateDir) ||
+			shutdown.Runner.ExecutableSHA256 != pin.SHA256 || shutdown.Runner.ResourceDigest != pin.ResourceDigest || shutdown.Runner.Version != pin.Version) {
 			return fail(errors.New("original shutdown Runner differs from the home binding"))
 		}
 	}
@@ -167,6 +171,8 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	stateRoot := filepath.Join(result.Home, "state")
 	var configs []Config
 	stateNames := map[string]bool{}
+	owners := map[string]*httpcontract.ProcessIdentity{}
+	drainedBuilds := map[string]bool{}
 	for _, entry := range catalog.entries {
 		p, ok := byConfig[entry.view.ConfigID]
 		if !ok && !interrupted {
@@ -178,6 +184,9 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 		}
 		if err := c.ResolveIdentity(ctx); err != nil {
 			return fail(err)
+		}
+		if !interrupted && p.ProjectID != httpcontract.ProjectID(c.Identity()) {
+			return fail(errors.New("original project configuration identity differs"))
 		}
 		if interrupted {
 			p = contract.ProjectShutdown{ConfigID: entry.view.ConfigID, ProjectID: httpcontract.ProjectID(c.Identity())}
@@ -211,11 +220,46 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 		if interrupted && snapshot.Checkpoint != nil {
 			p.InstanceID = snapshot.Checkpoint.Service.InstanceID
 		}
-		if err := verifyDiscardCheckpoint(snapshot.Checkpoint, c, p, *b.Identity, interrupted); err != nil {
+		if unstarted {
+			cp := snapshot.Checkpoint
+			if cp == nil || cp.Service.InstanceID == "" || cp.Service.ProcessIdentity == nil || cp.Service.RunnerBuild == nil {
+				return fail(errors.New("previous project checkpoint ownership is missing"))
+			}
+			previous := cp.Service.RunnerBuild
+			if sha, err := hex.DecodeString(previous.SHA256); err != nil || len(sha) != 32 || previous.Version == "" || previous.ResourceDigest == "" {
+				return fail(errors.New("previous project Runner build is unverified"))
+			}
+			selected := c.RunnerExecution.Runner
+			if !runnerbinding.SamePath(selected.Executable, pin.Executable) || selected.SHA256 != pin.SHA256 || selected.Version != pin.Version ||
+				!runnerbinding.SamePath(previous.Executable, pin.Executable) || !runnerbinding.SamePath(previous.StateDir, pin.StateDir) ||
+				previous.SHA256 == pin.SHA256 && !runnerbinding.SameBuild(*previous, pin) {
+				return fail(errors.New("previous project or saved configuration Runner binding differs from the installation"))
+			}
+			process := cp.Service.ProcessIdentity
+			owner := httpcontract.ProcessIdentity{Kind: process.Kind, PID: process.PID, Created: process.Created, Executable: process.Executable}
+			owners[p.ConfigID] = &owner
+			p.InstanceID = cp.Service.InstanceID
+			// Only the in-memory verifier uses the checkpoint's original build.
+			// The saved selection and the old database are never rewritten.
+			c.RunnerExecution.Runner.SHA256 = previous.SHA256
+			c.RunnerExecution.Runner.Version = previous.Version
+		}
+		if err := verifyDiscardCheckpoint(snapshot.Checkpoint, c, p, *b.Identity, interrupted, owners[p.ConfigID]); err != nil {
 			return fail(fmt.Errorf("%s: %w", p.ConfigID, err))
 		}
 		if !runnerbinding.SameBuild(*snapshot.Checkpoint.Service.RunnerBuild, pin) {
-			return fail(errors.New("original project checkpoint Runner differs from the home binding"))
+			if !unstarted {
+				return fail(errors.New("original project checkpoint Runner differs from the home binding"))
+			}
+			sha := snapshot.Checkpoint.Service.RunnerBuild.SHA256
+			if !drainedBuilds[sha] {
+				// A prior deployment may already have installed a new Runner.
+				// Never start that build on undrained old Runs or controls.
+				if err := original.VerifyInstalledUpgradeDrained(ctx, sha); err != nil {
+					return fail(err)
+				}
+				drainedBuilds[sha] = true
+			}
 		}
 		byConfig[p.ConfigID] = p
 		configs = append(configs, c)
@@ -239,6 +283,9 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	result.Discard = journal
 	if interrupted {
 		journal.InterruptedHost = b.Identity
+	}
+	if unstarted {
+		journal.UnstartedHost = b.Identity
 	}
 	if stopErr != nil {
 		journal.StopDiagnostic = stopErr.Error()
@@ -269,7 +316,7 @@ func prepareApplicationDiscard(ctx context.Context, runner, invocation string, v
 	proof := &ApplicationStopVerification{OriginalHost: *b.Identity, VerifierSHA256: hash, Runner: *journal.Resources, Projects: []ProjectStopVerification{}}
 	for i, c := range configs {
 		p := byConfig[catalog.entries[i].view.ConfigID]
-		project, err := verifyDiscardProject(ctx, c, p, *b.Identity, *journal.Resources, original, interrupted)
+		project, err := verifyDiscardProject(ctx, c, p, *b.Identity, *journal.Resources, original, interrupted, owners[p.ConfigID])
 		if err != nil {
 			return fail(fmt.Errorf("%s: %w", p.ConfigID, err))
 		}
@@ -316,6 +363,33 @@ func discardPlainPath(path string) error {
 		return fmt.Errorf("linked discard path: %s", path)
 	}
 	return nil
+}
+
+// A host that failed before opening any project cannot republish the previous
+// projects' instance IDs. Its matching receipt proves only its own local exit;
+// each old checkpoint owner and all native resources are independently checked.
+func recheckableDiscardShutdown(r contract.Shutdown, id contract.Identity, pin runnercontract.BuildPin) (bool, error) {
+	if err := recheckableShutdown(r, id); err == nil {
+		return false, nil
+	}
+	if r.Version != 2 || r.Identity != id || r.Runner == nil || len(r.Projects) == 0 || len(r.Projects) > 512 {
+		return false, errors.New("original host shutdown identity or membership is unverified")
+	}
+	seen := map[string]bool{}
+	for _, p := range r.Projects {
+		if p.ConfigID == "" || seen[p.ConfigID] || p.InstanceID != "" || p.ProjectID == "" || !p.LocalClosed || !p.LocksReleased {
+			return false, errors.New("unstarted host project closure or membership is unverified")
+		}
+		seen[p.ConfigID] = true
+	}
+	runner := r.Runner
+	if runner.StateDir != "" && !runnerbinding.SamePath(runner.StateDir, pin.StateDir) ||
+		runner.ExecutableSHA256 != "" && runner.ExecutableSHA256 != pin.SHA256 ||
+		runner.Version != "" && runner.Version != pin.Version || runner.ResourceDigest != "" && runner.ResourceDigest != pin.ResourceDigest ||
+		runner.ExecutableSHA256 == "" && (runner.InstanceID != "" || runner.RequestID != "") {
+		return false, errors.New("unstarted host Runner differs from the home binding")
+	}
+	return true, nil
 }
 
 func prepareDiscardedTasks(ctx context.Context, c Config, dir string) (counts DiscardedProject, retErr error) {
