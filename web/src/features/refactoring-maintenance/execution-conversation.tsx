@@ -30,6 +30,12 @@ export function operationStateLabel(state: string) {
   return operationStates[state] ?? state;
 }
 
+export function operationStatusLabel(operation: Operation) {
+  return operation.state === "submitted" && operation.run_status === "blocked"
+    ? "已阻断（待结算）"
+    : operationStateLabel(operation.state);
+}
+
 const recommendations = {
   merge: "建议合入",
   revise: "建议修改后再审",
@@ -90,13 +96,18 @@ function AgentMessage({
       {summary && <p className="refactoring-message-summary">{summary}</p>}
       {!execution && !summary && (
         <p>
-          {operation.state === "complete" && operation.feedback
-            ? "未形成已采纳的结论"
-            : operation.workflow === "generate" &&
-                operation.state === "submitted"
-              ? "等待 SteerAgent 决策"
-              : operationStateLabel(operation.state)}
+          {operation.state === "submitted" && operation.run_status === "blocked"
+            ? operationStatusLabel(operation)
+            : operation.state === "complete" && operation.feedback
+              ? "未形成已采纳的结论"
+              : operation.workflow === "generate" &&
+                  operation.state === "submitted"
+                ? "等待 SteerAgent 决策"
+                : operationStateLabel(operation.state)}
         </p>
+      )}
+      {!execution && operation.run_diagnostic && (
+        <pre tabIndex={0}>{operation.run_diagnostic}</pre>
       )}
       {execution && operation.prompt && (
         <>
@@ -148,10 +159,15 @@ function SentRequest({ operation }: { operation: Operation }) {
 }
 
 function RunnerMessage({ operation }: { operation: Operation }) {
-  const state = operationStateLabel(operation.state);
+  const state = operationStatusLabel(operation);
   const result = operation.result;
   const summary =
-    (["implement", "repair"].includes(operation.purpose) ? operation.feedback : "") ||
+    (operation.state === "submitted" && operation.run_status === "blocked"
+      ? state
+      : "") ||
+    (["implement", "repair"].includes(operation.purpose)
+      ? operation.feedback
+      : "") ||
     result?.summary ||
     result?.question ||
     (operation.state === "complete"
@@ -166,6 +182,9 @@ function RunnerMessage({ operation }: { operation: Operation }) {
       <h4>Runner · {operationPurposeLabel(operation.purpose)} · 执行反馈</h4>
       <MessageTime value={operation.completed_at} />
       <p className="refactoring-feedback">{summary}</p>
+      {operation.run_diagnostic && (
+        <pre tabIndex={0}>{operation.run_diagnostic}</pre>
+      )}
       {operation.feedback && operation.feedback !== summary && (
         <pre tabIndex={0}>{operation.feedback}</pre>
       )}

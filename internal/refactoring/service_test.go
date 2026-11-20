@@ -90,7 +90,7 @@ func (f *maintenanceRunner) Submit(_ context.Context, req rc.Request) (runnercli
 		if ctx.Mode == "report" {
 			data, _ = json.Marshal(decision.Review{Recommendation: "merge", Report: "收益已验证。" + ctx.PR.HeadRevision + ctx.PR.BaseRevision})
 		}
-		if g.Generate.Repository != nil || (ctx.Mode == "first") != (g.Generate.Directory != nil) {
+		if g.Generate.Repository != nil || (ctx.Mode == "first" || ctx.Mode == "report") != (g.Generate.Directory != nil) {
 			f.t.Fatalf("invalid decision source: %+v", g.Generate)
 		}
 		run.Execution.Workspace = filepath.Join(f.dir, "runs", id, "content")
@@ -723,7 +723,7 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 	for _, phase := range []string{"first", "select", "audit", "report"} {
 		r.Phase = phase
 		dir := ""
-		if phase == "first" {
+		if phase == "first" || phase == "report" {
 			dir = filepath.Join(t.TempDir(), "pinned")
 		}
 		op, err := s.prepareOperation(r, m.ID(), dir, m.ReviewEvidence{Diff: "fixture diff"})
@@ -736,10 +736,10 @@ func TestMaintenanceActualPromptFileHandoff(t *testing.T) {
 		}
 		g := input.Generate
 		want, err := prompts.MaintenanceDecision(phase, r.Input.Strategy, false, false)
-		if err != nil || g.Instruction != want || op.Prompt != want || g.Repository != nil || (g.Directory != nil) != (phase == "first") {
+		if err != nil || g.Instruction != want || op.Prompt != want || g.Repository != nil || (g.Directory != nil) != (phase == "first" || phase == "report") {
 			t.Fatal("wrong decision request", phase, err)
 		}
-		if phase == "first" && (g.Directory.Path != dir || g.Directory.Access != "read_only") {
+		if (phase == "first" || phase == "report") && (g.Directory.Path != dir || g.Directory.Access != "read_only") {
 			t.Fatal(g.Directory)
 		}
 		count := 1

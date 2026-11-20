@@ -144,6 +144,63 @@ function openSheet() {
   return within(screen.getByRole("dialog"));
 }
 
+it.each(["generate", "execute"] as const)(
+  "shows an unsettled %s Runner block and includes it in debug information",
+  async (workflow) => {
+    const writeText = vi.fn(async (_value: string) => {});
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: { writeText },
+    });
+    const diagnostic = "app-server did not become ready: connection refused";
+    const { submit } = setup([
+      {
+        ...record,
+        phase: "blocked",
+        diagnostic: "Reconciliation deadline exhausted\n" + diagnostic,
+        active: true,
+        slot: true,
+        can_finish: false,
+        finish_action: "",
+        can_stop: true,
+        operations: [
+          {
+            id: "blocked-operation",
+            purpose: workflow === "generate" ? "first" : "implement",
+            workflow,
+            state: "submitted",
+            feedback: "",
+            prompt: "original instruction",
+            run_id: "original-run",
+            run_status: "blocked",
+            run_diagnostic: diagnostic,
+          },
+        ],
+      },
+    ]);
+    const region = await screen.findByRole("region", { name: "重构任务详情" });
+    const detail = within(region);
+    expect(detail.getByText("已阻断", { exact: true })).toBeVisible();
+    expect(detail.getByText("已阻断（待结算）", { exact: true })).toBeVisible();
+    expect(detail.getByText(diagnostic, { exact: true })).toBeVisible();
+    expect(detail.queryByText("等待 SteerAgent 决策")).not.toBeInTheDocument();
+    expect(detail.queryByText("等待 Runner 回执")).not.toBeInTheDocument();
+    expect(detail.getByRole("button", { name: "立即停止" })).toBeEnabled();
+    expect(
+      detail.queryByRole("button", { name: "提前结束并创建 PR" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(detail.getByRole("button", { name: "复制调试信息" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls[0][0];
+    expect(copied).toContain("状态：已阻断");
+    expect(copied).toContain("已阻断（待结算）");
+    expect(copied).toContain("Runner 状态：blocked");
+    expect(copied).toContain("Runner 诊断：" + diagnostic);
+    expect(copied).toContain("Runner Run ID：original-run");
+    expect(submit).not.toHaveBeenCalled();
+  },
+);
+
 it.each([
   ["queued", "", { exhausted: false }, "完成一项改进后交付", ""],
   ["first", "", { seconds: 0, exhausted: true }, "0 秒", "完成当前工作后推进 PR"],
