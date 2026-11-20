@@ -7,22 +7,13 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/testkit/boundary"
 )
 
 // The actual cross-process behavior is exercised by the independently launched
 // TestDebugReleaseRuntime driver in a newly generated SteerlineDebug package.
 func TestRunnerExecutionBoundary(t *testing.T) {
-	report, err := boundary.ScanSource("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, violation := range report.Violations {
-		if strings.HasPrefix(violation, "developer configuration boundary:") {
-			t.Error(violation)
-		}
-	}
+	// The complete repository guard owns source checks (including developer
+	// configuration). This test retains the distinct product CLI closures.
 	for _, owner := range []string{"adapters", "reliable", "workflow", "conversation"} {
 		if _, err := os.Stat("../../internal/execution/" + owner); !os.IsNotExist(err) {
 			t.Fatal("retired execution owner returned", owner, err)

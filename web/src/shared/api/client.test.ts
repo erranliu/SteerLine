@@ -1,15 +1,16 @@
-import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
+import {
+  api,
+  envelope,
+  identity,
+  receipt,
+  response,
+  setupClientTests,
+} from "./client.test-support";
+setupClientTests();
+import { describe, it, expect, vi } from "vitest";
 import { Api } from "./client";
 import { webcrypto } from "node:crypto";
 import * as journal from "./journal";
-import type { Identity, Envelope, Receipt } from "./types";
-const identity = {
-  project_id: "project-a",
-  instance_id: "instance-a",
-  ready: true,
-} as Identity;
-const api = new Api(identity, "csrf");
-let envelope: Envelope;
 
 it.each([false, true])(
   "reads bounded final bytes across UTF-8 boundaries and verifies SHA (tamper=%s)",
@@ -75,59 +76,6 @@ it.each([false, true])(
     expect(fetch).toHaveBeenCalledTimes(4);
   },
 );
-const response = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-const receipt = (
-  status: Receipt["status"] = "applied",
-  extra: Partial<Receipt> = {},
-): Receipt => ({
-  ...envelope,
-  original: envelope,
-  status,
-  sampled_at: new Date().toISOString(),
-  ...extra,
-});
-beforeEach(async () => {
-  envelope = {
-    request_id: crypto.randomUUID().replaceAll("-", ""),
-    project_id: "project-a",
-    instance_id: "instance-a",
-    action: "start_task",
-    target_id: "8",
-    expected_version: 4,
-    payload: { execution_profile_id: "original" },
-  };
-  const db = await journal.openJournal();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(["requests", "drafts"], "readwrite");
-    tx.objectStore("requests").clear();
-    tx.objectStore("drafts").clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  const locks = new Map<string, Promise<unknown>>();
-  Object.defineProperty(navigator, "locks", {
-    configurable: true,
-    value: {
-      request: (
-        name: string,
-        options: LockOptions | (() => Promise<unknown>),
-        callback?: () => Promise<unknown>,
-      ) => {
-        const work = typeof options === "function" ? options : callback!;
-        const next = (locks.get(name) ?? Promise.resolve())
-          .catch(() => {})
-          .then(work);
-        locks.set(name, next);
-        return next;
-      },
-    },
-  });
-});
-afterEach(() => vi.unstubAllGlobals());
 describe("immutable browser requests", () => {
   it.each([
     ["environment_start", "command_not_found"],
@@ -166,26 +114,7 @@ describe("immutable browser requests", () => {
       ).toBeUndefined();
     },
   );
-  it("snapshots caller-owned data before waiting for a lock or persistence", async () => {
-    const original = structuredClone(envelope);
-    const fetch = vi.fn(async (_path, init) => {
-      expect(JSON.parse(init.body)).toEqual(original);
-      return response({
-        ...original,
-        original,
-        status: "applied",
-        sampled_at: "now",
-      });
-    });
-    vi.stubGlobal("fetch", fetch);
-    const sending = api.submit(envelope);
-    envelope.target_id = "changed-after-submit";
-    envelope.payload.execution_profile_id = "changed-profile";
-    await sending;
-    expect((await journal.requestByID(original.request_id))?.envelope).toEqual(
-      original,
-    );
-  });
+
   it("does not replay authoritative absence after reconciliation is cancelled", async () => {
     await journal.saveRequest(envelope);
     let resolve!: (value: Response) => void;
@@ -204,22 +133,7 @@ describe("immutable browser requests", () => {
     await expect(reconciling).rejects.toThrow();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
-  it("commits the whole envelope before POST, preserving target and version", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_path, init) => {
-        expect(
-          (await journal.requestByID(envelope.request_id))?.envelope,
-        ).toEqual(envelope);
-        expect(JSON.parse(init.body)).toEqual(envelope);
-        return response(receipt());
-      }),
-    );
-    await api.submit(envelope);
-    expect(
-      (await journal.requestByID(envelope.request_id))?.response?.status,
-    ).toBe("applied");
-  });
+
   it("does not send when IndexedDB save fails", async () => {
     vi.spyOn(journal, "saveRequest").mockRejectedValueOnce(
       new Error("storage failed"),
@@ -404,16 +318,7 @@ describe("immutable browser requests", () => {
     ).toBe("outcome_unknown");
     expect(fetch).toHaveBeenCalledTimes(2);
   });
-  it("never resends an unknown native operation", async () => {
-    await journal.saveRequest(envelope);
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(response(receipt("outcome_unknown")));
-    vi.stubGlobal("fetch", fetch);
-    await api.reconcile(envelope);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0][1].method).toBeUndefined();
-  });
+
   it("resends only a formally absent request with exactly its saved envelope", async () => {
     await journal.saveRequest(envelope);
     const fetch = vi

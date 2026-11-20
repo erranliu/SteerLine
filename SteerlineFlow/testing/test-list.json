@@ -42,8 +42,8 @@
       "level": "L1",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L1",
-      "check": "固定Go最小规则/契约/持久化/提示词/清单检查，现有完整Check的真实仓库Windows/Linux及非活动源码依赖矩阵，以及复用的前端请求封装与候选状态两文件全部执行；非零命中、终态完整、零跳过且断言通过；既有执行边界入口扫描全部平台/标签源码，开发者配置只允许配置定义/校验/编辑与能力映射读取，服务/查询/辅助包的原始导入或字段访问拒绝。",
-      "note": "一个固定最小集，整体目标一分钟；需要Go/Git、Node 24+及npm --prefix web ci。boundary owner复用TestThreeLayerRepositoryBoundary与原提示词守卫，保留其他Go及两份Vitest文件，不运行Web构建；完整反例仍归go.full。缺依赖明确失败。"
+      "check": "固定17个Go根：原子持久化、明确选择的六个任务/契约根、清单一致性、全部固定提示词正文/参数/材料校验、提示词源码守卫、完整真实仓库Check及Runner Windows/Linux产品闭包；前端两个minimum文件共五个代表用例，验证提交前冻结/保存原信封、未知操作不重发、候选状态与停止资格。全部非零执行、终态完整、零跳过、断言通过；完整Check覆盖所有平台/标签源码及开发者/原生配置所有权，不削减依赖矩阵。",
+      "note": "一个固定最小集，整体目标一分钟；Go/Git、Node 24+及npm --prefix web ci。不整包执行规则、不构建Web；源码扫描由boundary owner同一进程内的完整Check共享一次。新增业务回归默认进入L4 go.rules/go.boundary/web.unit，改变L1选择须显式审核；缺依赖、缺根或额外根失败。"
     },
     {
       "id": "smoke.delivery",
@@ -98,6 +98,24 @@
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario runtime.shared-runner-projects",
       "check": "同 home 两项目分别经公开项目检测取得资格后共用一个 Runner，相同产品请求号创建独立 Run；分别消费仓库/PR，整体重启保持绑定、零自动新输入，全体资源清理完整。",
       "note": "独立 home、双项目 repo/DB/provider/端口及证据；两项目分别通过 environment_start 和原 Run 停止/结果封存，不直接写资格；runtime 包内并发二。"
+    },
+    {
+      "id": "go.rules",
+      "name": "任务与调用方契约规则全集",
+      "level": "L4",
+      "environment": "isolated",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.rules",
+      "check": "全量执行internal/task/model、internal/task、internal/runnercontract三个普通Go owner，含任务规则、文档、DAG、重放/结果/依赖和等待/接管/策略契约。每包非零、终态完整、零跳过、断言通过；L1仅复用其中六个明确根。",
+      "note": "Go/Git；使用普通Go owner全量，不继承L1的-run筛选，p=1/parallel=1。仍包含在go.full中；按实际行为影响选择，不因其他L1改动默认必跑。"
+    },
+    {
+      "id": "go.boundary",
+      "name": "源码与依赖边界完整回归",
+      "level": "L4",
+      "environment": "isolated",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.boundary",
+      "check": "全量执行internal/testkit/boundary及tests/integration普通Go测试，含真实仓库完整Check、提示词/原生配置/开发者配置/所有权的正反例及非活动源码、Runner Windows/Linux产品闭包。每包非零、终态完整、零跳过、断言通过；不含runnercontract/e2e标签或真实Runner。",
+      "note": "Go/Git；使用普通Go owner全量，不继承L1的-run筛选，p=1/parallel=1。仍包含在go.full中；按实际行为影响选择，不因其他L1改动默认必跑。"
     },
     {
       "id": "go.full",
@@ -248,7 +266,7 @@
       "level": "L4",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit",
-      "check": "全部现有 src/**/*.test.ts/tsx 的 Vitest 原生文件/断言集合完整、非零、零跳过、断言通过；覆盖回执保存失败后沿原请求核实生效/拒绝/未知、启动待核实提示及禁止重复POST；保留原生 JSON/stdout/stderr。",
+      "check": "全部现有 src/**/*.test.ts/tsx 的 Vitest 原生文件/断言集合完整、非零、零跳过、断言通过；覆盖回执保存失败后沿原请求核实生效/拒绝/未知、启动待核实提示及禁止重复POST；保留原生 JSON/stdout/stderr。 包含client/state原全集及独立minimum文件；拆分只迁移原断言，不减少并发、超时、持久化失败及恢复矩阵。",
       "note": "Node 24+、npm --prefix web ci；不运行构建或浏览器，无模型/远端副作用。复用 L1 的两份文件，不复制测试。"
     },
     {
