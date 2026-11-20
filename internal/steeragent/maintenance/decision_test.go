@@ -33,6 +33,9 @@ func TestDecisionRoleBoundary(t *testing.T) {
 		valid      bool
 	}{
 		{`{"kind":"execute","prompt":"验证并修改","summary":"有限切片"}`, "select", true},
+		{`{"kind":"execute","prompt":"验证并修改","summary":"有限切片","question":null}`, "first", true},
+		{`{"kind":"accept","summary":"证据充分","question":null}`, "audit", true},
+		{`{"kind":"ask","summary":"需要决定","question":null}`, "first", false},
 		{`{"kind":"accept","prompt":"","summary":"证据充分"}`, "audit", true},
 		{`{"kind":"accept","prompt":"","summary":""}`, "select", false},
 		{`{"kind":"finish","prompt":"","summary":""}`, "finish", false},

@@ -64,6 +64,19 @@ func (s *Service) context(r model.Record, review model.ReviewEvidence) decisionC
 	}
 	if r.Phase == "report" {
 		f.PR, f.Checks = r.PR, review.Checks
+		accepted := map[string]bool{}
+		for _, op := range r.Operations {
+			if op.AcceptedOperation != "" {
+				accepted[op.AcceptedOperation] = true
+			}
+		}
+		for _, op := range r.Operations {
+			if r.PR != nil && accepted[op.ID] && op.Settled() && executionCommitted(op) && op.CommittedHead() == r.PR.HeadRevision {
+				f.Feedback = append(f.Feedback, contextOperation{ID: op.ID, TargetID: op.TargetID, Purpose: op.Purpose,
+					Prompt: op.Prompt, Feedback: op.Feedback, Result: op.Result, WorkspaceGit: op.WorkspaceGit,
+					Status: op.Run.Status, NativeOutcome: op.Run.Final.NativeOutcome, Committed: true})
+			}
+		}
 		return f
 	}
 	f.TargetID, f.TargetStart, f.TargetPrompt = r.TargetID, r.TargetStart, r.TargetPrompt
@@ -197,9 +210,9 @@ func (s *Service) prepareOperation(r model.Record, id, directory string, review 
 		if r.Phase == "report" {
 			g.Materials = append(g.Materials, runnercontract.Document{Kind: "file", Path: "maintenance/pr.diff", Content: &review.Diff})
 		}
-		if r.Phase == "first" {
+		if r.Phase == "first" || r.Phase == "report" {
 			if directory == "" {
-				return o, errors.New("缺少首轮调查目录")
+				return o, errors.New("缺少固定只读源码目录")
 			}
 			g.Directory = &runnercontract.DirectoryAccess{Path: directory, Access: "read_only"}
 		}

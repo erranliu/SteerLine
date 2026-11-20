@@ -360,9 +360,9 @@ func (s *Service) tick(ctx, lifecycle context.Context, r model.Record) error {
 	id := model.ID()
 	var directory string
 	var prepareErr error
-	if r.Phase == "first" {
+	if r.Phase == "first" || r.Phase == "report" {
 		if s.Investigate == nil || s.InvestigationPath == nil {
-			prepareErr = errors.New("缺少固定首轮调查目录")
+			prepareErr = errors.New("缺少固定只读源码目录")
 		} else {
 			directory, prepareErr = s.InvestigationPath(id)
 		}

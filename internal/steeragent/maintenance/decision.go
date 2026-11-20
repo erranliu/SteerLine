@@ -38,6 +38,9 @@ func Accept(raw []byte, mode string) (Decision, error) {
 	if len(raw) > 1<<20 || !json.Valid(raw) || decoder.Decode(&d) != nil {
 		return d, errors.New("维护决策不是有效JSON")
 	}
+	if bytes.Equal(bytes.TrimSpace(d.Question), []byte("null")) {
+		d.Question = nil
+	}
 	if !present(d.Summary) || d.Kind != "ask" && d.Question != nil || d.Kind != "execute" && d.Prompt != "" {
 		return d, errors.New("维护决定字段与用途不匹配")
 	}
@@ -79,7 +82,7 @@ func allowedKinds(mode string) []string {
 
 func Schema(mode string) json.RawMessage {
 	kinds, _ := json.Marshal(allowedKinds(mode))
-	return json.RawMessage(`{"type":"object","additionalProperties":false,"required":["kind","summary"],"properties":{"kind":{"enum":` + string(kinds) + `},"prompt":{"type":"string"},"summary":{"type":"string"},"question":{"type":"object","additionalProperties":false,"required":["prompt","facts","attempts","options","recommended_option_id","recommendation_reason"],"properties":{"prompt":{"type":"string"},"facts":{"type":"array","items":{"type":"string"}},"attempts":{"type":"array","items":{"type":"string"}},"options":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["id","label","impact"],"properties":{"id":{"type":"string"},"label":{"type":"string"},"impact":{"type":"string"}}}},"recommended_option_id":{"type":"string"},"recommendation_reason":{"type":"string"}}}}}`)
+	return json.RawMessage(`{"type":"object","additionalProperties":false,"required":["kind","summary"],"properties":{"kind":{"enum":` + string(kinds) + `},"prompt":{"type":"string"},"summary":{"type":"string"},"question":{"type":["object","null"],"additionalProperties":false,"required":["prompt","facts","attempts","options","recommended_option_id","recommendation_reason"],"properties":{"prompt":{"type":"string"},"facts":{"type":"array","items":{"type":"string"}},"attempts":{"type":"array","items":{"type":"string"}},"options":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["id","label","impact"],"properties":{"id":{"type":"string"},"label":{"type":"string"},"impact":{"type":"string"}}}},"recommended_option_id":{"type":"string"},"recommendation_reason":{"type":"string"}}}}}`)
 }
 
 func ReportSchema() json.RawMessage {

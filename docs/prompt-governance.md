@@ -16,7 +16,7 @@ Roadmap 规划的 `conversation/2` 通过应用管理的固定普通文件交付
 
 单任务规划沿用 `conversation/2`。沟通入口直接提交用户目标，普通消息直接续接原会话。直接规划和显式规划轮次才使用 `task-planning.md`，并引用随规划请求冻结的 `materials/task-planning.md`。首次发往 Runner 前验证规则文件，已受理请求沿原身份对账。用户确认任务卡后才进入独立的任务文档生成。
 
-重构与维护由 prompts 从[决策模板](../internal/prompts/maintenance-decision.md)组装完整指令，每次只发送共用规则和当前阶段的判断标准。选题时附适用的一句策略偏好。规则随 generate/1 的 `instruction` 交付。`maintenance/context.json` 提供行动事实，PR 评审另附固定版本的 `maintenance/pr.diff`。首轮使用固定启动提交的只读目录。内置「更新过期文档」来自[固定 Markdown](../internal/prompts/materials/refactoring-directions/update-stale-docs.md)，自定义模板来自[安装级数据库](integration/install-deploy.md#自定义重构方向)。受理任务时校验模板版本，并将方向名称和实际提交的原正文保存到任务快照。`maintenance/context.json` 通过 `direction_prompt` 提供该正文。
+重构与维护由 prompts 从[决策模板](../internal/prompts/maintenance-decision.md)组装完整指令，每次只发送共用规则和当前阶段的判断标准。选题时附适用的一句策略偏好。规则随 generate/1 的 `instruction` 交付。`maintenance/context.json` 提供行动事实，PR 评审另附固定版本的 `maintenance/pr.diff`，并以同一 PR head 的只读源码快照核对实现。评审上下文只纳入已接受、可信成功且提交匹配该 head 的执行记录；其中的执行者陈述仍不是测试通过证明。首轮使用固定启动提交的只读目录。内置「更新过期文档」来自[固定 Markdown](../internal/prompts/materials/refactoring-directions/update-stale-docs.md)，自定义模板来自[安装级数据库](integration/install-deploy.md#自定义重构方向)。受理任务时校验模板版本，并将方向名称和实际提交的原正文保存到任务快照。`maintenance/context.json` 通过 `direction_prompt` 提供该正文。
 
 实施和修复由固定模板直接呈现原自然语言执行指令，结果按原生 Final 保存并交回 SteerAgent 上下文审计。决策模板仅接受继续改进或收尾交付许可，预算数字由 SteerLine 保管。发布与冲突续作由固定模板包装指令和结构化上下文。SteerLine 选择[发布](../internal/prompts/maintenance-publish.md)或[冲突续作](../internal/prompts/maintenance-conflict.md)模板，并消费已停止 Run 的已验证最终 JSON。固定资产缺失阻断，原请求保存实际字节。
 

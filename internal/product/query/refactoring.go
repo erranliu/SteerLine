@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"math/big"
+	"strings"
 	"time"
 
 	refactoring "github.com/erranliu/SteerLine/internal/refactoring/model"
@@ -20,6 +21,7 @@ func Refactoring(r refactoring.Record, now time.Time) map[string]any {
 		op["sent_request"] = maintenanceSentRequest(o)
 		if o.Run != nil {
 			op["run_status"] = o.Run.Status
+			op["run_diagnostic"] = refactoringRunDiagnostic(o.Run)
 		}
 		if workflow == "generate" {
 			op["decision_summary"] = o.DecisionSummary
@@ -100,6 +102,13 @@ func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 		wallEnd = *r.FinishedAt
 	}
 	phase := r.DisplayPhase()
+	diagnostic := r.Diagnostic
+	if run := r.BlockedRun(); run != nil {
+		diagnostic = refactoringRunDiagnostic(run)
+		if diagnostic == "" {
+			diagnostic = "Runner 已阻断，原操作尚未结算"
+		}
+	}
 	wait := ""
 	switch r.WaitReason {
 	case refactoring.WaitSharedCapacity:
@@ -127,7 +136,7 @@ func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 		"id": r.ID, "revision": r.Revision, "direction_name": direction,
 		"environment_name": r.Frozen.EnvironmentName, "profile_name": r.Frozen.ProfileName,
 		"phase": phase, "slot": r.Slot, "wait_reason": wait,
-		"summary": r.Summary, "diagnostic": r.Diagnostic, "enqueued_at": r.EnqueuedAt,
+		"summary": r.Summary, "diagnostic": diagnostic, "enqueued_at": r.EnqueuedAt,
 		"elapsed_seconds": r.Elapsed(now).Seconds(), "wall_seconds": wallEnd.Sub(r.CreatedAt).Seconds(),
 		"created_at": r.CreatedAt, "updated_at": r.UpdatedAt, "active": r.Active(),
 		"can_finish": r.CanFinish(), "can_stop": r.Active() && !r.StopRequested,
@@ -135,6 +144,23 @@ func RefactoringSummary(r refactoring.Record, now time.Time) map[string]any {
 		"can_review":   r.CanReview(),
 		"can_conflict": r.Phase == "delivered" && r.PR != nil && !r.PR.Merged && r.PR.State == "open",
 	}
+}
+
+func refactoringRunDiagnostic(run *runnercontract.Run) string {
+	var messages []string
+	seen := map[string]bool{}
+	appendMessage := func(message string) {
+		if message != "" && !seen[message] {
+			messages = append(messages, message)
+			seen[message] = true
+		}
+	}
+	appendMessage(run.Diagnostic)
+	for _, op := range run.Operations {
+		appendMessage(op.Diagnostic)
+		appendMessage(op.OriginalDiagnostic)
+	}
+	return strings.Join(messages, "\n")
 }
 
 // Project only model-facing fields from the frozen request, never execution settings.

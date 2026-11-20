@@ -19,7 +19,7 @@ import { useActivityFeedback } from "../activities/feedback/feedback";
 import {
   ExecutionConversation,
   operationPurposeLabel,
-  operationStateLabel,
+  operationStatusLabel,
 } from "./execution-conversation";
 import { NewMaintenance, type StartInput } from "./new-maintenance";
 import { ManageDirections } from "./directions";
@@ -98,12 +98,13 @@ export type MaintenanceRecord = {
   operations?: {
     id: string;
     purpose: string;
-      state: string;
+    state: string;
     workflow: "generate" | "execute";
     feedback: string;
     prompt: string;
     run_id?: string;
     run_status?: string;
+    run_diagnostic?: string;
     created_at?: string;
     completed_at?: string | null;
     result?: { summary?: string; question?: string } | null;
@@ -819,10 +820,14 @@ function formatDebugInfo(current: DebugRecord, project: string) {
   for (const operation of current.operations ?? []) {
     lines.push(
       "",
-      `${operationPurposeLabel(operation.purpose)} · ${operationStateLabel(operation.state)}`,
+      `${operationPurposeLabel(operation.purpose)} · ${operationStatusLabel(operation)}`,
       `操作 ID：${operation.id}`,
       `Runner Run ID：${operation.run_id || "尚未取得"}`,
     );
+    if (operation.run_status)
+      lines.push(`Runner 状态：${operation.run_status}`);
+    if (operation.run_diagnostic)
+      lines.push(`Runner 诊断：${operation.run_diagnostic}`);
   }
   return lines.join("\n");
 }

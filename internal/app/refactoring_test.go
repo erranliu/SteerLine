@@ -110,6 +110,7 @@ func TestRefactoringPRVersionAndOriginalBranch(t *testing.T) {
 }
 
 func TestRefactoringReviewDiffIgnoresLocalReplacementObjects(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
 	remote, local := t.TempDir(), t.TempDir()
 	fixtureGit(t, remote, "init", "-q", "-b", "main")
 	commit := func(text string) string {
@@ -130,6 +131,28 @@ func TestRefactoringReviewDiffIgnoresLocalReplacementObjects(t *testing.T) {
 	diff, err := p.reviewDiff(context.Background(), r, rc.PRFact{BaseRevision: base, HeadRevision: head})
 	if err != nil || !strings.Contains(diff, "+reviewed") || strings.Contains(diff, "+replacement") {
 		t.Fatalf("review diff differs from the pinned objects: %s, %v", diff, err)
+	}
+	// The review reads the same head as the diff, never the startup base,
+	// mutable local files or local replacement refs.
+	require(t, os.WriteFile(filepath.Join(local, "code.txt"), []byte("uncommitted local contents"), 0600))
+	r.Phase = "report"
+	r.Frozen.Repository.LocalPath, r.Frozen.Repository.BaseRevision = local, base
+	r.PR = &rc.PRFact{HeadRevision: head, BaseRevision: base}
+	id := ref.ID()
+	r.Operations = []ref.Operation{{ID: id, Purpose: "report", PRVersion: head + ":" + base}}
+	t.Cleanup(func() { require(t, releaseInvestigation(id)) })
+	require(t, p.investigation(t.Context(), r, id))
+	directory, err := investigationPath(id)
+	require(t, err)
+	contents, err := os.ReadFile(filepath.Join(directory, "code.txt"))
+	require(t, err)
+	if strings.TrimSpace(string(contents)) != "reviewed" || fixtureGit(t, directory, "rev-parse", "HEAD") != head {
+		t.Fatal("review source did not use the pinned canonical PR head", string(contents))
+	}
+	require(t, releaseInvestigation(id))
+	r.Operations[0].PRVersion = base + ":" + base
+	if err := p.investigation(t.Context(), r, id); err == nil {
+		t.Fatal("snapshot accepted a different queued review version")
 	}
 }
 

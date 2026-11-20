@@ -338,6 +338,9 @@ func (r Record) Unsettled() bool {
 }
 
 func (r Record) DisplayPhase() string {
+	if r.BlockedRun() != nil {
+		return "blocked"
+	}
 	if r.Active() && !r.Slot && r.Phase != PhaseCheckingStart && r.Phase != "waiting_input" && r.Phase != "stopping" {
 		return "queued"
 	}
@@ -348,6 +351,19 @@ func (r Record) DisplayPhase() string {
 		}
 	}
 	return r.Phase
+}
+
+// BlockedRun affects presentation and controls without settling the operation
+// or replacing its workflow phase. Observation and stop duties remain active.
+func (r Record) BlockedRun() *runnercontract.Run {
+	if r.StopRequested || r.Phase == "stopping" || len(r.Operations) == 0 {
+		return nil
+	}
+	o := r.Operations[len(r.Operations)-1]
+	if !o.Settled() && o.Run != nil && o.Run.Status == "blocked" && o.Run.StopStatus != "stopped" {
+		return o.Run
+	}
+	return nil
 }
 
 func (r Record) HasRunnerBinding() bool {
@@ -361,7 +377,7 @@ func (r Record) CanFinish() bool {
 // FinishAction identifies the next authorized delivery operation for the UI and
 // command handler. An accepted publication is reconciled before any new write.
 func (r Record) FinishAction() string {
-	if !r.Authorized {
+	if !r.Authorized || r.BlockedRun() != nil {
 		return ""
 	}
 	if r.Phase == "stopped" || r.Phase == "blocked" {

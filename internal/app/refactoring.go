@@ -213,6 +213,22 @@ func releaseInvestigation(id string) error {
 }
 
 func (p *refactoringPort) investigation(ctx context.Context, r ref.Record, id string) error {
+	commit := r.Frozen.Repository.BaseRevision
+	if r.Phase == "report" {
+		if r.PR == nil || !ref.ValidRevision(r.PR.HeadRevision) || !ref.ValidRevision(r.PR.BaseRevision) {
+			return errors.New("PR 评审缺少固定源码版本")
+		}
+		bound := false
+		for _, op := range r.Operations {
+			if op.ID == id && op.Purpose == "report" && op.PRVersion == r.PR.HeadRevision+":"+r.PR.BaseRevision {
+				bound = true
+			}
+		}
+		if !bound {
+			return errors.New("PR 评审源码版本与原请求不一致")
+		}
+		commit = r.PR.HeadRevision
+	}
 	dir, err := investigationPath(id)
 	if err != nil {
 		return err
@@ -228,7 +244,6 @@ func (p *refactoringPort) investigation(ctx context.Context, r ref.Record, id st
 		source = "/" + source
 	}
 	local := (&url.URL{Scheme: "file", Path: source}).String()
-	commit := r.Frozen.Repository.BaseRevision
 	timeout := positiveDuration(p.config.CommandTimeout, 30*time.Second)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -245,12 +260,12 @@ func (p *refactoringPort) investigation(ctx context.Context, r ref.Record, id st
 		if step.name == "checkout" {
 			git.Env = map[string]string{"GIT_LFS_SKIP_SMUDGE": "1"}
 		}
-		_, err = git.Output(ctx, backend.Command{Executable: "git"}, step.args...)
+		_, err = git.Output(ctx, backend.Command{Executable: "git"}, append([]string{"--no-replace-objects"}, step.args...)...)
 		if err == nil {
 			err = ctx.Err()
 		}
 		if err != nil {
-			err = fmt.Errorf("首轮只读快照 git %s 失败（已用 %s，快照时限 %s）: %w", step.name, time.Since(started).Round(time.Millisecond), timeout, err)
+			err = fmt.Errorf("固定只读快照 git %s 失败（已用 %s，快照时限 %s）: %w", step.name, time.Since(started).Round(time.Millisecond), timeout, err)
 			return errors.Join(err, releaseInvestigation(id))
 		}
 	}
