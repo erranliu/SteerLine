@@ -38,21 +38,19 @@ func quickBoundaryPattern() string { return exactPattern(quickBoundaryTests) }
 var quickBoundaryAssigned = []string{"TestRunnerExecutionBoundary", "TestRunnerExecutionBoundary/windows", "TestRunnerExecutionBoundary/linux"}
 
 // L1 is deliberately fixed and small. All owner regressions remain in L4 go.full.
-var quickRulePackages = append(append([]string{}, taskRulePackages...),
-	"github.com/erranliu/SteerLine/internal/runnercontract")
-
-var quickOwnerCases = []struct {
+type quickOwnerCase struct {
 	ID, Package string
 	Tests       []string
-}{
-	{"quick-owner-catalogue", "github.com/erranliu/SteerLine/cmd/test-feedback", []string{"TestTMRegisteredCatalogueMatchesExecutableManifest", "TestScenarioContentListMatchesRegisteredIDsAndLevels", "TestRegisteredCommandsSelectExactlyTheirDefinitions"}},
-	{"quick-owner-prompts", "github.com/erranliu/SteerLine/internal/prompts", []string{"TestPromptGovernanceGolden", "TestPromptGovernanceRejectsInvalidInputs", "TestTestingContextOnlyBindsRuntimeFiles", "TestDocumentDrivenRuleCopies"}},
-	{"quick-owner-prompt-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestPromptGovernanceSourceBoundary", "TestThreeLayerRepositoryBoundary", "TestNativeConfigurationOwnership"}},
 }
 
+var quickOwnerCases = append(append([]quickOwnerCase{}, taskRuleCases...), []quickOwnerCase{
+	{"quick-owner-catalogue", "github.com/erranliu/SteerLine/cmd/test-feedback", []string{"TestTMRegisteredCatalogueMatchesExecutableManifest", "TestScenarioContentListMatchesRegisteredIDsAndLevels", "TestRegisteredCommandsSelectExactlyTheirDefinitions"}},
+	{"quick-owner-prompts", "github.com/erranliu/SteerLine/internal/prompts", []string{"TestPromptGovernanceGolden", "TestPromptGovernanceRejectsInvalidInputs", "TestTestingContextOnlyBindsRuntimeFiles", "TestDocumentDrivenRuleCopies"}},
+	{"quick-owner-prompt-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestPromptGovernanceSourceBoundary", "TestThreeLayerRepositoryBoundary"}},
+}...)
+
 var quickPackages = func() []string {
-	p := append([]string{corePackage}, quickRulePackages...)
-	p = append(p, boundaryPackage)
+	p := []string{corePackage, boundaryPackage}
 	for _, owner := range quickOwnerCases {
 		p = append(p, owner.Package)
 	}
@@ -239,7 +237,6 @@ func quickInvocations(opts options) []scopedInvocation {
 		invocations = append(invocations, scopedInvocation{id, append(args, packages...), assigned, packages})
 	}
 	add("quick-core", exactPattern(quickTests), quickTests, []string{corePackage})
-	add("quick-rules", "", nil, quickRulePackages)
 	for _, owner := range quickOwnerCases {
 		add(owner.ID, exactPattern(owner.Tests), owner.Tests, []string{owner.Package})
 	}
@@ -674,7 +671,7 @@ func checkScopedCoverage(report scopedReport) []string {
 			if count != 1 {
 				failures = append(failures, fmt.Sprintf("%s: package %s has %d terminal events", group.ID, pkg, count))
 			}
-			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" || (group.ID == "quick-boundary" || strings.HasPrefix(group.ID, "quick-owner-")) || group.ID == "quick-execution" || group.ID == "quick-execution-boundary" {
+			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-boundary" || strings.HasPrefix(group.ID, "quick-owner-") {
 				seenPackages[pkg] += count
 			}
 		}
@@ -744,9 +741,24 @@ func checkScopedCoverage(report scopedReport) []string {
 		if len(seenPackages) != len(expectedPackages) {
 			failures = append(failures, "quick package set differs")
 		}
+		expectedOwnerRoots := map[string]bool{}
+		for _, owner := range quickOwnerCases {
+			for _, name := range owner.Tests {
+				key := owner.Package + "\x00" + name
+				expectedOwnerRoots[key] = true
+				if seenOwnerTests[key] != 1 {
+					failures = append(failures, fmt.Sprintf("quick owner test %s ran %d times, want 1", key, seenOwnerTests[key]))
+				}
+			}
+		}
 		for key, count := range seenOwnerTests {
 			if count != 1 {
 				failures = append(failures, fmt.Sprintf("quick owner test %s ran %d times", key, count))
+			}
+			pkg, name, _ := strings.Cut(key, "\x00")
+			root, _, _ := strings.Cut(name, "/")
+			if !expectedOwnerRoots[pkg+"\x00"+root] {
+				failures = append(failures, "quick owner test has unassigned root "+key)
 			}
 		}
 	}

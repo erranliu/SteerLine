@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+L1 固定最小集收敛与 L4 完整回归（2026-11-20）。[实现、验证与独立审核](l1-convergence.md)
+
 放弃旧运行时直接重建当前 schema 状态，并恢复全部项目未打开的失败启动（2026-11-19）。[修复与验证](deployment-discard-schema-rebuild.md)
 
 schema 51/52 部署恢复（2026-11-19）：用户授权放弃旧运行，归档旧状态后重建任务库；20 个任务、8 条依赖保留，后端、Web、Runner 与四项目就绪。[维护记录](deployment-schema52-recovery-20261119.md)

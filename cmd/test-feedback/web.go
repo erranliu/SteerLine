@@ -15,7 +15,7 @@ import (
 	feedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
-var quickWebFiles = []string{"src/shared/api/client.test.ts", "src/features/runs/state.test.ts"}
+var quickWebFiles = []string{"src/shared/api/client.minimum.test.ts", "src/features/runs/state.minimum.test.ts"}
 
 type vitestReport struct {
 	Success         bool `json:"success"`

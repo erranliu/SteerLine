@@ -26,6 +26,8 @@ func TestLocalSuitesRequireExactSelection(t *testing.T) {
 		{"-level=L4", "-suite=usage", "-scenario=usage.remote-codex"},
 		{"-level=L4", "-suite=usage", "-scenario=usage.remote-codex", "-env=isolated"},
 		{"-level=L3", "-suite=web", "-env=isolated", "-scenario=web.unit"},
+		{"-level=L1", "-suite=go", "-scenario=go.rules"},
+		{"-level=L3", "-suite=go", "-env=isolated", "-scenario=go.boundary"},
 		{"-level=L4", "-suite=web", "-env=controlled"},
 		{"-level=L4", "-suite=go", "-scenario=go.http,go.storage"},
 		{"-level=L4", "-suite=web", "-scenario=go.full"},

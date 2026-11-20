@@ -249,17 +249,7 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tc.events), 0600); err != nil {
 				t.Fatal(err)
 			}
-			var rulesRaw []byte
-			for _, pkg := range quickRulePackages {
-				rulesRaw = append(rulesRaw, packageEvent("start", pkg)...)
-				rulesRaw = append(rulesRaw, packageEvent("pass", pkg)...)
-			}
-			rulesPath := filepath.Join(root, "rules.jsonl")
-			if err := os.WriteFile(rulesPath, rulesRaw, 0600); err != nil {
-				t.Fatal(err)
-			}
 			group := scopedGroup{ID: "quick-core", Assigned: []string{"TestA"}, Packages: []string{corePackage}, StdoutLog: path, Summary: testfeedback.Parse([]byte(tc.events), 0)}
-			rules := scopedGroup{ID: "quick-rules", Packages: quickRulePackages, StdoutLog: rulesPath, Summary: testfeedback.Parse(rulesRaw, 0)}
 			var boundaryRaw []byte
 			boundaryRaw = append(boundaryRaw, packageEvent("start", boundaryPackage)...)
 			for _, name := range quickBoundaryAssigned {
@@ -272,7 +262,7 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 				t.Fatal(err)
 			}
 			boundary := scopedGroup{ID: "quick-boundary", Assigned: quickBoundaryAssigned, Packages: []string{boundaryPackage}, StdoutLog: boundaryPath, Summary: testfeedback.Parse(boundaryRaw, 0)}
-			report := scopedReport{Scope: "quick", Groups: append([]scopedGroup{group, rules, boundary}, syntheticQuickOwners(t, root)...), AllPackages: quickPackages}
+			report := scopedReport{Scope: "quick", Groups: append([]scopedGroup{group, boundary}, syntheticQuickOwners(t, root)...), AllPackages: quickPackages}
 			problems := checkScopedCoverage(report)
 			if tc.wantPass && len(problems) != 0 {
 				t.Fatalf("complete stream added errors: %v", problems)
@@ -418,5 +408,41 @@ func TestQuickOwnersRejectMissingAndReplayedGroups(t *testing.T) {
 				t.Fatalf("coverage error not identified: %v", problems)
 			}
 		})
+	}
+}
+
+func TestQuickOwnersRequireFixedRootsEvenWhenReportAssignmentsChange(t *testing.T) {
+	for _, mode := range []string{"missing-root", "extra-root"} {
+		t.Run(mode, func(t *testing.T) {
+			groups := syntheticQuickOwners(t, t.TempDir())
+			group := &groups[0]
+			name := group.Assigned[0]
+			raw, err := os.ReadFile(group.StdoutLog)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "missing-root" {
+				raw = []byte(strings.ReplaceAll(string(raw), name, "TestUnassignedReplacement"))
+			} else {
+				raw = append(raw, []byte(strings.ReplaceAll(event("run", "TestNewOwnerRegression")+event("pass", "TestNewOwnerRegression"), corePackage, group.Packages[0]))...)
+			}
+			if err := os.WriteFile(group.StdoutLog, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			group.Assigned = nil
+			group.Summary = testfeedback.Parse(raw, 0)
+			problems := strings.Join(checkScopedCoverage(scopedReport{Scope: "quick", Groups: groups}), "\n")
+			if !strings.Contains(problems, "quick owner test has unassigned root") || mode == "missing-root" && !strings.Contains(problems, "ran 0 times, want 1") {
+				t.Fatal("changed report assignments bypassed fixed coverage", problems)
+			}
+		})
+	}
+}
+
+func TestQuickInvocationsNeverSelectWholeOwners(t *testing.T) {
+	for _, inv := range quickInvocations(options{}) {
+		if len(inv.Assigned) == 0 || flagValue(inv.Command, "-run", "") == "" {
+			t.Fatal("new owner tests would silently expand L1", inv)
+		}
 	}
 }

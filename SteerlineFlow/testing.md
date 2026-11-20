@@ -15,7 +15,7 @@ go run ./cmd/test-feedback -level=L2
 
 | 级别 | 本项目内容 | 环境与选择 |
 | --- | --- | --- |
-| [L1](testing/l1.md) | 一个最小 Go 与前端单元/集成集合 | 隔离 Go/Vitest 测试，无模型；需 Go/Git、Node 24+ 及 npm ci；保留固定提示词正文/参数/源码守卫，复用一次真实仓库完整依赖矩阵检查，不累积各功能完整 owner 回归。 |
+| [L1](testing/l1.md) | 一个最小 Go 与前端单元/集成集合 | 隔离 Go/Vitest 测试，无模型；需 Go/Git、Node 24+ 及 npm ci；保留固定提示词正文/参数/源码守卫，复用一次真实仓库完整依赖矩阵检查，17 个明确 Go 根与两个前端 minimum 文件的五个代表用例；完整规则、边界反例及 Web 回归分别归 L4 go.rules/go.boundary/web.unit，不自动吸收新 owner 用例。 |
 | [L2](testing/l2.md) | 一个受控核心交付冒烟 | 真实 SteerLine/Git/SQLite，公开 Runner/PR fixture；不需要真实 Runner、模型或 GitHub。 |
 | [L3](testing/l3.md) | 可并行功能流程 | controlled，资源隔离，总并发最多二；按受影响 ID 选择。 |
 | [L4](testing/l4.md) | 边界、不可并行功能、真实链和 Go 测试集 | controlled/live/isolated；live 必须单独精确选择，按需运行。 |
@@ -31,7 +31,7 @@ go run ./cmd/test-feedback -level=L4 -suite=go
 go run ./cmd/test-feedback -- ./internal/runnerclient ./internal/runnerbridge -count=1
 ```
 
-Full 仅指全部普通 Go 测试，已登记为 L4 `go.full`，不包含 e2e/runneracceptance 标签或 Web；没有测试文件的包单独枚举为编译项。真实测试 skip 在原 summary/退出码/managed 中均不通过。正式复用集可用 `-level=L4 -suite=go -scenario go.http/go.storage/go.environment/go.deployment/go.roadmap`（每次选一个 ID），前端全集用 `-level=L4 -suite=web -scenario web.unit`。前端与 HTTP 检查用 `scripts/test-web.ps1`，其他浏览器及独立脚本入口见 [L4 列表](testing/l4.md)；未接入受管报告的入口不能凭 Agent 自述登记通过。
+Full 仅指全部普通 Go 测试，已登记为 L4 `go.full`，不包含 e2e/runneracceptance 标签或 Web；没有测试文件的包单独枚举为编译项。真实测试 skip 在原 summary/退出码/managed 中均不通过。正式复用集可用 `-level=L4 -suite=go -scenario go.rules/go.boundary/go.http/go.storage/go.environment/go.deployment/go.roadmap`（每次选一个 ID），前端全集用 `-level=L4 -suite=web -scenario web.unit`。前端与 HTTP 检查用 `scripts/test-web.ps1`，其他浏览器及独立脚本入口见 [L4 列表](testing/l4.md)；未接入受管报告的入口不能凭 Agent 自述登记通过。
 
 选中 go.http 时全量执行七个 HTTP/快照/配置/探测/元数据进程 owner，每包必须实际非零；选中 go.environment 时串行执行环境/model/remotetest/中性executionconfig四包全量，以及明确的Windows32根/其他平台31根的 App 环境集成组。源清单/正式定义及 package/root 终态须一致，缺失、额外或重复、跳过、一组失败均使整体不通过；其他 App 回归仍在 go.full。测试范围或定义变化时须验证新范围，不继承旧专项通过。go.deployment 包含host/Windows localservice全量、App11/10根（放弃重建一根独立成组）和升级排空明确一根，go.roadmap 包含owner全量、App16根和host一根；选择依据见下节，选中后各组串行、保留原断言及 p1/parallel1，Roadmap App 组超时 45 分钟，其余组 25 分钟；部署整套上限 45 分钟，live排除与源漂移检查见L4列表。集合范围及原证据见[早期反馈验收](testing/acceptance/test-early-feedback.md)。
 
@@ -46,6 +46,9 @@ go.http 的 Windows 跨进程快照压力保持原30秒窗口、1000次发布和
 | 局部文案、样式、布局与展示映射 | 相关组件或纯函数测试；布局变化补代表视口、关键状态的浏览器检查，不自动要求 web.unit 或后端 owner 全集。 |
 | 前端状态、查询、操作参数或共享组件 | 相关组件/交互及消费者测试；共享影响跨页面、覆盖难以可靠收窄时选择 web.unit。仅调用既有 API 不自动要求后端 owner 全集。 |
 | HTTP、存储、环境、部署或 Roadmap 业务规则、契约 | 分别选择 go.http、go.storage、go.environment、go.deployment、go.roadmap，并按受影响消费者补功能场景；纯前端展示不因归属这些模块而触发对应后端专项。 |
+| 任务模型/任务规则、Runner 调用方 DTO 契约 | 选择 go.rules，并按受影响消费者补定向验证；此项不要求真实 Runner 的 go.runner-contract。 |
+| 源码边界检查器、所有权约束或生产依赖关系 | 选择 go.boundary，覆盖完整检查器正反例及产品闭包；L1 仍执行真实仓库完整门禁。 |
+| 浏览器请求信封、去重、锁、超时或回执恢复 | 选择 web.unit，覆盖 client 原完整故障矩阵及其消费者；minimum 只提供早期代表反馈。 |
 | 跨组件核心交付、恢复或生命周期流程 | 在 L2 基础上选择具有独有覆盖的 L3/L4 场景；不重复建设依赖 owner 的内部故障测试。 |
 
 Plan 写清实际变化、测试 ID 与选择原因，定向命令和专属浏览器步骤写入测试计划；`.tests.json` 只保存正式测试 ID，不将未登记的定向命令或专属浏览器步骤冒充正式 ID。所需行为尚无测试入口时安排补齐，不能以收窄范围为由省略必要覆盖。生产构建用于修改涉及构建、类型或打包的验证，浏览器检查用于组件测试无法验证的实际渲染与交互；均不因提交或更新记录单独触发重跑。

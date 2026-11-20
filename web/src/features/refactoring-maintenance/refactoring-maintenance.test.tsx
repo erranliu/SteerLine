@@ -162,7 +162,7 @@ it.each([
     "费用待结算",
   ],
 ] as const)(
-  "shows the separate budget at %s %s",
+  "shows the separate budget at %s %s (case %#)",
   async (phase, stage, remaining_budget, balance, status) => {
     setup([{ ...record, phase, delivery_stage: stage, remaining_budget }]);
     const budget = await screen.findByRole("region", { name: "剩余重构预算" });

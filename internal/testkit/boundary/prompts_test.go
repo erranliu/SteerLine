@@ -1,13 +1,11 @@
 package boundary
 
 import (
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
 
-func TestPromptGovernanceSourceBoundary(t *testing.T) {
+func TestPromptGovernanceSourceBoundaryFixtures(t *testing.T) {
 	cases := []struct {
 		name, file, code string
 		rejected         bool
@@ -40,11 +38,12 @@ func TestPromptGovernanceSourceBoundary(t *testing.T) {
 			}
 		})
 	}
-	_, file, _, _ := runtime.Caller(0)
-	report, err := ScanSource(filepath.Clean(filepath.Join(filepath.Dir(file), "../../..")))
-	if err != nil {
-		t.Fatal(err)
-	}
+}
+
+func TestPromptGovernanceSourceBoundary(t *testing.T) {
+	// Share the complete real-repository check with the architecture guard.
+	// Artificial checker counterexamples stay in the L4 owner regression.
+	report := checkRepositoryBoundary(t)
 	for _, v := range report.Violations {
 		if strings.HasPrefix(v, "prompt boundary:") {
 			t.Error(v)

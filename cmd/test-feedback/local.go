@@ -37,6 +37,8 @@ var localSuites = []localSuite{
 	{ID: "usage.remote-codex", Suite: "usage", Live: true, Tag: "runneracceptance", Groups: []localGroup{{ID: "go-usage-remote", Packages: []string{"./internal/app"}, Tests: []string{"TestBillingRemoteUsagePublished"}}}, Required: []string{"STEERRUNNER_EXE", "STEERRUNNER_VERSION", "STEERRUNNER_SHA256", "STEERLINE_USAGE_LIVE_ROOT", "STEERLINE_USAGE_LIVE_INPUT"}},
 	{ID: "go.full", Suite: "go"},
 	{ID: "web.unit", Suite: "web"},
+	{ID: "go.rules", Suite: "go", Groups: []localGroup{{ID: "go-rules-owner", Packages: []string{"./internal/task/model", "./internal/task", "./internal/runnercontract"}}}},
+	{ID: "go.boundary", Suite: "go", Groups: []localGroup{{ID: "go-boundary-owner", Packages: []string{"./internal/testkit/boundary", "./tests/integration"}}}},
 	{ID: "go.http", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./web/server", "./internal/product/httpapi", "./internal/product/httpclient", "./internal/product/httpfs", "./web/server/executionconfig", "./web/server/discovery", "./web/server/nativequery"}}}},
 	{ID: "go.storage", Suite: "go", Groups: []localGroup{{ID: "go-owner", Packages: []string{"./internal/storage/sqlite", "./internal/pathguard"}}}},
 	{ID: "go.deployment", Suite: "go", Groups: domainGroupsForGOOS("go.deployment", runtime.GOOS)},
